@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.Diagnostics.{
+    AttachmentLease,
     CaptureHandoff,
     SettingsProjection,
     SettingsSupervisor,
@@ -115,6 +116,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
          coordinator: __MODULE__.Coordinator,
          registry: __MODULE__.Rooms,
          projection: __MODULE__.Projection,
+         attachment_gate: AttachmentLease.gate(1),
          maximum_sources: 1,
          poll_interval_ms: 1_000,
          collector: fn context ->
@@ -145,6 +147,205 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     }
 
     %{settings: settings, capability: capability, room: room, pool: pool, frame: frame}
+  end
+
+  test "completed helper result queued past deadline is rejected and releases resolved debt",
+       ctx do
+    parent = self()
+    coordinator = Process.whereis(__MODULE__.Coordinator)
+
+    :sys.replace_state(coordinator, fn state ->
+      %{
+        state
+        | collector: fn context ->
+            send(parent, {:factory_waiting, self(), context})
+
+            receive do
+              :release_factory -> :ok
+            end
+
+            CaptureHandoff.new(parent,
+              owner: context.capability,
+              projection: __MODULE__.Projection
+            )
+          end
+      }
+    end)
+
+    enable(ctx.settings, true, 2)
+    assert %{pending?: true} = SourceCoordinator.scan(coordinator)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert_receive {:factory_waiting, helper, context}, 1_000
+    assert context.coordinator == coordinator
+    helper_monitor = Process.monitor(helper)
+    state = :sys.get_state(coordinator)
+    :ok = :sys.suspend(coordinator)
+
+    try do
+      send(helper, :release_factory)
+      assert_receive {:DOWN, ^helper_monitor, :process, ^helper, :normal}, 1_000
+      Process.send_after(self(), :startup_deadline_elapsed, 550)
+      assert_receive :startup_deadline_elapsed, 1_000
+    after
+      :sys.resume(coordinator)
+    end
+
+    assert %{active_sources: 0, pending?: false} = SourceCoordinator.status(coordinator)
+    refute AttachmentLease.current?(context.attachment_lease)
+    assert AttachmentLease.pending(state.attachment_gate) == 0
+    _ = :sys.get_state(__MODULE__.Workers)
+    assert DynamicSupervisor.which_children(__MODULE__.Workers) == []
+  end
+
+  test "source subtree restart retains a parent supplied gate with unresolved debt", ctx do
+    parent = self()
+    coordinator = Process.whereis(__MODULE__.Coordinator)
+    original_state = :sys.get_state(coordinator)
+
+    :sys.replace_state(coordinator, fn state ->
+      %{
+        state
+        | collector: fn _ ->
+            send(parent, {:factory_waiting, self()})
+
+            receive do
+              :never_release_factory -> :ok
+            end
+          end
+      }
+    end)
+
+    enable(ctx.settings, true, 2)
+    assert %{pending?: true} = SourceCoordinator.scan(coordinator)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert_receive {:factory_waiting, helper}, 1_000
+    helper_monitor = Process.monitor(helper)
+    coordinator_monitor = Process.monitor(coordinator)
+    Process.exit(coordinator, :kill)
+    assert_receive {:DOWN, ^coordinator_monitor, :process, ^coordinator, :killed}, 1_000
+    assert_receive {:DOWN, ^helper_monitor, :process, ^helper, :killed}, 1_000
+    _ = Supervisor.which_children(ctx.pool)
+    next_state = :sys.get_state(__MODULE__.Coordinator)
+    assert next_state.attachment_gate == original_state.attachment_gate
+    assert AttachmentLease.pending(next_state.attachment_gate) == 1
+    assert {:error, :unavailable} = AttachmentLease.reserve(next_state.attachment_gate, self())
+  end
+
+  test "stalled collector leaves coordinator responsive and retires startup", ctx do
+    parent = self()
+    coordinator = Process.whereis(__MODULE__.Coordinator)
+
+    :sys.replace_state(coordinator, fn state ->
+      %{
+        state
+        | collector: fn _context ->
+            send(parent, {:factory_waiting, self()})
+
+            receive do
+              :release_factory -> {:error, :unavailable}
+            end
+          end
+      }
+    end)
+
+    enable(ctx.settings, true, 2)
+    assert %{pending?: true} = SourceCoordinator.scan(coordinator)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert_receive {:factory_waiting, helper}, 1_000
+
+    try do
+      result =
+        try do
+          SourceCoordinator.status(coordinator)
+        catch
+          :exit, reason -> {:status_exit, reason}
+        end
+
+      assert %{active_sources: 0, pending?: true} = result
+      monitor = Process.monitor(helper)
+      assert_receive {:DOWN, ^monitor, :process, ^helper, :killed}, 1_000
+
+      assert %{active_sources: 0, pending?: false, last_reason: :attachment_timeout} =
+               SourceCoordinator.status(coordinator)
+
+      assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
+    after
+      send(helper, :release_factory)
+    end
+  end
+
+  test "normal coordinator shutdown kills its in-progress attachment helper", ctx do
+    parent = self()
+    coordinator = Process.whereis(__MODULE__.Coordinator)
+
+    :sys.replace_state(coordinator, fn state ->
+      %{
+        state
+        | collector: fn _ ->
+            send(parent, {:factory_waiting, self()})
+
+            receive do
+              :release_factory -> {:error, :unavailable}
+            end
+          end
+      }
+    end)
+
+    enable(ctx.settings, true, 2)
+    assert %{pending?: true} = SourceCoordinator.scan(coordinator)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert_receive {:factory_waiting, helper}, 1_000
+
+    try do
+      assert helper != coordinator
+      monitor = Process.monitor(helper)
+      assert :ok = GenServer.stop(coordinator, :normal)
+      assert_receive {:DOWN, ^monitor, :process, ^helper, :killed}
+      assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
+    after
+      send(helper, :release_factory)
+    end
+  end
+
+  test "blocked worker admission times out and keeps its unresolved permit", ctx do
+    coordinator = Process.whereis(__MODULE__.Coordinator)
+    workers = Process.whereis(__MODULE__.Workers)
+    :ok = :sys.suspend(workers)
+
+    try do
+      enable(ctx.settings, true, 2)
+      assert %{pending?: true} = SourceCoordinator.scan(coordinator)
+      assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+      assert_receive {:collector_started, _}, 1_000
+
+      result =
+        try do
+          SourceCoordinator.status(coordinator)
+        catch
+          :exit, reason -> {:status_exit, reason}
+        end
+
+      assert %{active_sources: 0, pending?: true} = result
+      state = :sys.get_state(coordinator)
+      helper = state.attaching.task.pid
+      monitor = Process.monitor(helper)
+      assert_receive {:DOWN, ^monitor, :process, ^helper, :killed}, 1_000
+      assert %{last_reason: :attachment_timeout} = SourceCoordinator.status(coordinator)
+      assert AttachmentLease.pending(state.attachment_gate) == 1
+
+      assert {:error, :unavailable} =
+               AttachmentLease.reserve(
+                 state.attachment_gate,
+                 self()
+               )
+
+      assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
+    after
+      :sys.resume(workers)
+    end
+
+    _ = :sys.get_state(workers)
+    assert DynamicSupervisor.which_children(workers) == []
   end
 
   test "profile request survives source announcement between coordinator requests", ctx do
@@ -186,7 +387,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert context.provider_profile.missing == []
 
     assert %{active_sources: 1, pending?: false} =
-             SourceCoordinator.status(__MODULE__.Coordinator)
+             settled_status(__MODULE__.Coordinator)
 
     input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
     assert CaptureHandoff.current?(input)
@@ -206,7 +407,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert %{pending?: true} = SourceCoordinator.scan(__MODULE__.Coordinator)
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
     assert_receive {:collector_started, first}, 1_000
-    assert %{active_sources: 1} = SourceCoordinator.status(__MODULE__.Coordinator)
+    assert %{active_sources: 1} = settled_status(__MODULE__.Coordinator)
     old = :sys.get_state(ctx.capability).diagnostic_tap.handoff
     monitor = Process.monitor(old.receiver)
     frame = %{ctx.frame | source_epoch: make_ref(), sequence_number: 2}
@@ -217,7 +418,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert_receive {:collector_started, second}, 1_000
     assert first.run_id != second.run_id
     assert second.source_epoch == frame.source_epoch
-    assert %{active_sources: 1} = SourceCoordinator.status(__MODULE__.Coordinator)
+    assert %{active_sources: 1} = settled_status(__MODULE__.Coordinator)
   end
 
   @tag initially_enabled: true
@@ -227,7 +428,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert :sys.get_state(ctx.capability).diagnostic_probe != nil
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
     assert_receive {:collector_started, _}, 1_000
-    assert %{active_sources: 1} = SourceCoordinator.status(coordinator)
+    assert %{active_sources: 1} = settled_status(coordinator)
     input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
     worker_monitor = Process.monitor(input.receiver)
     coordinator_monitor = Process.monitor(coordinator)
@@ -247,7 +448,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert %{pending?: true} = SourceCoordinator.scan(__MODULE__.Coordinator)
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
     assert_receive {:collector_started, _}, 1_000
-    assert %{active_sources: 1} = SourceCoordinator.status(__MODULE__.Coordinator)
+    assert %{active_sources: 1} = settled_status(__MODULE__.Coordinator)
     input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
     monitor = Process.monitor(input.receiver)
     :sys.replace_state(ctx.room, fn state -> %{state | text_capability: nil} end)
@@ -290,7 +491,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
              Vxpipe.CallEngine.RoomAuthority.DiagnosticSources.query(ctx.room)
 
     assert %{active_sources: 0, pending?: false} =
-             SourceCoordinator.status(__MODULE__.Coordinator)
+             settled_status(__MODULE__.Coordinator)
   end
 
   test "retires an active attachment after its source leaves eligible room candidates", ctx do
@@ -298,7 +499,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert %{pending?: true} = SourceCoordinator.scan(__MODULE__.Coordinator)
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
     assert_receive {:collector_started, _}, 1_000
-    assert %{active_sources: 1} = SourceCoordinator.status(__MODULE__.Coordinator)
+    assert %{active_sources: 1} = settled_status(__MODULE__.Coordinator)
     input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
     monitor = Process.monitor(input.receiver)
     :sys.replace_state(ctx.room, fn state -> %{state | connections: %{}} end)
@@ -339,7 +540,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert_receive :collector_replaced_epoch, 1_000
 
     assert %{active_sources: 0, pending?: false} =
-             SourceCoordinator.status(__MODULE__.Coordinator)
+             settled_status(__MODULE__.Coordinator)
   end
 
   test "coordinator failure retires collector output authority independently of terminate callback",
@@ -348,7 +549,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert %{pending?: true} = SourceCoordinator.scan(__MODULE__.Coordinator)
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
     assert_receive {:collector_started, _}, 1_000
-    assert %{active_sources: 1} = SourceCoordinator.status(__MODULE__.Coordinator)
+    assert %{active_sources: 1} = settled_status(__MODULE__.Coordinator)
     input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
     output = :sys.get_state(input.receiver).output
     assert CaptureHandoff.current?(output)
@@ -375,7 +576,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
 
     assert %{active_sources: 0, pending?: false, last_reason: :collector_unavailable} =
-             SourceCoordinator.status(coordinator)
+             settled_status(coordinator)
 
     assert :sys.get_state(ctx.capability).diagnostic_tap == nil
   end
@@ -407,7 +608,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert_receive {:collector_output, output}, 1_000
 
     assert %{active_sources: 0, pending?: false} =
-             SourceCoordinator.status(__MODULE__.Coordinator)
+             settled_status(__MODULE__.Coordinator)
 
     refute CaptureHandoff.current?(output)
     assert :sys.get_state(ctx.capability).diagnostic_tap == nil
@@ -427,7 +628,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
       :sys.resume(coordinator)
     end
 
-    assert %{active_sources: 0, pending?: false} = SourceCoordinator.status(coordinator)
+    assert %{active_sources: 0, pending?: false} = settled_status(coordinator)
     refute_received {:collector_started, _}
   end
 
@@ -454,7 +655,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert %{pending?: true} = SourceCoordinator.scan(__MODULE__.Coordinator)
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
     assert_receive {:collector_started, _}, 1_000
-    assert %{active_sources: 1} = SourceCoordinator.status(__MODULE__.Coordinator)
+    assert %{active_sources: 1} = settled_status(__MODULE__.Coordinator)
     input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
 
     :sys.replace_state(ctx.room, fn state ->
@@ -486,11 +687,22 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     _ = :sys.get_state(Vxpipe.CallEngine.Speech.Session.provider(session))
 
     assert %{active_sources: 0, pending?: false, last_reason: :profile_unavailable} =
-             SourceCoordinator.status(__MODULE__.Coordinator)
+             settled_status(__MODULE__.Coordinator)
 
     refute_received {:collector_started, _}
     assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
     assert_receive {:scribe_audio, _, _}
+  end
+
+  defp settled_status(coordinator),
+    do: settled_status(coordinator, System.monotonic_time(:millisecond) + 2_000)
+
+  defp settled_status(coordinator, deadline) do
+    status = SourceCoordinator.status(coordinator)
+
+    if status.pending? and System.monotonic_time(:millisecond) < deadline,
+      do: settled_status(coordinator, deadline),
+      else: status
   end
 
   defp echoed_settings do

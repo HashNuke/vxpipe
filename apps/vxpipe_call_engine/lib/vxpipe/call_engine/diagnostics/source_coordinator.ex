@@ -2,7 +2,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
   @moduledoc "One prospective discovery at a time, with separately bounded source workers."
   use GenServer
   alias Vxpipe.CallEngine.Capability.SpeechToText
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsProjection, SourceAttachment}
+
+  alias Vxpipe.CallEngine.Diagnostics.{
+    AttachmentLease,
+    CaptureHandoff,
+    SettingsProjection,
+    SourceAttachment
+  }
+
   alias Vxpipe.CallEngine.RoomAuthority.DiagnosticSources
 
   def start_link(options),
@@ -22,6 +29,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
         :runtime,
         :collector,
         :maximum_sources,
+        :attachment_gate,
         :poll_interval_ms
       ])
       |> Map.new()
@@ -29,6 +37,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
     state =
       Map.merge(state, %{
         active: %{},
+        attaching: nil,
+        coordinator: self(),
         pending: nil,
         room: nil,
         cursor: nil,
@@ -72,6 +82,29 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
         {:noreply, state}
     end
   end
+
+  def handle_info({reference, result}, %{attaching: %{task: %{ref: reference}}} = state) do
+    attempt = state.attaching
+    Process.cancel_timer(attempt.timer)
+    Process.demonitor(reference, [:flush])
+    Process.unlink(attempt.task.pid)
+    state = %{state | attaching: nil}
+    state = accept_attachment(state, attempt.lease, result)
+    AttachmentLease.finish(attempt.lease)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:attachment_timeout, reference},
+        %{attaching: %{task: %{ref: reference}}} = state
+      ),
+      do: {:noreply, %{cancel_attachment(state) | last_reason: :attachment_timeout}}
+
+  def handle_info(
+        {:DOWN, reference, :process, _, _},
+        %{attaching: %{task: %{ref: reference}}} = state
+      ),
+      do: {:noreply, %{cancel_attachment(state) | last_reason: :attachment_unavailable}}
 
   def handle_info({:DOWN, reference, :process, _worker, _reason}, state) do
     active =
@@ -154,18 +187,65 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
   end
 
   defp finish_discovery(state, candidate, packet) do
-    case SourceAttachment.start(candidate, packet, state) do
-      {:ok, entry} ->
-        {:noreply,
-         %{
-           state
-           | active: Map.put(state.active, entry.context.capability, entry),
-             last_reason: :attached
-         }}
+    case AttachmentLease.reserve(state.attachment_gate, self()) do
+      {:ok, lease} ->
+        options = Map.put(state, :attachment_lease, lease)
 
-      {:error, reason} ->
-        {:noreply, %{state | last_reason: reason}}
+        task =
+          Task.async(fn ->
+            AttachmentLease.operation(lease, fn ->
+              SourceAttachment.start(candidate, packet, options)
+            end)
+          end)
+
+        timer =
+          Process.send_after(
+            self(),
+            {:attachment_timeout, task.ref},
+            AttachmentLease.remaining(lease)
+          )
+
+        {:noreply,
+         %{state | attaching: %{task: task, lease: lease, timer: timer}, last_reason: :attaching}}
+
+      _ ->
+        {:noreply, %{state | last_reason: :attachment_capacity}}
     end
+  end
+
+  defp accept_attachment(state, lease, {:ok, entry}) do
+    if SourceAttachment.current?(entry) and CaptureHandoff.current?(entry.input) and
+         CaptureHandoff.current?(entry.output) and AttachmentLease.adopt(lease) do
+      entry = Map.put(entry, :monitor, Process.monitor(entry.worker))
+
+      %{
+        state
+        | active: Map.put(state.active, entry.context.capability, entry),
+          last_reason: :attached
+      }
+    else
+      AttachmentLease.cancel(lease)
+      SourceAttachment.close(entry)
+      %{state | last_reason: :stale_source}
+    end
+  end
+
+  defp accept_attachment(state, lease, {:error, reason}) do
+    AttachmentLease.cancel(lease)
+    %{state | last_reason: reason}
+  end
+
+  defp cancel_attachment(%{attaching: nil} = state), do: state
+
+  defp cancel_attachment(state) do
+    attempt = state.attaching
+    AttachmentLease.cancel(attempt.lease)
+    Process.cancel_timer(attempt.timer)
+    Process.unlink(attempt.task.pid)
+    Process.exit(attempt.task.pid, :kill)
+    Process.demonitor(attempt.task.ref, [:flush])
+    AttachmentLease.finish(attempt.lease)
+    %{state | attaching: nil}
   end
 
   defp audit_active(%{active: active} = state) when map_size(active) == 0, do: state
@@ -189,7 +269,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
         state = audit_active(state)
 
         cond do
-          state.pending != nil ->
+          state.pending != nil or state.attaching != nil ->
             state
 
           map_size(state.active) >= state.maximum_sources ->
@@ -337,7 +417,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
 
   defp revoke(state) do
     Enum.each(state.active, fn {_, entry} -> SourceAttachment.close(entry) end)
-    clear_pending(state)
+    state |> clear_pending() |> cancel_attachment()
   end
 
   defp schedule(state) do
@@ -348,7 +428,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
   defp summary(state),
     do: %{
       active_sources: map_size(state.active),
-      pending?: state.pending != nil,
+      pending?: state.pending != nil or state.attaching != nil,
       last_reason: state.last_reason
     }
 end

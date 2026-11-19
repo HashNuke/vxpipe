@@ -991,3 +991,22 @@ Collector Astra re-review is also clean (16 independent tests/probes), final sta
 checks and Lean pass; the full root suite remains pending. Production composition,
 coordinator helper/adoption and configured-call acceptance remain unimplemented;
 this checkpoint does not close any combined C acceptance item.
+
+Frozen startup-factory root verification at fb21396f completed with exit0:
+Engine2752/0, Calls445/0, Gateway891/0, Persistence580/0, Console591/0, and the
+remaining applications106/222/35/567/20 all pass. No runtime/test/build files changed
+during that run. Coordinator and production composition work follows this baseline.
+
+## Checkpoint C bounded coordinator attachment — 2026-11-19
+
+The source coordinator now runs attachment in one locally owned helper, keeping
+status and revocation responsive when collector or worker admission stalls. It
+cancels before terminating timed-out work, adopts only current results, and owns
+active worker monitors itself. Normal shutdown and abrupt failure retire helpers;
+a source subtree restart preserves its parent-supplied unresolved admission gate.
+
+Retained tests first reproduced blocked startup and missing helper ownership.
+Engine diagnostics149/0 pass; Astra xhigh review is clean with20 independent cases,
+including late results and gate debt across failure. Static root gates and Lean
+pass. The full root suite cited above predates this coordinator change. Calls parent
+and Application wiring, configured-call acceptance and combined C gates remain open.

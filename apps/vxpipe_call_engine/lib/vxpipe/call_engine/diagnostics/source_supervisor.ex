@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   use Supervisor
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, Participant}
-  alias Vxpipe.CallEngine.Diagnostics.{InferenceAdmission, SourceWorker}
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, InferenceAdmission, SourceWorker}
   alias Vxpipe.CallEngine.Speech.{ActivityRuntime, ActivitySupervisor, Silero}
 
   def child_spec(options),
@@ -22,7 +22,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
     {agent, options} = Keyword.pop(options, :agent)
 
     if eligible_agent?(agent),
-      do: start_eligible_source(options, workers, runtime),
+      do:
+        AttachmentLease.operation(Keyword.get(options, :attachment_lease), fn ->
+          start_eligible_source(options, workers, runtime)
+        end),
       else: {:error, :unsupported_agent}
   end
 
@@ -80,6 +83,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
         :classify,
         :coordinator,
         :collector,
+        :attachment_gate,
         registry: Vxpipe.CallEngine.RoomRegistry,
         projection: Vxpipe.CallEngine.Diagnostics.SettingsProjection,
         poll_interval_ms: 250,
@@ -102,6 +106,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
              Keyword.fetch!(options, :load_timeout_ms) in 1..15_000 and
              Keyword.fetch!(options, :inference_timeout_ms) in 1..2_000,
            do: raise(ArgumentError, "invalid diagnostic source pool")
+
+    options =
+      Keyword.put_new_lazy(options, :attachment_gate, fn -> AttachmentLease.gate(maximum) end)
 
     inference =
       options

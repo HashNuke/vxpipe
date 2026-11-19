@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
   alias Vxpipe.CallEngine.Capability.SpeechToText
 
   alias Vxpipe.CallEngine.Diagnostics.{
+    AttachmentLease,
     CaptureHandoff,
     SettingsProjection,
     SourceSupervisor,
@@ -16,7 +17,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         {:source_ready, generation, revision, track, epoch, codec, rate, channels, mode},
         options
       ) do
-    with {:ok, grant} <- SettingsProjection.grant(options.projection),
+    with true <- AttachmentLease.current?(options.attachment_lease),
+         {:ok, grant} <- SettingsProjection.grant(options.projection),
          true <- grant == candidate.grant,
          true <- current_candidate?(candidate) do
       context = %{
@@ -25,7 +27,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         connection_id: candidate.source.connection_id,
         agent_id: candidate.agent.participant_id,
         capability: candidate.source.capability,
-        coordinator: self(),
+        coordinator: options.coordinator,
+        attachment_lease: options.attachment_lease,
         generation: generation,
         provider_generation: candidate.provider_generation,
         provider_profile: candidate.provider_profile,
@@ -45,6 +48,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     else
       _ -> {:error, :stale_source}
     end
+  rescue
+    _ -> {:error, :unavailable}
+  catch
+    :exit, _ -> {:error, :unavailable}
   end
 
   def start(_candidate, _packet, _options), do: {:error, :invalid_source}
@@ -52,6 +59,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
   def current?(entry), do: current_candidate?(entry.candidate)
 
   def close(entry) do
+    AttachmentLease.cancel(entry.context.attachment_lease)
     CaptureHandoff.close(entry.input)
     CaptureHandoff.close(entry.output)
     :ok
@@ -91,7 +99,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     worker_options = [
       agent: candidate.agent,
       owner: context.capability,
-      coordinator: self(),
+      coordinator: context.coordinator,
+      attachment_lease: context.attachment_lease,
       output: output,
       projection: options.projection,
       mode: context.mode,
@@ -119,12 +128,15 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
            worker: worker,
            input: input,
            output: output,
-           monitor: Process.monitor(worker),
            context: context
          }}
 
       _ ->
-        _ = DynamicSupervisor.terminate_child(workers, worker)
+        _ =
+          AttachmentLease.operation(context.attachment_lease, fn ->
+            DynamicSupervisor.terminate_child(workers, worker)
+          end)
+
         {:error, :stale_source}
     end
   catch
@@ -132,10 +144,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
   end
 
   defp bind(worker, candidate, context, track) do
-    input = SourceWorker.handoff(worker, 250)
     source = %{track_id: track, source_epoch: context.source_epoch}
 
-    with true <- current_candidate?(candidate),
+    with %CaptureHandoff{} = input <- SourceWorker.handoff(worker, 250),
+         true <- current_candidate?(candidate),
          :ok <-
            SpeechToText.attach_diagnostics(
              context.capability,
