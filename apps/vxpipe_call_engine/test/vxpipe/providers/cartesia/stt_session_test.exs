@@ -104,11 +104,14 @@ defmodule Vxpipe.Providers.Cartesia.STTSessionTest do
     end
   end
 
-  test "startup timeout and provider failure retire owned transport without secret output" do
+  test "startup timeout retires owned transport before readiness" do
     {session, wire} = start_session()
     monitor = Process.monitor(wire)
     send(Session.provider(session), :setup_timeout)
-    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+    # Transport startup can precede the allocation's Channel.started acknowledgement.
+    # A timeout can therefore retire either initialization or the started session.
+    assert_receive {:vxpipe_speech_closed, ^session, reason}, 1_000
+    assert reason in [:initialization_failed, :session_failed]
     assert_receive {:DOWN, ^monitor, :process, ^wire, _reason}, 1_000
   end
 

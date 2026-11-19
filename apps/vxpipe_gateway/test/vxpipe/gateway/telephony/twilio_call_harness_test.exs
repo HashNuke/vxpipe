@@ -138,6 +138,16 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       )
 
     on_exit(fn ->
+      media_monitors =
+        for connection_id <- [@incoming_leg_id, @outgoing_leg_id],
+            {pid, _} <-
+              Registry.lookup(
+                Vxpipe.Gateway.Media.Registry,
+                {:telephony_media_connection, connection_id}
+              ) do
+          {pid, Process.monitor(pid)}
+        end
+
       stop_room(scenario.plan.tenant_id, scenario.plan.room_id)
 
       LegSupervisor.stop(
@@ -146,6 +156,10 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       )
 
       LegSupervisor.stop_outgoing(@outgoing_leg_id)
+
+      for {pid, monitor} <- media_monitors do
+        assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}, 2_000
+      end
     end)
 
     %{
@@ -694,6 +708,9 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
   end
 
   defp finish_private_briefing(briefing_tts) do
+    assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
+    assert %{"type" => "Speak"} = JSON.decode!(speak)
+
     TestTextToSpeechTransport.deliver_control(
       briefing_tts,
       ~s({"type":"SpeechStarted","request_id":"req","speech_id":"private-briefing"})
