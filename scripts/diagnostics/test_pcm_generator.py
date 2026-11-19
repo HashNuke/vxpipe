@@ -1,4 +1,5 @@
 """Contracts for pacing outside the measured BEAM process."""
+import hashlib
 import json
 import unittest
 from unittest.mock import patch
@@ -6,7 +7,7 @@ from pcm_generator import configure_affinity, generate, wait_until
 
 
 class PCMGeneratorTest(unittest.TestCase):
-    def run_generator(self, *, inputs=2, frames=3, delay=0):
+    def run_generator(self, *, inputs=2, frames=3, delay=0, settlement_inputs_per_room=None):
         now = [0]
         packets = []
         def clock():
@@ -16,7 +17,8 @@ class PCMGeneratorTest(unittest.TestCase):
         def write(packet):
             packets.append((now[0], packet))
             now[0] += delay
-        generate(bytes((index * 7 + index // 256) % 256 for index in range(1280)), inputs, frames, write, clock=clock, sleep=sleep)
+        generate(bytes((index * 7 + index // 256) % 256 for index in range(1280)), inputs, frames, write, clock=clock, sleep=sleep,
+                 settlement_inputs_per_room=settlement_inputs_per_room)
         return packets
 
     def test_staggered_absolute_schedule_keeps_each_stream_at_32ms(self):
@@ -38,6 +40,43 @@ class PCMGeneratorTest(unittest.TestCase):
             self.assertEqual(first[9:], second[9:])
             self.assertNotEqual(first[7:], second[7:])
         self.assertEqual(json.loads(packets[0][1][1:])['input_encoding'], 'first-sample-index')
+
+    def test_conversation_windows_preserve_pcm_without_same_room_speech_overlap(self):
+        fixture = bytes((index * 7 + index // 256) % 256 for index in range(1280))
+        for humans in (1, 2):
+            for rooms in range(1, 16 // humans + 1):
+                inputs = rooms * humans
+                packets = self.run_generator(inputs=inputs, frames=192, settlement_inputs_per_room=humans)
+                manifest = json.loads(packets[0][1][1:])
+                expected = [[64 + 64 * ((index % humans) * rooms + index // humans + 1) // inputs + turn * 64
+                             for turn in range(2)] for index in range(inputs)]
+                self.assertEqual(manifest['provider_settlement_frames'], expected)
+                self.assertEqual(manifest['tail_encoding'], 'silence-outside-speech-windows')
+                self.assertEqual(manifest['speech_clip'], dict(offset_samples=0, samples=16384, sha256=hashlib.sha256((fixture * 26)[:32768]).hexdigest()))
+                audio = {(int.from_bytes(p[1:3], 'big'), int.from_bytes(p[3:7], 'big')): (at, p[7:])
+                         for at, p in packets if p[0] == 1}
+                self.assertEqual(len(audio), 192 * inputs)
+                for sequence in range(192):
+                    for index in range(inputs):
+                        frame = sequence + 1
+                        ending = next((end for end in expected[index] if end - 31 <= frame <= end), None)
+                        offset = (frame - (ending - 31)) * 1024 if ending is not None else None
+                        raw = bytes(1024) if offset is None else bytes(fixture[(offset + i) % len(fixture)] for i in range(1024))
+                        payload = (index + 1).to_bytes(2, 'little') + raw[2:] if inputs > 1 else raw
+                        self.assertEqual(audio[index, sequence], (sequence * 32_000_000 + 32_000_000 * index // inputs, payload))
+                    if humans == 2:
+                        for room in range(rooms):
+                            active = [any(end - 31 <= sequence + 1 <= end for end in expected[index])
+                                      for index in (room * 2, room * 2 + 1)]
+                            self.assertLessEqual(sum(active), 1)
+                self.assertGreaterEqual(min(ends[0] - 31 for ends in expected), 37)
+                self.assertEqual(json.loads(packets[-1][1][1:])['frames_sent'], 192 * inputs)
+
+    def test_settlement_profile_rejects_incomplete_or_unbounded_shapes(self):
+        for inputs, frames, humans in [(1, 64, 2), (3, 64, 2), (2, 127, 2), (2, 64, True)]:
+            with self.subTest(inputs=inputs, frames=frames, humans=humans), self.assertRaises(ValueError):
+                generate(bytes(1024), inputs, frames, lambda _: None,
+                         settlement_inputs_per_room=humans)
 
     def test_blocked_write_lateness_is_reported_without_shifting_deadlines(self):
         packets = self.run_generator(inputs=1, frames=3, delay=40_000_000)

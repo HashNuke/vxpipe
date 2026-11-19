@@ -164,10 +164,30 @@ mandatory. The four-case smoke watchdog is available with:
 python3 scripts/diagnostics/smoke_runner.py --committed-writes --output /tmp/diagnostics-smoke-unique
 ```
 
-`--rooms N` exercises N concurrent one-human rooms (1–16); each must deliver all
-64 frames and two complete turns. This is still a short functional smoke, not a
-full matrix cell or evidence that all allowed counts have passed. The two-human
-per-room topology is not yet supported by this runner.
+`--rooms N --inputs-per-room M` exercises N rooms with one or two human STT
+inputs each, with at most 16 total inputs. Each input must deliver all 192 frames
+and two complete turns. This is still a short functional smoke, not a full matrix
+cell or evidence that every allowed topology has passed native acceptance.
+
+Synthetic provider settlements use a fixed 64-frame cadence. For input index i,
+room count R and humans per room H, slot = (i mod H) × R + floor(i / H), and the
+first settlement is 64 + floor(64 × (slot + 1) / (R × H)); the second is 64 frames
+later. Same-room humans are 32 frames apart. Each settlement ends a 32-frame speech
+window replaying the first 16,384 samples of the pinned fixture. Outside those
+windows the PCM is silence, before applying the source marker. The manifest pins
+the clip's offset, length and SHA-256, declares silence/window encoding and lists
+per-input settlement frames. The fixture checks actual emitted settlements, exact
+PCM delivery, canonical IDs, native fingerprints and full public event traces.
+
+This 192-frame/6.144-second normal-conversation smoke intentionally primes inputs
+with at least 36 silent frames before the first speech window. It is not cold
+startup coverage or the full paired workload. All four modes have identical
+scheduled PCM and deadlines; no observer or response acknowledgement changes the
+schedule. Same-room windows do not overlap, but there is no guaranteed response
+completion gap: an interruption still fails the strict normal-conversation oracle.
+The earlier continuous-speech, staggered-commit attempt exposed interruptions and
+an early missing diagnostic row; those attempts remain recorded, not accepted.
+Overlapping speech and interrupted turns remain separate functional/live cases.
 
 `--committed-writes` creates a separate migrated database for each of the four
 cases and verifies committed rows through an independent connection. Normal ExUnit

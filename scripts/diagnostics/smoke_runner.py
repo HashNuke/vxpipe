@@ -140,7 +140,7 @@ def stop_unit(unit, *, system=False):
             raise RuntimeError('could not stop owned transient unit')
 
 
-def smoke_complete(reports, samples, *, committed_writes=False, rooms=1):
+def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_per_room=1):
     expected = {(False, False), (False, True), (True, False), (True, True)}
     if len(reports) != 4 or {(r['operational_vad'], r['collection']) for r in reports} != expected:
         return False
@@ -149,17 +149,18 @@ def smoke_complete(reports, samples, *, committed_writes=False, rooms=1):
     if committed_writes and any(r.get('persistence') != 'committed' or
                                 r.get('database_pool_size') != 10 for r in reports):
         return False
-    if any(r.get('rooms', 1) != rooms for r in reports):
+    if any(r.get('rooms', 1) != rooms or r.get('inputs_per_room', 1) != inputs_per_room
+           for r in reports):
         return False
     return all(type(r['operational_vad']) is bool and type(r['collection']) is bool and
-               r['generator']['frames_sent'] == 64 * rooms and
+               r['generator']['frames_sent'] == 192 * rooms * inputs_per_room and
                type(r['generator']['p95_lateness_ns']) is int and
                0 <= r['generator']['p95_lateness_ns'] <= 2_000_000 and
-               r['generator']['elapsed_ns'] >= 2_048_000_000 for r in reports)
+               r['generator']['elapsed_ns'] >= 6_144_000_000 for r in reports)
 
 
 def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sleep=time.sleep,
-          committed_writes=False, rooms=1):
+          committed_writes=False, rooms=1, inputs_per_room=1):
     samples, reports, cleanup_errors = [], [], []
     abort, pending = None, ''
     identity = None
@@ -230,7 +231,8 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
             except Exception as error:
                 cleanup_errors.append(type(error).__name__ + ': generator cleanup failed')
     try:
-        complete = smoke_complete(reports, samples, committed_writes=committed_writes, rooms=rooms)
+        complete = smoke_complete(reports, samples, committed_writes=committed_writes, rooms=rooms,
+                                  inputs_per_room=inputs_per_room)
     except (KeyError, TypeError, ValueError):
         complete = False
     return dict(run_id=owned.run_id, exit_code=process.returncode, abort=abort,
@@ -245,6 +247,8 @@ def provenance():
              'scripts/diagnostics/pcm_generator.py', 'mix.lock',
              'apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs',
              'apps/vxpipe_console/test/support/diagnostics_database.ex',
+             'apps/vxpipe_console/test/support/diagnostics_schedule.ex',
+             'apps/vxpipe_console/test/support/speech_connection.ex',
              'apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero/model.ex',
              'apps/vxpipe_call_engine/priv/speech/silero_v6.2.3.onnx']
     return dict(
@@ -261,8 +265,11 @@ def main():
     parser.add_argument('--committed-writes', action='store_true',
                         help='use a fresh migrated database and real commits for each case')
     parser.add_argument('--rooms', type=int, choices=range(1, 17), default=1,
-                        help='concurrent rooms with one human STT input each (1..16)')
+                        help='concurrent rooms (total human inputs must be at most 16)')
+    parser.add_argument('--inputs-per-room', type=int, choices=(1, 2), default=1)
     args = parser.parse_args()
+    if args.rooms * args.inputs_per_room > 16:
+        parser.error('at most 16 total human STT inputs')
     if os.getuid() == 0:
         parser.error('invoke as the checkout user, not root')
     if available_memory() < 1536 * 1024:
@@ -282,6 +289,7 @@ def main():
                'VXPIPE_DIAGNOSTIC_GENERATOR_CPUS=2,3', 'VXPIPE_DIAGNOSTIC_GENERATOR_SYSTEMD=1',
                'VXPIPE_DIAGNOSTIC_RUN_ID=' + owned.run_id,
                'VXPIPE_DIAGNOSTIC_ROOMS=' + str(args.rooms),
+               'VXPIPE_DIAGNOSTIC_INPUTS_PER_ROOM=' + str(args.inputs_per_room),
                'VXPIPE_DIAGNOSTIC_COMMITTED_WRITES=' + ('1' if args.committed_writes else '0'),
                'mix', 'test', 'test/integration/configured_latency_diagnostics_test.exs',
                '--only', 'external_pcm', '--seed', '0', '--max-cases', '1']
@@ -292,7 +300,8 @@ def main():
     with log_path.open('w') as log:
         process = subprocess.Popen(command, cwd=ROOT / 'apps/vxpipe_console',
                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        report = watch(process, owned, log_path, committed_writes=args.committed_writes, rooms=args.rooms)
+        report = watch(process, owned, log_path, committed_writes=args.committed_writes,
+                       rooms=args.rooms, inputs_per_room=args.inputs_per_room)
     report['provenance'] = source
     report['scope'] = 'functional smoke watchdog; not paired performance acceptance'
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

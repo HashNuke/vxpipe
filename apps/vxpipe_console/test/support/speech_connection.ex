@@ -147,6 +147,12 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
     {:noreply, state}
   end
 
+  def handle_info({:vxpipe_event, event} = message, %{audit_events?: :scoped} = state) do
+    send(state.observer, {:configured_public_event, self(), event})
+    send(state.observer, message)
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_event, event} = message, %{audit_events?: true} = state) do
     send(state.observer, {:configured_public_event, event})
     send(state.observer, message)

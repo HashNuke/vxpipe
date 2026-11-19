@@ -13,8 +13,8 @@ LEAF = '12345678-1234-1234-1234-123456789abc'
 
 def reports():
     return [dict(operational_vad=vad, collection=enabled,
-                 generator=dict(frames_sent=64, p95_lateness_ns=1000,
-                                elapsed_ns=2_048_000_000))
+                 generator=dict(frames_sent=192, p95_lateness_ns=1000,
+                                elapsed_ns=6_144_000_000))
             for vad in (False, True) for enabled in (False, True)]
 
 
@@ -99,7 +99,7 @@ class SmokeRunnerTest(unittest.TestCase):
 
     def test_zero_exit_without_complete_matrix_or_resource_samples_is_not_success(self):
         reports = [dict(operational_vad=vad, collection=enabled,
-                        generator=dict(frames_sent=64, p95_lateness_ns=1000, elapsed_ns=2_048_000_000))
+                        generator=dict(frames_sent=192, p95_lateness_ns=1000, elapsed_ns=6_144_000_000))
                    for vad in (False, True) for enabled in (False, True)]
         samples = [dict(beams=[dict(rss_kib=100)])]
         self.assertTrue(smoke_complete(reports, samples))
@@ -108,7 +108,7 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertFalse(smoke_complete(reports[:-1] + [reports[0]], samples))
         reports[0]['generator']['elapsed_ns'] = 0
         self.assertFalse(smoke_complete(reports, samples))
-        reports[0]['generator']['elapsed_ns'] = 2_048_000_000
+        reports[0]['generator']['elapsed_ns'] = 6_144_000_000
         reports[0]['generator']['p95_lateness_ns'] = -1
         self.assertFalse(smoke_complete(reports, samples))
         reports[0]['generator']['p95_lateness_ns'] = 2_000_001
@@ -131,10 +131,22 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertFalse(smoke_complete(evidence, samples, rooms=2))
         for report in evidence:
             report['rooms'] = 2
-            report['generator']['frames_sent'] = 128
+            report['generator']['frames_sent'] = 384
         self.assertTrue(smoke_complete(evidence, samples, rooms=2))
-        evidence[0]['generator']['frames_sent'] = 64
+        evidence[0]['generator']['frames_sent'] = 192
         self.assertFalse(smoke_complete(evidence, samples, rooms=2))
+
+    def test_two_humans_per_room_requires_matching_topology_and_all_frames(self):
+        evidence = reports()
+        samples = [dict(beams=[dict(rss_kib=100)])]
+        self.assertFalse(smoke_complete(evidence, samples, rooms=2, inputs_per_room=2))
+        for report in evidence:
+            report['rooms'] = 2
+            report['inputs_per_room'] = 2
+            report['generator']['frames_sent'] = 768
+        self.assertTrue(smoke_complete(evidence, samples, rooms=2, inputs_per_room=2))
+        evidence[0]['inputs_per_room'] = 1
+        self.assertFalse(smoke_complete(evidence, samples, rooms=2, inputs_per_room=2))
 
     def test_sampler_failure_still_cleans_owned_units_and_cannot_pass(self):
         owned = OwnedUnits(RUN)

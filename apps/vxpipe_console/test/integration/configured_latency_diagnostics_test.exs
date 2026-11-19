@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   @moduletag :capture_log
   @moduletag timeout: 30_000
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Command.AttachConnection
+  alias Vxpipe.CallEngine.Command.{AttachConnection, JoinParticipant}
 
   alias Vxpipe.CallEngine.Diagnostics.{
     AgentRuntimeModelProvider,
@@ -262,11 +262,35 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   end
 
   @tag :trace_oracle
+  test "peer transcript projection oracle rejects reordered copies" do
+    connection = make_ref()
+    first = %{id: "first", connection_id: "source"}
+    second = %{id: "second", connection_id: "source"}
+    send(self(), {:configured_public_event, connection, second})
+    send(self(), {:configured_public_event, connection, first})
+
+    assert_raise ExUnit.AssertionError, fn ->
+      assert_peer_projection(connection, "source", [first, second])
+    end
+  end
+
+  @tag :trace_oracle
+  test "stored input oracle rejects rows belonging to another human's canonical turns" do
+    events =
+      for id <- ["own-first", "own-second"],
+          do: struct(CallEngine.Event.ParticipantTurnCompleted, correlation_id: id)
+
+    turns = [%{turn_id: "other-first"}, %{turn_id: "other-second"}]
+    assert_raise ExUnit.AssertionError, fn -> assert_stored_input_turns(turns, events) end
+  end
+
+  @tag :trace_oracle
   test "single-room trace oracle rejects unexpected events from another room" do
     connection = make_ref()
     send(self(), {:configured_speech_closed, connection})
     send(self(), {:control_trace_agent, connection, "agent"})
-    send(self(), {:configured_public_event, %{room_id: "unexpected-room"}})
+    event = struct(CallEngine.Event.ParticipantTurnStarted, room_id: "unexpected-room")
+    send(self(), {:configured_public_event, event})
 
     assert_raise ExUnit.AssertionError, fn ->
       assert_complete_text_trace(connection, %{room_id: "expected-room"}, [])
@@ -278,12 +302,41 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @tag matrix: true,
          actual_inference: true,
          external_pcm: true,
+         external_case: "#{vad}/#{enabled}",
          vad: vad,
          diagnostics_enabled: enabled
     test "externally paced actual Silero smoke, operational #{vad}, collection #{enabled}", c do
       room_count = String.to_integer(System.get_env("VXPIPE_DIAGNOSTIC_ROOMS", "1"))
-      assert room_count in 1..16
-      calls = Enum.map(1..room_count, fn _ -> call(c.options, c.vad, :concurrent_llm, true) end)
+
+      inputs_per_room =
+        String.to_integer(System.get_env("VXPIPE_DIAGNOSTIC_INPUTS_PER_ROOM", "1"))
+
+      assert inputs_per_room in 1..2
+      assert room_count in 1..16 and room_count * inputs_per_room <= 16
+
+      primary_inputs =
+        Enum.map(1..room_count, fn _ ->
+          call(c.options, c.vad, {:concurrent_llm, inputs_per_room}, :scoped)
+        end)
+
+      calls =
+        Enum.flat_map(primary_inputs, fn {_, _, _, _, identity} = primary ->
+          if inputs_per_room == 2 do
+            room_id = identity.room_id
+            assert_receive {:diagnostic_extra_input, ^room_id, extra}
+            [primary, extra]
+          else
+            [primary]
+          end
+        end)
+
+      total_inputs = room_count * inputs_per_room
+
+      for {call, _, _, _, _} <- calls do
+        assert Enum.count(Map.values(call.plan.participants), &(&1.kind == :human)) ==
+                 inputs_per_room
+      end
+
       pcm_path = Vxpipe.Providers.Deepgram.LiveFixture.pcm_path()
       generator = Path.expand("../../../../scripts/diagnostics/pcm_generator.py", __DIR__)
       python = System.find_executable("python3")
@@ -296,7 +349,17 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         end
 
       generator_args =
-        [generator, "--pcm", pcm_path, "--inputs", to_string(room_count), "--frames", "64"] ++
+        [
+          generator,
+          "--pcm",
+          pcm_path,
+          "--inputs",
+          to_string(total_inputs),
+          "--frames",
+          "192",
+          "--settlement-inputs-per-room",
+          to_string(inputs_per_room)
+        ] ++
           affinity_args
 
       {executable, arguments} =
@@ -361,29 +424,53 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
              frames: 0,
              offered: [],
              received: [],
-             completed: 0
+             completed: 0,
+             settlements: []
            }}
         end)
 
       result =
         external_pcm_loop(%{
           port: port,
+          rooms: room_count,
+          inputs_per_room: inputs_per_room,
           inputs: inputs,
           exited?: false,
           manifest: nil,
           report: nil,
           wire_indices: Map.new(inputs, fn {index, input} -> {input.wire, index} end),
-          room_indices: Map.new(inputs, fn {index, input} -> {input.identity.room_id, index} end)
+          source_indices:
+            Map.new(inputs, fn {index, input} ->
+              {{input.identity.room_id, input.identity.participant_id}, index}
+            end)
         })
 
-      for {_index, input} <- result.inputs do
+      for {index, input} <- result.inputs do
         assert input.received == input.offered
-        assert input.frames == 64
+        assert input.frames == 192
+
+        expected =
+          for frame <- 1..192,
+              turn =
+                Vxpipe.Console.Test.DiagnosticsSchedule.turn_at(
+                  index,
+                  frame,
+                  room_count,
+                  inputs_per_room
+                ),
+              not is_nil(turn),
+              do: {frame, turn}
+
+        assert Enum.reverse(input.settlements) == expected
+
+        assert Enum.at(result.manifest["provider_settlement_frames"], index) ==
+                 Enum.map(expected, &elem(&1, 0))
       end
 
-      assert result.manifest["inputs"] == room_count
-      assert result.manifest["frames_per_input"] == 64
-      assert result.report["frames_sent"] == 64 * room_count
+      assert result.manifest["tail_encoding"] == "silence-outside-speech-windows"
+      assert result.manifest["inputs"] == total_inputs
+      assert result.manifest["frames_per_input"] == 192
+      assert result.report["frames_sent"] == 192 * total_inputs
 
       IO.puts(
         "DIAGNOSTIC_EXTERNAL_GENERATOR " <>
@@ -398,7 +485,17 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       assert result.manifest["fixture_sha256"] ==
                Base.encode16(:crypto.hash(:sha256, File.read!(pcm_path)), case: :lower)
 
-      for {_index, %{attachment: attachment, identity: identity}} <- result.inputs do
+      clip = binary_part(File.read!(pcm_path), 0, 32 * 1024)
+
+      assert result.manifest["speech_clip"] == %{
+               "offset_samples" => 0,
+               "samples" => 16_384,
+               "sha256" => Base.encode16(:crypto.hash(:sha256, clip), case: :lower)
+             }
+
+      room_inputs = result.inputs |> Map.values() |> Enum.uniq_by(& &1.identity.room_id)
+
+      for %{attachment: attachment, identity: identity} <- room_inputs do
         assert {:ok, completion} =
                  CallEngine.monitor_room_completion(
                    identity.tenant_id,
@@ -414,26 +511,43 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         %{call: call, connection: connection, wire: wire, identity: identity} = input
         await_diagnostic_drain(identity)
 
-        assert_complete_text_trace(
-          connection,
-          identity,
-          [
-            "External PCM turn 1.",
-            "External PCM turn 2."
-          ],
-          identity.room_id
-        )
+        events =
+          assert_complete_text_trace(
+            connection,
+            identity,
+            [external_turn_text(index, 1), external_turn_text(index, 2)],
+            {:source, connection, identity.connection_id}
+          )
+
+        peers =
+          result.inputs
+          |> Map.values()
+          |> Enum.filter(
+            &(&1.identity.room_id == identity.room_id and &1.connection != connection)
+          )
+
+        projected =
+          Enum.filter(
+            events,
+            &(&1.__struct__ in [ParticipantTranscription, CallEngine.Event.TextOutput])
+          )
+
+        for peer <- peers,
+            do: assert_peer_projection(peer.connection, identity.connection_id, projected)
 
         assert {:ok, %{entries: runs}} =
                  LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
 
         if c.diagnostics_enabled do
-          assert [%{run: run}] = runs
+          assert length(runs) == inputs_per_room
+
+          assert %{run: run} =
+                   Enum.find(runs, &(&1.run.participant_id == identity.participant_id))
 
           assert {:ok, turns} =
                    LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
 
-          assert length(turns) == 2
+          assert_stored_input_turns(turns, events)
         else
           assert runs == []
         end
@@ -452,7 +566,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                      Ecto.UUID.dump!(call.id)
                    ])
 
-          expected_rows = if c.diagnostics_enabled, do: 2, else: 0
+          expected_rows = if c.diagnostics_enabled, do: 2 * inputs_per_room, else: 0
 
           assert %{rows: [[^expected_rows]]} =
                    Postgrex.query!(
@@ -468,6 +582,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       assert_diagnostic_slots_released()
       refute_received {:configured_public_event, _}
+      refute_received {:configured_public_event, _, _}
 
       evidence = actual_inference_evidence()
 
@@ -479,7 +594,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             input.offered
             |> Enum.reject(fn pcm ->
               # The source marker alone is not evidence of speech-bearing PCM.
-              if room_count > 1,
+              if total_inputs > 1,
                 do: binary_part(pcm, 2, 1022) == :binary.copy(<<0>>, 1022),
                 else: pcm == :binary.copy(<<0>>, 1024)
             end)
@@ -510,6 +625,13 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             operational_vad: c.vad,
             collection: c.diagnostics_enabled,
             rooms: room_count,
+            inputs_per_room: inputs_per_room,
+            settlement_schedule: "64-frame-cadence-32-frame-speech-windows",
+            settlement_frames:
+              Map.new(result.inputs, fn {index, input} ->
+                {Integer.to_string(index),
+                 input.settlements |> Enum.reverse() |> Enum.map(&elem(&1, 0))}
+              end),
             persistence: if(c.measurement_database, do: "committed", else: "sandbox"),
             database_pool_size:
               if(c.measurement_database, do: Keyword.fetch!(c.measurement_database, :pool_size)),
@@ -2426,7 +2548,10 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     assert_receive {:configured_speech_closed, ^connection}, 2_000
     assert_receive {:control_trace_agent, ^connection, agent}
     events = collect_control_events(scope)
-    assert length(events) == length(texts) * 6
+
+    assert length(events) == length(texts) * 6,
+           "unexpected event sequence: #{inspect(Enum.map(events, & &1.__struct__))}"
+
     assert Enum.all?(events, &(is_binary(&1.id) and byte_size(&1.id) > 0))
     assert length(Enum.uniq_by(events, & &1.id)) == length(events)
     sequences = Enum.map(events, & &1.sequence)
@@ -2484,11 +2609,42 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                  Map.merge(common, fields)
       end
     end
+
+    events
+  end
+
+  defp assert_peer_projection(connection, source_connection_id, events) do
+    for expected <- events do
+      assert_receive {:configured_public_event, ^connection,
+                      %{connection_id: ^source_connection_id} = observed},
+                     2_000
+
+      assert observed == expected
+    end
+  end
+
+  defp assert_stored_input_turns(turns, events) do
+    assert length(turns) == 2
+
+    canonical =
+      for %CallEngine.Event.ParticipantTurnCompleted{} = event <- events,
+          do: event.correlation_id
+
+    assert MapSet.new(turns, & &1.turn_id) == MapSet.new(canonical)
   end
 
   defp collect_control_events(:all) do
     receive do
       {:configured_public_event, event} -> [event | collect_control_events(:all)]
+    after
+      0 -> []
+    end
+  end
+
+  defp collect_control_events({:source, connection, connection_id} = scope) do
+    receive do
+      {:configured_public_event, ^connection, %{connection_id: ^connection_id} = event} ->
+        [event | collect_control_events(scope)]
     after
       0 -> []
     end
@@ -2743,6 +2899,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   defp call(options, vad \\ false, scenario \\ :llm, audit_events? \\ false) do
     routing? = scenario == :transfer
     input_only? = scenario == :humans
+    concurrent? = match?({:concurrent_llm, _}, scenario)
+    two_inputs? = scenario == {:concurrent_llm, 2}
 
     sts_mode =
       case scenario do
@@ -2794,6 +2952,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         }
       }
     }
+
+    source =
+      if two_inputs? do
+        put_in(source, [:participants, "guest"], %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"}
+        })
+      else
+        source
+      end
 
     source =
       if input_only? do
@@ -2935,7 +3103,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             {SpeechConnection,
              command: command, observer: self(), output: sink, audit_events?: audit_events?},
             id:
-              if(scenario == :concurrent_llm,
+              if(concurrent?,
                 do: {:speech_connection, command.room_id, command.connection_id},
                 else: SpeechConnection
               )
@@ -3028,6 +3196,65 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       assert_receive {:configured_speech_ready, ^connection}, 5_000
     end
 
+    if two_inputs? do
+      guest = Map.fetch!(claim.call.plan.participants, "guest")
+
+      assert {:ok, join} =
+               JoinParticipant.new(
+                 tenant_id: tenant.key,
+                 actor_id: claim.call.plan.actor_id,
+                 room_id: prepared.room_id,
+                 participant_id: guest.participant_id,
+                 role: :human,
+                 deadline: DateTime.add(DateTime.utc_now(), 20, :second)
+               )
+
+      assert {:ok, _} = CallEngine.join_participant(join)
+
+      assert {:ok, guest_command} =
+               AttachConnection.new(
+                 tenant_id: tenant.key,
+                 actor_id: claim.call.plan.actor_id,
+                 room_id: prepared.room_id,
+                 incarnation_id: room.incarnation_id,
+                 participant_id: guest.participant_id,
+                 connection_id: "diagnostic-guest",
+                 deadline: DateTime.add(DateTime.utc_now(), 20, :second)
+               )
+
+      guest_connection =
+        start_supervised!(
+          Supervisor.child_spec(
+            {SpeechConnection, command: guest_command, observer: self(), audit_events?: :scoped},
+            id: {:speech_connection, prepared.room_id, "diagnostic-guest"}
+          )
+        )
+
+      assert {:ok, _} = SpeechConnection.attach(guest_connection)
+      assert_receive {:scribe_started, guest_wire}, 5_000
+
+      :ok =
+        Wire.deliver_frame(
+          guest_wire,
+          JSON.encode!(%{
+            "message_type" => "session_started",
+            "session_id" => "synthetic-guest",
+            "config" => echoed_settings()
+          })
+        )
+
+      assert_receive {:configured_speech_ready, ^guest_connection}, 5_000
+      agent = Map.fetch!(claim.call.plan.participants, claim.call.plan.entry_receiver)
+      send(self(), {:control_trace_agent, guest_connection, agent.participant_id})
+
+      send(
+        self(),
+        {:diagnostic_extra_input, prepared.room_id,
+         {claim.call, guest_connection, SpeechConnection.attachment(guest_connection), guest_wire,
+          guest_command}}
+      )
+    end
+
     {claim.call, connection, SpeechConnection.attachment(connection), wire, command}
   end
 
@@ -3057,11 +3284,13 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  defp external_turn_text(index, turn), do: "External PCM input #{index + 1}, turn #{turn}."
+
   defp external_pcm_loop(state) do
     complete? =
       state.exited? and state.report != nil and
         Enum.all?(state.inputs, fn {_index, input} ->
-          input.completed == 2 and length(input.received) == 64
+          input.completed == 2 and length(input.received) == 192
         end)
 
     if complete?, do: state, else: external_pcm_receive(state)
@@ -3099,20 +3328,55 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         input = Map.fetch!(state.inputs, index)
         received = [pcm | input.received]
         count = length(received)
-        assert count <= 64
-        if rem(count, 32) == 0, do: emit_scribe_turn(wire, "External PCM turn #{div(count, 32)}.")
-        updated = %{input | received: received}
+        assert count <= 192
+
+        turn =
+          Vxpipe.Console.Test.DiagnosticsSchedule.turn_at(
+            index,
+            count,
+            state.rooms,
+            state.inputs_per_room
+          )
+
+        settlements =
+          if turn do
+            emit_scribe_turn(wire, external_turn_text(index, turn))
+            [{count, turn} | input.settlements]
+          else
+            input.settlements
+          end
+
+        updated = %{input | received: received, settlements: settlements}
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
 
+      {:vxpipe_event, %CallEngine.Event.AgentTurnInterrupted{} = event} ->
+        source = Map.fetch!(state.source_indices, {event.room_id, event.source_participant_id})
+
+        interrupter =
+          Map.fetch!(state.source_indices, {event.room_id, event.interrupted_by_participant_id})
+
+        flunk(
+          "external workload response for input #{source} interrupted by input #{interrupter}"
+        )
+
       {:vxpipe_event, %CallEngine.Event.AgentTurnCompleted{} = event} ->
-        index = Map.fetch!(state.room_indices, event.room_id)
+        index = Map.fetch!(state.source_indices, {event.room_id, event.source_participant_id})
         input = Map.fetch!(state.inputs, index)
         assert event.source_participant_id == input.identity.participant_id
         assert input.completed < 2
         updated = %{input | completed: input.completed + 1}
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
     after
-      5_000 -> flunk("external PCM workload did not complete")
+      5_000 ->
+        progress =
+          Map.new(state.inputs, fn {index, input} ->
+            {index,
+             %{frames: input.frames, received: length(input.received), completed: input.completed}}
+          end)
+
+        flunk(
+          "external PCM workload did not complete: #{inspect(progress)}; generator exited: #{state.exited?}"
+        )
     end
   end
 

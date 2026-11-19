@@ -16,16 +16,32 @@ import time
 PERIOD_NS = 32_000_000
 
 
-def generate(pcm, inputs, frames, write, *, clock=time.monotonic_ns, sleep=time.sleep, affinity=None, spin_ns=0):
+def generate(pcm, inputs, frames, write, *, clock=time.monotonic_ns, sleep=time.sleep, affinity=None,
+             spin_ns=0, settlement_inputs_per_room=None):
     if (type(inputs) is not int or not 1 <= inputs <= 16
             or type(frames) is not int or not 1 <= frames <= 1000
             or len(pcm) < 1024 or len(pcm) % 2
             or type(spin_ns) is not int or not 0 <= spin_ns <= 2_000_000):
         raise ValueError('invalid bounded 16 kHz PCM workload')
+    settlements = None
+    speech_clip = (pcm * math.ceil(32768 / len(pcm)))[:32768]
+    if settlement_inputs_per_room is not None:
+        if (type(settlement_inputs_per_room) is not int or settlement_inputs_per_room not in (1, 2)
+                or inputs % settlement_inputs_per_room or frames < 128):
+            raise ValueError('invalid settlement topology or duration')
+        rooms = inputs // settlement_inputs_per_room
+        settlements = []
+        for index in range(inputs):
+            slot = (index % settlement_inputs_per_room) * rooms + index // settlement_inputs_per_room
+            first = 64 + 64 * (slot + 1) // inputs
+            settlements.append(list(range(first, frames + 1, 64)))
     manifest = dict(inputs=inputs, frames_per_input=frames, sample_rate=16000,
                     samples_per_frame=512, fixture_sha256=hashlib.sha256(pcm).hexdigest(),
                     generator_cpu_affinity=affinity, pacing_spin_ns=spin_ns,
-                    input_encoding='first-sample-index' if inputs > 1 else 'fixture')
+                    input_encoding='first-sample-index' if inputs > 1 else 'fixture',
+                    provider_settlement_frames=settlements,
+                    speech_clip=dict(offset_samples=0, samples=16384, sha256=hashlib.sha256(speech_clip).hexdigest()) if settlements else None,
+                    tail_encoding='silence-outside-speech-windows' if settlements else 'fixture')
     write(b'\0' + json.dumps(manifest).encode())
     start = clock()
     cpu_start = time.process_time()
@@ -42,7 +58,15 @@ def generate(pcm, inputs, frames, write, *, clock=time.monotonic_ns, sleep=time.
             before_write = clock()
             # Distinguish sources without changing frame size or pacing. These
             # workload fixtures are not acoustic-accuracy ground truth.
-            payload = struct.pack('<h', index + 1) + chunk[2:] if inputs > 1 else chunk
+            source_pcm = chunk
+            if settlements:
+                ending = next((end for end in settlements[index] if end - 31 <= sequence + 1 <= end), None)
+                if ending is None:
+                    source_pcm = bytes(1024)
+                else:
+                    speech_offset = (sequence + 1 - (ending - 31)) * 1024
+                    source_pcm = speech_clip[speech_offset:speech_offset + 1024]
+            payload = struct.pack('<h', index + 1) + source_pcm[2:] if inputs > 1 else source_pcm
             write(b'\1' + struct.pack('>HI', index, sequence) + payload)
             after_write = clock()
             wake_lateness.append(max(0, before_write - deadline))
@@ -85,12 +109,15 @@ def main():
     parser.add_argument('--frames', required=True, type=int)
     parser.add_argument('--spin-us', type=int, default=2000, help='bounded final spin guard (0..2000 us)')
     parser.add_argument('--cpus', help='explicit external-generator CPU ids, e.g. 2,3')
+    parser.add_argument('--settlement-inputs-per-room', type=int, choices=(1, 2),
+                        help='declare fixed 32-frame speech windows ending at provider settlements')
     args = parser.parse_args()
     affinity = configure_affinity(args.cpus)
     def write(packet):
         sys.stdout.buffer.write(struct.pack('>I', len(packet)) + packet)
         sys.stdout.buffer.flush()
-    generate(args.pcm.read_bytes(), args.inputs, args.frames, write, affinity=affinity, spin_ns=args.spin_us * 1000)
+    generate(args.pcm.read_bytes(), args.inputs, args.frames, write, affinity=affinity,
+             spin_ns=args.spin_us * 1000, settlement_inputs_per_room=args.settlement_inputs_per_room)
 
 
 if __name__ == '__main__':

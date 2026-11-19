@@ -689,7 +689,12 @@ uses disposable databases with independent committed-row checks, avoiding the
 sandbox's omitted commit costs. The
 [concurrent workload checkpoint](../20261119-2232-diagnostics-concurrent-workload.md)
 extends this smoke to independently checked room inputs with source-distinct PCM.
-Full paired-load acceptance remains unchecked.
+The [participant workload checkpoint](../20261119-2245-diagnostics-participant-workload.md)
+adds two STT humans per room, ordered peer projections, canonical row identity and
+fixed, declared participant speech windows. Two-room/two-human and single-input
+primed functional smoke each pass all four modes with committed canonical rows;
+earlier cold/overlapping fixture failures remain recorded separately. This does
+not establish cold coverage, full inference coverage or paired-load acceptance.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
