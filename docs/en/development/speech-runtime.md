@@ -85,6 +85,68 @@ original association. When human STT is selected, it owns that publication path.
 Transcript source and the controller that triggers an STS response are separate
 choices.
 
+## Passive latency observation
+
+The optional room diagnostics service observes accepted human STT inputs. Source
+identity includes the room incarnation, participant, connection/source epoch and
+STT allocation. Local operational Silero contributes existing inference evidence;
+without it, one passive detector state belongs to each accepted STT stream.
+Provider endpointing remains a separate landmark and never substitutes for local
+acoustic boundaries. Native speech-to-speech-only sources and agent output are
+outside this path; human STT that drives an STS controller is still eligible.
+Automatic attachment currently additionally requires an acknowledged
+`scribe_v2_realtime` profile that passes Scribe validation for provider `:vad`
+commit strategy with no missing required fields. `RoomService.accept_discovery/2`
+rejects other/manual/unacknowledged profiles as `:profile_unavailable`; this is a
+runtime restriction, not just a pending live-validation claim. Local operational
+Silero can be off or on within that supported profile.
+
+`RoomIncarnationSupervisor` owns a temporary, non-significant diagnostics subtree.
+Its service reconciles room-local sources and owns source workers; node-wide
+admission, model loading, inference and Calls persistence remain bounded shared
+infrastructure. Engine resolves the injected node port without depending on Calls.
+Neither diagnostic readiness nor persistence is a room admission requirement.
+Failure or exhaustion of the diagnostic subtree leaves the call running with
+missing or incomplete diagnostic evidence.
+
+Authority uses STT allocation generation and the source's STT/audio-input policy
+intervals. An unrelated policy revision or response-agent transfer preserves
+observation when those inputs survive. Actual source/STT replacement, revocation,
+clock discontinuity or local VAD mode change fences the old work. Source snapshots
+without interval evidence retain the conservative global-revision fence. Do not
+remove policy checks to preserve continuity.
+
+A source can produce multiple acoustic segments within one canonical turn.
+Bounded per-turn and per-run unattached segment records preserve omission counts.
+Fallback recurrent state continues across provider settlements; operational reuse
+preserves its existing resets and reports resulting gaps. Late local confirmation
+can revise an earlier turn without moving it to a newer source epoch. Response
+landmarks require matching canonical input/output identities; absent or tool-only
+responses do not prevent an input timing row.
+
+Calls owns diagnostic records and authorized reads; Persistence owns storage.
+Writes use a separate bounded, asynchronous handoff and finite drain. A writer
+crash can leave a durable running header: read-time stale-heartbeat coverage marks
+it unconfirmed rather than fabricating terminal evidence. Accepted historical
+summaries may persist after capture stops. Diagnostics stores no raw PCM or
+transcript text, and its records cascade with call deletion.
+
+See [operator interpretation](../usage/operations.md#passive-latency-diagnostics),
+[resource limits and authority rules](../../design/latency-diagnostics-runtime-limits.md)
+and the [measurement plan](../../design/latency-diagnostics-measurement-plan.md).
+In-process dirty-scheduler inference does not isolate native crashes or establish
+CPU/RSS overhead. Source-level deadlines fence results; they cannot prove a native
+job has stopped before its process exits.
+
+Focused deterministic checks live in Engine's `test/vxpipe/call_engine/diagnostics`,
+Calls' `test/vxpipe/calls/diagnostics`, and Console's
+`test/integration/configured_latency_diagnostics_test.exs`. Run focused tests from
+the owning child application while iterating. Configured fixtures use local
+provider transports; they are not live-provider acceptance. The
+[milestone](../../../labnotes/milestones/passive-call-latency-diagnostics.md)
+separately requires labelled acoustic accuracy, paired on/off load, Scribe/browser
+acceptance and final umbrella gates. No live Telnyx tests belong to this milestone.
+
 ## Output credit and settlement
 
 Generation, local playback and remote hearing are different facts. Audio delivery

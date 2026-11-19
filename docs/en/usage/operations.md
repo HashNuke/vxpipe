@@ -34,6 +34,106 @@ Recordings and immutable call-detail publications are separate artifacts. They
 require configured object storage and relevant capture permissions. A readable
 inspection page does not imply a recording exists.
 
+## Passive latency diagnostics
+
+Collection is off by default. In **Installation → Diagnostics**, built-in Admin
+and Superadmin browser users can save **Benchmark using Silero VAD**. This is a
+separate setting from a call's operational VAD switch. Tenant membership, custom
+roles, API keys and call join credentials do not grant permission to change it.
+Existing tenant call-inspection permissions govern reading collected reports.
+Installation URL controls remain Superadmin-only.
+
+A saved setting confirms a database revision, not that every worker has applied
+it. The current production settings response does not certify cross-node
+application; **Collection status unavailable** is an honest outcome, not evidence
+that collection has stopped everywhere. On a failed or conflicting save, reload
+the setting before retrying. Disabling collection does not delete earlier reports,
+and already accepted summaries may finish their bounded persistence drain.
+
+The implementation is still undergoing acceptance: distributed effective-status,
+measured overhead, acoustic accuracy and live browser validation remain open in
+[the milestone](../../../labnotes/milestones/passive-call-latency-diagnostics.md).
+The first live acceptance profile is human ElevenLabs Scribe v2 Realtime input
+over browser WebRTC with local Silero off and on. Offline fixtures do not establish
+live support for other providers, models or transports. Automatic attachment
+currently requires an acknowledged Scribe v2 Realtime profile with provider
+`vad` commit strategy and all required echoed settings present and valid. Other
+models/providers, manual commit mode and missing or mismatched acknowledgements
+do not attach an observer. Provider `vad` commit strategy is independent of the
+local operational Silero switch, which can be off or on.
+
+### Which audio is observed
+
+Each supported, accepted human STT input is independent. When it already uses local
+operational Silero, diagnostics reuses its evidence without a second inference
+pass. Otherwise a room-owned passive Silero observer supplies the evidence.
+Provider-side VAD and turn markers are separate signals. Diagnostics does not
+commit STT, choose when a conversational turn ends, or change the operational VAD
+setting.
+
+Two humans using STT have separate detector states. A human STT input remains
+eligible when it also controls a speech-to-speech agent, but native
+speech-to-speech-only input has no STT source to observe. Agent output and mixed
+room audio are never diagnostic sources. A response-agent transfer preserves
+observation only when the accepted source and STT allocation survive; a real
+replacement starts a new observation.
+
+### Read the timing evidence
+
+Open **Latency diagnostics** in call details or the debug view. It starts
+collapsed. Select an observation by participant and start time, then expand a
+human turn for its landmarks, source/clock identity, uncertainty and acoustic
+segments. Several speech segments can belong to one conversational turn.
+**Speech outside recorded turns** shows unmatched segments without inventing turns
+or response samples. Omitted-segment counts indicate bounded evidence loss.
+
+| Display | Meaning |
+| --- | --- |
+| STT latency | Estimated acoustic speech end to receipt of the STT turn-end signal. Includes silence detection, buffering and network time; it is not provider compute time alone. |
+| Dispatch | STT turn-end receipt to the room accepting the completed input turn. |
+| Response text | Room input completion to the first matching published response text. This need not be the model's first token. |
+| Audio start | First response text to acknowledged server audio egress. This does not prove playback at the caller's device or remote hearing. |
+| Observer confirmation | Delay between the estimated acoustic end and the detector confirming that end. |
+
+Values display in `ms`; landmark offsets share one observation's clock origin.
+Do not subtract offsets across observations. Missing stages are unavailable, not
+zero. Tool-only or silent responses can have no text/audio stages. Local Silero
+resets at provider settlement can leave an incomplete endpoint; diagnostics does
+not fill that gap with provider markers or a second detector.
+
+Whole-call summaries group compatible observation profiles and show median, p95,
+valid and excluded sample counts. Excluded samples do not enter percentiles.
+Check the profile, coverage and excluded counts before comparing results.
+
+### Coverage, troubleshooting and retention
+
+Coverage describes the selected observation window, not the whole call or the
+accuracy of its detector. `collecting` has a fresh heartbeat; `complete` means a
+closed window has no recorded coverage loss. `incomplete` reports known loss.
+`unconfirmed` means current completeness cannot be established, for example a
+stale heartbeat after a writer crash or uncertain clocks. No observation means
+not collected; it does not prove a zero-latency call.
+
+| Symptom | Check |
+| --- | --- |
+| No observations | Saved collection setting, human STT eligibility, supported/acknowledged provider profile, source permissions and diagnostic service availability. Enabling later cannot reconstruct earlier audio. |
+| Partial start or source changed | Collection began late, an STT/source allocation changed, or input continuity could not be proved. Compare separate observations without stitching their clocks. |
+| Observer unavailable or overloaded | Model readiness, bounded source/inference capacity and dropped-frame counts. Keep ordinary call behavior separate from diagnostic health. |
+| Lease expired | Settings reads or their authority expired. Restore settings-store access; do not bypass the collection gate with call/environment options. |
+| Pending or missing stored turns | Allow the bounded writer drain, then refresh. A storage failure can lose diagnostics while the call continues normally. |
+| Stale heartbeat | Refresh the report and inspect diagnostic writer/service health. Do not reinterpret an unclosed running record as a complete observation. |
+
+Persisted diagnostics contain timing, identities, observation profiles, segment
+boundaries and loss counters, not raw PCM or transcript text. They are still
+call-associated metadata: use the existing authorized call-inspection path and
+avoid copying caller information into logs. Turning collection off preserves
+existing evidence. Deleting the owning call cascades to its diagnostic runs and
+turn records; this feature adds no independent retention schedule. Call recordings
+and transcripts retain their own storage and access rules.
+
+See [runtime ownership and verification](../development/speech-runtime.md#passive-latency-observation)
+for implementation boundaries and test lanes.
+
 ## Common failures
 
 | Symptom | Check |

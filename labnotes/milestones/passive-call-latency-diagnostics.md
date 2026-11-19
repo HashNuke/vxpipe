@@ -701,8 +701,12 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
   calls, persisted state after reload, denied member requests, and no collection
   while off. A supported disabled call has unchanged behavior;
   confirm technical events remain hidden by default but inspectable in production UI.
-- [ ] Update relevant usage/development handbook pages with configuration, supported
+- [x] Update relevant usage/development handbook pages with configuration, supported
   profiles, timing meanings, privacy, failure/loss semantics and troubleshooting.
+  The [handbook checkpoint](../20261119-2033-diagnostics-operator-handbook.md)
+  records source verification and the current automatic Scribe profile restriction.
+  Handbook text explicitly retains the unresolved effective-status, load, accuracy
+  and live-acceptance limitations; this does not complete those gates.
 - [ ] Pass root format, compile warnings-as-errors, strict Credo, default tests and
   unused-lock checks; run Lean if speech/source state machines change. Run relevant
   frontend/core checks and finish rendered verification. Required unavailable live
