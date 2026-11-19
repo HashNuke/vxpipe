@@ -12,6 +12,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
   end
 
   @doc false
+  def copy({:audio, %AudioFrame{codec: :opus, activity_pcm: %{payload: pcm}} = frame}),
+    do: copy({:audio, %{frame | codec: :linear16, payload: pcm, activity_pcm: nil}})
+
   def copy({:audio, frame}) do
     {:audio,
      %{
@@ -31,6 +34,20 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
   defp valid?({:audio, %AudioFrame{codec: :linear16, channels: 1, activity_pcm: nil} = frame})
        when map_size(frame) == @frame_fields do
     Enum.all?(@frame_keys, &Map.has_key?(frame, &1)) and valid_audio?(frame)
+  end
+
+  defp valid?({:audio, %AudioFrame{codec: :opus, channels: 1, activity_pcm: decoded} = frame})
+       when map_size(frame) == @frame_fields and is_map(decoded) and map_size(decoded) == 4 do
+    case decoded do
+      %{payload: pcm, timestamp: timestamp, sample_rate: rate, channels: 1}
+      when is_binary(pcm) and timestamp == frame.timestamp and rate == frame.sample_rate and
+             is_binary(frame.payload) and byte_size(frame.payload) > 0 and
+             byte_size(frame.payload) + byte_size(pcm) <= 131_072 ->
+        valid?({:audio, %{frame | codec: :linear16, payload: pcm, activity_pcm: nil}})
+
+      _ ->
+        false
+    end
   end
 
   defp valid?({:probabilities, epoch, first_sample, probabilities, observed_at}) do

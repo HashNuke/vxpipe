@@ -704,3 +704,18 @@ Static root gates and Lean pass; the full umbrella suite is running. This suppli
 admission for the isolated worker lifecycle; production pool composition,
 automatic source workers and transport mapping remain open. Combined C tasks are
 still unchecked pending their configured-call acceptance gates.
+
+## Checkpoint C accepted-audio mapping — 2026-11-19
+
+A bounded observer-only timeline now normalizes accepted PCM and verified decoded
+Opus copies, preserving original source continuity before resampling. It converts
+transport milliseconds to run-relative microseconds, rejects identity/rate and
+ordering changes, deduplicates identical PCM, and carries receipt/quantization
+uncertainty. Gaps retire prior mappings without assigning expired endpoints new
+timestamps; original clock uncertainty survives normalized rounding.
+
+Two reviewer-proved gap/uncertainty regressions and an additional rounding case
+are retained green. Affected suite95/0; Astra xhigh re-review clean (independent91/0),
+static root gates and Lean pass. The existing umbrella run predates this change.
+Automatic source workers, raw Opus decode without an existing decoded copy and
+configured-call transport acceptance remain pending; the combined C task stays open.

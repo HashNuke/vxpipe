@@ -422,3 +422,26 @@ and delivery. Active diagnostic jobs check revocation every 250 ms, in addition
 to the existing load/inference deadlines. Native work keeps its execution slot
 until actual termination. This asynchronous API is a foundation for the isolated
 source workers; production composition and automatic call attachment remain open.
+
+### Accepted-audio timeline foundation
+
+`AudioTimeline` projects already accepted PCM into the same 16 kHz normalization
+used by operational activity detection. A decoded Opus copy is eligible only when
+its timestamp, sample rate and mono channel metadata match the accepted transport
+frame exactly. Capture delivers just that PCM and bounded identity metadata,
+without changing provider input. Raw Opus without a decoded copy still needs an
+isolated decoder path before the supported-live profile is complete.
+
+Continuity is checked on original transport samples before normalization, so a
+missing source sample cannot disappear through rounding. A gap drops the prior
+mapping; changed source/participant/connection/rate and reordered evidence are
+rejected. Identical admitted duplicates do not cause duplicate inference, while
+conflicting duplicate PCM fails validation. Consumers must reset their observer
+stream on gaps or rejected evidence rather than bridge the missing interval.
+
+Receipt timestamps are converted from milliseconds to integer microseconds
+relative to the run origin. Normalized mapping history is bounded (256 frames by
+default); expired or unobserved positions stay unavailable. Uncertainty includes
+receipt-clock jitter plus a conservative source/output sample-period allowance.
+This is server receipt mapping, not microphone capture time. Automatic source
+worker composition and end-to-end transport acceptance remain pending.
