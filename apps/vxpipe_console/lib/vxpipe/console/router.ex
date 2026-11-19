@@ -178,7 +178,7 @@ defmodule Vxpipe.Console.Router do
     pipe_through [:browser, :operator_pages]
 
     get "/setup", Vxpipe.Console.AdminPageController, :index
-    get "/login", Vxpipe.Console.AdminPageController, :index
+    get "/login", Vxpipe.Console.AdminPageController, :login
     get "/recover", Vxpipe.Console.AdminPageController, :index
     post "/logout", Vxpipe.Console.UserAuthController, :logout
   end

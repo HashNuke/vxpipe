@@ -3,6 +3,16 @@ defmodule Vxpipe.Console.AdminPageController do
 
   use Phoenix.Controller, formats: [:html]
 
+  def login(conn, params) do
+    backend =
+      Application.get_env(:vxpipe_console, :user_identity_backend, Vxpipe.Console.UserIdentity)
+
+    case Vxpipe.Console.UserSession.fetch(conn, backend: backend) do
+      {:ok, _principal} -> redirect(conn, to: "/")
+      {:error, _reason} -> index(conn, params)
+    end
+  end
+
   def index(conn, _params) do
     csrf_token = Plug.CSRFProtection.get_csrf_token()
 

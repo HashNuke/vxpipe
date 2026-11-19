@@ -198,6 +198,25 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
     assert json_response(response, 200) == %{"status" => "pending_first_run"}
   end
 
+  test "an authenticated browser opening login returns to the dashboard" do
+    signed_in =
+      post(build_conn(), "https://localhost/auth/api/login", %{
+        "email" => "owner@example.test",
+        "password" => "long-password"
+      })
+
+    assert json_response(signed_in, 200)["ok"] == true
+    response = signed_in |> recycle() |> get("https://localhost/auth/login")
+    assert redirected_to(response) == "/"
+    assert Plug.Conn.get_resp_header(response, "cache-control") == ["private, no-store"]
+  end
+
+  test "an anonymous browser cannot open an admin call detail page" do
+    response = get(build_conn(), "https://localhost/admin/tenants/north/calls/call-example")
+    assert redirected_to(response) == "/auth/login"
+    refute response.resp_body =~ "admin-root"
+  end
+
   test "setup, login and local recovery pages load the Console application" do
     for path <- ["/auth/setup", "/auth/login", "/auth/recover"] do
       response = get(build_conn(), "https://localhost#{path}")
