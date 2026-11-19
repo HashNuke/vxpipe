@@ -572,7 +572,7 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
 - [x] Start source workers inside that subtree, admitted through the node-wide
   `AttachmentLease.gate` and `InferenceAdmission`; record `capacity_unavailable`
   and attach late as partial coverage when a slot frees. Test two rooms at the cap.
-- [ ] Resolve the Calls-composed node pool and collector by registered name; with
+- [x] Resolve the Calls-composed node pool and collector by registered name; with
   the port absent or down, report `unavailable` coverage and do no work. Preserve
   gate debt on tracker restart; before publishing a fresh gate, prove termination
   of old room-owned workers (including reuse mode) and resolve outstanding starts.
@@ -2030,3 +2030,33 @@ Together with the prior source/mode/settings boundary evidence, this closes the
 specific transfer-continuity task. Broader room-service lifecycle/stale-work,
 fresh-root admission, effective settings, UI and E/F acceptance remain open.
 No live provider test, Telnyx change, full umbrella suite or deployment occurred.
+
+
+## Migration step 3 acceptance — real Engine admission teardown, 2026-11-19
+
+An isolated peer now starts the real Engine application and a real planned room.
+Two actual SourceWorkers (reuse/fallback) are admitted under its diagnostic worker
+supervisor. A test-only start wrapper holds the return of a third real worker start,
+injected into the actual room AttachmentRunner. Exact child membership and the
+wrapper's executing supervisor establish the project-owned supervision boundary.
+This is an unresolved-start lifecycle test, not a replacement for source discovery.
+
+Stopping the Engine kills the runner but waits for the held worker start. A
+concurrent restart request cannot finish while the original admission gate remains.
+After release, all three old worker PIDs must already be gone when stop returns:
+fresh monitors require noproc, rather than accepting a later normal DOWN. The new
+Engine has a distinct empty gate and accepts new admission. Existing tracker-restart
+and optional-subtree tests retain their conservative gate-debt evidence.
+
+Focused Engine diagnostics/application checks pass 239/239; the stronger final
+ordering probe passes 1/1. Static gates pass. Independent scoped Astra review is
+clean, with 3/3 probes including assertion and failed-start-result cleanup: both
+return the intended assertion promptly instead of timing out behind the held start.
+The pending result is always released before fixture/app cleanup. See
+[checkpoint labnotes](../20261119-1829-engine-admission-teardown.md).
+
+Together with the existing registered-port absence/loss and gate-restart evidence,
+this closes the node admission/real-root teardown task. Remaining room-service
+lifecycle/stale-work, settings, UI and E/F gates stay open. This checkpoint changes
+only tests and documentation; no live provider, Telnyx, full umbrella suite or
+deployment action occurred.

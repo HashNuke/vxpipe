@@ -159,8 +159,8 @@ outcomes retain bounded debt rather than guessing that no worker exists.
 Tracker restart must reuse its gate. Lost monitor ownership leaves conservative
 debt; it cannot reclaim capacity merely because a replacement tracker has an empty
 map. A fresh gate requires a confirmed teardown barrier for old room-owned workers,
-including operational-reuse workers and unresolved starts. That replacement barrier
-and node-pool/room-service wiring remain prerequisites for cutover. Rejected
+including operational-reuse workers and unresolved starts. The composed Engine
+barrier is verified by the isolated real-root acceptance below. Rejected
 alternatives are using `finish/1` immediately after adoption (releases too early),
 counting only per-room supervisor children (multiplies the node cap), and creating
 a fresh gate on tracker restart (can admit over surviving old workers). No running
@@ -212,10 +212,13 @@ budget. Tracker restarts reuse the gate and preserve lost-monitor debt. Exhausti
 removes the temporary subtree and leaves admission unavailable; there is no
 automatic subtree recreation. Any explicit re-add must retain the original gate
 and must not reconstruct Application.child_specs to manufacture fresh capacity.
-Controlled Engine-root teardown stops room workers before allocating a fresh root
-gate. The composition harness verifies worker DOWN before that reallocation;
-unresolved-start teardown with the real room diagnostics subtree remains a cutover
-gate. No Calls/source path uses this new admission port until room-service wiring.
+The composed room service uses this admission port. Isolated real-Engine acceptance
+starts actual reuse/fallback SourceWorkers under a planned room and holds an
+unreturned third worker start in its worker supervisor. Engine shutdown and a
+concurrent restart request wait for that start to resolve. Old workers are already
+dead when stop returns, before the fresh root's distinct gate is used. The test
+injects a blocked startup boundary into the real room IO runner; it does not replace
+accepted-source discovery or provider tests.
 
 
 ## Participant input attachment
@@ -295,8 +298,8 @@ coordinator and agent-selected query are removed; there is one observation owner
 
 Real planned-room tests establish that room completion waits for admitted worker
 termination and retains its slot until DOWN. Exhausting diagnostic restarts leaves
-the authority open. The full fresh-Engine-root unresolved-start replacement proof
-and broader participant/turn acceptance remain separate open milestone checks.
+the authority open. The real-root unresolved-start replacement proof is described
+above; broader lifecycle and settings acceptance remain separate milestone checks.
 
 
 ## Canonical input completion independent of response selection
