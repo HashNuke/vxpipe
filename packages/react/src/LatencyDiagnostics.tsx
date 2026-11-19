@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import type { LatencyLoader, LatencyMetric, LatencyTurn, Message, Participant } from "@vxpipe/core";
+import type { JsonValue, LatencyLoader, LatencyMetric, LatencyTurn, Message, Participant } from "@vxpipe/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useLatencyReport } from "./useLatencyReport.js";
 
@@ -7,12 +7,27 @@ const stages: ReadonlyArray<[LatencyMetric, string]> = [
   ["speech_end_to_provider_end", "STT latency"], ["provider_to_room", "Dispatch"],
   ["room_to_first_text", "Response text"], ["text_to_first_audio", "Audio start"],
 ];
+const metricLabels: Record<LatencyMetric, string> = {
+  speech_end_to_provider_end: "STT latency", observer_confirmation: "Observer confirmation",
+  commit_to_provider_end: "Transcript commit to STT turn end", provider_to_adapter: "STT turn end to adapter",
+  provider_to_room: "Dispatch", room_to_first_text: "Response text", text_to_first_audio: "Audio start",
+  speech_end_to_first_audio: "Speech end to audio start", speech_end_to_manual_commit: "Speech end to manual commit",
+  manual_commit_to_provider_end: "Manual commit to STT turn end",
+};
 const landmarks = {
   acoustic_end: "Estimated speech end", observer_confirmed: "Observer confirmation",
   provider_text_commit: "Transcript committed", provider_end_received: "STT turn ended",
   adapter_end_emitted: "Adapter end", room_turn_completed: "Room accepted turn",
   first_response_text: "Response text ready", first_audio_started: "Audio started", manual_commit_sent: "Manual commit sent",
 };
+/** A summary cohort is its complete profile plus metric, independent of JSON key order. */
+function profileIdentity(value: JsonValue): string {
+  if (Array.isArray(value)) return `[${value.map(profileIdentity).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${profileIdentity(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
 function ms(value: number | null | undefined) {
   return value == null ? "Unavailable" : `${Math.round(value / 1000).toLocaleString()} ms`;
 }
@@ -89,8 +104,8 @@ export function LatencyDiagnostics({ loader, live, participants, messages = [], 
       </>}
       {data.report && data.report.summary.length > 0 && <details className="vx-latency-summary"><summary>Whole-call summaries</summary>
         <p>All collected turns, grouped by provider and observation profile. Excluded samples do not contribute to percentiles.</p>
-        {data.report.summary.filter(value => value.metric === "speech_end_to_provider_end").map((value, index) => <div key={index}>
-          <p>{String(value.profile.provider)} · {String(value.profile.model)} · {reason(String(value.profile.inference_source))}: median {ms(value.p50Us)}, p95 {ms(value.p95Us)} · {value.validCount} valid, {value.excludedCount} excluded.</p>
+        {data.report.summary.map((value, index) => <div key={`${value.metric}:${profileIdentity(value.profile)}`}>
+          <p>{String(value.profile.provider)} · {String(value.profile.model)} · {reason(String(value.profile.inference_source))} · {metricLabels[value.metric]}: median {ms(value.p50Us)}, p95 {ms(value.p95Us)} · {value.validCount} valid, {value.excludedCount} excluded.</p>
           <details><summary>Observation profile {index + 1}</summary><dl>{Object.entries(value.profile).map(([key, setting]) => <div key={key}><dt>{reason(key)}</dt><dd>{typeof setting === "object" ? JSON.stringify(setting) : String(setting)}</dd></div>)}</dl></details>
         </div>)}
       </details>}

@@ -28,13 +28,24 @@ export const latencyTurns: LatencyTurnPage = {
       metricReasons: { speech_end_to_provider_end: "partial_start", room_to_first_text: "missing_evidence", text_to_first_audio: "missing_evidence" } },
   ],
 };
-export function createLatencyFixture(mode: "available" | "empty" | "unavailable" | "loading" = "available"): LatencyLoader {
+export type LatencyFixtureMode = "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large";
+export function createLatencyFixture(mode: LatencyFixtureMode = "available"): LatencyLoader {
   return {
     async report() {
       if (mode === "loading") return new Promise(() => {});
+      if (mode === "denied") throw { status: 403 };
+      if (mode === "pending") return { ...latencyReport, summary: [], runs: [{ ...latencyReport.runs[0]!, state: "running", closedAt: null, reasons: [], coverage: { ...latencyReport.runs[0]!.coverage, status: "collecting", recordedState: "running", reasons: [], terminationReasons: [], storedTurns: 0, pendingTurns: 2 } }] };
+      if (mode === "unsupported") return { ...latencyReport, summary: [], runs: [{ ...latencyReport.runs[0]!, reasons: ["unsupported"], coverage: { ...latencyReport.runs[0]!.coverage, reasons: ["unsupported"], observedTurns: 0, storedTurns: 0, pendingTurns: 0 } }] };
+      if (mode === "large") return { ...latencyReport, runs: [{ ...latencyReport.runs[0]!, coverage: { ...latencyReport.runs[0]!.coverage, observedTurns: 200, storedTurns: 200 } }], summary: [{ ...latencyReport.summary[0]!, validCount: 100, excludedCount: 100 }] };
+      if (mode === "zero-valid") return { ...latencyReport, summary: [{ ...latencyReport.summary[0]!, validCount: 0, excludedCount: 2, p50Us: null, p95Us: null }] };
       if (mode === "unavailable") throw new Error("Fixture unavailable");
       return mode === "empty" ? { runs: [], summary: [], nextCursor: null } : latencyReport;
     },
-    async turns() { return latencyTurns; },
+    async turns(_runId, cursor) {
+      if (mode === "pending" || mode === "unsupported") return { ...latencyTurns, turns: [] };
+      if (mode === "large") return { ...latencyTurns, nextCursor: cursor ? null : "turn-100", turns: Array.from({ length: 100 }, (_, index) => ({ ...latencyTurns.turns[index % 2]!, turnId: `turn-${index + 1 + (cursor ? 100 : 0)}` })) };
+      if (mode === "zero-valid") return { ...latencyTurns, turns: [{ ...latencyTurns.turns[1]!, turnId: "turn-one" }, latencyTurns.turns[1]!] };
+      return latencyTurns;
+    },
   };
 }

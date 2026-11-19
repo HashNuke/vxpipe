@@ -15,3 +15,9 @@ export const Collected: Story = {};
 export const NotCollected: Story = { args: { loader: createLatencyFixture("empty") } };
 export const Unavailable: Story = { args: { loader: createLatencyFixture("unavailable") } };
 export const Loading: Story = { args: { loader: createLatencyFixture("loading") } };
+
+export const Denied: Story = { args: { loader: createLatencyFixture("denied") } };
+export const Pending: Story = { args: { loader: createLatencyFixture("pending"), live: true } };
+export const Unsupported: Story = { args: { loader: createLatencyFixture("unsupported") } };
+export const ZeroValidSamples: Story = { args: { loader: createLatencyFixture("zero-valid") } };
+export const LargeReport: Story = { args: { loader: createLatencyFixture("large") } };

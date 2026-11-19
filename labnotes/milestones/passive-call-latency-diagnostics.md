@@ -368,7 +368,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
   partial stages and existing authorized transcript links. No raw benchmark timeline events.
 - [ ] Cover old calls, disabled/unsupported capture, pending/late rows, incomplete
   coverage, denied reads, storage outage/retry and zero valid samples in fixtures/tests.
-- [ ] Verify summaries use all report rows, exclude invalid durations, and preserve
+- [x] Verify summaries use all report rows, exclude invalid durations, and preserve
   units/provenance; prevent pure-inference or remote-hearing labels.
 - [ ] Inspect desktop/mobile Chrome, keyboard/focus, loading/error and large report
   states in both hosts; keep technical detail opt-in and ordinary messages readable.
@@ -1151,3 +1151,16 @@ returned no findings. Desktop and mobile Chrome verified pointer/keyboard naviga
 and target focus in the admin preview, with no mobile document overflow. Static
 checks passed. The first two D tasks are now complete; remaining fixture/summary
 and both-host acceptance gates stay open, as do C/E/F and final deployment.
+
+## Checkpoint D summary metrics and evidence states — 2026-11-19
+
+All returned timing definitions now appear as labelled profile-specific aggregates;
+missing percentiles remain unavailable. Focused storage verification (17 tests)
+proved full-report counts/percentiles independent of page size, missing-evidence
+exclusion and profile separation. The UI has pending, unsupported, denied,
+zero-valid and 200-turn fixtures; focused UI checks passed 21 tests. Review findings
+about unstable summary disclosure keys and contradictory pending fixture reasons
+were reproduced and fixed with retained regressions. Rendered desktop/mobile Chrome
+confirmed unavailable percentiles, evidence states and a bounded 100-row page at
+390px width. Static checks passed. The summary acceptance task is complete;
+absence-of-collection provenance and the remaining both-host matrix stay open.
