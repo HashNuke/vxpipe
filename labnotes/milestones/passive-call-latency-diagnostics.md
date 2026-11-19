@@ -662,8 +662,11 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
   error and incomplete rate; model frame size is not an accuracy guarantee.
-- [ ] Verify loss/reordering, resampling and source/clock resets for WebRTC/Telnyx;
+- [x] Verify loss/reordering, resampling and source/clock resets for WebRTC/Telnyx;
   uncertain segments remain invalid, not stitched into plausible timing values.
+  Offline transport evidence is recorded in the
+  [transport timing checkpoint](../20261119-1944-diagnostics-transport-timing.md).
+  This uses local fixtures only and does not claim live Telnyx support.
 - [ ] Stress deterministic on/off calls with slow inference, full queues, writer
   crashes, blocked storage and repeated settings revocation/re-enable/teardown. Check bounded retained
   bytes, tasks, mailboxes, retries and absence of call-control differences.
