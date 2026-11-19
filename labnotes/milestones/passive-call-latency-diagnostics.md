@@ -1101,3 +1101,13 @@ summary queries cover the entire authorized call independently of pagination.
 Turn pages retain revisions, default to50 and cap at100 rows. A full last turn page
 may have an empty successor. No Console route or core/UI consumer is claimed yet;
 D acceptance stays open until those pieces and their checks are implemented.
+
+## Checkpoint D Console report API — 2026-11-19
+
+The authorized Calls reads now have session-only Console routes and a configured
+Persistence read port on database-backed hosts. Versioned private JSON preserves
+nullable microsecond stages, revisions, run coverage and bounded profile/clock
+provenance. Missing scope and unavailable storage have separate generic errors.
+Endpoint/runtime tests pass20/0; Astra xhigh source review is clean. Local Chrome
+confirmed signed-out401 and signed-in200 report/turn reads with private/no-store.
+Core state, lazy report UI and live refresh still remain; D tasks stay unchecked.

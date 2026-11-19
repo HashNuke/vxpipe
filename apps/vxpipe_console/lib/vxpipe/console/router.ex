@@ -242,6 +242,12 @@ defmodule Vxpipe.Console.Router do
 
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show,
       metadata: %{console_product_api: true}
+
+    get "/:call_id/latency", Vxpipe.Console.CallLatencyController, :show,
+      metadata: %{console_product_api: true}
+
+    get "/:call_id/latency/runs/:run_id/turns", Vxpipe.Console.CallLatencyController, :turns,
+      metadata: %{console_product_api: true}
   end
 
   scope "/api/tenants/:tenant_key/calls" do
@@ -607,6 +613,9 @@ defmodule Vxpipe.Console.Router do
     pipe_through [:session_product_api, :user_call_access]
 
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show
+
+    get "/:call_id/latency", Vxpipe.Console.CallLatencyController, :show
+    get "/:call_id/latency/runs/:run_id/turns", Vxpipe.Console.CallLatencyController, :turns
   end
 
   scope "/admin/diagnostics" do

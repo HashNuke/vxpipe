@@ -70,6 +70,12 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
                Vxpipe.CallEngine.Diagnostics.SourceCoordinator
 
       refute Keyword.has_key?(settings, :enabled)
+
+      assert Config.Reader.read!(runtime, env: environment)
+             |> Keyword.fetch!(:vxpipe_calls)
+             |> Keyword.fetch!(Vxpipe.Calls)
+             |> Keyword.fetch!(:latency_repository) ==
+               {Vxpipe.Persistence.LatencyStore, Vxpipe.Persistence.Repo}
     end
 
     System.delete_env("VXPIPE_DB_URL")
