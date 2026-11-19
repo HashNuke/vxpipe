@@ -48,3 +48,7 @@ export const Latency: Story = {
   args: { scenario: "metrics", initialTab: "metrics", latency: true },
   parameters: { docs: { description: { story: "Synthetic optional latency diagnostics. Opens collapsed and fetches only when expanded; complete and partial turn evidence remain distinct." } } },
 };
+
+export const LatencyLoading: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "loading" } };
+export const LatencyRetry: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "retry" } };
+export const LatencyLarge: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "large" } };

@@ -371,7 +371,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
   coverage, denied reads, storage outage/retry and zero valid samples in fixtures/tests.
 - [x] Verify summaries use all report rows, exclude invalid durations, and preserve
   units/provenance; prevent pure-inference or remote-hearing labels.
-- [ ] Inspect desktop/mobile Chrome, keyboard/focus, loading/error and large report
+- [x] Inspect desktop/mobile Chrome, keyboard/focus, loading/error and large report
   states in both hosts; keep technical detail opt-in and ordinary messages readable.
 
 ### E — Isolation and accuracy
@@ -1260,3 +1260,22 @@ revision on desktop and outage/retry plus keyboard expansion on mobile. The D
 fixture/test task is checked; comprehensive both-host rendered acceptance remains
 open. Storybook exposes Late Evidence and Retry After Outage through its existing
 Tailscale preview. No production deployment or provider use occurred.
+
+## Checkpoint D both-host rendered acceptance — 2026-11-19
+
+Both production wrappers now have bounded Chrome evidence at desktop 1440x1000
+and mobile 390x844. Admin CallDetailsPage and shared CallConsole Storybook states
+passed 12 loading/retry/large-report cases; the real CallInspectionApp with its own
+host CSS and height passed another six cases through a temporary local fixture.
+Standards mode, exact viewport width, no page overflow, 100-row page limits,
+next/first paging, keyboard expansion, full focused-row visibility and return to
+ordinary conversation were checked. Existing technical-event opt-in and transcript
+checks remain recorded in earlier checkpoints.
+
+Added reusable host stories for loading, outage/retry and large reports. Focused
+React checks passed 27/27 and Console wrapper/loader checks 16/16; both TypeScript
+checks and root static gates passed. Astra reviewed the fixture wiring and final
+browser evidence, required correction of the temporary document mode/focus proof,
+and returned clean. The temporary harness and server were removed. All D tasks
+are now checked; C settings UI/failure/landmark acceptance, E and F remain open.
+No deployment or live provider use occurred.

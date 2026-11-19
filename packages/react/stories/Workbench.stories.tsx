@@ -94,3 +94,8 @@ export const ConnectionFailed: Story = { args: { scenario: "failed" } };
 export const Light: Story = { args: { theme: "light" } };
 export const SetupIncomplete: Story = { args: { page: "setup", ready: false } };
 export const SetupComplete: Story = { args: { page: "setup", ready: true } };
+
+export const Latency: Story = { args: { initialTab: "metrics", latency: "available" } };
+export const LatencyLoading: Story = { args: { initialTab: "metrics", latency: "loading" } };
+export const LatencyRetry: Story = { args: { initialTab: "metrics", latency: "retry" } };
+export const LatencyLarge: Story = { args: { initialTab: "metrics", latency: "large" } };

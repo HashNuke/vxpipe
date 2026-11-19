@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createLatencyFixture, type LatencyFixtureMode } from "./latencyFixtures.js";
 import { CallConsole } from "../src/index.js";
 import {
   createFixtureController,
@@ -15,6 +16,7 @@ export interface WorkbenchProps {
   initialTab?: "chat" | "variables" | "metrics" | "participants";
   animateSpeech?: boolean;
   attached?: boolean;
+  latency?: LatencyFixtureMode;
 }
 
 export function Workbench({
@@ -25,6 +27,7 @@ export function Workbench({
   initialTab = "chat",
   animateSpeech = false,
   attached = true,
+  latency,
 }: WorkbenchProps) {
   const [page, setPage] = useState(initialPage);
   const [theme, setTheme] = useState(initialTheme);
@@ -44,6 +47,10 @@ export function Workbench({
             details: client.details,
           },
     [attached, client],
+  );
+  const inspectionController = useMemo(
+    () => latency ? { ...controller, latency: createLatencyFixture(latency) } : controller,
+    [controller, latency],
   );
   useEffect(() => {
     if (!animateSpeech || page !== "console") return;
@@ -120,7 +127,7 @@ export function Workbench({
         <div className="prototype-console-page">
           <CallConsole
             key={`${run}-${selectedScenario}`}
-            controller={controller}
+            controller={inspectionController}
             initialTab={initialTab}
             maxHeight="calc(100dvh - 132px)"
             theme={theme}
