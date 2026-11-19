@@ -160,6 +160,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
        collector_supervisor: __MODULE__.Collectors,
        task_supervisor: __MODULE__.Writes,
        maximum_collectors: if(Map.get(tags, :input_only, false), do: 2, else: 1),
+       maximum_writers: if(Map.get(tags, :repeated_lifecycle, false), do: 1, else: 64),
        source_options: [
          name: __MODULE__.Sources,
          inference: __MODULE__.Inference,
@@ -570,6 +571,105 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute_received {:scribe_audio, ^wire, ^off_pcm}
       refute_received {:scribe_audio, ^wire, ^on_pcm}
       refute_received {:scribe_commit, ^wire}
+    end
+  end
+
+  for vad <- [false, true] do
+    @tag matrix: true, vad: vad, repeated_lifecycle: true, timeout: 120_000
+    test "twenty configured enable/revoke/re-enable/teardown cycles release diagnostics, Silero #{vad}",
+         c do
+      Enum.reduce(1..20, c.settings_revision, fn cycle, revision ->
+        {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+        epoch = make_ref()
+        sequence = discover_with_audio(attachment, identity, epoch, wire)
+
+        first =
+          lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, :enabled)
+
+        assert first.run.settings_revision == revision
+
+        change_diagnostics(false, revision)
+        await_diagnostic_drain(identity)
+        assert_diagnostic_slots_released()
+
+        disabled =
+          lifecycle_turn(
+            c,
+            call,
+            attachment,
+            wire,
+            identity,
+            epoch,
+            sequence + 1,
+            cycle,
+            :disabled
+          )
+
+        change_diagnostics(true, revision + 1)
+        sequence = discover_with_audio(attachment, identity, epoch, wire, sequence + 2)
+
+        second =
+          lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, :reenabled)
+
+        assert second.run.settings_revision == revision + 2
+        refute second.run.id == first.run.id
+        refute second.run.source_epoch == first.run.source_epoch
+
+        assert {:ok, completion} =
+                 CallEngine.monitor_room_completion(
+                   identity.tenant_id,
+                   identity.room_id,
+                   identity.incarnation_id
+                 )
+
+        room_diagnostics = GenServer.whereis(RoomSupervisor.address(identity, :supervisor))
+        assert is_pid(room_diagnostics)
+        diagnostics_down = Process.monitor(room_diagnostics)
+        GenServer.stop(attachment.room_authority, :shutdown)
+        assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+        assert_receive {:DOWN, ^diagnostics_down, :process, ^room_diagnostics, _}, 2_000
+        await_diagnostic_drain(identity)
+        assert_diagnostic_slots_released()
+        assert :ok = stop_supervised(SpeechConnection)
+
+        assert {:ok, %{entries: entries}} =
+                 LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+        assert length(entries) == 2
+        assert Enum.all?(entries, &(not is_nil(&1.run.closed_at)))
+
+        stored =
+          Enum.flat_map(entries, fn %{run: run} ->
+            assert {:ok, turns} =
+                     LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
+
+            Enum.map(turns, &{run.id, &1.turn_id})
+          end)
+
+        assert Enum.sort(stored) ==
+                 Enum.sort([
+                   {first.run.id, first.turn_id},
+                   {second.run.id, second.turn_id}
+                 ])
+
+        refute Enum.any?(stored, fn {_, turn_id} -> turn_id == disabled.turn_id end)
+
+        for observed <- [first, disabled, second] do
+          pcm = observed.pcm
+          turn_id = observed.turn_id
+          refute_received {:scribe_audio, ^wire, ^pcm}
+          refute_received {:matrix_inference, _, _, ^pcm}
+
+          refute_received {:vxpipe_event,
+                           %ParticipantTranscription{final: true, correlation_id: ^turn_id}}
+
+          refute_received {:vxpipe_event, %CallEngine.Event.TextOutput{correlation_id: ^turn_id}}
+        end
+
+        refute_received {:scribe_commit, ^wire}
+        refute_received {:vxpipe_connection_unavailable, _}
+        revision + 2
+      end)
     end
   end
 
@@ -1516,6 +1616,63 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  defp lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, phase) do
+    phase_number = %{enabled: 0, disabled: 1, reenabled: 2} |> Map.fetch!(phase)
+    pcm = :binary.copy(<<cycle * 3 + phase_number, 0>>, 512)
+    pace(32)
+    send_audio(attachment, identity, epoch, sequence, sequence * 512, pcm)
+    assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+
+    if c.vad do
+      assert_receive {:matrix_inference, :operational, _, ^pcm}, 2_000
+    else
+      if phase != :disabled, do: assert_receive({:matrix_inference, :benchmark, _, ^pcm}, 2_000)
+    end
+
+    text = "Lifecycle #{cycle} #{phase}."
+    emit_scribe_turn(wire, text)
+    assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = input}, 2_000
+    assert input.text == text
+    assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+    assert output.text == "Acknowledged."
+    assert output.correlation_id == input.correlation_id
+    refute_received {:scribe_audio, ^wire, ^pcm}
+    refute_received {:matrix_inference, _, _, ^pcm}
+
+    run =
+      if phase == :disabled do
+        assert diagnostic_turn(call, input.correlation_id) == nil
+        nil
+      else
+        turn = await(fn -> diagnostic_turn(call, input.correlation_id) end)
+
+        assert {:ok, %{entries: entries}} =
+                 LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+        %{run: run} = Enum.find(entries, &(&1.run.id == turn.run_id))
+        run
+      end
+
+    %{run: run, turn_id: input.correlation_id, pcm: pcm}
+  end
+
+  defp assert_diagnostic_slots_released do
+    await(fn ->
+      Vxpipe.CallEngine.Diagnostics.SourceAdmission.status(
+        Vxpipe.CallEngine.Diagnostics.SourceAdmission
+      ) ==
+        %{active_sources: 0, occupied_slots: 0}
+    end)
+
+    await(fn -> Task.Supervisor.children(__MODULE__.Tasks) == [] end)
+    await(fn -> Task.Supervisor.children(__MODULE__.Writes) == [] end)
+
+    admission =
+      Vxpipe.CallEngine.Speech.ActivityRuntime.diagnostic_admission(__MODULE__.Runtime)
+
+    assert Vxpipe.CallEngine.Diagnostics.InferenceAdmission.pending(admission) == 0
+  end
+
   defp diagnostic_turn(call, turn_id) do
     {:ok, %{entries: runs}} = LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
 
@@ -1620,11 +1777,13 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     {:ok, tenant, key} = Administration.bootstrap_tenant("Diagnostic fixture", [:calls], options)
     {:ok, actor} = Calls.authenticate(tenant.key, key.secret, :calls, options)
 
+    credential_name = "diagnostic-scribe-#{tenant.key}"
+
     assert {:ok, _} =
              ProviderCredentials.provision(
                :platform,
                "elevenlabs",
-               "diagnostic-scribe",
+               credential_name,
                "api_key",
                %{"api_key" => "synthetic"},
                options
@@ -1639,7 +1798,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           speech_to_text: %{
             provider: "elevenlabs",
             model: "scribe_v2_realtime",
-            credential_name: "diagnostic-scribe",
+            credential_name: credential_name,
             vad: vad
           }
         }

@@ -670,6 +670,10 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
 - [ ] Stress deterministic on/off calls with slow inference, full queues, writer
   crashes, blocked storage and repeated settings revocation/re-enable/teardown. Check bounded retained
   bytes, tasks, mailboxes, retries and absence of call-control differences.
+  The [repeated configured lifecycle subcase](../20261119-1953-diagnostics-repeat-lifecycle.md)
+  passes 20 complete room lifecycles in each local VAD mode, with exact final
+  persisted turns and released source/inference/writer capacity. Saturation,
+  mailbox high-water and measured memory acceptance remain open.
 - [ ] Establish before running load: hardware, concurrency, duration, warm/cold
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
   paired on/off measurements; publish measured results and limits. Any missed
