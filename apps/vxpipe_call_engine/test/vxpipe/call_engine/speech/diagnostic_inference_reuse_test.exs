@@ -25,6 +25,34 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     :ok
   end
 
+  for observing? <- [false, true] do
+    @observing observing?
+    test "operational inference failure keeps session failure semantics with observation #{@observing}" do
+      {session, _recognizer} = session(:fail)
+      observer = if @observing, do: handoff()
+
+      if observer do
+        assert :ok = ConversationalSTT.observe(session, observer)
+        _ = :sys.get_state(Session.provider(session))
+      end
+
+      pcm = :binary.copy(<<8, 0>>, 2_048)
+      assert :ok = Session.push_audio(session, pcm)
+      assert_receive {:classified, _, 0, ^pcm}
+      assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+
+      if observer do
+        assert {:reset, 0, :inference_failed, at} = packet(observer)
+        assert is_integer(at)
+      else
+        refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+      end
+
+      refute_received {:classified, _, _, _}
+      refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
+    end
+  end
+
   test "reuse emits existing probability windows once and disabling never disables operational inference" do
     {session, recognizer} = session(false)
     handoff = handoff()
@@ -347,15 +375,19 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
       if audio != :binary.copy(<<0>>, 1_024) do
         send(parent, {:classified, self(), stream.samples, audio})
 
-        if hold?,
+        if hold? == true,
           do:
             (receive do
                :finish -> :ok
              end)
       end
 
-      count = div(byte_size(audio), 1_024)
-      {:ok, %{stream | samples: stream.samples + count * 512}, List.duplicate(0.9, count)}
+      if hold? == :fail and audio != :binary.copy(<<0>>, 1_024) do
+        {:error, :fixture_inference_failed}
+      else
+        count = div(byte_size(audio), 1_024)
+        {:ok, %{stream | samples: stream.samples + count * 512}, List.duplicate(0.9, count)}
+      end
     end
 
     tree = start_supervised!({CapabilityTree, owner: self()})

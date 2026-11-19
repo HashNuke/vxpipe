@@ -330,9 +330,9 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 - [x] Instrument socket receipt and actual adapter settlement with monotonic
   timestamps, distinguishing committed text from provider end evidence. Record
   effective acknowledged settings and optional manual-commit send evidence.
-- [ ] Add independent accepted-audio observation preserving per-source sample
+- [x] Add independent accepted-audio observation preserving per-source sample
   identity and transport receipt mapping; normalize only the observer copy.
-- [ ] Reuse timestamped probability/sample evidence from existing operational Silero
+- [x] Reuse timestamped probability/sample evidence from existing operational Silero
   when present; otherwise start one isolated benchmark-only stream. Preserve
   operational reset/failure semantics, report gaps and record inference provenance.
 - [ ] Prove exactly one inference execution per eligible source frame with call-spec
@@ -1164,3 +1164,16 @@ were reproduced and fixed with retained regressions. Rendered desktop/mobile Chr
 confirmed unavailable percentiles, evidence states and a bounded 100-row page at
 390px width. Static checks passed. The summary acceptance task is complete;
 absence-of-collection provenance and the remaining both-host matrix stay open.
+
+## Checkpoint C accepted-audio and inference-mode acceptance audit — 2026-11-19
+
+Current source and focused tests complete the accepted-audio observation and
+operational-reuse/standalone implementation tasks. The verification selection
+passed 84 capability/source/clock/worker tests, and the configured Scribe persistence
+and shutdown fixture passed. A focused audit found an inference-failure coverage
+gap: paired observer-absent/present tests now prove the operational session failure
+is unchanged, only one inference runs, and the observer gets timestamped failure
+rather than an invented endpoint. All 14 reuse tests pass. These two C tasks are
+checked; the separate full on/off/configured matrix, distributed effective status,
+revocation/load/accuracy gates and final deployment remain unchecked. Earlier
+partial-checkpoint notes are historical evidence, not the current task status.
