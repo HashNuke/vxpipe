@@ -18,7 +18,12 @@ User-approved scope: separate durable diagnostic records; asynchronous bounded
 writes; optional call-details presentation; hide the seven named noisy event types
 by default while retaining their diagnostic/accounting value. Implementation is
 authorized. Deploy `vxpipe.service` only after the complete milestone passes;
-o live measurements or deployment are claimed by the offline foundation.
+no live measurements or deployment are claimed by the offline foundation.
+
+User scope correction, 2026-11-19: do not use real Telnyx numbers, run live Telnyx
+provider tests, or change Telnyx code for this milestone. Live acceptance is limited
+to the VAD/Scribe browser path. Existing local Telnyx fixtures may run as part of the
+unchanged umbrella suite; they are not real calls or evidence of live Telnyx support.
 
 ## Prerequisites and design sources
 
@@ -88,8 +93,9 @@ inference, not merely labelled unsupported in the UI. Enforce this before creati
 an observer; the application setting does not override this exclusion.
 
 First supported live profile: human ElevenLabs Scribe v2 realtime input over browser
-WebRTC and Telnyx. Exercise operational local VAD both off and on without changing
-it. Manual/historical Scribe is covered by protocol fixtures; label unsupported
+WebRTC. Live Telnyx acceptance is excluded by the user's scope correction. Exercise
+operational local VAD both off and on without changing it. Manual/historical Scribe
+is covered by protocol fixtures; label unsupported
 profiles explicitly, including native speech-to-speech. Do not claim a new live
 provider/transport is supported from common fixtures alone.
 
@@ -321,7 +327,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 
 ### C — Passive configured call
 
-- [ ] Instrument socket receipt and actual adapter settlement with monotonic
+- [x] Instrument socket receipt and actual adapter settlement with monotonic
   timestamps, distinguishing committed text from provider end evidence. Record
   effective acknowledged settings and optional manual-commit send evidence.
 - [ ] Add independent accepted-audio observation preserving per-source sample
@@ -350,7 +356,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
   compare identical provider bytes, commits and production control traces on/off.
 - [ ] Capture matching text/audio landmarks without intercepting output or delaying
   model dispatch; handle silent/tool-only responses, interruption and multi-agent routing.
-- [ ] Demonstrate a configured Scribe fixture call persists the report, including
+- [x] Demonstrate a configured Scribe fixture call persists the report, including
   late confirmation after turn end and call termination while diagnostics drain.
 
 ### D — Latency details UI
@@ -388,8 +394,8 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 ### F — Live acceptance and handbook
 
 - [ ] Run tagged existing-runner live acceptance through `bin/livetests run` for
-  Scribe/browser and Scribe/Telnyx with ordinary local VAD off/on; keep credentials
-  in the established runner and never read or modify its prohibited env file.
+  Scribe/browser with ordinary local VAD off/on; do not run live Telnyx tests. Keep
+  credentials in the established runner and never read or modify its prohibited env file.
 - [ ] Include several normal turns, a pause/resume, interruption, tool-only end
   and final hangup. Compare permitted recording/listening evidence with stored
   endpoints, provider evidence and UI; report coverage and error, not universal accuracy.
@@ -1063,3 +1069,26 @@ configured fixture1/0 pass, as do Engine178/0, static root checks and Lean. The
 current-source frozen full root suite is running; its acceptance remains pending. Response audio, manual
 commit timing, full on/off/transport acceptance and per-turn finalization remain
 open; no combined C checklist item is newly complete.
+
+## Checkpoint C manual commit timing and configured shutdown — 2026-11-19
+
+Successful explicit Scribe draft-flush commits now carry socket-send receipts,
+separate from provider transcript commits. The unchanged wire payload is sent once;
+failed sends, revoked observations, capture replacement and legacy transports retain
+existing operational behavior without fabricated evidence. Independent Astra xhigh
+review is clean; integrated focused timing/socket/report tests pass21/0 and the
+broader diagnostics/reuse selection passes205/0.
+
+The configured two-turn fixture now holds its terminal database write: room and
+collector termination complete while the persisted run is still running, then the
+writer is released and both turns are reread durably. Discovery supplies paced
+silence until this source subscribes, replacing the one-frame startup assumption
+that failed in the prior root suite. Focused test and independent review each pass1/0.
+The instrumentation and configured fixture tasks above are now complete; broader
+on/off, response-audio and final milestone acceptance remain open.
+
+Format, compile warnings-as-errors, strict Credo and unused-lock checks pass.
+Full-suite runs are deferred until milestone implementation is complete per user
+instruction. The prior f5a20d3b root run ended with two failures (a local Telnyx
+startup fixture and this corrected discovery fixture); it is not a passing gate.
+No Telnyx code or live-provider tests were used for this checkpoint.

@@ -136,7 +136,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
   defp valid?({:provider_landmark, generation, turn, kind, observed_at, samples}) do
     is_reference(generation) and is_reference(turn) and signed?(observed_at) and
       unsigned?(samples) and
-      kind in [:provider_text_commit, :provider_end_evidence, :adapter_end_emission]
+      kind in [
+        :provider_text_commit,
+        :provider_end_evidence,
+        :adapter_end_emission,
+        :manual_commit_sent
+      ]
   end
 
   defp valid?({:provider_profile, canonical, provider, status})

@@ -43,6 +43,7 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   end
 
   def send_frame(socket, frame), do: request(socket, {:send, frame})
+  def send_frame_with_receipt(socket, frame), do: request(socket, {:send_with_receipt, frame})
   def close(socket, payload), do: request(socket, {:close, payload})
 
   def observe(socket, %CaptureHandoff{} = handoff),
@@ -123,20 +124,31 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   end
 
   @impl true
-  def handle_call({:send, _frame}, _from, %{retiring?: true} = state),
-    do: {:reply, {:error, :retiring}, state}
+  def handle_call({operation, _frame}, _from, %{retiring?: true} = state)
+      when operation in [:send, :send_with_receipt],
+      do: {:reply, {:error, :retiring}, state}
 
   @impl true
-  def handle_call({:send, _frame}, _from, %{connection: nil} = state),
-    do: {:reply, {:error, :not_ready}, state}
+  def handle_call({operation, _frame}, _from, %{connection: nil} = state)
+      when operation in [:send, :send_with_receipt],
+      do: {:reply, {:error, :not_ready}, state}
 
   def handle_call({:close, _payload}, _from, %{connection: nil} = state),
     do: {:stop, :normal, :ok, state}
 
-  def handle_call({:send, frame}, _from, state) do
+  def handle_call({operation, frame}, _from, state)
+      when operation in [:send, :send_with_receipt] do
     case SocketConnection.send_frame(state.connection, frame) do
-      {:ok, connection} -> {:reply, :ok, %{state | connection: connection}}
-      {:error, _reason} -> {:stop, :normal, {:error, :connection_lost}, disconnect(state)}
+      {:ok, connection} ->
+        reply =
+          if operation == :send_with_receipt,
+            do: {:ok, ProviderTiming.stamp(Map.get(state.callback_state, :diagnostic_handoff))},
+            else: :ok
+
+        {:reply, reply, %{state | connection: connection}}
+
+      {:error, _reason} ->
+        {:stop, :normal, {:error, :connection_lost}, disconnect(state)}
     end
   end
 

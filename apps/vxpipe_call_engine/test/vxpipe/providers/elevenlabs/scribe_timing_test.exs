@@ -64,6 +64,138 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
     end
   end
 
+  test "explicit draft flush records successful send evidence on the current provider turn" do
+    {session, wire, handoff} = start_session()
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    started = event(session, :speech_started)
+    _ = event(session, :transcript)
+    assert {:provider_landmark, generation, turn, :provider_text_commit, _, 0} = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit, ^wire}, 2_000
+    assert_receive {:scribe_commit_receipt, ^wire, {token, sent_at}}, 1_000
+    assert token == handoff.token
+    assert turn == started.turn_ref
+
+    assert {:provider_landmark, ^generation, ^turn, :manual_commit_sent, ^sent_at, 0} =
+             packet(handoff)
+
+    refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
+    socket_frame(session, wire, handoff, "committed_transcript", "final draft")
+    _ = event(session, :transcript)
+    assert {:provider_landmark, ^generation, ^turn, :provider_text_commit, _, 0} = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "")
+    assert event(session, :turn_ended).turn_ref == turn
+
+    assert {:provider_landmark, ^generation, ^turn, :provider_end_evidence, ended_at, 0} =
+             packet(handoff)
+
+    assert sent_at <= ended_at
+  end
+
+  test "delayed commit replies retain the original send timestamp" do
+    {session, wire, handoff} = start_session()
+    :ok = GenServer.call(wire, {:commit_mode, :hold})
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    assert {:provider_landmark, generation, turn, :provider_text_commit, _, _} = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit_receipt, ^wire, {_, sent_at}}, 1_000
+    released_at = System.monotonic_time(:microsecond)
+    assert :ok = GenServer.call(wire, :release_commit)
+
+    assert {:provider_landmark, ^generation, ^turn, :manual_commit_sent, ^sent_at, 0} =
+             packet(handoff)
+
+    assert sent_at <= released_at
+  end
+
+  test "revocation during a delayed commit reply suppresses timing without changing the flush" do
+    {session, wire, handoff} = start_session()
+    :ok = GenServer.call(wire, {:commit_mode, :hold})
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    _ = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit, ^wire}, 1_000
+    assert_receive {:scribe_commit_receipt, ^wire, _}, 1_000
+    CaptureHandoff.close(handoff)
+    assert :ok = GenServer.call(wire, :release_commit)
+    socket_frame(session, wire, handoff, "committed_transcript", "final")
+    _ = event(session, :transcript)
+    socket_frame(session, wire, handoff, "partial_transcript", "")
+    assert event(session, :turn_ended).text == "first final"
+    refute_received {:scribe_commit, ^wire}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "a failed timed send never retries the legacy commit or records success" do
+    {session, wire, handoff} = start_session()
+    :ok = GenServer.call(wire, {:commit_mode, :fail})
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    _ = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit_failed, ^wire}, 1_000
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+    refute_received {:scribe_commit, ^wire}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "legacy transports still send one commit without inventing send evidence" do
+    {session, wire, handoff} = start_session(wire_module: Vxpipe.CallEngine.LegacyScribeTransport)
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    _ = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit, ^wire}, 1_000
+    socket_frame(session, wire, handoff, "committed_transcript", "final")
+    _ = event(session, :transcript)
+    assert {:provider_landmark, _, _, :provider_text_commit, _, _} = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "")
+    assert event(session, :turn_ended).text == "first final"
+    assert {:provider_landmark, _, _, :provider_end_evidence, _, _} = packet(handoff)
+    assert {:provider_landmark, _, _, :adapter_end_emission, _, _} = packet(handoff)
+    refute_received {:scribe_commit, ^wire}
+    refute_received {:scribe_commit_receipt, ^wire, _}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert %{invalid: 0} = CaptureHandoff.stats(handoff)
+  end
+
+  test "replacement during a held commit cannot assign its receipt to the new capture" do
+    {session, wire, old} = start_session()
+    :ok = GenServer.call(wire, {:commit_mode, :hold})
+    socket_frame(session, wire, old, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    _ = packet(old)
+    socket_frame(session, wire, old, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit_receipt, ^wire, _}, 1_000
+    {:ok, current} = CaptureHandoff.new(self(), projection: @projection)
+    CaptureHandoff.close(old)
+    assert :ok = Channel.observe(session, current)
+    assert :ok = GenServer.call(wire, :release_commit)
+    assert_receive {:scribe_observing, ^wire, token}, 1_000
+    assert token == current.token
+    socket_frame(session, wire, current, "committed_transcript", "final")
+    _ = event(session, :transcript)
+    assert {:provider_landmark, _, _, :provider_text_commit, _, _} = packet(current)
+    socket_frame(session, wire, current, "partial_transcript", "")
+    assert event(session, :turn_ended).text == "first final"
+    assert {:provider_landmark, _, _, :provider_end_evidence, _, _} = packet(current)
+    assert {:provider_landmark, _, _, :adapter_end_emission, _, _} = packet(current)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
   test "revoked diagnostics preserve normal recognition without collecting landmarks" do
     {session, wire, handoff} = start_session()
     :ok = CaptureHandoff.close(handoff)
@@ -239,7 +371,78 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
     assert length(Enum.uniq(links)) == 2
   end
 
+  test "a foreign receipt token cannot invent manual timing or fail a successful flush" do
+    {session, wire, handoff} = start_session()
+    :ok = GenServer.call(wire, {:commit_mode, :hold})
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    _ = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit_receipt, ^wire, _}, 1_000
+
+    :sys.replace_state(wire, fn state ->
+      Map.update!(state, :held_commit, fn {caller, {_token, at}} ->
+        {caller, {make_ref(), at}}
+      end)
+    end)
+
+    assert :ok = GenServer.call(wire, :release_commit)
+    _ = :sys.get_state(Session.provider(session))
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert %{invalid: 0} = CaptureHandoff.stats(handoff)
+    socket_frame(session, wire, handoff, "committed_transcript", "final")
+    _ = event(session, :transcript)
+    assert {:provider_landmark, _, _, :provider_text_commit, _, _} = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "")
+    assert event(session, :turn_ended).text == "first final"
+    assert {:provider_landmark, _, _, :provider_end_evidence, _, _} = packet(handoff)
+    assert {:provider_landmark, _, _, :adapter_end_emission, _, _} = packet(handoff)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "an unobserved session keeps the ordinary commit path even on a receipt capable transport" do
+    {session, wire, handoff} = start_session(initial_capture: false)
+    :ok = GenServer.call(wire, {:commit_mode, :fail})
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit, ^wire}, 1_000
+    refute_received {:scribe_commit_failed, ^wire}
+    refute_received {:scribe_commit_receipt, ^wire, _}
+    socket_frame(session, wire, handoff, "committed_transcript", "final")
+    _ = event(session, :transcript)
+    socket_frame(session, wire, handoff, "partial_transcript", "")
+    assert event(session, :turn_ended).text == "first final"
+    refute_received {:scribe_commit, ^wire}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "manual receipt keeps the current accepted sample prefix" do
+    {session, wire, handoff} = start_session()
+    audio = :binary.copy(<<1, 0>>, 128)
+    assert :ok = Session.push_audio(session, audio)
+    assert_receive {:scribe_audio, ^wire, ^audio}
+    socket_frame(session, wire, handoff, "committed_transcript", "first")
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    assert {:provider_landmark, generation, turn, :provider_text_commit, _, 128} = packet(handoff)
+    socket_frame(session, wire, handoff, "partial_transcript", "draft")
+    _ = event(session, :transcript)
+    assert_receive {:scribe_commit, ^wire}, 1_000
+    assert_receive {:scribe_commit_receipt, ^wire, {_token, at}}, 1_000
+
+    assert {:provider_landmark, ^generation, ^turn, :manual_commit_sent, ^at, 128} =
+             packet(handoff)
+
+    refute_received {:scribe_commit, ^wire}
+  end
+
   defp start_session(options \\ []) do
+    {wire_module, options} = Keyword.pop(options, :wire_module, Wire)
     {initial?, options} = Keyword.pop(options, :initial_capture, true)
     {wrapped?, options} = Keyword.pop(options, :wrapped, false)
 
@@ -251,8 +454,9 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
 
     private = [
       config: config,
-      wire_module: Wire,
+      wire_module: wire_module,
       wire_options: [observer: self()],
+      draft_flush_gap_ms: 10,
       diagnostic_handoff: if(initial?, do: handoff)
     ]
 

@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.TestElevenLabsScribeTransport do
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
   def send_audio(pid, audio), do: GenServer.call(pid, {:audio, audio}, 5_000)
   def observe(pid, handoff), do: send(pid, {:observe, self(), handoff})
+  def commit_with_receipt(pid), do: GenServer.call(pid, :commit_with_receipt, 5_000)
   def commit(pid), do: GenServer.call(pid, :commit, 5_000)
   def deliver_frame(pid, payload), do: GenServer.call(pid, {:frame, payload})
   def deliver(pid, event), do: GenServer.call(pid, {:deliver, event}, 5_000)
@@ -31,6 +32,30 @@ defmodule Vxpipe.CallEngine.TestElevenLabsScribeTransport do
     count = state.audio_count + 1
     result = if count == state.fail_audio_at, do: {:error, :transport_failed}, else: :ok
     {:reply, result, %{state | audio_count: count}}
+  end
+
+  def handle_call({:commit_mode, mode}, _from, state),
+    do: {:reply, :ok, Map.put(state, :commit_mode, mode)}
+
+  def handle_call(:release_commit, _from, state) do
+    {caller, stamp} = Map.fetch!(state, :held_commit)
+    GenServer.reply(caller, {:ok, stamp})
+    {:reply, :ok, Map.delete(state, :held_commit)}
+  end
+
+  def handle_call(:commit_with_receipt, from, state) do
+    if Map.get(state, :commit_mode) == :fail do
+      send(state.observer, {:scribe_commit_failed, self()})
+      {:reply, {:error, :transport_failed}, state}
+    else
+      stamp = Vxpipe.CallEngine.Diagnostics.ProviderTiming.stamp(state.diagnostic_handoff)
+      send(state.observer, {:scribe_commit, self()})
+      send(state.observer, {:scribe_commit_receipt, self(), stamp})
+
+      if Map.get(state, :commit_mode) == :hold,
+        do: {:noreply, Map.put(state, :held_commit, {from, stamp})},
+        else: {:reply, {:ok, stamp}, state}
+    end
   end
 
   def handle_call(:commit, _from, state) do

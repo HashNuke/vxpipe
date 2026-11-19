@@ -444,7 +444,19 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   end
 
   defp request_commit(state) do
-    state.wire_module.commit(state.wire)
+    if state.diagnostic_handoff != nil and
+         function_exported?(state.wire_module, :commit_with_receipt, 1) do
+      case state.wire_module.commit_with_receipt(state.wire) do
+        {:ok, receipt} ->
+          landmark(state, :manual_commit_sent, receipt)
+          :ok
+
+        result ->
+          result
+      end
+    else
+      state.wire_module.commit(state.wire)
+    end
   rescue
     _failure -> {:error, :session_failed}
   catch

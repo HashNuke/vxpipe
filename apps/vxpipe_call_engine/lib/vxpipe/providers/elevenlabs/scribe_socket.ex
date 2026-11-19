@@ -26,6 +26,9 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
 
   def commit(socket), do: Socket.send_frame(socket, {:text, Scribe.commit()})
 
+  def commit_with_receipt(socket),
+    do: Socket.send_frame_with_receipt(socket, {:text, Scribe.commit()})
+
   @impl true
   def keepalive_frame(_state), do: {:text, Scribe.keepalive()}
 

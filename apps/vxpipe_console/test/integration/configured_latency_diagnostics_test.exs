@@ -92,7 +92,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       {Vxpipe.Calls.Diagnostics.Supervisor,
        name: __MODULE__.Diagnostics,
        projection: __MODULE__.Projection,
-       repository: {LatencyStore, Repo},
+       repository: {Vxpipe.Console.Test.HeldLatencyStore, {Repo, parent}},
        writer_supervisor: __MODULE__.Writers,
        collector_supervisor: __MODULE__.Collectors,
        task_supervisor: __MODULE__.Writes,
@@ -106,10 +106,14 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
          coordinator: __MODULE__.Coordinator,
          poll_interval_ms: 250,
          classify: fn model, stream, pcm ->
-           send(parent, {:classify, self(), byte_size(pcm)})
+           if byte_size(pcm) == 1_024 do
+             Silero.push(stream, model, pcm)
+           else
+             send(parent, {:classify, self(), byte_size(pcm)})
 
-           receive do
-             :finish -> Silero.push(stream, model, pcm)
+             receive do
+               :finish -> Silero.push(stream, model, pcm)
+             end
            end
          end
        ]}
@@ -131,15 +135,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   test "configured Scribe call persists pending timing then late acoustic confirmation", c do
     {call, _connection, attachment, wire, identity} = call(c.options)
     epoch = make_ref()
-    _ = SourceCoordinator.scan(__MODULE__.Coordinator)
-    send_audio(attachment, identity, epoch, 0, 0, <<0::size(8192)>>)
-
-    receive do
-      {:scribe_observing, ^wire, _} -> :ok
-    after
-      2_000 ->
-        flunk("No observer: #{inspect(SourceCoordinator.status(__MODULE__.Coordinator))}")
-    end
+    sequence = discover_with_audio(attachment, identity, epoch, wire)
+    sample_origin = sequence * 512
 
     await(fn -> SourceCoordinator.status(__MODULE__.Coordinator).active_sources == 1 end)
 
@@ -159,7 +156,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
     for {chunk, index} <- [{first, 0}, {second, 1}] do
       pace(1_000)
-      send_audio(attachment, identity, epoch, 1 + index, 512 + 16_000 * index, chunk)
+
+      send_audio(
+        attachment,
+        identity,
+        epoch,
+        sequence + index,
+        sample_origin + 16_000 * index,
+        chunk
+      )
+
       assert_receive {:classify, task, 32_000}, 5_000
       monitor = Process.monitor(task)
       send(task, :finish)
@@ -167,7 +173,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
 
     pace(1_000)
-    send_audio(attachment, identity, epoch, 3, 32_512, third)
+    send_audio(attachment, identity, epoch, sequence + 2, sample_origin + 32_000, third)
     assert_receive {:classify, task, 32_000}, 2_000
 
     for {kind, text} <- [
@@ -197,7 +203,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     send(task, :finish)
     assert_receive {:DOWN, ^monitor, :process, ^task, :normal}, 2_000
     pace(8)
-    send_audio(attachment, identity, epoch, 4, 48_512, <<0::size(2048)>>)
+
+    send_audio(
+      attachment,
+      identity,
+      epoch,
+      sequence + 3,
+      sample_origin + 48_000,
+      <<0::size(2048)>>
+    )
+
     assert_receive {:classify, tail_task, 256}, 2_000
     tail_monitor = Process.monitor(tail_task)
     send(tail_task, :finish)
@@ -219,7 +234,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     # A second complete turn establishes normal coverage after the prospective first turn.
     for {chunk, index} <- [{first, 0}, {second, 1}, {third, 2}] do
       pace(1_000)
-      send_audio(attachment, identity, epoch, 5 + index, 48_640 + 16_000 * index, chunk)
+
+      send_audio(
+        attachment,
+        identity,
+        epoch,
+        sequence + 4 + index,
+        sample_origin + 48_128 + 16_000 * index,
+        chunk
+      )
+
       assert_receive {:classify, next_task, 32_000}, 2_000
       next_monitor = Process.monitor(next_task)
       send(next_task, :finish)
@@ -238,7 +262,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                    1_000
 
     pace(8)
-    send_audio(attachment, identity, epoch, 8, 96_640, <<0::size(2048)>>)
+
+    send_audio(
+      attachment,
+      identity,
+      epoch,
+      sequence + 7,
+      sample_origin + 96_128,
+      <<0::size(2048)>>
+    )
+
     assert_receive {:classify, last_task, 256}, 2_000
     last_monitor = Process.monitor(last_task)
     send(last_task, :finish)
@@ -267,9 +300,22 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         [{_, pid, _, _}] -> pid
       end
 
+    [{_, writer, _, _}] = DynamicSupervisor.which_children(__MODULE__.Writers)
+    writer_monitor = Process.monitor(writer)
     collector_monitor = Process.monitor(collector)
+    room_monitor = Process.monitor(attachment.room_authority)
     GenServer.stop(attachment.room_authority, :shutdown)
-    assert_receive {:DOWN, ^collector_monitor, :process, ^collector, :normal}, 3_000
+    assert_receive {:DOWN, ^room_monitor, :process, _, :shutdown}, 1_000
+    assert_receive {:terminal_diagnostic_write, write_task, run_id}, 1_000
+    assert run_id == run.id
+    assert_receive {:DOWN, ^collector_monitor, :process, ^collector, :normal}, 1_000
+
+    assert {:ok, %{state: :running, closed_at: nil}} =
+             LatencyStore.fetch_run(Repo, call.tenant_key, call.id, run.id)
+
+    refute_received {:DOWN, ^writer_monitor, :process, ^writer, _}
+    send(write_task, :persist_terminal)
+    assert_receive {:DOWN, ^writer_monitor, :process, ^writer, :normal}, 2_000
 
     closed =
       await(fn ->
@@ -416,6 +462,28 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                payload: pcm,
                received_at: System.monotonic_time(:millisecond)
              })
+  end
+
+  # Real input continues while discovery scans rooms; one early frame is not a
+  # readiness barrier. Keep receipt time and sample time aligned during discovery.
+  defp discover_with_audio(attachment, identity, epoch, wire) do
+    deadline = System.monotonic_time(:millisecond) + 3_000
+    discover_with_audio(attachment, identity, epoch, wire, 0, deadline)
+  end
+
+  defp discover_with_audio(attachment, identity, epoch, wire, sequence, deadline) do
+    receive do
+      {:scribe_observing, ^wire, _} -> sequence
+    after
+      0 ->
+        assert System.monotonic_time(:millisecond) < deadline,
+               "No observer: #{inspect(SourceCoordinator.status(__MODULE__.Coordinator))}"
+
+        _ = SourceCoordinator.scan(__MODULE__.Coordinator)
+        send_audio(attachment, identity, epoch, sequence, sequence * 512, <<0::size(8192)>>)
+        pace(32)
+        discover_with_audio(attachment, identity, epoch, wire, sequence + 1, deadline)
+    end
   end
 
   defp pace(ms) do

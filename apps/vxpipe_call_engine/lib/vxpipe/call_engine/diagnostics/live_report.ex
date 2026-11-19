@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
   @provider_kinds %{
     provider_text_commit: :provider_text_commit,
+    manual_commit_sent: :manual_commit_sent,
     provider_end_evidence: :provider_end_received,
     adapter_end_emission: :adapter_end_emitted
   }
@@ -133,7 +134,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
          {:provider_landmark, g, t, k, old, old_samples},
          {:provider_landmark, g, t, k, at, samples}
        ) do
-    if k == :provider_text_commit do
+    if k in [:provider_text_commit, :manual_commit_sent] do
       {:ok, {:provider_landmark, g, t, k, max(old, at), max(old_samples, samples)}}
     else
       {:error, :conflicting_evidence}
