@@ -1296,3 +1296,18 @@ task remains open. Design review rejected treating one API node's elapsed time a
 unconditional global lease expiry. The runtime-limits note records fresh-read,
 revision and clock-progress requirements and acknowledgement alternatives without
 claiming that an unimplemented proof exists. No production capture was enabled.
+
+## Checkpoint C response boundary acceptance — 2026-11-19
+
+Silent and tool-only completions publish their normal events without fabricated
+response landmarks. A retired text capability cannot contribute a replacement
+agent's first response; valid replacement output retains the accepted input IDs.
+Interruption rejects late text and the exact previously registered speech request
+after cancellation acknowledgement. Full diagnostic queues do not suppress text
+or relabel a later sentence as the first response.
+
+The focused room/input, live-report and timing selection passes 29/29. Astra's
+independent positive-control playback probe passes and its final review is clean.
+Root static gates pass. These are boundary fixtures for existing behavior; the
+combined C landmark task remains open for actual configured routing through
+matching text/audio. No runtime implementation, live provider or deployment changed.

@@ -211,6 +211,131 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
     refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
   end
 
+  for response <- [:silent, :tool_only] do
+    @response response
+    test "#{@response} completion does not invent text or audio landmarks", ctx do
+      {state, command} = response_turn(ctx.handoff)
+
+      state =
+        if @response == :tool_only do
+          call = %Vxpipe.CallEngine.Tool.Call{id: "lookup", name: "lookup", arguments: %{}}
+          next = Vxpipe.CallEngine.RoomAuthority.ToolCalls.started(state, self(), command, call)
+          assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallStarted{}}
+
+          next =
+            Vxpipe.CallEngine.RoomAuthority.ToolCalls.completed(next, self(), command, call, %{})
+
+          assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCompleted{}}
+          next
+        else
+          state
+        end
+
+      next = AgentOutput.text_complete(self(), command, state)
+      assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.AgentTurnCompleted{}}
+      assert TurnState.get(next, command) == nil
+      refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+    end
+  end
+
+  test "a replaced text capability cannot contribute another agent's first response", ctx do
+    {state, command} = response_turn(ctx.handoff)
+    replacement = start_supervised!({Agent, fn -> nil end})
+
+    routed = %{
+      state
+      | text_capability: %{
+          module: __MODULE__,
+          pid: replacement,
+          participant_id: "replacement-agent"
+        }
+    }
+
+    assert ^routed = AgentOutput.text(self(), command, "retired agent", routed)
+    refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.TextOutput{}}
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+
+    _ = AgentOutput.text(replacement, command, "routed response", routed)
+
+    assert_receive {:vxpipe_event,
+                    %Vxpipe.CallEngine.Event.TextOutput{
+                      id: output,
+                      participant_id: "replacement-agent",
+                      text: "routed response"
+                    }}
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _,
+                    {:response_landmark, turn, id, ^output, :first_response_text, _}, _}
+
+    assert turn == command.correlation_id
+    assert id == command.id
+  end
+
+  test "interruption prevents late text and playback from fabricating a response", ctx do
+    {state, command} = response_turn(ctx.handoff)
+
+    interrupter = %Vxpipe.CallEngine.TurnInterrupter{
+      participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: "interrupt",
+      correlation_id: "interrupt-turn"
+    }
+
+    request = %TextToSpeechRequest{
+      tenant_id: command.tenant_id,
+      room_id: command.room_id,
+      incarnation_id: command.incarnation_id,
+      participant_id: "agent",
+      source_participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id,
+      output_id: "late-output",
+      text: "late response",
+      output_sink: self()
+    }
+
+    speech =
+      start_supervised!(
+        {Task,
+         fn ->
+           receive do
+             {:"$gen_call", from, :interrupt} -> GenServer.reply(from, {:ok, [{request, 0}]})
+           end
+         end}
+      )
+
+    state = put_in(state.connections[command.connection_id].output_sink, self())
+    state = %{state | text_to_speech_capability: %{pid: speech, participant_id: "agent"}}
+    state = TurnState.begin_speech(state, request)
+    assert TurnState.speech_targets(state, command) == [request]
+    assert {:ok, interrupted} = AgentOutput.interrupt(interrupter, state)
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.AgentTurnInterrupted{}}
+    assert TurnState.get(interrupted, command) == nil
+    assert ^interrupted = AgentOutput.text(self(), command, "late response", interrupted)
+    assert ^interrupted = AgentOutput.playback(speech, request, :started, interrupted)
+    refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.TextOutput{}}
+    refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.AgentSpeechStarted{}}
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+  end
+
+  test "full diagnostic queues cannot suppress text or relabel a later sentence as first" do
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), projection: __MODULE__.Projection, maximum_count: 1)
+
+    {state, command} = response_turn(handoff)
+    assert :ok = CaptureHandoff.offer(handoff, {:reset, 0, :partial_start, 0})
+    state = AgentOutput.text(self(), command, "first", state)
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.TextOutput{text: "first"}}
+    assert %{overflow: 1} = CaptureHandoff.stats(handoff)
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:reset, _, _, _}, _} = queued
+    {:ok, _, charge} = CaptureHandoff.message(handoff, queued)
+    CaptureHandoff.release(handoff, charge, :processed)
+    _ = AgentOutput.text(self(), command, "second", state)
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.TextOutput{text: "second"}}
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+  end
+
   def respond(receiver, command) do
     send(receiver, {:diagnostic_response_command, command})
     :ok
