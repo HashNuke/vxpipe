@@ -60,6 +60,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @doc "Attach only if the discovery's global policy revision is still installed."
+  def attach_diagnostics(capability, generation, revision, source, handoff) do
+    GenServer.call(
+      capability,
+      {:attach_diagnostics, generation, revision, source, handoff},
+      @call_timeout
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   def prepare_policy(capability, candidate, options),
     do: PolicyPreparation.request(capability, candidate, options)
 
@@ -151,6 +162,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       {:ok, next} -> {:reply, :ok, next}
       error -> {:reply, error, state}
     end
+  end
+
+  def handle_call({:attach_diagnostics, generation, revision, source, handoff}, from, state) do
+    if is_integer(revision) and revision >= 0 and
+         match?(%Snapshot{revision: ^revision}, state.policy),
+       do: handle_call({:attach_diagnostics, generation, source, handoff}, from, state),
+       else: {:reply, {:error, :unavailable}, state}
   end
 
   def handle_call({:attach_diagnostics, generation, source, handoff}, _from, state) do

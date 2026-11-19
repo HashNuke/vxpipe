@@ -490,6 +490,23 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     )
   end
 
+  test "automatic attachment rejects the policy revision captured before a transition" do
+    {capability, generation, frame} = capability(:ok)
+    source = %{track_id: frame.track_id, source_epoch: frame.source_epoch}
+    assert :ok = Enforcer.apply(capability, policy(1, ["human"]), 1_000)
+    stale = handoff(capability)
+
+    assert {:error, :unavailable} =
+             SpeechToText.attach_diagnostics(capability, generation, 0, source, stale)
+
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    current = handoff(capability)
+    assert :ok = SpeechToText.attach_diagnostics(capability, generation, 1, source, current)
+    assert :ok = SpeechToText.push_audio(capability, %{frame | sequence_number: 2})
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:audio, _}, _}
+  end
+
   defp attach(capability, generation, frame, handoff),
     do:
       SpeechToText.attach_diagnostics(

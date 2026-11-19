@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ParticipantTransfer,
     CallerIdle,
     ConnectionLifecycle,
+    DiagnosticSources,
     EndCall,
     FirstMessage,
     InputTurns,
@@ -185,7 +186,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       state =
         State.new(
           ArchiveRecorder.new(room_source, incarnation_id, options),
-          build_snapshot(room_source, incarnation_id, options),
+          Snapshot.new(room_source, incarnation_id, options),
           initial_speech_to_text_runtime(room_source),
           OpeningAudio.new(room_source, Keyword.get(options, :opening_audio)),
           FirstMessage.new(room_source),
@@ -217,6 +218,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   @impl true
+  def handle_call({:diagnostic_sources, cursor, limit}, _from, state),
+    do: {:reply, DiagnosticSources.read(state, cursor, limit), state}
+
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 
   def handle_call({:end_call, incarnation}, _from, state),
@@ -766,28 +770,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp room_identity(options) do
     source = room_source(options)
     {source.tenant_id, source.room_id}
-  end
-
-  defp build_snapshot(%CreateRoom{} = command, incarnation_id, _options) do
-    %Snapshot{
-      tenant_id: command.tenant_id,
-      room_id: command.room_id,
-      incarnation_id: incarnation_id,
-      lifecycle: :open,
-      created_by_actor_id: command.actor_id,
-      created_by_command_id: command.id
-    }
-  end
-
-  defp build_snapshot(%ResolvedCallPlan{} = plan, incarnation_id, options) do
-    %Snapshot{
-      tenant_id: plan.tenant_id,
-      room_id: plan.room_id,
-      incarnation_id: incarnation_id,
-      lifecycle: :open,
-      created_by_actor_id: plan.actor_id,
-      created_by_command_id: Keyword.fetch!(options, :start_command_id)
-    }
   end
 
   defp via(tenant_id, room_id) do

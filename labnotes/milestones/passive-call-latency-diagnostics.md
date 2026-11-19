@@ -865,3 +865,21 @@ Affected tests156/0, static gates and Lean pass. Astra xhigh final re-review is 
 (six independent probes). The earlier umbrella run has passed through Persistence
 but predates this checkpoint. Automatic room enumeration/attachment, collection,
 persistence and configured-call acceptance remain open; C is still incomplete.
+
+
+## Checkpoint C current room candidates and policy-fenced attachment — 2026-11-19
+
+A coordinator-only query now pages current main-admission human STT bindings for
+the selected, present LLM agent. It excludes native STS, held/private/absent sources
+and unready rooms, and returns bounded identity/eligibility data without prompts
+or provider configuration. The new attachment overload requires the policy revision
+reported by source discovery to remain installed before existing allocation/source
+and settings checks run. Snapshot construction moved mechanically to Room.Snapshot
+to keep RoomAuthority within the repository's module-size limit.
+
+Focused23/0 and final broader403/0 pass, as do static root gates and Lean. Astra
+xhigh review is clean: seven independent probes exercised a real configured room,
+67-source pagination, privacy, selected-agent identity, attachment fences and
+snapshot parity. The prior full umbrella run is still active and predates these
+edits. Automatic scheduling, collection/persistence and configured-call acceptance
+remain open; C tasks stay incomplete.
