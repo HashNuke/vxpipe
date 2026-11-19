@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { LatencyDiagnostics } from "../src/LatencyDiagnostics.js";
 import { createLatencyFixture, latencyReport, latencyTurns } from "../stories/latencyFixtures.js";
@@ -237,4 +237,85 @@ test("a failed turn refresh retains labelled previous evidence and can recover",
   await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   expect(screen.getByText("425 ms")).toBeVisible();
   expect(turns).toHaveBeenCalledTimes(3);
+});
+
+const segmentEvidence = {
+  version: 1 as const, omittedCount: 2, reasons: ["segment_limit"], entries: [
+    { epoch: 0, startSample: 0, endSample: 16000, startUs: 0, endUs: 1000000,
+      startConfirmedUs: 128000, endConfirmedUs: 1512000, uncertaintyUs: 32000, reasons: [] },
+    { epoch: 1, startSample: null, endSample: 32000, startUs: null, endUs: 2000000,
+      startConfirmedUs: null, endConfirmedUs: 2512000, uncertaintyUs: null, reasons: ["partial_start"] },
+  ],
+};
+
+test("turn expansion reveals local segments without promoting them to conversational turns", async () => {
+  const loader = { report: vi.fn().mockResolvedValue(latencyReport), turns: vi.fn().mockResolvedValue({ ...latencyTurns,
+    turns: [{ ...latencyTurns.turns[0]!, acousticSegments: segmentEvidence }] }) };
+  render(<LatencyDiagnostics loader={loader} live={false} participants={[]} />);
+  open();
+  const button = await screen.findByRole("button", { name: "Turn 1" });
+  expect(screen.queryByRole("table", { name: "Speech segments" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Turn 2" })).not.toBeInTheDocument();
+  fireEvent.click(button);
+  const segments = screen.getByRole("table", { name: "Speech segments" });
+  expect(within(segments).getByText("0 ms")).toBeVisible();
+  expect(within(segments).getByText("1,000 ms")).toBeVisible();
+  expect(within(segments).getByText("Confirmed 1,512 ms")).toBeVisible();
+  expect(within(segments).getByText("Sample 0")).toBeVisible();
+  expect(within(segments).getByText("partial start")).toBeVisible();
+  expect(within(segments).getAllByText(/Unavailable/).length).toBeGreaterThan(0);
+  expect(screen.getByText("2 additional segments omitted (segment limit).")).toBeVisible();
+});
+
+test("legacy unavailable segments differ from an observed empty collection", async () => {
+  const loader = { report: vi.fn().mockResolvedValue(latencyReport), turns: vi.fn().mockResolvedValue({ ...latencyTurns,
+    turns: [latencyTurns.turns[0]!, { ...latencyTurns.turns[1]!, acousticSegments: { version: 1, entries: [], omittedCount: 0, reasons: [] } }] }) };
+  render(<LatencyDiagnostics loader={loader} live={false} participants={[]} />);
+  open();
+  fireEvent.click(await screen.findByRole("button", { name: "Turn 1" }));
+  expect(within(screen.getByRole("table", { name: "Per-turn latency" })).getByText("Speech segment evidence unavailable.")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Turn 2" }));
+  expect(screen.getByText("No speech segments recorded.")).toBeVisible();
+});
+
+test("participant selection keeps unattached segments and input runs isolated", async () => {
+  const fixture = createLatencyFixture("participants", "second");
+  const loader = { report: vi.fn(fixture.report), turns: vi.fn(fixture.turns) };
+  render(<LatencyDiagnostics loader={loader} live={false} participants={[{ id: "caller", name: "Caller" }, { id: "second", name: "Second human" }]} />);
+  open();
+  const selector = await screen.findByRole("combobox", { name: "Observation" });
+  expect(within(selector).getAllByRole("option")).toHaveLength(2);
+  fireEvent.click(await screen.findByRole("button", { name: "Turn 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "Turn 2" }));
+  expect(screen.getAllByText(/Clock: clock-one/)).toHaveLength(2);
+  const disclosure = await screen.findByText("Speech outside recorded turns");
+  expect(disclosure.closest("details")).not.toHaveAttribute("open");
+  fireEvent.click(disclosure);
+  expect(screen.getByRole("table", { name: "Unattached speech segments" })).toBeVisible();
+  fireEvent.change(selector, { target: { value: "run-second" } });
+  await waitFor(() => expect(loader.turns).toHaveBeenLastCalledWith("run-second", null, expect.any(AbortSignal)));
+  expect(screen.queryByRole("table", { name: "Unattached speech segments" })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Turn 1" }));
+  expect(screen.getByText(/Clock: clock-second/)).toBeVisible();
+  expect(screen.queryByText("partial start")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Clock: clock-one/)).not.toBeInTheDocument();
+});
+
+test("refresh retains newer unattached evidence while equal-revision coverage can change", async () => {
+  const run = { ...latencyReport.runs[0]!, revision: 5, unattachedSegments: segmentEvidence };
+  const report = vi.fn().mockResolvedValueOnce({ ...latencyReport, runs: [run] })
+    .mockResolvedValueOnce({ ...latencyReport, runs: [{ ...run, revision: 4, unattachedSegments: null }] })
+    .mockResolvedValue({ ...latencyReport, runs: [{ ...run, unattachedSegments: null,
+      coverage: { ...run.coverage, storedTurns: 9 } }] });
+  const loader = { report, turns: vi.fn().mockResolvedValue(latencyTurns) };
+  render(<LatencyDiagnostics loader={loader} live={false} participants={[]} />);
+  open();
+  fireEvent.click(await screen.findByText("Speech outside recorded turns"));
+  expect(screen.getByRole("table", { name: "Unattached speech segments" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh diagnostics" }));
+  await waitFor(() => expect(loader.turns).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole("table", { name: "Unattached speech segments" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh diagnostics" }));
+  await waitFor(() => expect(screen.getByText(/9 stored turns/)).toBeVisible());
+  expect(screen.getByRole("table", { name: "Unattached speech segments" })).toBeVisible();
 });

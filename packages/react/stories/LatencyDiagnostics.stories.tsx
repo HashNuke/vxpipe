@@ -31,3 +31,6 @@ export const RetryAfterOutage: Story = { render: function Render(args) {
   const loader = useMemo(() => createLatencyFixture("retry"), []);
   return <LatencyDiagnostics {...args} loader={loader} />;
 } };
+
+export const ParticipantSegments: Story = { args: { loader: createLatencyFixture("participants"),
+  participants: [{ id: "caller", name: "Caller" }, { id: "second-caller", name: "Second participant" }] } };

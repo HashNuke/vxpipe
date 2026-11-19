@@ -1,9 +1,9 @@
 # Passive call latency diagnostics and readable timelines
 
 Status: records/replay, room-service cutover and STT eligibility implemented; settings/UI acceptance pending, 2026-11-19.
-A, B and existing D functionality are implemented. C now uses participant-owned
+A, B and D, including participant/segment presentation, are implemented. C uses participant-owned
 observation managed by a room service; settings and failure-parity acceptance remain.
-The new D segment/participant extensions, remaining C acceptance, E and F remain incomplete.
+Remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
 ## Runnable outcome
@@ -637,7 +637,7 @@ Open tasks (unchanged in scope; verify on the room-service path):
 
 ### D — Latency details UI
 
-- [ ] Extend authorized reads and both hosts' fixtures for participant-owned runs,
+- [x] Extend authorized reads and both hosts' fixtures for participant-owned runs,
   acoustic start/end evidence and two STT participants; preserve collapsed defaults
   and verify transfer continuity and legacy-row display in rendered Chrome.
 
@@ -2146,3 +2146,20 @@ client selections now pass 10/10 and 11/11. Independent Astra review is clean;
 Root static checks, workspace/Console typechecks, focused lint and 26 shared
 latency tests pass. D's participant/segment presentation and both-host rendered
 acceptance remain unchecked. See [checkpoint labnotes](../20261119-1908-acoustic-segment-contracts.md).
+
+## Checkpoint D — participant segment presentation, 2026-11-19
+
+The shared view and both hosts now present participant-owned acoustic segments.
+Expanded turns show estimated start/end separately from confirmations, samples,
+epoch and uncertainty. Run-level unattached speech is separately collapsed with
+omitted counts; no segment becomes a conversational turn. Legacy unavailable and
+observed-empty evidence remain distinct. Two-human Storybook fixtures cover fallback,
+operational reset gaps and one caller input continuing across response commands.
+
+Independent review reproduced and verified fixes for a conflicting fixture reason
+and stale run refresh losing unattached evidence. Same-revision coverage still
+refreshes; older run records cannot replace newer evidence. Focused core/React
+checks pass 43/43, Console host/API checks 18/18, and build/type/static gates pass.
+Chrome inspection covers both hosts at desktop/mobile sizes, legacy rows, light
+and dark surfaces, keyboard disclosure/scrolling and top-aligned labels. Independent
+final visual review is clean, completing the scoped D participant/segment extension. See [checkpoint labnotes](../20261119-1915-participant-segment-presentation.md).

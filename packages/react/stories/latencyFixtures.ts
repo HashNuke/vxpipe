@@ -28,12 +28,13 @@ export const latencyTurns: LatencyTurnPage = {
       metricReasons: { speech_end_to_provider_end: "partial_start", room_to_first_text: "missing_evidence", text_to_first_audio: "missing_evidence" } },
   ],
 };
-export type LatencyFixtureMode = "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large" | "late" | "retry";
-export function createLatencyFixture(mode: LatencyFixtureMode = "available"): LatencyLoader {
+export type LatencyFixtureMode = "participants" | "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large" | "late" | "retry";
+export function createLatencyFixture(mode: LatencyFixtureMode = "available", secondParticipantId = "second-caller"): LatencyLoader {
   let reads = 0;
   return {
     async report() {
       reads++;
+      if (mode === "participants") return participantReport(secondParticipantId);
       if (mode === "retry" && reads === 1) throw new Error("Fixture temporary outage");
       if (mode === "late" && reads === 1) return { ...latencyReport, summary: [], runs: [{ ...latencyReport.runs[0]!, revision: 1, state: "running", closedAt: null, reasons: [], coverage: { ...latencyReport.runs[0]!.coverage, status: "collecting", recordedState: "running", reasons: [], terminationReasons: [], storedTurns: 1, pendingTurns: 1 } }] };
       if (mode === "loading") return new Promise(() => {});
@@ -46,6 +47,7 @@ export function createLatencyFixture(mode: LatencyFixtureMode = "available"): La
       return mode === "empty" ? { runs: [], summary: [], nextCursor: null } : latencyReport;
     },
     async turns(_runId, cursor) {
+      if (mode === "participants") return participantTurns(_runId);
       if (mode === "late" && reads === 1) return { ...latencyTurns, turns: [{ ...latencyTurns.turns[0]!, revision: 1, quality: "incomplete", acousticReason: "missing_evidence", acousticSample: null, uncertaintyUs: null,
         landmarksUs: { provider_end_received: 3425000, room_turn_completed: 3437000 }, durationsUs: { speech_end_to_provider_end: null, provider_to_room: 12000 }, metricReasons: { speech_end_to_provider_end: "missing_evidence" } }] };
       if (mode === "pending" || mode === "unsupported") return { ...latencyTurns, turns: [] };
@@ -54,4 +56,41 @@ export function createLatencyFixture(mode: LatencyFixtureMode = "available"): La
       return latencyTurns;
     },
   };
+}
+
+// One caller input survives a response-agent transfer; a second human owns another source/clock.
+const callerSegments = { version: 1 as const, omittedCount: 0, reasons: [], entries: [
+  { epoch: 0, startSample: 0, endSample: 16000, startUs: 0, endUs: 1000000,
+    startConfirmedUs: 128000, endConfirmedUs: 1512000, uncertaintyUs: 32000, reasons: [] },
+  { epoch: 0, startSample: 32000, endSample: 48000, startUs: 2000000, endUs: 3000000,
+    startConfirmedUs: 2128000, endConfirmedUs: 3512000, uncertaintyUs: 32000, reasons: [] },
+] };
+function participantReport(secondParticipantId: string): LatencyReport {
+  const caller = { ...latencyReport.runs[0]!, unattachedSegments: { ...callerSegments,
+    entries: [{ ...callerSegments.entries[0]!, startSample: 128000, endSample: 144000,
+      startUs: 8000000, endUs: 9000000, startConfirmedUs: 8128000, endConfirmedUs: 9512000 }],
+    omittedCount: 3, reasons: ["segment_limit"] } };
+  const second = { ...caller, id: "run-second", participantId: secondParticipantId, connectionId: "browser-second",
+    sourceEpoch: "source-second", clockId: "clock-second", profile: { ...caller.profile, inference_source: "operational_reuse" },
+    reasons: ["inference_reset"], coverage: { ...caller.coverage, reasons: ["inference_reset"], observedTurns: 1, storedTurns: 1 },
+    unattachedSegments: { version: 1 as const, entries: [], omittedCount: 0, reasons: [] } };
+  return { runs: [caller, second], summary: [], nextCursor: null };
+}
+function participantTurns(runId: string): LatencyTurnPage {
+  if (runId === "run-second") return { runId, nextCursor: null, turns: [{ ...latencyTurns.turns[1]!,
+    runId, turnId: "second-human-turn", sttAllocationId: "stt-second", sourceEpoch: "source-second", clockId: "clock-second",
+    acousticReason: "inference_reset", metricReasons: { ...latencyTurns.turns[1]!.metricReasons, speech_end_to_provider_end: "inference_reset" }, acousticSegments: { version: 1, omittedCount: 0, reasons: ["inference_reset"],
+      entries: [{ epoch: 1, startSample: 0, endSample: null, startUs: 0, endUs: null,
+        startConfirmedUs: 128000, endConfirmedUs: null, uncertaintyUs: null, reasons: ["inference_reset"] }] } }] };
+  return { ...latencyTurns, turns: [
+    { ...latencyTurns.turns[0]!, acousticSegments: callerSegments },
+    { ...latencyTurns.turns[1]!, responseTurnId: "specialist-response", quality: "available", acousticReason: null,
+      acousticSample: 96000, uncertaintyUs: 32000,
+      landmarksUs: { acoustic_end: 6000000, observer_confirmed: 6512000, provider_end_received: 7000000,
+        room_turn_completed: 7015000, first_response_text: 7200000, first_audio_started: 7400000 },
+      durationsUs: { speech_end_to_provider_end: 1000000, provider_to_room: 15000, room_to_first_text: 185000,
+        text_to_first_audio: 200000, speech_end_to_first_audio: 1400000 }, metricReasons: {},
+      acousticSegments: { ...callerSegments, entries: [{ ...callerSegments.entries[0]!, startSample: 80000, endSample: 96000,
+        startUs: 5000000, endUs: 6000000, startConfirmedUs: 5128000, endConfirmedUs: 6512000 }] } },
+  ] };
 }

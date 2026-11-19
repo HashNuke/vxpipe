@@ -52,3 +52,6 @@ export const Latency: Story = {
 export const LatencyLoading: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "loading" } };
 export const LatencyRetry: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "retry" } };
 export const LatencyLarge: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "large" } };
+
+export const ParticipantSegments: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "participants" },
+  parameters: { docs: { description: { story: "Synthetic participant-owned VAD evidence: two human STT observations, multiple segments per turn, agent-transfer continuity, and explicit missing/omitted evidence." } } } };

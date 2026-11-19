@@ -111,3 +111,13 @@ export function mergeLatencyTurns(previous: LatencyTurnPage | undefined, next: L
     return current && current.revision >= turn.revision ? current : turn;
   }) };
 }
+
+/** Retain newer run records only on the requested page; coverage is derived at read time. */
+export function mergeLatencyReports(previous: LatencyReport | undefined, next: LatencyReport): LatencyReport {
+  const retained = new Map(previous?.runs.map(run => [run.id, run]));
+  return { ...next, runs: next.runs.map(run => {
+    const current = retained.get(run.id);
+    if (!current || current.revision < run.revision) return run;
+    return current.revision === run.revision ? { ...current, coverage: run.coverage } : current;
+  }) };
+}

@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { JsonValue, LatencyLoader, LatencyMetric, LatencyTurn, Message, Participant } from "@vxpipe/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { AcousticSegments } from "./AcousticSegments.js";
 import { useLatencyReport } from "./useLatencyReport.js";
 
 const stages: ReadonlyArray<[LatencyMetric, string]> = [
@@ -53,6 +54,7 @@ function TurnRow({ turn, index, onTranscript }: { turn: LatencyTurn; index: numb
       <dl>{Object.entries(landmarks).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{ms(turn.landmarksUs[key as keyof typeof landmarks])}</dd></div>)}</dl>
       <dl>{stages.filter(([key]) => turn.durationsUs[key] == null).map(([key, label]) => <div key={key}><dt>{label} unavailable</dt><dd>{reason(turn.metricReasons[key])}</dd></div>)}</dl>
       <p>Clock: {turn.clockId} · Source: {turn.sourceEpoch} · Revision {turn.revision} · Timing uncertainty: {ms(turn.uncertaintyUs)}</p>
+      <AcousticSegments evidence={turn.acousticSegments} />
       <p>Speech end to audio start: {ms(turn.durationsUs.speech_end_to_first_audio)}. Missing stages are not zero latency.</p>
     </td></tr>}
   </>;
@@ -97,6 +99,11 @@ export function LatencyDiagnostics({ loader, live, participants, messages = [], 
             })()} />)}</tbody>
         </table></div>
         {!data.loading && data.turns?.runId === run.id && data.turns.turns.length === 0 && <p>{data.turnCursor ? "No more turns on this page." : "No turn summaries in this observation yet."}</p>}
+        <details key={run.id} className="vx-latency-unattached">
+          <summary>Speech outside recorded turns</summary>
+          <p>These segments were not matched to a recorded conversational turn. They do not add turns or response latency samples.</p>
+          <AcousticSegments evidence={run.unattachedSegments} label="Unattached speech segments" />
+        </details>
         <div className="vx-latency-toolbar">
           {data.turnCursor && <button type="button" onClick={() => data.pageTurns(null)} disabled={data.loading}>First turns</button>}
           {data.turns?.nextCursor && <button type="button" onClick={() => data.pageTurns(data.turns?.nextCursor ?? null)} disabled={data.loading}>Next turns</button>}

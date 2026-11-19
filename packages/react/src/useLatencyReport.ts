@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { mergeLatencyTurns, type LatencyLoader, type LatencyReport, type LatencyTurnPage } from "@vxpipe/core";
+import { mergeLatencyReports, mergeLatencyTurns, type LatencyLoader, type LatencyReport, type LatencyTurnPage } from "@vxpipe/core";
 
 /** One bounded report page and one turn page. Refresh runs only while visible. */
 export function useLatencyReport(loader: LatencyLoader, open: boolean, live: boolean) {
@@ -28,7 +28,7 @@ export function useLatencyReport(loader: LatencyLoader, open: boolean, live: boo
         const next = await loader.report(runCursor, abort.signal);
         if (abort.signal.aborted) return;
         const selected = next.runs.find(run => run.id === runId) ?? next.runs.find(run => run.id === effectiveRun.current) ?? next.runs[0];
-        setReport(next);
+        setReport(previous => mergeLatencyReports(previous, next));
         if (selected && selected.id !== effectiveRun.current) {
           effectiveRun.current = selected.id;
           if (turnCursor !== null) {

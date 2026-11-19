@@ -43,7 +43,7 @@ export type {
   UnavailableReason,
 } from "./callDetails.js";
 
-export { latencyMetrics, latencyLandmarks, mergeLatencyTurns } from "./callLatency.js";
+export { latencyMetrics, latencyLandmarks, mergeLatencyReports, mergeLatencyTurns } from "./callLatency.js";
 export type {
   LatencyMetric, LatencyLandmark, LatencyProfile, LatencyCoverage, LatencyRun,
   LatencyAcousticSegment, LatencyAcousticSegments, LatencyTurn, LatencySummary, LatencyReport, LatencyTurnPage, LatencyLoader,

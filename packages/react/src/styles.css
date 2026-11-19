@@ -1898,3 +1898,14 @@ button.vx-tool-summary:hover {
   .vx-latency-toolbar label { flex-direction: column; align-items: flex-start; width: 100%; }
   .vx-latency-evidence dl { grid-template-columns: 1fr; }
 }
+
+.vx-acoustic-segments { margin-top: 20px; }
+.vx-acoustic-segments h4 { margin: 0; font: inherit; font-weight: 600; }
+.vx-acoustic-segments small { max-width: none; overflow: visible; white-space: normal; }
+.vx-acoustic-segments td:last-child { white-space: normal; min-width: 14ch; }
+.vx-latency-unattached { margin-top: 16px; }
+.vx-latency-unattached summary { cursor: pointer; }
+
+@media (max-width: 640px) {
+  .vx-latency-evidence > :is(p, dl, .vx-acoustic-segments) { width: calc(100vw - 48px); max-width: 100%; }
+}

@@ -49,7 +49,7 @@ export function Workbench({
     [attached, client],
   );
   const inspectionController = useMemo(
-    () => latency ? { ...controller, latency: createLatencyFixture(latency) } : controller,
+    () => latency ? { ...controller, latency: createLatencyFixture(latency, "support") } : controller,
     [controller, latency],
   );
   useEffect(() => {

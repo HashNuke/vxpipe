@@ -99,3 +99,6 @@ export const Latency: Story = { args: { initialTab: "metrics", latency: "availab
 export const LatencyLoading: Story = { args: { initialTab: "metrics", latency: "loading" } };
 export const LatencyRetry: Story = { args: { initialTab: "metrics", latency: "retry" } };
 export const LatencyLarge: Story = { args: { initialTab: "metrics", latency: "large" } };
+
+export const ParticipantSegments: Story = { args: { initialTab: "metrics", latency: "participants" },
+  parameters: { docs: { description: { story: "Synthetic participant-owned VAD evidence: caller input stays continuous across a response-agent transfer; a second human uses operational Silero with a reset gap." } } } };
