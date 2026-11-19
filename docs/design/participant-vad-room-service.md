@@ -106,6 +106,23 @@ epochs may reuse sample positions. No audio or text is accepted.
 The envelope is independently versioned and additive in the existing JSON records;
 no table migration or replacement of legacy timing fields is needed. Existing
 scalar timing quality continues to describe those metrics; segment reasons describe
-the segment evidence separately. Producing these fields from LiveReport/Collector,
-assigning segments without ambiguous overlap, and exposing them in the authorized
-API/UI remain subsequent work, not implied by record round-trip tests.
+the segment evidence separately.
+
+LiveReport projects accepted boundary packets into these collections. A pair is
+assigned only when exactly one canonical provider source-sample interval contains
+both boundaries. Missing mappings, partial pairs and segments outside all intervals
+remain on the run; competing intervals add `ambiguous_boundary`. Late canonical
+links/mappings can reassign retained evidence without inventing turns. Inference
+epochs never pair across resets. Repeated transition kinds and reversed acoustic
+clocks are rejected before replacing accepted evidence; the collector drains that
+valid evidence with an explicit incomplete run.
+
+No observed boundary or finalized progress means unavailable (`nil`). A turn's
+collection remains `pending` until finalized coverage spans its source interval;
+a closed overlapping epoch instead records its gap/reset reason. Earlier adjacent
+epochs do not mark the next interval lost. Observed segments can be persisted before a scalar latency estimate becomes valid.
+Both per-turn and unattached collections retain 32 segments with omitted counts,
+and are charged inside LiveReport's existing packet/byte limits. Collector
+heartbeats and final drain persist the unattached collection. The offline replay
+extension and authorized API/UI presentation remain pending; component production
+is not acceptance of the room-service migration.

@@ -1670,3 +1670,28 @@ This is a record/storage foundation only. LiveReport/Collector segment productio
 canonical-turn assignment, bounded unattached retention and API/UI presentation
 are not implemented by this checkpoint. Step 2 and B/D extension checkboxes remain
 open. No live provider, Telnyx code, source state machine or deployment changed.
+
+
+## Migration step 2 live segment correlation — 2026-11-19
+
+LiveReport now projects multiple acoustic segments onto uniquely proven canonical
+source-sample intervals. Missing mappings and partial/outside segments stay in the
+bounded run collection; conflicting intervals retain explicit ambiguity. Late
+mapping or canonical evidence can reassign retained segments. Per-turn and run
+collections both carry omitted counts; their bytes are included in report capacity.
+Collector writes segment revisions before scalar coverage is necessarily complete,
+and writes unattached evidence on heartbeat/final drain.
+
+No acoustic observation remains nil. Incomplete finalized coverage remains pending;
+resets close partial segments without fabricating endpoints. Conflicting transition
+or clock evidence is rejected before replacing accepted state, and the collector
+drains valid evidence with a clock-uncertain incomplete run. Closed epochs reject
+late progress and report gap reasons, without contaminating adjacent intervals.
+Engine diagnostics pass 192/192, Calls domain/diagnostics 64/64, final Collector
+9/9 and configured synthetic calls 10/10. Root static gates pass. Final scoped Astra
+review is clean with ten independent regression probes passing; details are in
+[the checkpoint labnotes](../20261119-1543-acoustic-segment-correlation.md).
+
+The offline ReplayReport extension remains pending, so the B extension checkbox
+stays open. Room-service ownership/cutover and API/UI extensions remain separate
+unfinished tasks. No live provider, Telnyx behavior or deployment changed.

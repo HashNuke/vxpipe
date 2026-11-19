@@ -13,6 +13,248 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReportTest do
     %{state: state, generation: generation, turn: turn}
   end
 
+  test "retains multiple acoustic segments per canonical turn and unattached speech", c do
+    boundaries = [
+      {:acoustic_boundary, 0, :speech_started, 0, 0, 1_000, 100, nil},
+      {:acoustic_boundary, 0, :speech_ended, 160, 10_000, 11_000, 100, nil},
+      {:acoustic_boundary, 0, :speech_started, 320, 20_000, 21_000, 100, nil},
+      {:acoustic_boundary, 0, :speech_ended, 480, 30_000, 31_000, 100, nil},
+      {:acoustic_boundary, 0, :speech_started, 800, 50_000, 51_000, 100, nil},
+      {:acoustic_boundary, 0, :speech_ended, 960, 60_000, 61_000, 100, nil}
+    ]
+
+    state = observe(c.state, boundaries ++ [{:acoustic_progress, 0, 0, 1_024}])
+    assert %{entries: [_, _, _], omitted_count: 0} = LiveReport.unattached_segments(state)
+    assert LiveReport.reports(state) == []
+
+    state =
+      observe(state, [
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -60_000, 640},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -59_000}
+      ])
+
+    [report] = LiveReport.reports(state)
+
+    assert %{version: 1, entries: [first, second], omitted_count: 0, reasons: []} =
+             report.acoustic_segments
+
+    assert {first.start_sample, first.end_sample, first.start_us, first.end_us} ==
+             {0, 160, 0, 10_000}
+
+    assert {second.start_confirmed_us, second.end_confirmed_us} == {21_000, 31_000}
+
+    assert %{entries: [%{start_sample: 800, end_sample: 960}]} =
+             LiveReport.unattached_segments(state)
+
+    assert LiveReport.reports(observe(state, boundaries)) == [report]
+  end
+
+  test "unattached segment retention reports omissions without inventing turns", c do
+    packets =
+      for n <- 0..32, kind <- [:speech_started, :speech_ended] do
+        sample = 320 * n + if(kind == :speech_ended, do: 160, else: 0)
+        {:acoustic_boundary, 0, kind, sample, sample * 60, sample * 60 + 100, 10, nil}
+      end
+
+    state = observe(c.state, packets)
+
+    assert %{entries: entries, omitted_count: 1, reasons: [:segment_limit]} =
+             LiveReport.unattached_segments(state)
+
+    assert length(entries) == 32
+    assert LiveReport.counts(state).observed_turns == 0
+
+    state =
+      observe(state, [
+        {:acoustic_progress, 0, 0, 11_000},
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, 600_000, 11_000},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", 601_000}
+      ])
+
+    assert [
+             %{
+               acoustic_segments: %{
+                 entries: ^entries,
+                 omitted_count: 1,
+                 reasons: [:segment_limit]
+               }
+             }
+           ] =
+             LiveReport.reports(state)
+
+    assert %{entries: [], omitted_count: 0} = LiveReport.unattached_segments(state)
+  end
+
+  test "competing canonical intervals keep acoustic evidence explicitly ambiguous", c do
+    other = make_ref()
+
+    state =
+      observe(c.state, [
+        {:acoustic_boundary, 0, :speech_started, 0, 0, 100, 10, nil},
+        {:acoustic_boundary, 0, :speech_ended, 160, 10_000, 11_000, 10, nil},
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -80_000, 320},
+        {:provider_landmark, c.generation, other, :provider_end_evidence, -79_000, 320},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -78_000},
+        {:room_turn_completed, c.generation, other, "other", "other-command", -77_000}
+      ])
+
+    assert %{entries: [%{reasons: reasons}]} = LiveReport.unattached_segments(state)
+    assert :ambiguous_boundary in reasons
+    assert Enum.all?(LiveReport.reports(state), &(&1.acoustic_segments.entries == []))
+  end
+
+  test "missing source mapping never borrows acoustic segments by wall clock", c do
+    state = LiveReport.new(%{generation: c.generation, clock_id: "clock", origin_us: -100_000})
+
+    state =
+      observe(state, [
+        {:acoustic_boundary, 0, :speech_started, 0, 0, 100, 10, nil},
+        {:acoustic_boundary, 0, :speech_ended, 160, 10_000, 11_000, 10, nil},
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -80_000, 320},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -79_000}
+      ])
+
+    assert [%{acoustic_segments: %{entries: []}}] = LiveReport.reports(state)
+    assert %{entries: [_]} = LiveReport.unattached_segments(state)
+    mapped = observe(state, [{:provider_sample_mapping, c.generation, 0, 0}])
+    assert [%{acoustic_segments: %{entries: [_]}}] = LiveReport.reports(mapped)
+    assert %{entries: []} = LiveReport.unattached_segments(mapped)
+  end
+
+  test "absent acoustic evidence remains unavailable rather than observed empty", c do
+    state =
+      observe(c.state, [
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -80_000, 320},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -79_000}
+      ])
+
+    assert LiveReport.unattached_segments(state) == nil
+    assert [%{acoustic_segments: nil}] = LiveReport.reports(state)
+    observed = observe(state, [{:acoustic_progress, 0, 0, 320}])
+    assert %{entries: []} = LiveReport.unattached_segments(observed)
+    assert [%{acoustic_segments: %{entries: []}}] = LiveReport.reports(observed)
+  end
+
+  test "partial finalized coverage cannot claim an observed empty turn", c do
+    state =
+      observe(c.state, [
+        {:acoustic_progress, 0, 0, 512},
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -60_000, 640},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -59_000}
+      ])
+
+    assert [%{acoustic_segments: %{entries: [], reasons: [:pending]}}] = LiveReport.reports(state)
+    state = observe(state, [{:acoustic_progress, 0, 0, 1_024}])
+    assert [%{acoustic_segments: %{entries: [], reasons: []}}] = LiveReport.reports(state)
+  end
+
+  test "closed insufficient coverage reports its loss instead of remaining pending", c do
+    state =
+      observe(c.state, [
+        {:acoustic_progress, 0, 0, 512},
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -60_000, 640},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -59_000},
+        {:reset, 0, :audio_gap, -55_000}
+      ])
+
+    assert [%{acoustic_segments: %{entries: [], reasons: [:audio_gap]}}] =
+             LiveReport.reports(state)
+  end
+
+  test "a closed preceding epoch does not mark the next pending interval lost", c do
+    previous = make_ref()
+
+    state =
+      observe(c.state, [
+        {:acoustic_progress, 0, 0, 320},
+        {:provider_landmark, c.generation, previous, :provider_end_evidence, -80_000, 320},
+        {:reset, 0, :audio_gap, -79_000},
+        {:acoustic_progress, 1, 320, 512},
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -60_000, 640},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -59_000}
+      ])
+
+    assert [%{acoustic_segments: %{reasons: [:pending]}}] = LiveReport.reports(state)
+  end
+
+  test "a second end without onset cannot replace an already paired endpoint", c do
+    state =
+      observe(c.state, [
+        {:acoustic_boundary, 0, :speech_started, 160, 10_000, 15_000, 100, nil},
+        {:acoustic_boundary, 0, :speech_ended, 320, 20_000, 30_000, 100, nil},
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -60_000, 640},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -59_000}
+      ])
+
+    assert {:error, :conflicting_evidence} =
+             LiveReport.observe(
+               state,
+               {:acoustic_boundary, 0, :speech_ended, 1_200, 75_000, 90_000, 100, nil}
+             )
+
+    assert [%{acoustic_segments: %{entries: [%{end_sample: 320}]}}] = LiveReport.reports(state)
+  end
+
+  test "contradictory confirmation order cannot poison previously accepted evidence", c do
+    state =
+      observe(c.state, [
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -60_000, 640},
+        {:room_turn_completed, c.generation, c.turn, "turn", "command", -59_000},
+        {:acoustic_boundary, 0, :speech_started, 0, 0, 200_000, 10, nil}
+      ])
+
+    assert {:error, :conflicting_evidence} =
+             LiveReport.observe(
+               state,
+               {:acoustic_boundary, 0, :speech_ended, 512, 32_000, 100_000, 10, nil}
+             )
+
+    assert [%{landmarks_us: %{provider_end_received: 40_000}}] = LiveReport.reports(state)
+
+    assert %{entries: [%{start_confirmed_us: 200_000, end_sample: nil}]} =
+             LiveReport.unattached_segments(state)
+  end
+
+  test "reset opening an epoch does not close its later partial segment", c do
+    state =
+      observe(c.state, [
+        {:reset, 1, :audio_gap, -99_000},
+        {:acoustic_boundary, 1, :speech_started, 512, 32_000, 64_000, 10, nil}
+      ])
+
+    assert %{entries: [%{reasons: [:pending]}]} = LiveReport.unattached_segments(state)
+  end
+
+  test "same-epoch reuse reset closes a partial segment", c do
+    state =
+      observe(c.state, [
+        {:acoustic_boundary, 0, :speech_started, 0, 0, 200_000, 10, nil},
+        {:reset, 0, :audio_gap, 0}
+      ])
+
+    assert %{entries: [%{reasons: [:audio_gap]}]} = LiveReport.unattached_segments(state)
+
+    assert {:error, :conflicting_evidence} =
+             LiveReport.observe(state, {:acoustic_progress, 0, 0, 512})
+  end
+
+  test "reset separates partial segments and retains missing endpoint evidence", c do
+    state =
+      observe(c.state, [
+        {:acoustic_boundary, 0, :speech_started, 0, 0, 100, 10, nil},
+        {:reset, 1, :audio_gap, -99_000},
+        {:acoustic_boundary, 1, :speech_ended, 160, 10_000, 11_000, 10, nil}
+      ])
+
+    assert %{entries: [start, finish]} = LiveReport.unattached_segments(state)
+    assert start.start_sample == 0
+    assert start.end_sample == nil
+    assert :audio_gap in start.reasons
+    assert finish.start_sample == nil
+    assert finish.end_sample == 160
+    assert :partial_start in finish.reasons
+  end
+
   test "joins provider, accepted room and response evidence by identity, with run offsets", c do
     packets = [
       {:provider_landmark, c.generation, c.turn, :provider_text_commit, -80_000, 1_000},

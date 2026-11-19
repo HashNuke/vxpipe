@@ -143,6 +143,56 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
     assert DynamicSupervisor.which_children(__MODULE__.Collectors) == []
   end
 
+  test "contradictory acoustic clocks drain previously valid evidence as incomplete", c do
+    collector = start_supervised!({Collector, c.options})
+    handoff = Collector.handoff(collector)
+    assert_receive {:diagnostic_write, task, run}
+    send(task, {:finish, {:ok, run}})
+    monitor = Process.monitor(collector)
+
+    for packet <- [
+          {:acoustic_boundary, 0, :speech_started, 0, 0, 200_000, 10, nil},
+          {:acoustic_boundary, 0, :speech_ended, 512, 32_000, 100_000, 10, nil}
+        ] do
+      assert :ok = CaptureHandoff.offer(handoff, packet)
+    end
+
+    assert_receive {:DOWN, ^monitor, :process, ^collector, :normal}
+    assert_receive {:diagnostic_write, task, closed}
+    assert closed.state == :incomplete
+    assert :clock_uncertain in closed.reasons
+    assert %{entries: [%{start_sample: 0, end_sample: nil}]} = closed.unattached_segments
+    assert Vxpipe.Calls.AcousticSegments.valid?(closed.unattached_segments)
+    send(task, {:finish, {:ok, closed}})
+  end
+
+  test "drain persists unattached acoustic evidence without inventing canonical turns", c do
+    collector = start_supervised!({Collector, c.options})
+    handoff = Collector.handoff(collector)
+    assert_receive {:diagnostic_write, task, run}
+    send(task, {:finish, {:ok, run}})
+
+    for packet <- [
+          {:acoustic_boundary, 0, :speech_started, 0, 0, 100, 10, nil},
+          {:acoustic_boundary, 0, :speech_ended, 160, 10_000, 11_000, 10, nil}
+        ] do
+      assert :ok = CaptureHandoff.offer(handoff, packet)
+    end
+
+    _ = :sys.get_state(collector)
+    monitor = Process.monitor(collector)
+    assert :ok = Collector.close(collector, :call_ended)
+    assert_receive {:DOWN, ^monitor, :process, ^collector, :normal}
+    assert_receive {:diagnostic_write, task, closed}
+
+    assert %{entries: [%{start_sample: 0, end_sample: 160}], omitted_count: 0} =
+             closed.unattached_segments
+
+    assert closed.counts.observed_turns == 0
+    send(task, {:finish, {:ok, closed}})
+    refute_received {:diagnostic_turn_write, _, _, _}
+  end
+
   test "writes a run then revises one accepted turn as late acoustic evidence arrives", c do
     collector = start_supervised!({Collector, c.options})
     handoff = Collector.handoff(collector)
@@ -176,11 +226,23 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
                {:acoustic_boundary, 0, :speech_started, 0, 10_000, 12_000, 1_000, nil}
              )
 
+    assert_receive {:diagnostic_turn_write, task, ^scope, pending_segments}
+
+    assert pending_segments.acoustic_segments ==
+             %{version: 1, entries: [], omitted_count: 0, reasons: [:pending]}
+
+    send(task, {:finish, {:ok, pending_segments}})
+
     assert :ok =
              CaptureHandoff.offer(
                handoff,
                {:acoustic_boundary, 0, :speech_ended, 512, 40_000, 90_000, 1_000, nil}
              )
+
+    assert_receive {:diagnostic_turn_write, task, ^scope, segments_only}
+    assert %{entries: [%{start_sample: 0, end_sample: 512}]} = segments_only.acoustic_segments
+    assert segments_only.durations_us.speech_end_to_provider_end == nil
+    send(task, {:finish, {:ok, segments_only}})
 
     assert :ok = CaptureHandoff.offer(handoff, {:acoustic_progress, 0, 0, 3_072})
 

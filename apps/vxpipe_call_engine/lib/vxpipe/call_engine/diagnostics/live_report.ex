@@ -1,6 +1,6 @@
 defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
   @moduledoc "Bounded source-run evidence joined by provider, canonical turn and command identity."
-  alias Vxpipe.CallEngine.Diagnostics.{CapturePacket, TurnTiming}
+  alias Vxpipe.CallEngine.Diagnostics.{CapturePacket, SegmentProjection, TurnTiming}
 
   @provider_kinds %{
     provider_text_commit: :provider_text_commit,
@@ -10,7 +10,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
   }
   @enforce_keys [:generation, :clock_id, :origin_us, :maximum_packets, :maximum_bytes]
   @derive {Inspect, only: [:maximum_packets, :maximum_bytes]}
-  defstruct @enforce_keys ++ [packets: %{}, reports: %{}, closed_epochs: %{}]
+  defstruct @enforce_keys ++
+              [packets: %{}, reports: %{}, closed_epochs: %{}, unattached_segments: nil]
 
   def new(context, options \\ []) do
     %__MODULE__{
@@ -33,11 +34,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
          {:ok, packet} <- merge(Map.get(state.packets, key), packet),
          packets = Map.put(state.packets, key, CapturePacket.copy(packet)),
          true <- map_size(packets) <= state.maximum_packets,
+         :ok <- segment_order(packets),
          next = %{state | packets: packets},
          next = if(Map.has_key?(state.packets, key), do: next, else: close_epochs(next, packet)),
-         next = %{next | reports: build(next)},
+         {reports, unattached} = build(next),
+         next = %{next | reports: reports, unattached_segments: unattached},
          true <-
-           4 * :erlang.external_size({next.packets, next.reports, next.closed_epochs}) + 512 <=
+           4 *
+             :erlang.external_size(
+               {next.packets, next.reports, next.closed_epochs, next.unattached_segments}
+             ) + 512 <=
              state.maximum_bytes do
       {:ok, next}
     else
@@ -46,7 +52,15 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
     end
   end
 
+  defp segment_order(packets) do
+    if SegmentProjection.valid_order?(Map.values(packets)),
+      do: :ok,
+      else: {:error, :conflicting_evidence}
+  end
+
   def reports(state), do: state.reports |> Map.values() |> Enum.sort_by(& &1.turn_id)
+
+  def unattached_segments(state), do: state.unattached_segments
 
   def counts(state) do
     matched = MapSet.new(state.reports, fn {_key, report} -> report.provider_turn_id end)
@@ -156,60 +170,72 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
           at >= state.origin_us,
           do: at - state.origin_us
 
-    Map.new(rows, fn {room, timing, provider_ids} ->
-      {:room_turn_completed, generation, reference, turn, command, _} = room
-      finish = timing.landmarks_us[:provider_end_received]
-      previous = Enum.filter(ends, &(finish != nil and &1 < finish)) |> Enum.max(fn -> -1 end)
+    intervals =
+      Map.new(rows, fn
+        {{:room_turn_completed, generation, reference, _, _, _}, _, ids} ->
+          {{generation, reference}, segment_bounds(ids, packets)}
+      end)
 
-      {timing, endpoint} =
-        acoustic(
-          state,
-          timing,
-          packets,
-          previous,
-          finish,
-          source_bounds(provider_ids, packets, previous + state.origin_us)
-        )
+    {segments, unattached} = SegmentProjection.build(packets, intervals, state.closed_epochs)
 
-      timing =
-        if length(provider_ids) > 1 or (finish != nil and Enum.count(ends, &(&1 == finish)) > 1),
-          do: elem(TurnTiming.invalidate_acoustic(timing, :ambiguous_boundary), 1),
-          else: timing
+    reports =
+      Map.new(rows, fn {room, timing, provider_ids} ->
+        {:room_turn_completed, generation, reference, turn, command, _} = room
+        finish = timing.landmarks_us[:provider_end_received]
+        previous = Enum.filter(ends, &(finish != nil and &1 < finish)) |> Enum.max(fn -> -1 end)
 
-      timing = validate_coverage(timing, endpoint, provider_ids, packets)
+        {timing, endpoint} =
+          acoustic(
+            state,
+            timing,
+            packets,
+            previous,
+            finish,
+            source_bounds(provider_ids, packets, previous + state.origin_us)
+          )
 
-      {timing, endpoint} =
-        finalize_coverage(timing, endpoint, provider_ids, packets, state.closed_epochs)
+        timing =
+          if length(provider_ids) > 1 or (finish != nil and Enum.count(ends, &(&1 == finish)) > 1),
+            do: elem(TurnTiming.invalidate_acoustic(timing, :ambiguous_boundary), 1),
+            else: timing
 
-      report =
-        timing
-        |> TurnTiming.report()
-        |> Map.merge(%{
-          turn_id: turn,
-          stt_allocation_id: identifier(generation),
-          provider_turn_id: if(length(provider_ids) == 1, do: identifier(hd(provider_ids))),
-          response_turn_id:
-            if(
-              Map.has_key?(timing.landmarks_us, :first_response_text) or
-                Map.has_key?(timing.landmarks_us, :first_audio_started),
-              do: command
-            ),
-          acoustic_sample: if(endpoint, do: elem(endpoint, 3)),
-          uncertainty_us: if(endpoint, do: elem(endpoint, 6))
-        })
+        timing = validate_coverage(timing, endpoint, provider_ids, packets)
 
-      key = {generation, reference}
-      old = Map.get(state.reports, key)
+        {timing, endpoint} =
+          finalize_coverage(timing, endpoint, provider_ids, packets, state.closed_epochs)
 
-      revision =
-        cond do
-          old == nil -> 1
-          Map.delete(old, :revision) == report -> old.revision
-          true -> old.revision + 1
-        end
+        report =
+          timing
+          |> TurnTiming.report()
+          |> Map.merge(%{
+            acoustic_segments: Map.fetch!(segments, {generation, reference}),
+            turn_id: turn,
+            stt_allocation_id: identifier(generation),
+            provider_turn_id: if(length(provider_ids) == 1, do: identifier(hd(provider_ids))),
+            response_turn_id:
+              if(
+                Map.has_key?(timing.landmarks_us, :first_response_text) or
+                  Map.has_key?(timing.landmarks_us, :first_audio_started),
+                do: command
+              ),
+            acoustic_sample: if(endpoint, do: elem(endpoint, 3)),
+            uncertainty_us: if(endpoint, do: elem(endpoint, 6))
+          })
 
-      {key, Map.put(report, :revision, revision)}
-    end)
+        key = {generation, reference}
+        old = Map.get(state.reports, key)
+
+        revision =
+          cond do
+            old == nil -> 1
+            Map.delete(old, :revision) == report -> old.revision
+            true -> old.revision + 1
+          end
+
+        {key, Map.put(report, :revision, revision)}
+      end)
+
+    {reports, unattached}
   end
 
   defp provider_row(
@@ -428,6 +454,26 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
   defp source_end(_, _), do: nil
 
+  defp segment_bounds([{g, _}] = ids, packets) do
+    finish = source_end(ids, packets)
+
+    previous =
+      for {:provider_landmark, ^g, t, :provider_end_evidence, _, _} <- packets,
+          endpoint = source_end([{g, t}], packets),
+          is_integer(endpoint) and is_integer(finish) and endpoint < finish,
+          do: endpoint
+
+    origin =
+      case Enum.find(packets, &match?({:provider_sample_mapping, ^g, _, _}, &1)) do
+        {:provider_sample_mapping, ^g, _, start} -> start
+        _ -> nil
+      end
+
+    {Enum.max(previous, fn -> origin end), finish}
+  end
+
+  defp segment_bounds(_, _), do: {nil, nil}
+
   defp source_bounds([{g, _}] = ids, packets, previous) do
     previous_ids =
       for {:provider_landmark, ^g, t, :provider_end_evidence, ^previous, _} <- packets,
@@ -466,6 +512,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
       {true, {:acoustic_progress, _, _, old}} when finalized > old ->
         {:error, :conflicting_evidence}
 
+      {true, nil} ->
+        {:error, :conflicting_evidence}
+
       _ ->
         :ok
     end
@@ -485,6 +534,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
     closed =
       Enum.reduce(state.packets, state.closed_epochs, fn
         {{:progress, epoch}, _}, acc when epoch <= next -> Map.put_new(acc, epoch, reason)
+        {{:acoustic, epoch, _, _}, _}, acc when epoch <= next -> Map.put_new(acc, epoch, reason)
         _, acc -> acc
       end)
 

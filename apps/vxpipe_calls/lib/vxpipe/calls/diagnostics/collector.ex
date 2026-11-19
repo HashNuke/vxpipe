@@ -185,6 +185,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
 
         case result do
           {:ok, reports} -> persist(record_loss(%{state | reports: reports}, packet))
+          {:error, :conflicting_evidence} -> {:noreply, begin_finish(state, :clock_uncertain)}
           _ -> {:noreply, begin_finish(state, :observer_overloaded)}
         end
 
@@ -264,7 +265,8 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
       state.run
       | revision: state.run.revision + 1,
         heartbeat_at: now,
-        counts: Map.merge(state.run.counts, LiveReport.counts(state.reports))
+        counts: Map.merge(state.run.counts, LiveReport.counts(state.reports)),
+        unattached_segments: LiveReport.unattached_segments(state.reports)
     }
   end
 

@@ -33,11 +33,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReportBoundaryCoverageTest do
 
     state =
       observe(state, [
+        {:acoustic_boundary, 0, :speech_started, 11_500, 600_000, 800_000, 1_000, nil},
         {:acoustic_boundary, 0, :speech_ended, 12_000, 650_000, 900_000, 1_000, nil}
       ])
 
     [report] = LiveReport.reports(state)
     assert report.acoustic_sample == 3_200
+    assert [%{start_sample: 1_600, end_sample: 3_200}] = report.acoustic_segments.entries
     assert report.durations_us.speech_end_to_provider_end == 500_000
   end
 
