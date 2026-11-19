@@ -164,3 +164,28 @@ alternatives are using `finish/1` immediately after adoption (releases too early
 counting only per-room supervisor children (multiplies the node cap), and creating
 a fresh gate on tracker restart (can admit over surviving old workers). No running
 coordinator or room composition changes in the admission primitive checkpoint.
+
+
+## Room-local accepted input snapshot
+
+`RoomAuthority.DiagnosticInputs` exposes bounded pages and exact connection reads
+for accepted human STT bindings. It requires an open, ready room with matching
+plan/snapshot ownership, main admission, present unheld human membership and a
+local STT capability binding. It returns only room/call/incarnation identity,
+participant/connection identity and the bound capability; no agent, prompt or
+provider configuration is returned. Selected response agents and room-level STS
+capabilities do not affect this input snapshot. An STT replacement changes the
+binding; an agent-only transfer leaves the same input identity intact.
+
+This query is candidate evidence, not permission to inspect audio. Source policy
+intervals, current allocation, setting grants and source/profile proof still gate
+attachment. The old coordinator keeps its old query until the single-owner cutover;
+new snapshots alone do not start observers or enable no-agent turn persistence.
+
+Gate-lifetime design review selected allocation in the Engine root's retained
+child-spec arguments, outside Calls/source-pool and optional tracker restarts. The
+admission subtree must be temporary/non-significant with its own restart intensity.
+Missing admission ports fail closed; the composed path must not manufacture a new
+fallback gate. A fresh Engine-root gate is safe only after confirmed teardown of
+old room subtrees and unresolved starts. The root composition/restart tests remain
+pending; the query checkpoint is not evidence of that lifetime property.

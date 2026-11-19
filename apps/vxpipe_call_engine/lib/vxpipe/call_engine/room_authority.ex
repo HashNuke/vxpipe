@@ -34,6 +34,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     CallerIdle,
     ConnectionLifecycle,
     DiagnosticSources,
+    DiagnosticInputs,
     EndCall,
     FirstMessage,
     InputTurns,
@@ -220,6 +221,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   @impl true
   def handle_call({:diagnostic_sources, cursor, limit}, _from, state),
     do: {:reply, DiagnosticSources.read(state, cursor, limit), state}
+
+  def handle_call({:diagnostic_inputs, cursor, limit}, _from, state),
+    do: {:reply, DiagnosticInputs.read(state, cursor, limit), state}
 
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 

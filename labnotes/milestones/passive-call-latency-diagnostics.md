@@ -1747,3 +1747,23 @@ supervision/service, accepted-STT discovery, Calls port resolution and cutover
 remain pending. Tracker restart must retain gate debt; creating a fresh gate still
 requires a proven teardown barrier for old workers and unresolved starts. No
 existing coordinator/room composition, provider behavior or deployment changed.
+
+
+## Migration step 3 accepted-input snapshot — 2026-11-19
+
+RoomAuthority now offers a separate DiagnosticInputs read for bounded accepted
+human STT bindings, including exact connection revalidation. It is independent of
+the selected response agent and room-level STS capabilities while retaining room
+readiness, plan ownership, human membership, admission and held-source exclusions.
+No-agent/mixed-room snapshots, two-human pagination, agent-transfer identity,
+replacement bindings and private-plan omission are covered. The old coordinator
+still uses its existing source query; ownership is not cut over by this checkpoint.
+
+Focused new/old snapshot and coordinator tests pass 29/29; root static gates pass.
+Scoped Astra review is clean (9 query cases plus a six-case wrapper/replacement probe). The gate-lifetime
+design review selected Engine-root retained allocation, with no fresh fallback gate
+on Calls/tracker restart; composition tests must still prove that boundary.
+See [checkpoint labnotes](../20261119-1626-room-diagnostic-inputs.md).
+No additional C checkbox is complete: room service/subtree, stable node admission
+composition, attachment, notifications, persisted no-agent turns and cutover remain
+pending. No operational dispatch, provider behavior or deployment changed.
