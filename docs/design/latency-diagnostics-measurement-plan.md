@@ -53,8 +53,8 @@ The external generator must start outside that measured cgroup: a direct Port
 child inherits the restricted cpuset. The smoke uses a transient user-manager
 service with piped packet output, pins the Python generator to CPUs 2–3, and
 records its actual mask. Its lifetime is limited to 45 seconds with a two-second
-stop timeout, with an exact owned-unit stop on test cleanup. A reusable watchdog
-must also stop its owned generator units on abort. The fixed pacing method sleeps until two milliseconds before each
+stop timeout, with an exact owned-unit stop on test cleanup. The smoke watchdog
+also stops its owned generator units on abort. The fixed pacing method sleeps until two milliseconds before each
 absolute deadline, then spins for the remaining bounded interval; its CPU cost
 is reported separately. The original 2 ms p95 write-completion lateness limit
 still applies. Retain invalid attempts; neither the spin guard nor CPU placement
@@ -144,8 +144,21 @@ process CPU ticks, resident memory and thread counts; it fences PID reuse using
 process start ticks and rejects missing, nonfinite or nonmonotonic samples. Its
 resource comparison alone cannot establish a passing workload: correctness,
 coverage, generator timing, readiness and all latency budgets below remain
-mandatory. The configured workload driver, watchdog and paired report integration
-remain to be completed.
+mandatory. The four-case smoke watchdog is available with:
+
+```shell
+python3 scripts/diagnostics/smoke_runner.py --output /tmp/diagnostics-smoke-unique
+```
+
+Use a new output directory; existing evidence is never overwritten. It requires
+noninteractive sudo for its uniquely named transient system scope, while the
+workload runs as the invoking checkout user. The report records source/model hashes,
+raw resource samples, generator reports and cleanup failures. Invalid output,
+process replacement, resource/affinity violations and incomplete evidence prevent
+a passing result. Cleanup targets only the scope and registered generator units
+belonging to that run. Finite unit lifetimes remain the fallback if cleanup fails.
+This is functional smoke evidence. The full configured workload driver and paired
+report integration remain to be completed.
 
 Compare each matched pair separately. All valid repetitions must pass; also
 publish the worst result. Let N be the number of accepted human STT inputs:

@@ -1,0 +1,276 @@
+"""Run the four configured Silero smoke cases with enforced CPU isolation.
+
+This is a watchdog/functional smoke runner, not paired performance acceptance.
+It creates only uniquely named transient units and requires noninteractive sudo
+for its own system scope. The workload itself runs as the invoking normal user.
+"""
+import argparse
+import hashlib
+from dataclasses import asdict
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import signal
+import subprocess
+import time
+import uuid
+
+from measurement import read_process
+
+ROOT = Path(__file__).resolve().parents[2]
+MARKER = 'DIAGNOSTIC_GENERATOR_UNIT '
+SMOKE_MARKER = 'DIAGNOSTIC_EXTERNAL_SMOKE '
+
+
+class OwnedUnits:
+    def __init__(self, run_id):
+        if not re.fullmatch(r'[0-9a-f]{32}', run_id):
+            raise ValueError('invalid run identity')
+        self.run_id = run_id
+        self.scope = f'vxpipe-diagnostic-smoke-{run_id}.scope'
+        self.generators = set()
+
+    def observe(self, line):
+        if MARKER not in line:
+            return
+        unit = line.split(MARKER, 1)[1].strip()
+        pattern = (rf'vxpipe-diagnostic-generator-{self.run_id}-'
+                   r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.service')
+        if not re.fullmatch(pattern, unit):
+            raise ValueError('unowned generator unit in workload output')
+        self.generators.add(unit)
+
+
+def parse_cpu_mask(text):
+    result = set()
+    for part in text.split(','):
+        bounds = part.split('-')
+        if len(bounds) not in (1, 2):
+            raise ValueError('invalid CPU mask')
+        low, high = int(bounds[0]), int(bounds[-1])
+        if not 0 <= low <= high < 4096:
+            raise ValueError('invalid CPU mask')
+        result.update(range(low, high + 1))
+    return result
+
+
+def violation(beams, *, available_kib, elapsed):
+    if sum(beam['rss_kib'] for beam in beams) > 1024 * 1024:
+        return 'VM RSS exceeds 1024 MiB'
+    if available_kib < 768 * 1024:
+        return 'host available memory below 768 MiB'
+    if elapsed > 300:
+        return '300 second watchdog deadline'
+    if len(beams) > 1:
+        return 'more than one measured VM'
+    for beam in beams:
+        masks = beam['thread_cpu_masks']
+        if not masks or any(not parse_cpu_mask(mask) <= {0, 1} for mask in masks):
+            return 'native thread outside enforced CPUs 0-1'
+    return None
+
+
+def available_memory():
+    line = next(line for line in Path('/proc/meminfo').read_text().splitlines()
+                if line.startswith('MemAvailable:'))
+    return int(line.split()[1])
+
+
+def descendants(pid):
+    result = [pid]
+    try:
+        children = Path(f'/proc/{pid}/task/{pid}/children').read_text().split()
+    except FileNotFoundError:
+        return result
+    for child in children:
+        result.extend(descendants(int(child)))
+    return result
+
+
+def snapshot(pid):
+    beams = []
+    for child in descendants(pid):
+        path = Path(f'/proc/{child}')
+        try:
+            if (path / 'comm').read_text().strip() != 'beam.smp':
+                continue
+            state = next(line for line in (path / 'status').read_text().splitlines()
+                         if line.startswith('State:'))
+            if state.split()[1] in ('Z', 'X'):
+                continue
+            sample = read_process(child)
+            masks = set()
+            for thread in (path / 'task').glob('*/status'):
+                try:
+                    masks.add(next(line.split(':', 1)[1].strip()
+                                   for line in thread.read_text().splitlines()
+                                   if line.startswith('Cpus_allowed_list:')))
+                except FileNotFoundError:
+                    pass
+            if read_process(child).start_ticks != sample.start_ticks:
+                raise ValueError('measured process replaced during sampling')
+            beams.append(dict(asdict(sample), thread_cpu_masks=sorted(masks)))
+        except FileNotFoundError:
+            continue
+    return dict(available_kib=available_memory(), beams=beams)
+
+
+def stop_unit(unit, *, system=False):
+    prefix = ['sudo', '-n', 'systemctl'] if system else ['systemctl', '--user']
+    result = subprocess.run(prefix + ['stop', unit], capture_output=True, text=True, timeout=5)
+    if result.returncode:
+        state = subprocess.run(prefix + ['show', unit, '-p', 'ActiveState', '--value'],
+                               capture_output=True, text=True, timeout=5)
+        if state.stdout.strip() not in ('inactive', 'failed'):
+            raise RuntimeError('could not stop owned transient unit')
+
+
+def smoke_complete(reports, samples):
+    expected = {(False, False), (False, True), (True, False), (True, True)}
+    if len(reports) != 4 or {(r['operational_vad'], r['collection']) for r in reports} != expected:
+        return False
+    if not any(sample['beams'] for sample in samples):
+        return False
+    return all(type(r['operational_vad']) is bool and type(r['collection']) is bool and
+               r['generator']['frames_sent'] == 64 and
+               type(r['generator']['p95_lateness_ns']) is int and
+               0 <= r['generator']['p95_lateness_ns'] <= 2_000_000 and
+               r['generator']['elapsed_ns'] >= 2_048_000_000 for r in reports)
+
+
+def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sleep=time.sleep):
+    samples, reports, cleanup_errors = [], [], []
+    abort, pending = None, ''
+    identity = None
+    start = clock()
+    reader = log_path.open()
+
+    def consume():
+        nonlocal pending, abort
+        pending += reader.read()
+        while '\n' in pending:
+            line, pending = pending.split('\n', 1)
+            try:
+                owned.observe(line)
+                if SMOKE_MARKER in line:
+                    reports.append(json.loads(line.split(SMOKE_MARKER, 1)[1]))
+            except (ValueError, TypeError) as error:
+                # Keep scanning so invalid output cannot hide later owned units.
+                abort = abort or type(error).__name__ + ': invalid workload output'
+
+
+    try:
+        while process.poll() is None:
+            consume()
+            if abort:
+                break
+            observed = dict(sample(process.pid), seconds=clock() - start)
+            samples.append(observed)
+            for beam in observed['beams']:
+                current = (beam['pid'], beam['start_ticks'])
+                if identity is not None and current != identity:
+                    raise ValueError('measured process identity changed')
+                identity = current
+            abort = violation(observed['beams'], available_kib=observed['available_kib'],
+                              elapsed=observed['seconds'])
+            if abort:
+                break
+            sleep(.1)
+    except (Exception, KeyboardInterrupt) as error:
+        abort = type(error).__name__ + ': ' + str(error)
+    finally:
+        # Stop future producers first, then read all registered owned unit names.
+        try:
+            stop_unit(owned.scope, system=True)
+        except Exception as error:
+            cleanup_errors.append(type(error).__name__ + ': scope cleanup failed')
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            # The process group was created by this runner; never target a name/PID
+            # supplied by workload output. A live child PID cannot yet be reused.
+            try:
+                subprocess.run(['sudo', '-n', 'kill', '-KILL', '--', f'-{process.pid}'],
+                               capture_output=True, timeout=5)
+                process.wait(timeout=5)
+                cleanup_errors.append('launcher required process-group kill')
+            except Exception:
+                cleanup_errors.append('launcher could not be reaped after owned-scope cleanup')
+        except Exception:
+            cleanup_errors.append('launcher wait failed')
+        try:
+            consume()
+        except Exception as error:
+            abort = abort or type(error).__name__ + ': invalid final output'
+        reader.close()
+        for unit in sorted(owned.generators):
+            try:
+                stop_unit(unit)
+            except Exception as error:
+                cleanup_errors.append(type(error).__name__ + ': generator cleanup failed')
+    try:
+        complete = smoke_complete(reports, samples)
+    except (KeyError, TypeError, ValueError):
+        complete = False
+    return dict(run_id=owned.run_id, exit_code=process.returncode, abort=abort,
+                cleanup_errors=cleanup_errors, samples=samples, smoke_reports=reports,
+                completed=process.returncode == 0 and abort is None and not cleanup_errors and complete)
+
+
+def provenance():
+    paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py',
+             'scripts/diagnostics/pcm_generator.py', 'mix.lock',
+             'apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs',
+             'apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero/model.ex',
+             'apps/vxpipe_call_engine/priv/speech/silero_v6.2.3.onnx']
+    return dict(
+        source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT,
+                                              text=True, timeout=5).strip(),
+        worktree_dirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT,
+                                                   text=True, timeout=5).strip()),
+        file_sha256={path: hashlib.sha256((ROOT / path).read_bytes()).hexdigest() for path in paths})
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', required=True, type=Path, help='new directory; never overwrite evidence')
+    args = parser.parse_args()
+    if os.getuid() == 0:
+        parser.error('invoke as the checkout user, not root')
+    if available_memory() < 1536 * 1024:
+        parser.error('need at least 1536 MiB available host memory')
+    subprocess.run(['sudo', '-n', 'true'], check=True, timeout=5)
+    args.output.mkdir(parents=True, exist_ok=False)
+    source = provenance()
+    owned = OwnedUnits(uuid.uuid4().hex)
+    username = pwd.getpwuid(os.getuid()).pw_name
+    environment = [key + '=' + os.environ[key] for key in
+                   ('PATH', 'MIX_HOME', 'HEX_HOME', 'XDG_RUNTIME_DIR') if key in os.environ]
+    command = ['sudo', '-n', 'systemd-run', '--quiet', '--scope', '--collect',
+               '--unit=' + owned.scope, '--property=AllowedCPUs=0,1',
+               '--property=RuntimeMaxSec=300', '--property=TimeoutStopSec=2', '--',
+               'runuser', '-u', username, '--', 'env', *environment,
+               'ERL_FLAGS=+S 2:2 +SDcpu 1 +SDio 1 +A 2',
+               'VXPIPE_DIAGNOSTIC_GENERATOR_CPUS=2,3', 'VXPIPE_DIAGNOSTIC_GENERATOR_SYSTEMD=1',
+               'VXPIPE_DIAGNOSTIC_RUN_ID=' + owned.run_id,
+               'mix', 'test', 'test/integration/configured_latency_diagnostics_test.exs',
+               '--only', 'external_pcm', '--seed', '0', '--max-cases', '1']
+    def interrupted(_signal, _frame):
+        raise KeyboardInterrupt('runner interrupted')
+    signal.signal(signal.SIGTERM, interrupted)
+    log_path = args.output / 'workload.log'
+    with log_path.open('w') as log:
+        process = subprocess.Popen(command, cwd=ROOT / 'apps/vxpipe_console',
+                                   stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        report = watch(process, owned, log_path)
+    report['provenance'] = source
+    report['scope'] = 'functional smoke watchdog; not paired performance acceptance'
+    (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
+    print(json.dumps({key: report[key] for key in ('run_id', 'completed', 'exit_code', 'abort', 'cleanup_errors')}))
+    raise SystemExit(0 if report['completed'] else 1)
+
+
+if __name__ == '__main__':
+    main()

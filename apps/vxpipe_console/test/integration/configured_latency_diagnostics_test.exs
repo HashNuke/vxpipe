@@ -263,7 +263,14 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           # cgroup. A direct Port child would inherit that cgroup's CPU limit.
           systemd = System.find_executable("systemd-run")
           assert is_binary(systemd)
-          unit = "vxpipe-diagnostic-generator-#{Ecto.UUID.generate()}.service"
+
+          run_id =
+            System.get_env("VXPIPE_DIAGNOSTIC_RUN_ID") ||
+              String.replace(Ecto.UUID.generate(), "-", "")
+
+          assert Regex.match?(~r/\A[0-9a-f]{32}\z/, run_id)
+          unit = "vxpipe-diagnostic-generator-#{run_id}-#{Ecto.UUID.generate()}.service"
+          IO.puts("DIAGNOSTIC_GENERATOR_UNIT " <> unit)
 
           on_exit(fn ->
             # It may already have exited and been collected; stop only our unit.

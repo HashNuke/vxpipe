@@ -681,6 +681,9 @@ and complete paired measurements remain outstanding. The
 [external workload smoke](../20261119-2128-diagnostics-external-workload.md) verifies
 real Silero and durable configured calls in all four modes with enforced native
 CPU isolation; it is not the full topology/duration/latency matrix.
+The [smoke watchdog](../20261119-2204-diagnostics-smoke-runner.md) makes that
+four-case run reproducible with bounded lifetime, owned-unit cleanup, resource
+samples and source provenance. Full paired-load acceptance remains unchecked.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
