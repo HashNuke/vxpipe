@@ -162,7 +162,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
        collector_supervisor: __MODULE__.Collectors,
        task_supervisor: __MODULE__.Writes,
        maximum_collectors: if(Map.get(tags, :input_only, false), do: 2, else: 1),
-       maximum_writers: if(Map.get(tags, :repeated_lifecycle, false), do: 1, else: 64),
+       maximum_writers:
+         if(Map.get(tags, :repeated_lifecycle, false) or Map.get(tags, :writer_crash, false),
+           do: 1,
+           else: 64
+         ),
        source_options: [
          name: __MODULE__.Sources,
          inference: __MODULE__.Inference,
@@ -573,6 +577,141 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute_received {:scribe_audio, ^wire, ^off_pcm}
       refute_received {:scribe_audio, ^wire, ^on_pcm}
       refute_received {:scribe_commit, ^wire}
+    end
+  end
+
+  for vad <- [false, true], enabled <- [false, true] do
+    @tag matrix: true, vad: vad, diagnostics_enabled: enabled, writer_crash: true
+    test "writer death preserves the configured call and exposes interrupted coverage, Silero #{vad}, collection #{enabled}",
+         c do
+      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      epoch = make_ref()
+
+      sequence =
+        if c.diagnostics_enabled,
+          do: discover_with_audio(attachment, identity, epoch, wire),
+          else: 0
+
+      before = writer_failure_turn(c, attachment, wire, identity, epoch, sequence, 71)
+
+      original =
+        if c.diagnostics_enabled, do: await(fn -> diagnostic_turn(call, before.turn_id) end)
+
+      if c.diagnostics_enabled do
+        [{_, writer, _, _}] = DynamicSupervisor.which_children(__MODULE__.Writers)
+        [{_, collector, _, _}] = DynamicSupervisor.which_children(__MODULE__.Collectors)
+
+        [{_, worker, _, _}] =
+          DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+
+        monitors = Enum.map([writer, collector, worker], &{&1, Process.monitor(&1)})
+        handoff = Vxpipe.Calls.Diagnostics.Writer.handoff(writer)
+
+        # Finish shared sandbox queries before killing the writer. Killing a borrower
+        # mid-query disconnects the test's shared transaction, unlike production's
+        # independent connections. The writer unit test covers blocked-task death.
+        :ok = :sys.suspend(collector)
+
+        try do
+          await(fn -> Vxpipe.Calls.Diagnostics.Handoff.stats(handoff).pending_count == 0 end)
+          Process.exit(writer, :kill)
+        after
+          resume_diagnostic_worker(collector)
+        end
+
+        for {pid, monitor} <- monitors do
+          assert_receive {:DOWN, ^monitor, :process, ^pid, reason}, 2_000
+          if pid == writer, do: assert(reason == :killed)
+        end
+      else
+        assert DynamicSupervisor.count_children(__MODULE__.Writers).active == 0
+      end
+
+      # Call input and response do not wait for replacement diagnostic attachment.
+      during = writer_failure_turn(c, attachment, wire, identity, epoch, sequence + 1, 72)
+
+      next =
+        if c.diagnostics_enabled,
+          do: discover_with_audio(attachment, identity, epoch, wire, sequence + 2),
+          else: sequence + 2
+
+      after_crash = writer_failure_turn(c, attachment, wire, identity, epoch, next, 73)
+
+      if c.diagnostics_enabled do
+        recovered = await(fn -> diagnostic_turn(call, after_crash.turn_id) end)
+        refute recovered.run_id == original.run_id
+        assert DynamicSupervisor.count_children(__MODULE__.Writers).active == 1
+      end
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
+      assert_diagnostic_slots_released()
+
+      if c.diagnostics_enabled do
+        assert {:ok, access} =
+                 Calls.operator_call_access(
+                   Vxpipe.Calls.InstallationOperator.authority(),
+                   call.tenant_key
+                 )
+
+        options = [latency_repository: {LatencyStore, Repo}]
+
+        interrupted =
+          await(
+            fn ->
+              assert {:ok, report} = Calls.fetch_latency_report(access, call.id, options)
+
+              Enum.find(report.entries, fn entry ->
+                entry.run.id == original.run_id and entry.coverage.status == :unconfirmed
+              end)
+            end,
+            7_000
+          )
+
+        assert :stale_heartbeat in interrupted.coverage.reasons
+        assert interrupted.run.state == :running
+        assert interrupted.run.closed_at == nil
+
+        assert {:ok, old_turns} =
+                 Calls.fetch_latency_turns(access, call.id, original.run_id, options)
+
+        assert Enum.map(old_turns.entries, & &1.turn_id) == [before.turn_id]
+      else
+        assert {:ok, %{entries: []}} =
+                 LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+      end
+
+      for observed <- [before, during, after_crash] do
+        pcm = observed.pcm
+        turn_id = observed.turn_id
+
+        if c.diagnostics_enabled and not c.vad and observed == during do
+          receive do
+            {:matrix_inference, :benchmark, _, ^pcm} -> :ok
+          after
+            0 -> :ok
+          end
+        end
+
+        refute_received {:scribe_audio, ^wire, ^pcm}
+        refute_received {:matrix_inference, _, _, ^pcm}
+
+        refute_received {:vxpipe_event,
+                         %ParticipantTranscription{final: true, correlation_id: ^turn_id}}
+
+        refute_received {:vxpipe_event, %CallEngine.Event.TextOutput{correlation_id: ^turn_id}}
+      end
+
+      refute_received {:scribe_commit, ^wire}
+      refute_received {:vxpipe_connection_unavailable, _}
     end
   end
 
@@ -1747,6 +1886,26 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute Map.has_key?(tool_only.landmarks_us, :first_response_text)
       refute Map.has_key?(tool_only.landmarks_us, :first_audio_started)
     end
+  end
+
+  defp writer_failure_turn(c, attachment, wire, identity, epoch, sequence, marker) do
+    pcm = :binary.copy(<<marker, 0>>, 512)
+    pace(32)
+    send_audio(attachment, identity, epoch, sequence, sequence * 512, pcm)
+    assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+    if c.vad, do: assert_receive({:matrix_inference, :operational, _, ^pcm}, 2_000)
+
+    if c.diagnostics_enabled and not c.vad and marker != 72,
+      do: assert_receive({:matrix_inference, :benchmark, _, ^pcm}, 2_000)
+
+    text = "Writer failure turn #{marker}."
+    emit_scribe_turn(wire, text)
+    assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = input}, 2_000
+    assert input.text == text
+    assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+    assert output.text == "Acknowledged."
+    assert output.correlation_id == input.correlation_id
+    %{turn_id: input.correlation_id, pcm: pcm}
   end
 
   defp resume_diagnostic_worker(worker) do

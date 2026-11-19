@@ -676,8 +676,11 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
   [queue saturation checkpoint](../20261119-2006-diagnostics-queue-saturation.md)
   verifies configured count/byte saturation, held-worker mailbox bounds and
   uninterrupted call responses. It also fixes missing persisted upstream-overload
-  evidence. Writer-crash/control-trace stress and measured memory acceptance
-  remain open.
+  evidence. The [writer-crash checkpoint](../20261119-2022-diagnostics-writer-crash.md)
+  checks idle-writer death, continued configured calls, fresh-run recovery and
+  stale-heartbeat coverage through authorized reads in both local VAD modes,
+  with collection-off controls. Broader control-trace stress and measured memory
+  acceptance remain open.
 - [ ] Establish before running load: hardware, concurrency, duration, warm/cold
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
   paired on/off measurements; publish measured results and limits. Any missed
