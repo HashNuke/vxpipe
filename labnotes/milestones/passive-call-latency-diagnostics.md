@@ -695,6 +695,11 @@ fixed, declared participant speech windows. Two-room/two-human and single-input
 primed functional smoke each pass all four modes with committed canonical rows;
 earlier cold/overlapping fixture failures remain recorded separately. This does
 not establish cold coverage, full inference coverage or paired-load acceptance.
+The [phase-resource checkpoint](../20261119-2322-diagnostics-phase-resources.md)
+adds opt-in audio-clock CPU/RSS intervals with raw samples, identity-fenced RSS
+reset and separate resource-boundary timing gates. Four-mode native verification
+passes with independently recomputed raw summaries; this does not complete
+warm/cold or paired-load acceptance.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

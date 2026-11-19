@@ -1,4 +1,7 @@
 """Watchdog authority and invalid-run contracts, without privileged processes."""
+from dataclasses import asdict
+from copy import deepcopy
+from measurement import ProcessSample, summarize
 import json
 import unittest
 import subprocess
@@ -25,6 +28,86 @@ def sample(pid, start):
 
 
 class SmokeRunnerTest(unittest.TestCase):
+    def test_requested_resource_samples_require_a_complete_interval_for_the_observed_vm(self):
+        evidence = reports()
+        samples = [sample(123, 77)]
+        self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+        for phase, report in enumerate(evidence):
+            base = 1_000_000_000 + phase * 8_000_000_000
+            raw = [dict(deadline_ns=base + ms * 1_000_000,
+                        read_started_ns=base + ms * 1_000_000,
+                        read_finished_ns=base + ms * 1_000_000,
+                        sample=asdict(ProcessSample(123, 77, base / 1e9 + ms / 1000, base / 2e9 + ms / 2000,
+                                                   100, 100, 2, ms == 0)))
+                   for ms in list(range(0, 6144, 100)) + [6144]]
+            report['resource_samples'] = raw
+            report['generator']['resource_interval'] = dict(pid=123, start_ticks=77,
+                scheduled_start_ns=base, scheduled_end_ns=base + 6_144_000_000,
+                timing_valid=True, timing_contract='boundary-2ms-no-skipped-slot-v1',
+                start_lateness_ns=0, end_lateness_ns=0,
+                maximum_lateness_ns=0, maximum_sample_gap_ns=100_000_000,
+                summary=summarize([ProcessSample(**e['sample']) for e in raw]))
+        self.assertTrue(smoke_complete(evidence, samples, sample_resources=True))
+        interval = evidence[0]['generator']['resource_interval']
+        for key, bad in [('pid', 124), ('start_ticks', 78), ('timing_valid', False),
+                         ('scheduled_end_ns', 7_644_000_000), ('maximum_lateness_ns', 2_000_001)]:
+            good = interval[key]
+            interval[key] = bad
+            with self.subTest(key=key):
+                self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+            interval[key] = good
+        original_second = deepcopy(evidence[1])
+        evidence[1]['generator']['resource_interval'] = deepcopy(evidence[0]['generator']['resource_interval'])
+        evidence[1]['resource_samples'] = deepcopy(evidence[0]['resource_samples'])
+        self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+        evidence[1] = original_second
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'workload.log'
+            lines = []
+            for report in evidence:
+                lines.extend('DIAGNOSTIC_RESOURCE_SAMPLE ' + json.dumps(e) + '\n'
+                             for e in report['resource_samples'])
+                lines.append('DIAGNOSTIC_EXTERNAL_SMOKE ' + json.dumps(report) + '\n')
+            log.write_text(''.join(lines))
+            process = Mock(pid=456, returncode=0)
+            process.poll.side_effect = [None, 0]
+            with patch('smoke_runner.stop_unit'):
+                result = watch(process, OwnedUnits(RUN), log, sample=lambda _: sample(123, 77),
+                               sleep=lambda _: None, sample_resources=True)
+            self.assertTrue(result['completed'])
+            self.assertEqual(len(result['resource_samples']), 252)
+            self.assertEqual([len(r['resource_samples']) for r in result['smoke_reports']], [63] * 4)
+        original = deepcopy(evidence[0])
+        middle = evidence[0]['resource_samples'][1]
+        middle['read_finished_ns'] += 3_000_000
+        middle['sample']['at_seconds'] += .003
+        interval = evidence[0]['generator']['resource_interval']
+        interval['maximum_lateness_ns'] = 3_000_000
+        interval['maximum_sample_gap_ns'] = 103_000_000
+        self.assertTrue(smoke_complete(evidence, samples, sample_resources=True))
+        middle['read_finished_ns'] = evidence[0]['resource_samples'][2]['deadline_ns']
+        interval['maximum_lateness_ns'] = 100_000_000
+        interval['maximum_sample_gap_ns'] = 200_000_000
+        self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+        evidence[0] = deepcopy(original)
+        for field in ('cpu_seconds', 'cpu_cores', 'process_high_water_kib'):
+            evidence[0] = deepcopy(original)
+            del evidence[0]['generator']['resource_interval']['summary'][field]
+            self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+        evidence[0] = deepcopy(original)
+        evidence[0]['resource_samples'][1]['sample']['cpu_seconds'] = -1
+        self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+        evidence[0] = deepcopy(original)
+        evidence[0]['resource_samples'][1]['sample']['high_water_kib'] = 200
+        self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+        evidence[0] = deepcopy(original)
+        evidence[0]['resource_samples'].pop()
+        self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+        evidence[0] = original
+        interval = evidence[0]['generator']['resource_interval']
+        interval['summary']['sample_count'] = 62
+        self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+
     def test_only_this_run_can_register_cleanup_units(self):
         owned = OwnedUnits(RUN)
         name = f'vxpipe-diagnostic-generator-{RUN}-{LEAF}.service'

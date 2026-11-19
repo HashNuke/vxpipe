@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from measurement import ProcessSample, begin_interval, compare_resources, read_process, summarize
+from measurement import ProcessSample, PinnedProcessReader, begin_interval, compare_resources, read_process, summarize
 
 
 class ResourceMeasurementTest(unittest.TestCase):
@@ -31,6 +31,60 @@ class ResourceMeasurementTest(unittest.TestCase):
             first = begin_interval(123, proc_root=root, ticks_per_second=100, clock=lambda: 10.0)
             self.assertTrue(first.interval_start)
             self.assertEqual((process / 'clear_refs').read_text(), '5\n')
+            (process / 'clear_refs').write_text('unchanged')
+            with self.assertRaises(ValueError):
+                begin_interval(123, proc_root=root, ticks_per_second=100, clock=lambda: 10.0, expected_start_ticks=88)
+            self.assertEqual((process / 'clear_refs').read_text(), 'unchanged')
+
+    def test_retained_proc_files_refresh_counters_without_following_reused_pid_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / '123'
+            path.mkdir()
+            fields = ['0'] * 50
+            fields[0], fields[11], fields[19] = 'S', '100', '77'
+            (path / 'stat').write_text('123 (target) ' + ' '.join(fields))
+            (path / 'status').write_text('VmRSS: 100 kB\nVmHWM: 110 kB\nThreads: 1\n')
+            with PinnedProcessReader(123, proc_root=root, ticks_per_second=100, clock=lambda: 10.0) as reader:
+                self.assertEqual(reader(123).cpu_seconds, 1.0)
+                fields[11] = '200'
+                (path / 'stat').write_text('123 (target) ' + ' '.join(fields))
+                (path / 'status').write_text('VmRSS: 120 kB\nVmHWM: 130 kB\nThreads: 2\n')
+                self.assertEqual(reader(123).cpu_seconds, 2.0)
+                self.assertEqual(reader(123).high_water_kib, 130)
+                path.rename(root / 'retired')
+                path.mkdir()
+                fields[11], fields[19] = '900', '88'
+                (path / 'stat').write_text('123 (replacement) ' + ' '.join(fields))
+                (path / 'status').write_text('VmRSS: 900 kB\nVmHWM: 900 kB\nThreads: 1\n')
+                self.assertEqual(reader(123).start_ticks, 77)
+                self.assertEqual(reader(123).cpu_seconds, 2.0)
+            with self.assertRaises(ValueError):
+                reader(123)
+
+    def test_recycled_pid_never_resets_replacement_counter(self):
+        for swap_at in (1, 2):
+            with self.subTest(swap_at=swap_at), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                def process(start):
+                    path = root / '123'
+                    path.mkdir()
+                    fields = ['0'] * 50
+                    fields[0], fields[11], fields[19] = 'S', '100', str(start)
+                    (path / 'stat').write_text('123 (target) ' + ' '.join(fields))
+                    (path / 'status').write_text('VmRSS: 100 kB\nVmHWM: 110 kB\nThreads: 1\n')
+                    (path / 'clear_refs').write_text('untouched')
+                process(77)
+                calls = [0]
+                def clock():
+                    calls[0] += 1
+                    if calls[0] == swap_at:
+                        (root / '123').rename(root / 'retired')
+                        process(88)
+                    return float(calls[0])
+                with self.assertRaises(ValueError):
+                    begin_interval(123, proc_root=root, ticks_per_second=100, clock=clock)
+                self.assertEqual((root / '123' / 'clear_refs').read_text(), 'untouched')
 
     def test_cpu_delta_uses_elapsed_interval_and_preserves_high_water(self):
         result = summarize(self.samples(cpu=2.0))
@@ -38,6 +92,13 @@ class ResourceMeasurementTest(unittest.TestCase):
         self.assertEqual(result['duration_seconds'], 20.0)
         self.assertEqual(result['peak_sampled_rss_kib'], 101000)
         self.assertEqual(result['process_high_water_kib'], 101200)
+
+    def test_linux_reported_high_water_dip_retains_the_largest_observed_peak(self):
+        samples = [ProcessSample(123, 77, 1.0, 20.05, 236144, 236144, 14, True),
+                   ProcessSample(123, 77, 1.1, 20.06, 234000, 235980, 14)]
+        summary = summarize(samples)
+        self.assertEqual(summary['process_high_water_kib'], 236144)
+        self.assertEqual(summary['peak_sampled_rss_kib'], 236144)
 
     def test_missing_or_restarted_process_cannot_produce_a_summary(self):
         for samples in [[], self.samples()[:1], [self.samples()[0],

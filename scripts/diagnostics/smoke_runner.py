@@ -17,11 +17,12 @@ import subprocess
 import time
 import uuid
 
-from measurement import read_process
+from measurement import ProcessSample, read_process, summarize
 
 ROOT = Path(__file__).resolve().parents[2]
 MARKER = 'DIAGNOSTIC_GENERATOR_UNIT '
 SMOKE_MARKER = 'DIAGNOSTIC_EXTERNAL_SMOKE '
+RESOURCE_MARKER = 'DIAGNOSTIC_RESOURCE_SAMPLE '
 
 
 class OwnedUnits:
@@ -140,12 +141,61 @@ def stop_unit(unit, *, system=False):
             raise RuntimeError('could not stop owned transient unit')
 
 
-def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_per_room=1):
+def resource_complete(report, samples):
+    try:
+        interval = report['generator']['resource_interval']
+        events = report['resource_samples']
+        if (not isinstance(interval, dict) or len(events) != 63
+                or interval.get('timing_contract') != 'boundary-2ms-no-skipped-slot-v1'):
+            return False
+        start, end = interval['scheduled_start_ns'], interval['scheduled_end_ns']
+        if type(start) is not int or type(end) is not int or end - start != 6_144_000_000:
+            return False
+        if [e['deadline_ns'] for e in events] != list(range(start, end, 100_000_000)) + [end]:
+            return False
+        raw = [ProcessSample(**e['sample']) for e in events]
+        summary = summarize(raw)
+        identities = {(b['pid'], b['start_ticks']) for s in samples for b in s['beams']}
+        identity = (interval['pid'], interval['start_ticks'])
+        if identity not in identities or any((s.pid, s.start_ticks) != identity for s in raw):
+            return False
+        for event, sample in zip(events, raw):
+            before, after = event['read_started_ns'], event['read_finished_ns']
+            if (type(before) is not int or type(after) is not int
+                    or not event['deadline_ns'] <= before <= after
+                    or not before - 1 <= round(sample.at_seconds * 1e9) <= after + 1):
+                return False
+        lateness = [e['read_finished_ns'] - e['deadline_ns'] for e in events]
+        gaps = [b['read_finished_ns'] - a['read_finished_ns'] for a, b in zip(events, events[1:])]
+        return (interval['timing_valid'] is True and summary == interval['summary']
+                and max(lateness[0], lateness[-1]) <= 2_000_000
+                and all(e['read_finished_ns'] < following['deadline_ns']
+                        for e, following in zip(events[1:-1], events[2:]))
+                and 6.140 <= summary['duration_seconds'] <= 6.148
+                and interval['start_lateness_ns'] == lateness[0]
+                and interval['end_lateness_ns'] == lateness[-1]
+                and interval['maximum_lateness_ns'] == max(lateness)
+                and interval['maximum_sample_gap_ns'] == max(gaps))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+
+
+def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_per_room=1,
+                   sample_resources=False):
     expected = {(False, False), (False, True), (True, False), (True, True)}
     if len(reports) != 4 or {(r['operational_vad'], r['collection']) for r in reports} != expected:
         return False
     if not any(sample['beams'] for sample in samples):
         return False
+    if sample_resources:
+        if not all(resource_complete(r, samples) for r in reports):
+            return False
+        for previous, current in zip(reports, reports[1:]):
+            if (current['generator']['resource_interval']['scheduled_start_ns'] <=
+                    previous['generator']['resource_interval']['scheduled_end_ns']
+                    or current['resource_samples'][0]['sample']['cpu_seconds'] <
+                    previous['resource_samples'][-1]['sample']['cpu_seconds']):
+                return False
     if committed_writes and any(r.get('persistence') != 'committed' or
                                 r.get('database_pool_size') != 10 for r in reports):
         return False
@@ -160,22 +210,34 @@ def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_
 
 
 def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sleep=time.sleep,
-          committed_writes=False, rooms=1, inputs_per_room=1):
+          committed_writes=False, rooms=1, inputs_per_room=1, sample_resources=False):
     samples, reports, cleanup_errors = [], [], []
+    resource_samples, current_resources = [], []
     abort, pending = None, ''
     identity = None
     start = clock()
     reader = log_path.open()
 
     def consume():
-        nonlocal pending, abort
+        nonlocal pending, abort, current_resources
         pending += reader.read()
         while '\n' in pending:
             line, pending = pending.split('\n', 1)
             try:
                 owned.observe(line)
+                if MARKER in line:
+                    current_resources = []
+                if RESOURCE_MARKER in line:
+                    event = json.loads(line.split(RESOURCE_MARKER, 1)[1])
+                    if not isinstance(event, dict) or len(resource_samples) >= 252:
+                        raise ValueError('invalid or excessive resource samples')
+                    resource_samples.append(event)
+                    current_resources.append(event)
                 if SMOKE_MARKER in line:
-                    reports.append(json.loads(line.split(SMOKE_MARKER, 1)[1]))
+                    report = json.loads(line.split(SMOKE_MARKER, 1)[1])
+                    report['resource_samples'] = list(current_resources)
+                    reports.append(report)
+                    current_resources = []
             except (ValueError, TypeError) as error:
                 # Keep scanning so invalid output cannot hide later owned units.
                 abort = abort or type(error).__name__ + ': invalid workload output'
@@ -232,18 +294,18 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
                 cleanup_errors.append(type(error).__name__ + ': generator cleanup failed')
     try:
         complete = smoke_complete(reports, samples, committed_writes=committed_writes, rooms=rooms,
-                                  inputs_per_room=inputs_per_room)
+                                  inputs_per_room=inputs_per_room, sample_resources=sample_resources)
     except (KeyError, TypeError, ValueError):
         complete = False
     return dict(run_id=owned.run_id, exit_code=process.returncode, abort=abort,
                 cleanup_errors=cleanup_errors, retained_databases=sorted(owned.pending_databases),
-                samples=samples, smoke_reports=reports,
+                samples=samples, smoke_reports=reports, resource_samples=resource_samples,
                 completed=process.returncode == 0 and abort is None and not cleanup_errors and
                 not owned.pending_databases and complete)
 
 
 def provenance():
-    paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py',
+    paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py', 'scripts/diagnostics/resource_schedule.py',
              'scripts/diagnostics/pcm_generator.py', 'mix.lock',
              'apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs',
              'apps/vxpipe_console/test/support/diagnostics_database.ex',
@@ -267,6 +329,7 @@ def main():
     parser.add_argument('--rooms', type=int, choices=range(1, 17), default=1,
                         help='concurrent rooms (total human inputs must be at most 16)')
     parser.add_argument('--inputs-per-room', type=int, choices=(1, 2), default=1)
+    parser.add_argument('--sample-resources', action='store_true', help='sample the audio-only VM interval on the generator clock')
     args = parser.parse_args()
     if args.rooms * args.inputs_per_room > 16:
         parser.error('at most 16 total human STT inputs')
@@ -290,6 +353,7 @@ def main():
                'VXPIPE_DIAGNOSTIC_RUN_ID=' + owned.run_id,
                'VXPIPE_DIAGNOSTIC_ROOMS=' + str(args.rooms),
                'VXPIPE_DIAGNOSTIC_INPUTS_PER_ROOM=' + str(args.inputs_per_room),
+               'VXPIPE_DIAGNOSTIC_RESOURCE_SAMPLES=' + ('1' if args.sample_resources else '0'),
                'VXPIPE_DIAGNOSTIC_COMMITTED_WRITES=' + ('1' if args.committed_writes else '0'),
                'mix', 'test', 'test/integration/configured_latency_diagnostics_test.exs',
                '--only', 'external_pcm', '--seed', '0', '--max-cases', '1']
@@ -301,7 +365,8 @@ def main():
         process = subprocess.Popen(command, cwd=ROOT / 'apps/vxpipe_console',
                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         report = watch(process, owned, log_path, committed_writes=args.committed_writes,
-                       rooms=args.rooms, inputs_per_room=args.inputs_per_room)
+                       rooms=args.rooms, inputs_per_room=args.inputs_per_room,
+                       sample_resources=args.sample_resources)
     report['provenance'] = source
     report['scope'] = 'functional smoke watchdog; not paired performance acceptance'
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

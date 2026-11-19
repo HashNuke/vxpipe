@@ -348,6 +348,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           value -> ["--cpus", value]
         end
 
+      sample_resources? = System.get_env("VXPIPE_DIAGNOSTIC_RESOURCE_SAMPLES") == "1"
+      resource_args = if sample_resources?, do: ["--measure-pid", System.pid()], else: []
+
       generator_args =
         [
           generator,
@@ -360,7 +363,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           "--settlement-inputs-per-room",
           to_string(inputs_per_room)
         ] ++
-          affinity_args
+          affinity_args ++ resource_args
 
       {executable, arguments} =
         if System.get_env("VXPIPE_DIAGNOSTIC_GENERATOR_SYSTEMD") == "1" do
@@ -438,6 +441,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           exited?: false,
           manifest: nil,
           report: nil,
+          resources: [],
           wire_indices: Map.new(inputs, fn {index, input} -> {input.wire, index} end),
           source_indices:
             Map.new(inputs, fn {index, input} ->
@@ -492,6 +496,24 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                "samples" => 16_384,
                "sha256" => Base.encode16(:crypto.hash(:sha256, clip), case: :lower)
              }
+
+      if sample_resources? do
+        interval = result.report["resource_interval"]
+        assert interval["timing_valid"] == true
+        assert interval["pid"] == String.to_integer(System.pid())
+        assert interval["summary"]["sample_count"] == 63
+        assert length(result.resources) == 63
+        resources = Enum.reverse(result.resources)
+        assert hd(resources)["sample"]["interval_start"] == true
+
+        for resource <- resources do
+          assert resource["sample"]["pid"] == interval["pid"]
+          assert resource["sample"]["start_ticks"] == interval["start_ticks"]
+        end
+      else
+        assert result.resources == []
+        assert result.report["resource_interval"] == nil
+      end
 
       room_inputs = result.inputs |> Map.values() |> Enum.uniq_by(& &1.identity.room_id)
 
@@ -640,7 +662,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                 "frames_sent",
                 "p95_lateness_ns",
                 "elapsed_ns",
-                "generator_cpu_seconds"
+                "generator_cpu_seconds",
+                "resource_interval"
               ])
           })
       )
@@ -3315,6 +3338,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         send_audio(input.attachment, input.identity, input.epoch, sequence, sequence * 512, pcm)
         updated = %{input | frames: sequence + 1, offered: [pcm | input.offered]}
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
+
+      {^port, {:data, <<3, json::binary>>}} ->
+        resource = Jason.decode!(json)
+        IO.puts("DIAGNOSTIC_RESOURCE_SAMPLE " <> json)
+        external_pcm_loop(%{state | resources: [resource | state.resources]})
 
       {^port, {:data, <<2, json::binary>>}} ->
         external_pcm_loop(%{state | report: Jason.decode!(json)})

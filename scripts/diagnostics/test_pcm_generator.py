@@ -3,6 +3,9 @@ import hashlib
 import json
 import unittest
 from unittest.mock import patch
+from dataclasses import replace
+from measurement import ProcessSample
+from resource_schedule import ResourceSchedule
 from pcm_generator import configure_affinity, generate, wait_until
 
 
@@ -20,6 +23,31 @@ class PCMGeneratorTest(unittest.TestCase):
         generate(bytes((index * 7 + index // 256) % 256 for index in range(1280)), inputs, frames, write, clock=clock, sleep=sleep,
                  settlement_inputs_per_room=settlement_inputs_per_room)
         return packets
+
+    def test_resource_sampling_retains_audio_deadlines_and_streams_raw_samples(self):
+        for delay in (0, 40_000_000):
+            now = [0]
+            packets = []
+            def reader(pid):
+                return ProcessSample(pid, 77, now[0] / 1e9, now[0] / 2e9, 100, 100, 2)
+            def begin(pid, *, expected_start_ticks):
+                self.assertEqual(expected_start_ticks, 77)
+                now[0] += delay
+                return replace(reader(pid), interval_start=True)
+            resources = ResourceSchedule(123, start_offset_ns=50_000_000, reader=reader, begin=begin, clock=lambda: now[0])
+            generate(bytes(1024), 1, 6, lambda p: packets.append((now[0], p)),
+                     clock=lambda: now[0], sleep=lambda seconds: now.__setitem__(0, now[0] + round(seconds * 1e9)),
+                     resources=resources)
+            samples = [json.loads(p[1:]) for _, p in packets if p[0] == 3]
+            self.assertEqual([s['deadline_ns'] for s in samples], [50_000_000, 150_000_000, 192_000_000])
+            audio = [(at, p) for at, p in packets if p[0] == 1]
+            self.assertEqual(len(audio), 6)
+            self.assertEqual([int.from_bytes(p[3:7], 'big') for _, p in audio], list(range(6)))
+            report = json.loads(packets[-1][1][1:])
+            self.assertEqual(report['resource_interval']['summary']['sample_count'], 3)
+            self.assertEqual(report['resource_interval']['timing_valid'], delay == 0)
+            self.assertEqual(audio[-1][0], 160_000_000)
+            self.assertEqual(report['lateness_ns'][2], 26_000_000 if delay else 0)
 
     def test_staggered_absolute_schedule_keeps_each_stream_at_32ms(self):
         packets = self.run_generator()

@@ -212,6 +212,35 @@ belonging to that run. Finite unit lifetimes remain the fallback if cleanup fail
 This is functional smoke evidence. The full configured workload driver and paired
 report integration remain to be completed.
 
+Optional `--sample-resources` samples the isolated VM on the generator clock,
+starting immediately before paced audio and ending at its declared end. The
+192-frame smoke has 63 samples over 6.144 seconds; it measures audio only, excluding
+room/STT/model preparation, and is not cold acceptance. The generator pins the
+process start ticks and resets high-water RSS through a retained procfs descriptor
+after rechecking identity. Raw samples are streamed to the workload log before
+the final resource summary, and the watchdog verifies the measured BEAM identity.
+
+Resource timing contract `boundary-2ms-no-skipped-slot-v1`: the first and last
+reads must finish within 2 ms of their scheduled boundary. Each interior read must
+finish strictly before its next declared sample deadline, including the shorter
+final slot. Samples are scheduled every 100 ms; actual adjacent gaps may approach
+200 ms. Retain and report all planned/actual read times, interior lateness and gaps;
+calculate CPU rate with actual sample timestamps. These checks are separate from
+PCM p95 lateness. Boundary precision prevents diluting CPU rate with idle time after
+audio; interior deadlines prevent silently skipping scheduled samples. The complete
+raw interval must reproduce every summary field and match the observed VM identity.
+
+This corrects an overly strict every-read 2 ms/102 ms rule introduced during the
+sampler checkpoint, beyond the original plan's periodic sampling requirement.
+The earlier probes remain invalid under their original contract; they are not
+relabelled as passes. CPU/RSS regression budgets and PCM timing limits are unchanged.
+Missing/reset-failed/incomplete or replaced-PID intervals fail. Linux-reported HWM
+may dip slightly; retain its maximum observed value after reset. A generator start
+offset is available for future warm phases; 5000 ms in this short smoke leaves
+1.144 seconds, not the full paired interval.
+Database CPU, cold preparation and the complete paired driver remain outstanding.
+
+
 Compare each matched pair separately. All valid repetitions must pass; also
 publish the worst result. Let N be the number of accepted human STT inputs:
 
