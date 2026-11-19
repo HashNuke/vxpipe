@@ -1,8 +1,8 @@
 # Passive call latency diagnostics and readable timelines
 
 Status: implementation in progress, 2026-11-19. Checkpoint A code, focused tests,
-rendered checks and Astra xhigh review are complete; final umbrella verification
-is running. B–F remain unimplemented. The index owns implementation order.
+rendered checks, Astra xhigh review and all root gates pass. Checkpoint B timing
+foundations are in progress; B–F acceptance remains open. The index owns implementation order.
 
 ## Runnable outcome
 
@@ -455,6 +455,7 @@ presenter suite: 16 passing. Workspace and Console typechecks pass.
 Headless Chrome via agent-browser verified Workbench/debug and admin call details
 on desktop/mobile, default-hidden/technical-enabled states, keyboard filters and
 page controls. Format, warnings-as-errors compile and strict Credo pass. Initial
-umbrella run exited 143 without a result; persistent rerun and unused-lock gate
-are pending. Do not claim checkpoint exit or deployment until those pass.
+umbrella run exited 143 without a result; the persistent rerun completed with
+zero failures (exit 0), followed by a passing unused-lock gate (exit 0).
+Checkpoint A is complete; deployment waits for B–F.
 See [implementation labnotes](../20261119-0145-implement-passive-diagnostics.md).

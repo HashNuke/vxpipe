@@ -47,3 +47,46 @@
 - Final affected Console frontend run passes 22 tests and typecheck. Latest shared
   UI run passes 50 tests including all reviewer reproductions. No runtime code has
   changed since root verification started; later changes are frontend/docs only.
+
+## Checkpoint B — timing foundations in progress
+
+- Checkpoint A code committed/pushed as `10d9c4a8`, with its final umbrella gate
+  explicitly pending. This supersedes the earlier uncommitted resumption note.
+- Added isolated engine timing/sample-clock primitives after the running A suite
+  had already loaded its engine tests. That suite does not count as B verification.
+- TurnTiming red: seven undefined-module failures; green: all seven pass. Keeps
+  text commits distinct from actual provider-end receipt; calculates from acoustic
+  sample time, rejects cross-clock input and invalid order, and preserves valid
+  response-stage durations when acoustic coverage is invalid.
+- SampleClock red: six undefined-module failures; green: six pass. Bounded sample
+  mapping records receipt jitter, flags gaps, rejects reorder/source mismatch and
+  conflicting duplicate input, never extrapolates through missing audio, and
+  keeps pre-run/expired endpoints unavailable. Existing five diagnostic tests also
+  pass: combined diagnostics directory 18 tests, zero failures.
+- Both are pure measurement primitives; no provider/audio runtime integration or
+  setting activation exists yet. Persistence, replay and async storage remain B work.
+
+## Checkpoint A gate completion and B review
+
+- Persistent A umbrella run completed with zero failures and exit 0; unused-lock
+  check also exited 0. Milestone/index now record A complete. No deployment yet.
+- Astra xhigh reproduced four timing defects: compressed-arrival reversal, shared
+  boundary remapping after eviction, multiple acoustic endpoints selecting an early
+  pause, and adapter/room causal inversion. Retained regression tests fail before
+  fixes and pass afterward; diagnostics directory passes 22 tests.
+- Distinct endpoints now invalidate acoustic timing as ambiguous; compressed frame
+  mappings return clock_uncertain. Exclusive boundary ownership expires old mappings
+  rather than silently changing timestamps. Causal inversion invalidates affected stages.
+- Further review reproduced unbounded integer retention. Added signed-64-bit bounds
+  for sample timestamp and sequence after confirming the failing test.
+- Calls LatencyRun: 5 red then green tests. TurnDiagnostic: 4 red then green tests;
+  combined records suite passes 9. Records reject unrestricted fields and derive
+  durations from allowlisted landmarks, preserving partial/incomplete evidence.
+- B remains partial: no migration, repository, async writer, replay or live capture.
+- Final Astra xhigh foundation review returned no remaining findings: 23 timing
+  tests and 9 neutral-record tests pass independently. Root format, warnings-as-errors
+  compile and strict Credo pass. Fresh root tests run in tmux `vxdiag-foundations`;
+  terminal evidence: `/tmp/vxpipe-B-foundation-test.exit` and
+  `/tmp/vxpipe-B-foundation-unlock.exit`. Pending at this foundation commit.
+- This is a reviewed partial B checkpoint, not completion of the durable-report
+  vertical slice. B checklist remains unchecked until persistence/replay gates pass.

@@ -182,3 +182,26 @@ The toggle lives in a Diagnostics section of the existing Installation page.
 Admins may access that section; the installation URL and its operation retain
 their existing superadmin-only authorization. Implementation must replace the
 whole-page guard with section-specific access and test both roles.
+
+## Timing foundation decisions
+
+The initial sample-clock implementation retains a bounded set of received audio
+frames. A frame owns positions after its start through its endpoint; only the
+first frame also owns its start. Eviction therefore expires a shared boundary
+instead of reassigning it to a neighboring packet with a different receipt time.
+Mapping subtracts remaining sample duration from packet receipt time and carries
+receipt jitter as uncertainty. If compressed arrivals would make the inferred
+sample timeline move backward, that frame is unavailable (`clock_uncertain`).
+These are server-receipt estimates, not microphone capture timestamps.
+
+Turn evidence uses one clock identity and bounded integer offsets. Missing stages
+remain null, and an inverted causal chain invalidates affected stage durations.
+Two distinct acoustic endpoints submitted to one unresolved turn are ambiguous;
+the correlator must identify the final speech segment before assigning an endpoint.
+It must not silently select the earliest pause. Invalid acoustic evidence does not
+erase independently valid provider/adapter/response stages.
+
+Neutral run and turn records reject arbitrary configuration and payload fields.
+Turn durations are derived from allowlisted landmarks rather than accepted from
+callers. This prevents a supplied latency value from contradicting its evidence;
+it does not replace repository ownership, revision or lifecycle enforcement.
