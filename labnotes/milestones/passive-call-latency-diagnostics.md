@@ -761,3 +761,23 @@ Affected tests111/0, static gates and Lean pass. Astra xhigh review is clean wit
 five additional buffering/resampling/reset probes. The earlier umbrella run is
 still in progress and does not verify this newer source state. Reuse consumption,
 automatic source attachment and report correlation remain open; C is incomplete.
+
+
+## Checkpoint C reused boundary consumer — 2026-11-19
+
+The existing source worker can now consume operational probabilities without a
+model runtime. It waits for matching accepted audio under bounded capture charges,
+requires full retained window coverage, and invalidates gaps/missing windows.
+Provider resets discard pending old evidence; late retired results cannot enter a
+new epoch. Input loss and output saturation retire observation. LLM-only admission
+selects reuse without consulting diagnostic inference resources. Actual adapter
+integration proves one inference produces operational and diagnostic onset, and
+revocation leaves subsequent operational inference running.
+
+A reviewer-proven uncaptured-prefix error is fixed with a retained regression.
+Affected tests119/0; static gates and Lean pass. Astra xhigh final re-review is
+clean (19focused plus2additional probes). The previous root run finished with
+an independently reproduced OAuth repository-shutdown race, now fixed/reviewed
+with33focused tests. A new umbrella run is active. Automatic source attachment,
+provider/response correlation, report persistence and full configured-call on/off
+acceptance remain pending; combined C tasks stay unchecked.

@@ -35,6 +35,27 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
          workers,
          runtime
        ) do
+    case Keyword.get(options, :mode, :benchmark_only) do
+      :operational_reuse ->
+        DynamicSupervisor.start_child(
+          workers,
+          {SourceWorker, Keyword.delete(options, :admission)}
+        )
+
+      :benchmark_only ->
+        start_benchmark(options, workers, runtime)
+
+      _ ->
+        {:error, :unsupported_mode}
+    end
+  catch
+    :exit, _ -> {:error, :unavailable}
+  end
+
+  defp start_eligible_source(_agent, _options, _workers, _runtime),
+    do: {:error, :unsupported_agent}
+
+  defp start_benchmark(options, workers, runtime) do
     case ActivityRuntime.diagnostic_admission(runtime) do
       %InferenceAdmission{} = admission ->
         DynamicSupervisor.start_child(
@@ -45,12 +66,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
       _ ->
         {:error, :unavailable}
     end
-  catch
-    :exit, _ -> {:error, :unavailable}
   end
-
-  defp start_eligible_source(_agent, _options, _workers, _runtime),
-    do: {:error, :unsupported_agent}
 
   @impl true
   def init(options) do

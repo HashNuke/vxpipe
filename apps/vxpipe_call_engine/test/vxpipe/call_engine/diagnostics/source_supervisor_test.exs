@@ -55,8 +55,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisorTest do
     assert :ok = DynamicSupervisor.terminate_child(__MODULE__.Workers, worker)
     assert_receive {:DOWN, ^monitor, :process, ^worker, :shutdown}
 
-    assert {:ok, _replacement} =
+    assert {:ok, replacement} =
              SourceSupervisor.start_source(options, __MODULE__.Workers, __MODULE__.Runtime)
+
+    assert :ok = DynamicSupervisor.terminate_child(__MODULE__.Workers, replacement)
+
+    assert {:ok, _reused} =
+             SourceSupervisor.start_source(
+               Keyword.put(options, :mode, :operational_reuse),
+               __MODULE__.Workers,
+               __MODULE__.AbsentRuntime
+             )
   end
 
   test "speech-to-speech and unknown agents are rejected before touching diagnostic resources" do

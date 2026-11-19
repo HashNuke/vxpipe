@@ -1,5 +1,5 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
-  @moduledoc "Isolated benchmark-only source consumer; never emits speech-control events."
+  @moduledoc "Isolated acoustic source consumer; never emits speech-control events."
   use GenServer
   alias Vxpipe.CallEngine.Diagnostics.{AudioTimeline, CaptureHandoff, InferenceAdmission}
   alias Vxpipe.CallEngine.Speech.{ActivityBoundary, Silero}
@@ -15,17 +15,19 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     Process.flag(:trap_exit, true)
     owner = Keyword.fetch!(options, :owner)
     output = Keyword.fetch!(options, :output)
-    admission = Keyword.fetch!(options, :admission)
+    admission = Keyword.get(options, :admission)
+    mode = Keyword.get(options, :mode, :benchmark_only)
 
     capture_options =
       Keyword.take(options, [:projection, :maximum_count, :maximum_bytes])
       |> Keyword.put(:owner, owner)
 
     with true <- output.owner == owner and CaptureHandoff.current?(output),
-         true <- is_struct(admission, InferenceAdmission) and Process.alive?(admission.runtime),
+         true <- valid_admission?(mode, admission),
          {:ok, input} <- CaptureHandoff.new(self(), capture_options),
          true <- input.grant == output.grant and input.projection == output.projection do
-      Enum.each([owner, output.receiver, admission.runtime], &Process.monitor/1)
+      Enum.each([owner, output.receiver], &Process.monitor/1)
+      if admission, do: Process.monitor(admission.runtime)
 
       timeline =
         AudioTimeline.new(
@@ -40,6 +42,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
          input: input,
          output: output,
          admission: admission,
+         mode: mode,
+         reused: :queue.new(),
+         reuse_invalid?: false,
          timeline: timeline,
          origin_us: Keyword.fetch!(options, :origin_us),
          clock: Keyword.get(options, :clock, fn -> System.monotonic_time(:microsecond) end),
@@ -120,6 +125,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     if state.inference,
       do: CaptureHandoff.release(state.input, state.inference.charge, :discarded)
 
+    Enum.each(:queue.to_list(state.reused), fn {_packet, charge} ->
+      CaptureHandoff.release(state.input, charge, :discarded)
+    end)
+
     Enum.each(:queue.to_list(state.queue), fn {_packet, charge} ->
       CaptureHandoff.release(state.input, charge, :discarded)
     end)
@@ -131,7 +140,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   def format_status(status),
     do:
       status
-      |> Map.put(:state, %{mode: :benchmark_only})
+      |> Map.put(:state, %{mode: status.state.mode})
       |> Map.put(:message, :redacted)
       |> Map.put(:reason, :redacted)
       |> Map.put(:log, [])
@@ -155,14 +164,65 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     end
   end
 
+  defp process(
+         %{mode: :operational_reuse} = state,
+         {{:mapped_probabilities, epoch, _, _, _, _} = packet, charge}
+       ) do
+    cond do
+      epoch < state.epoch or (epoch == state.epoch and state.reuse_invalid?) ->
+        CaptureHandoff.release(state.input, charge, :discarded)
+        {:ok, state}
+
+      epoch > state.epoch ->
+        case reuse_reset(state, epoch, :provider_turn_settled, state.clock.(), false) do
+          {:ok, next} -> process(next, {packet, charge})
+          {:stop, next} -> discard(next, charge)
+        end
+
+      true ->
+        reuse_drain(%{state | reused: :queue.in({packet, charge}, state.reused)})
+    end
+  end
+
+  defp process(
+         %{mode: :operational_reuse} = state,
+         {{:reset, epoch, reason, at}, charge}
+       ) do
+    CaptureHandoff.release(state.input, charge, :processed)
+
+    cond do
+      epoch < state.epoch -> {:ok, state}
+      epoch == state.epoch and reason == :provider_turn_settled -> {:ok, state}
+      true -> reuse_reset(state, epoch, reason, at, reason != :provider_turn_settled)
+    end
+  end
+
+  defp process(
+         %{mode: :operational_reuse} = state,
+         {{:probabilities, epoch, _, _, at}, charge}
+       ) do
+    CaptureHandoff.release(state.input, charge, :discarded)
+
+    if epoch < state.epoch or (epoch == state.epoch and state.reuse_invalid?),
+      do: {:ok, state},
+      else: reuse_reset(state, epoch, :partial_start, at, true)
+  end
+
   defp process(state, {{:audio, frame}, charge}) do
     case AudioTimeline.push(state.timeline, frame) do
       {:ok, timeline, pcm, notices} ->
         state = %{state | timeline: timeline}
 
-        case if(notices == [], do: {:ok, state}, else: reset(state, :audio_gap)) do
-          {:ok, state} -> infer(state, pcm, charge)
-          {:stop, state} -> discard(state, charge)
+        case audio_notices(state, notices) do
+          {:ok, %{mode: :operational_reuse} = state} ->
+            CaptureHandoff.release(state.input, charge, :processed)
+            reuse_drain(state)
+
+          {:ok, state} ->
+            infer(state, pcm, charge)
+
+          {:stop, state} ->
+            discard(state, charge)
         end
 
       {:duplicate, _timeline} ->
@@ -174,7 +234,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
 
       {:error, _reason} ->
         CaptureHandoff.release(state.input, charge, :discarded)
-        reset(state, :audio_gap)
+        audio_notices(state, [:audio_gap])
     end
   end
 
@@ -190,6 +250,79 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   end
 
   defp process(state, {_packet, charge}), do: discard(state, charge)
+
+  defp audio_notices(state, []), do: {:ok, state}
+
+  defp audio_notices(%{mode: :operational_reuse} = state, _notices),
+    do: reuse_reset(state, state.epoch, :audio_gap, state.clock.(), true)
+
+  defp audio_notices(state, _notices), do: reset(state, :audio_gap)
+
+  defp reuse_reset(state, epoch, reason, at, invalid?) do
+    Enum.each(:queue.to_list(state.reused), fn {_, charge} ->
+      CaptureHandoff.release(state.input, charge, :discarded)
+    end)
+
+    emit(
+      %{
+        state
+        | epoch: epoch,
+          reused: :queue.new(),
+          reuse_invalid?: invalid?,
+          boundary: ActivityBoundary.new(),
+          sample_origin: nil,
+          partial?: true
+      },
+      {:reset, epoch, reason, at}
+    )
+  end
+
+  defp reuse_drain(state) do
+    case :queue.out(state.reused) do
+      {:empty, _} ->
+        {:ok, state}
+
+      {{:value, {{:mapped_probabilities, _, local, sample, probabilities, _}, charge}}, rest} ->
+        last = state.timeline.clock.last_input
+        count = 512 * length(probabilities)
+
+        cond do
+          local != state.boundary.samples or
+              (state.sample_origin != nil and sample != state.sample_origin + local) ->
+            reuse_reset(state, state.epoch, :audio_gap, state.clock.(), true)
+
+          last == nil or last.sample_timestamp + last.sample_count < sample + count ->
+            {:ok, state}
+
+          not captured_start?(state.timeline, sample) ->
+            reuse_reset(state, state.epoch, :audio_gap, state.clock.(), true)
+
+          true ->
+            CaptureHandoff.release(state.input, charge, :processed)
+            next = %{state | reused: rest, sample_origin: state.sample_origin || sample}
+
+            case boundaries(next, probabilities) do
+              {:ok, next} -> reuse_drain(next)
+              stop -> stop
+            end
+        end
+    end
+  end
+
+  # Audio from one producer is ordered, and gaps invalidate the epoch. Once the
+  # end is captured, an absent prefix cannot arrive later or be reconstructed.
+  defp captured_start?(timeline, sample) do
+    Enum.any?(timeline.clock.frames, fn frame ->
+      sample >= frame.sample_timestamp and sample < frame.sample_timestamp + frame.sample_count
+    end)
+  end
+
+  defp valid_admission?(:operational_reuse, nil), do: true
+
+  defp valid_admission?(:benchmark_only, %InferenceAdmission{runtime: runtime}),
+    do: Process.alive?(runtime)
+
+  defp valid_admission?(_, _), do: false
 
   defp infer(state, "", charge) do
     CaptureHandoff.release(state.input, charge, :processed)
@@ -300,8 +433,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
       else: {:stop, state}
   end
 
-  defp current?(state),
-    do: CaptureHandoff.current?(state.input) and CaptureHandoff.current?(state.output)
+  defp current?(state) do
+    stats = CaptureHandoff.stats(state.input)
+
+    stats.overflow == 0 and stats.invalid == 0 and
+      CaptureHandoff.current?(state.input) and CaptureHandoff.current?(state.output)
+  end
 
   defp discard(state, charge) do
     CaptureHandoff.release(state.input, charge, :discarded)

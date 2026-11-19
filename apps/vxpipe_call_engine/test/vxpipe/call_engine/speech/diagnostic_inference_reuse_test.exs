@@ -251,6 +251,62 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     refute_received {:classified, _, _, _}
   end
 
+  test "operational results feed the diagnostic boundary worker without another inference" do
+    {session, _recognizer} = session(false)
+    output = handoff()
+    epoch = make_ref()
+
+    worker =
+      start_supervised!(
+        {Vxpipe.CallEngine.Diagnostics.SourceWorker,
+         mode: :operational_reuse,
+         owner: self(),
+         output: output,
+         projection: @projection,
+         source_epoch: epoch,
+         clock_id: "clock",
+         source_id: "source",
+         origin_us: -1_000_000,
+         clock: fn -> 0 end}
+      )
+
+    input = Vxpipe.CallEngine.Diagnostics.SourceWorker.handoff(worker)
+    assert :ok = ConversationalSTT.observe(session, input)
+    _ = :sys.get_state(Session.provider(session))
+    pcm = :binary.copy(<<9, 0>>, 2_048)
+
+    frame = %Vxpipe.CallEngine.Media.AudioFrame{
+      tenant_id: "tenant",
+      room_id: "room",
+      incarnation_id: "incarnation",
+      participant_id: "human",
+      connection_id: "connection",
+      track_id: "audio",
+      source_epoch: epoch,
+      codec: :linear16,
+      channels: 1,
+      sample_rate: 16_000,
+      timestamp: 32_000,
+      sequence_number: 1,
+      payload: pcm,
+      received_at: -872
+    }
+
+    assert :ok = Session.push_frame(session, frame)
+    assert :ok = CaptureHandoff.offer(input, {:audio, frame})
+    assert_receive {:classified, _, 0, ^pcm}
+    _ = event(session, :speech_started)
+
+    assert {:acoustic_boundary, 0, :speech_started, 32_000, 0, 1_000_000, _, :partial_start} =
+             packet(output)
+
+    refute_received {:classified, _, _, _}
+    CaptureHandoff.close(output)
+    send(worker, :check_grant)
+    assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048, sequence_number: 2})
+    assert_receive {:classified, _, 2_048, ^pcm}
+  end
+
   defp session(hold?, prepared? \\ false) do
     parent = self()
 
