@@ -580,6 +580,113 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  for vad <- [false, true] do
+    @tag matrix: true, vad: vad, settings_unavailable: true
+    test "settings store unavailability revokes and recovers configured observation, Silero #{vad}",
+         c do
+      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      epoch = make_ref()
+      sequence = discover_with_audio(attachment, identity, epoch, wire)
+      before = lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, 81, :enabled)
+
+      [{_, worker, _, _}] =
+        DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+
+      handoff = SourceWorker.handoff(worker)
+      worker_down = Process.monitor(worker)
+      settings = Repo.get!(Vxpipe.Persistence.Schema.DiagnosticsSettings, "default")
+
+      # A real store error, isolated to this sandbox. Do not send an invalidation:
+      # the normal projection reader must discover the unavailable setting.
+      Repo.delete!(settings)
+      assert {:error, :unavailable} = DiagnosticsSettingsStore.snapshot()
+
+      await(fn ->
+        match?(
+          {:unavailable, _},
+          Vxpipe.CallEngine.Diagnostics.SettingsProjection.status(__MODULE__.Projection)
+        )
+      end)
+
+      assert_receive {:DOWN, ^worker_down, :process, ^worker, _}, 2_000
+      await_diagnostic_drain(identity)
+      assert_diagnostic_slots_released()
+      refute CaptureHandoff.current?(handoff)
+
+      during =
+        lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence + 1, 81, :disabled)
+
+      # Recovery at the same durable revision must still mint a fresh capture
+      # epoch; the previously revoked handoff cannot become usable again.
+      Repo.insert!(Ecto.put_meta(settings, state: :built))
+
+      await(fn ->
+        Vxpipe.CallEngine.Diagnostics.SettingsProjection.status(__MODULE__.Projection) ==
+          {:enabled, settings.revision}
+      end)
+
+      sequence = discover_with_audio(attachment, identity, epoch, wire, sequence + 2)
+
+      recovered =
+        lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, 81, :reenabled)
+
+      assert recovered.run.settings_revision == before.run.settings_revision
+      refute recovered.run.id == before.run.id
+      refute recovered.run.source_epoch == before.run.source_epoch
+      refute CaptureHandoff.current?(handoff)
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
+      assert_diagnostic_slots_released()
+
+      assert {:ok, %{entries: entries}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      assert length(entries) == 2
+      %{run: interrupted} = Enum.find(entries, &(&1.run.id == before.run.id))
+      assert interrupted.state == :incomplete
+      assert :lease_expired in interrupted.reasons
+
+      stored =
+        Enum.flat_map(entries, fn %{run: run} ->
+          assert run.closed_at != nil
+
+          assert {:ok, turns} =
+                   LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
+
+          Enum.map(turns, &{run.id, &1.turn_id})
+        end)
+
+      assert Enum.sort(stored) ==
+               Enum.sort([{before.run.id, before.turn_id}, {recovered.run.id, recovered.turn_id}])
+
+      refute Enum.any?(stored, fn {_, turn_id} -> turn_id == during.turn_id end)
+
+      for observed <- [before, during, recovered] do
+        pcm = observed.pcm
+        turn_id = observed.turn_id
+        refute_received {:scribe_audio, ^wire, ^pcm}
+        refute_received {:matrix_inference, _, _, ^pcm}
+
+        refute_received {:vxpipe_event,
+                         %ParticipantTranscription{final: true, correlation_id: ^turn_id}}
+
+        refute_received {:vxpipe_event, %CallEngine.Event.TextOutput{correlation_id: ^turn_id}}
+      end
+
+      refute_received {:scribe_commit, ^wire}
+      refute_received {:vxpipe_connection_unavailable, _}
+    end
+  end
+
   for vad <- [false, true], enabled <- [false, true] do
     @tag matrix: true, vad: vad, diagnostics_enabled: enabled, writer_crash: true
     test "writer death preserves the configured call and exposes interrupted coverage, Silero #{vad}, collection #{enabled}",

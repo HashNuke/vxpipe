@@ -1,8 +1,9 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay, room-service cutover and STT eligibility implemented; settings/UI acceptance pending, 2026-11-19.
+Status: records/replay, room-service cutover and STT eligibility implemented; effective-settings and failure-parity acceptance pending, 2026-11-19.
 A, B and D, including participant/segment presentation, are implemented. C uses participant-owned
-observation managed by a room service; settings and failure-parity acceptance remain.
+observation managed by a room service; UI and local settings transitions are verified.
+Distributed effective-status and failure-parity acceptance remain.
 Remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
@@ -631,10 +632,15 @@ Open tasks (unchanged in scope; verify on the room-service path):
   open task below; production currently reports it unavailable.
 - [ ] Specify bounded cross-node settings propagation and effective-status reporting
   without a new cluster-membership system; never report applied from a saved value.
-- [ ] Prove on/off transitions for active/new calls, unknown settings, DB outage,
+- [x] Prove on/off transitions for active/new calls, unknown settings, DB outage,
   stale enabled cache, restart, worker disconnect and re-enable. Environment/call
   options cannot bypass off; stop observation and queued audio on revocation;
   preserve only pre-disable summaries and distinguish partially observed turns.
+  The [settings-transition audit](../20261119-2052-diagnostics-settings-transitions.md)
+  maps these contracts to focused Engine/Calls and configured evidence, including
+  real settings-store unavailability and same-revision recovery. Controlled peer
+  clocks model lost refresh/hints; this is not physical DB partition or global
+  effective-status proof, which remains open above.
 - [ ] Red-test saturation, observer crash/hang, absent model, DB failure and teardown;
   compare identical provider bytes, commits and production control traces on/off.
 - [x] Capture matching text/audio landmarks without intercepting output or delaying
