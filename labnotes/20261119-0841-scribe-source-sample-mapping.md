@@ -26,7 +26,7 @@ Session.push_frame input slot is the smallest seam. Plan:
   Keep original bytes/chunking and failure results unchanged; partial wire failure
   must not emit a successful anchor. Direct continuous input uses the same path.
 - Retain compact identity/epoch/next timestamp/next sequence and token, not audio.
-  Accepted raw input, duplicates, gaps, format/source changes or invalid optional
+  Accepted raw input after anchoring, duplicates, gaps, format/source changes or invalid optional
   metadata retire diagnostics without newly rejecting otherwise accepted audio.
   LiveReport mappings are immutable: do not clear local state and silently reuse
   the old collector anchor. A fresh handoff starts fresh correspondence; repeated

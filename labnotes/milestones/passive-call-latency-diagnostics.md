@@ -944,7 +944,7 @@ accepted audio. Replacement handoffs establish fresh correspondence.
 
 Retained red/green regressions cover missing mapping and missing identity metadata.
 Affected tests762/0 (9 excluded), root static gates and Lean pass. Astra xhigh
-review is clean with22 independent probe cases. The frozen collector baseline
+review is clean with22 review cases, including seven additional probes. The frozen collector baseline
 passed the full umbrella suite; a full root run for this new checkpoint remains
 required. Acknowledged provider profiles, application wiring and configured-call
 acceptance remain open, so combined C tasks stay unchecked.
