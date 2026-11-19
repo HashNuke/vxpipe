@@ -99,6 +99,9 @@ defmodule Vxpipe.Providers.Google.STTSessionTest do
     refute second_wire == first_wire
     assert_control(second_wire, %{"setup" => %{"model" => "models/gemini-3.5-transcribe-live"}})
     TestGoogleSTTTransport.deliver(second_wire, ~s({"setupComplete":{}}))
+    # Delivery casts to the wire before it forwards readiness to the provider.
+    _ = :sys.get_state(second_wire)
+    _ = :sys.get_state(Session.provider(session))
     assert :ok = Session.push_audio(session, <<1, 0>>)
     assert_receive {:test_google_stt_audio, ^first_wire, <<1, 0>>}
 
