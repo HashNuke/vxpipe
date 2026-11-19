@@ -698,7 +698,11 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
   stale-heartbeat coverage through authorized reads in both local VAD modes,
   with collection-off controls. The control-trace checkpoint also verifies the
   complete public connection-event sequence across these five failure families.
-  Broader stress and measured memory acceptance remain open.
+  The [lifecycle memory checkpoint](../20261119-2109-diagnostics-stress-memory.md)
+  adds complete public traces for 40 rooms/120 turns and post-drain process RSS:
+  median growth is -18700 KiB (fallback) and 3728 KiB (reuse), both within 16 MiB.
+  Inference is deterministic; actual-model load/accuracy remain separate. The
+  remaining stress coverage audit, including reported mailbox maxima, stays open.
 - [ ] Establish before running load: hardware, concurrency, duration, warm/cold
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
   paired on/off measurements; publish measured results and limits. Any missed

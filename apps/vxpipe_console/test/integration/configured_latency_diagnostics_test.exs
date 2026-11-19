@@ -974,98 +974,139 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @tag matrix: true, vad: vad, repeated_lifecycle: true, timeout: 120_000
     test "twenty configured enable/revoke/re-enable/teardown cycles release diagnostics, Silero #{vad}",
          c do
-      Enum.reduce(1..20, c.settings_revision, fn cycle, revision ->
-        {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
-        epoch = make_ref()
-        sequence = discover_with_audio(attachment, identity, epoch, wire)
+      measure_memory? = System.get_env("VXPIPE_DIAGNOSTIC_STRESS_RSS") == "1"
 
-        first =
-          lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, :enabled)
+      {rss_samples, _revision} =
+        Enum.map_reduce(1..20, c.settings_revision, fn cycle, revision ->
+          {call, connection, attachment, wire, identity} = call(c.options, c.vad, :llm, true)
+          epoch = make_ref()
+          sequence = discover_with_audio(attachment, identity, epoch, wire)
 
-        assert first.run.settings_revision == revision
+          first =
+            lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, :enabled)
 
-        change_diagnostics(false, revision)
-        await_diagnostic_drain(identity)
-        assert_diagnostic_slots_released()
+          assert first.run.settings_revision == revision
 
-        disabled =
-          lifecycle_turn(
-            c,
-            call,
-            attachment,
-            wire,
-            identity,
-            epoch,
-            sequence + 1,
-            cycle,
-            :disabled
-          )
+          change_diagnostics(false, revision)
+          await_diagnostic_drain(identity)
+          assert_diagnostic_slots_released()
 
-        change_diagnostics(true, revision + 1)
-        sequence = discover_with_audio(attachment, identity, epoch, wire, sequence + 2)
+          disabled =
+            lifecycle_turn(
+              c,
+              call,
+              attachment,
+              wire,
+              identity,
+              epoch,
+              sequence + 1,
+              cycle,
+              :disabled
+            )
 
-        second =
-          lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, :reenabled)
+          change_diagnostics(true, revision + 1)
+          sequence = discover_with_audio(attachment, identity, epoch, wire, sequence + 2)
 
-        assert second.run.settings_revision == revision + 2
-        refute second.run.id == first.run.id
-        refute second.run.source_epoch == first.run.source_epoch
+          second =
+            lifecycle_turn(
+              c,
+              call,
+              attachment,
+              wire,
+              identity,
+              epoch,
+              sequence,
+              cycle,
+              :reenabled
+            )
 
-        assert {:ok, completion} =
-                 CallEngine.monitor_room_completion(
-                   identity.tenant_id,
-                   identity.room_id,
-                   identity.incarnation_id
-                 )
+          assert second.run.settings_revision == revision + 2
+          refute second.run.id == first.run.id
+          refute second.run.source_epoch == first.run.source_epoch
 
-        room_diagnostics = GenServer.whereis(RoomSupervisor.address(identity, :supervisor))
-        assert is_pid(room_diagnostics)
-        diagnostics_down = Process.monitor(room_diagnostics)
-        GenServer.stop(attachment.room_authority, :shutdown)
-        assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
-        assert_receive {:DOWN, ^diagnostics_down, :process, ^room_diagnostics, _}, 2_000
-        await_diagnostic_drain(identity)
-        assert_diagnostic_slots_released()
-        assert :ok = stop_supervised(SpeechConnection)
+          assert {:ok, completion} =
+                   CallEngine.monitor_room_completion(
+                     identity.tenant_id,
+                     identity.room_id,
+                     identity.incarnation_id
+                   )
 
-        assert {:ok, %{entries: entries}} =
-                 LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+          room_diagnostics = GenServer.whereis(RoomSupervisor.address(identity, :supervisor))
+          assert is_pid(room_diagnostics)
+          diagnostics_down = Process.monitor(room_diagnostics)
+          GenServer.stop(attachment.room_authority, :shutdown)
+          assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+          assert_receive {:DOWN, ^diagnostics_down, :process, ^room_diagnostics, _}, 2_000
+          await_diagnostic_drain(identity)
+          assert_diagnostic_slots_released()
 
-        assert length(entries) == 2
-        assert Enum.all?(entries, &(not is_nil(&1.run.closed_at)))
+          assert_complete_text_trace(connection, identity, [
+            "Lifecycle #{cycle} enabled.",
+            "Lifecycle #{cycle} disabled.",
+            "Lifecycle #{cycle} reenabled."
+          ])
 
-        stored =
-          Enum.flat_map(entries, fn %{run: run} ->
-            assert {:ok, turns} =
-                     LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
+          assert :ok = stop_supervised(SpeechConnection)
 
-            Enum.map(turns, &{run.id, &1.turn_id})
-          end)
+          assert {:ok, %{entries: entries}} =
+                   LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
 
-        assert Enum.sort(stored) ==
-                 Enum.sort([
-                   {first.run.id, first.turn_id},
-                   {second.run.id, second.turn_id}
-                 ])
+          assert length(entries) == 2
+          assert Enum.all?(entries, &(not is_nil(&1.run.closed_at)))
 
-        refute Enum.any?(stored, fn {_, turn_id} -> turn_id == disabled.turn_id end)
+          stored =
+            Enum.flat_map(entries, fn %{run: run} ->
+              assert {:ok, turns} =
+                       LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
 
-        for observed <- [first, disabled, second] do
-          pcm = observed.pcm
-          turn_id = observed.turn_id
-          refute_received {:scribe_audio, ^wire, ^pcm}
-          refute_received {:matrix_inference, _, _, ^pcm}
+              Enum.map(turns, &{run.id, &1.turn_id})
+            end)
 
-          refute_received {:vxpipe_event,
-                           %ParticipantTranscription{final: true, correlation_id: ^turn_id}}
+          assert Enum.sort(stored) ==
+                   Enum.sort([
+                     {first.run.id, first.turn_id},
+                     {second.run.id, second.turn_id}
+                   ])
 
-          refute_received {:vxpipe_event, %CallEngine.Event.TextOutput{correlation_id: ^turn_id}}
-        end
+          refute Enum.any?(stored, fn {_, turn_id} -> turn_id == disabled.turn_id end)
 
-        refute_received {:scribe_commit, ^wire}
-        refute_received {:vxpipe_connection_unavailable, _}
-        revision + 2
-      end)
+          for observed <- [first, disabled, second] do
+            pcm = observed.pcm
+            turn_id = observed.turn_id
+            refute_received {:scribe_audio, ^wire, ^pcm}
+            refute_received {:matrix_inference, _, _, ^pcm}
+
+            refute_received {:vxpipe_event,
+                             %ParticipantTranscription{final: true, correlation_id: ^turn_id}}
+
+            refute_received {:vxpipe_event,
+                             %CallEngine.Event.TextOutput{correlation_id: ^turn_id}}
+          end
+
+          refute_received {:scribe_commit, ^wire}
+          refute_received {:vxpipe_connection_unavailable, _}
+          rss = if measure_memory?, do: diagnostic_rss_kib()
+          {rss, revision + 2}
+        end)
+
+      if measure_memory? do
+        first = rss_samples |> Enum.take(5) |> Enum.sort() |> Enum.at(2)
+        last = rss_samples |> Enum.take(-5) |> Enum.sort() |> Enum.at(2)
+
+        IO.puts(
+          "DIAGNOSTIC_STRESS_RSS " <>
+            Jason.encode!(%{
+              operational_vad: c.vad,
+              rss_kib: rss_samples,
+              first_five_median_kib: first,
+              last_five_median_kib: last,
+              growth_kib: last - first,
+              budget_kib: 16 * 1024
+            })
+        )
+
+        assert last - first <= 16 * 1024
+      end
     end
   end
 
@@ -2182,6 +2223,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
     assert output.text == "Acknowledged."
     assert output.correlation_id == input.correlation_id
+    turn_id = input.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.AgentTurnCompleted{correlation_id: ^turn_id}},
+                   2_000
+
     refute_received {:scribe_audio, ^wire, ^pcm}
     refute_received {:matrix_inference, _, _, ^pcm}
 
@@ -2200,6 +2247,14 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       end
 
     %{run: run, turn_id: input.correlation_id, pcm: pcm}
+  end
+
+  # Opt-in Linux process RSS includes native allocations; BEAM heap size does not.
+  # Sample after room completion and diagnostic drain, without forcing collection.
+  defp diagnostic_rss_kib do
+    status = File.read!("/proc/#{System.pid()}/status")
+    [_, rss] = Regex.run(~r/^VmRSS:\s+(\d+) kB$/m, status)
+    String.to_integer(rss)
   end
 
   defp assert_diagnostic_slots_released do
