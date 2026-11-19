@@ -2090,3 +2090,24 @@ This closes the room-service reuse/fallback migration checklist. Installation
 settings/effective-status and failure-parity acceptance, remaining response/report
 checks, D extensions and E/F stay open. Only tests/documentation changed; no live
 provider, Telnyx, full umbrella suite or deployment action occurred.
+
+
+## Checkpoint C — configured missing benchmark model isolation, 2026-11-19
+
+Four configured cases independently vary operational Silero and diagnostic
+collection while only the benchmark model loader fails. Two canonical Scribe
+turns still produce the same transcripts and correlated model responses; exact
+marker PCM reaches the provider once. Enabled fallback must invoke the failing
+loader and persist observer_unavailable. Operational reuse and collection-off
+must never invoke it; disabled collection leaves no diagnostic runs. This does
+not alter operational Silero's own missing-model behavior.
+
+Actual room completion and diagnostic drain precede duplicate-byte/inference and
+extra-commit refutes. Independent review passes the four normal cases and its
+working-loader control fails specifically at the missing unavailable-run reason,
+proving the failure evidence is meaningful. See
+[checkpoint labnotes](../20261119-1850-missing-model-isolation.md) for final checks.
+The combined failure-parity task remains open for storage/saturation and remaining
+control-trace acceptance. Settings effective-status proof is also still open;
+no global confirmation is inferred from a saved value. No live provider, Telnyx,
+full umbrella suite or deployment action occurred.

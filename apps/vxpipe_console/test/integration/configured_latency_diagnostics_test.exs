@@ -160,6 +160,14 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
          tasks: __MODULE__.Tasks,
          runtime: __MODULE__.Runtime,
          port: __MODULE__.Port,
+         load:
+           if(Map.get(tags, :missing_diagnostic_model, false),
+             do: fn ->
+               send(parent, :diagnostic_model_missing)
+               {:error, :missing_model}
+             end,
+             else: &Silero.load/0
+           ),
          classify:
            if(matrix?,
              do: benchmark_classifier(parent, Map.get(tags, :diagnostic_failure)),
@@ -635,6 +643,81 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute_received {:scribe_commit, ^wire}
       refute_received {:vxpipe_connection_unavailable, _}
       GenServer.stop(attachment.room_authority, :shutdown)
+    end
+  end
+
+  for vad <- [false, true], enabled <- [false, true] do
+    @tag matrix: true, missing_diagnostic_model: true, vad: vad, diagnostics_enabled: enabled
+    test "missing benchmark model preserves call behavior with Silero #{vad} and collection #{enabled}",
+         c do
+      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      pace(32)
+      epoch = make_ref()
+
+      sequence =
+        if c.diagnostics_enabled,
+          do: discover_with_audio(attachment, identity, epoch, wire),
+          else: 0
+
+      pcm = :binary.copy(<<41, 0>>, 512)
+      send_audio(attachment, identity, epoch, sequence, sequence * 512, pcm)
+      assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+      if c.vad, do: assert_receive({:matrix_inference, :operational, _, ^pcm}, 2_000)
+      if c.diagnostics_enabled and not c.vad, do: assert_receive(:diagnostic_model_missing, 2_000)
+
+      for index <- 1..2 do
+        text = "Continue without the benchmark model #{index}."
+        emit_scribe_turn(wire, text)
+        assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = input}, 2_000
+        assert input.text == text
+        assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+        assert output.text == "Acknowledged."
+        assert output.correlation_id == input.correlation_id
+        marker = :binary.copy(<<41 + index, 0>>, 512)
+
+        send_audio(
+          attachment,
+          identity,
+          epoch,
+          sequence + index,
+          (sequence + index) * 512,
+          marker
+        )
+
+        assert_receive {:scribe_audio, ^wire, ^marker}, 2_000
+        if c.vad, do: assert_receive({:matrix_inference, :operational, _, ^marker}, 2_000)
+      end
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
+
+      assert {:ok, %{entries: runs}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      cond do
+        not c.diagnostics_enabled -> assert runs == []
+        not c.vad -> assert Enum.any?(runs, &(:observer_unavailable in &1.run.reasons))
+        true -> assert runs != []
+      end
+
+      if c.vad or not c.diagnostics_enabled, do: refute_received(:diagnostic_model_missing)
+
+      for marker <- 41..43 do
+        pcm = :binary.copy(<<marker, 0>>, 512)
+        refute_received {:scribe_audio, _, ^pcm}
+        refute_received {:matrix_inference, _, _, ^pcm}
+      end
+
+      refute_received {:scribe_commit, _}
+      refute_received {:vxpipe_connection_unavailable, _}
     end
   end
 
