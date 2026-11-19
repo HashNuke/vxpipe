@@ -1,6 +1,7 @@
 defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
   @moduledoc false
   @behaviour Vxpipe.CallEngine.Speech.Socket
+  alias Vxpipe.CallEngine.Diagnostics.ProviderTiming
   alias Vxpipe.CallEngine.Speech.Socket
   alias Vxpipe.Providers.ElevenLabs.Scribe
 
@@ -10,7 +11,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
         owner: Keyword.fetch!(options, :owner),
         model: public.model,
         commit_strategy: public.commit_strategy,
-        keepalive_interval: 10_000
+        keepalive_interval: 10_000,
+        diagnostic_handoff: Keyword.get(options, :diagnostic_handoff)
       })
     end
   end
@@ -27,9 +29,17 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
 
   @impl true
   def handle_frame({:text, payload}, state) do
+    receipt = ProviderTiming.stamp(Map.get(state, :diagnostic_handoff))
+
     case Scribe.decode(payload, state.commit_strategy, state.model) do
-      {:ok, event} -> notify(state, {:event, event})
-      {:error, reason} -> notify(state, {:closed, reason})
+      {:ok, {kind, _text} = event} when kind in [:partial, :segment] and receipt != nil ->
+        notify(state, {:event, event, receipt})
+
+      {:ok, event} ->
+        notify(state, {:event, event})
+
+      {:error, reason} ->
+        notify(state, {:closed, reason})
     end
   end
 

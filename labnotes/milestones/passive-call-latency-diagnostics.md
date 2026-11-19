@@ -653,3 +653,15 @@ sample, and consumers must recheck before work/results. Diagnostic tests pass62/
 Astra xhigh re-review is clean (independent focused selection17/0), and root static
 gates pass. The active umbrella run has an MCP startup-ack timeout and cannot be
 counted as passing. These primitive tests do not complete configured-call C gates.
+
+## Checkpoint C partial Scribe timing evidence — 2026-11-19
+
+Optional internal capture handles now carry socket-callback receipt stamps through
+the real continuous Scribe adapter. Nonblank transcript commits remain separate
+from provider end evidence; actual canonical turn-end emission has a distinct
+stamp. Only fixed bounded metadata reaches the capture handoff. Revocation and
+saturation tests preserve ordinary recognition; affected suite82/0 (4excluded).
+Astra xhigh review is clean (independent85/0 including additional semantics probes);
+root static gates and Lean verification pass. Automatic subscription, manual Scribe,
+manual commit sent, room/response correlation and report persistence remain open;
+the combined C instrumentation task is not yet complete.

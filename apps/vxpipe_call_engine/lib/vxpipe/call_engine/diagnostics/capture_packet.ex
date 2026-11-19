@@ -1,5 +1,5 @@
 defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
-  @moduledoc "Bounded transient audio/probability evidence; excludes provider text and arbitrary metadata."
+  @moduledoc "Bounded transient audio, probability and timing evidence; excludes text and arbitrary metadata."
   alias Vxpipe.CallEngine.Media.AudioFrame
   @frame_keys Map.keys(AudioFrame.__struct__())
   @frame_fields length(@frame_keys)
@@ -41,6 +41,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
   defp valid?({:reset, epoch, reason, observed_at}) do
     unsigned?(epoch) and signed?(observed_at) and
       reason in [:provider_turn_settled, :source_replaced, :audio_gap, :inference_failed]
+  end
+
+  defp valid?({:provider_landmark, generation, turn, kind, observed_at, samples}) do
+    is_reference(generation) and is_reference(turn) and signed?(observed_at) and
+      unsigned?(samples) and
+      kind in [:provider_text_commit, :provider_end_evidence, :adapter_end_emission]
   end
 
   defp valid?(_packet), do: false

@@ -11,6 +11,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   """
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
+  alias Vxpipe.CallEngine.Diagnostics.ProviderTiming
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, SessionTree, STTProvider}
   alias Vxpipe.Providers.ElevenLabs.{Scribe, ScribeSocket}
 
@@ -87,6 +88,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
       {:ok,
        %{
          allocation: Keyword.fetch!(options, :allocation),
+         diagnostic_handoff: Keyword.get(private, :diagnostic_handoff),
          channel: channel,
          config: config,
          wire_module: Keyword.get(private, :wire_module, ScribeSocket),
@@ -116,6 +118,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   def handle_continue(:connect, state) do
     options = [
       owner: self(),
+      diagnostic_handoff: state.diagnostic_handoff,
       connection: Scribe.connection_options(state.config),
       model: state.config.model,
       commit_strategy: :vad,
@@ -173,10 +176,15 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
         %{wire: wire, ready?: true} = state
       )
       when kind in [:partial, :segment] and is_binary(text) do
-    case recognition(state, kind, text) do
-      {:ok, state} -> {:noreply, state}
-      _failure -> fail(state)
-    end
+    handle_recognition(state, kind, text, nil)
+  end
+
+  def handle_info(
+        {:vxpipe_scribe_transport, wire, {:event, {kind, text}, receipt}},
+        %{wire: wire, ready?: true} = state
+      )
+      when kind in [:partial, :segment] and is_binary(text) do
+    handle_recognition(state, kind, text, receipt)
   end
 
   def handle_info({:commit_deadline, token}, %{commit_watchdog: {_timer, token}} = state),
@@ -214,12 +222,19 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     |> Map.put(:log, [])
   end
 
-  defp recognition(%{committed: committed, partial: ""} = state, :partial, "")
-       when committed != "" do
-    settle(state)
+  defp handle_recognition(state, kind, text, receipt) do
+    case recognition(state, kind, text, receipt) do
+      {:ok, state} -> {:noreply, state}
+      _failure -> fail(state)
+    end
   end
 
-  defp recognition(state, :partial, text) do
+  defp recognition(%{committed: committed, partial: ""} = state, :partial, "", receipt)
+       when committed != "" do
+    settle(state, receipt)
+  end
+
+  defp recognition(state, :partial, text, _receipt) do
     if String.trim(text) == "" or text == state.partial do
       {:ok, state}
     else
@@ -231,7 +246,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     end
   end
 
-  defp recognition(state, :segment, text) do
+  defp recognition(state, :segment, text, receipt) do
     if String.trim(text) == "" do
       {:ok, state}
     else
@@ -246,6 +261,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
                },
                cumulative
              ) do
+        landmark(state, :provider_text_commit, receipt)
         {:ok, state |> cancel_commit_watchdog() |> commit_watchdog()}
       end
     end
@@ -286,8 +302,10 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     end
   end
 
-  defp settle(state) do
+  defp settle(state, receipt) do
     duration = div((state.accepted_samples - state.settled_samples) * 1_000, 16_000)
+
+    emitted = ProviderTiming.stamp(state.diagnostic_handoff)
 
     case Event.emit(state.channel, :turn_ended,
            turn_ref: state.turn,
@@ -297,6 +315,9 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
            audio_duration_ms: duration
          ) do
       result when result in [:ok, :discarded] ->
+        landmark(state, :provider_end_evidence, receipt)
+        landmark(state, :adapter_end_emission, emitted)
+
         {:ok,
          %{
            cancel_commit_watchdog(state)
@@ -310,6 +331,17 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
       _failure ->
         {:error, :session_failed}
     end
+  end
+
+  defp landmark(state, kind, stamp) do
+    ProviderTiming.emit(
+      state.diagnostic_handoff,
+      state.allocation.generation,
+      state.turn,
+      kind,
+      stamp,
+      state.accepted_samples
+    )
   end
 
   defp flush_candidate(%{committed: ""} = state), do: state
