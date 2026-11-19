@@ -883,3 +883,22 @@ xhigh review is clean: seven independent probes exercised a real configured room
 snapshot parity. The prior full umbrella run is still active and predates these
 edits. Automatic scheduling, collection/persistence and configured-call acceptance
 remain open; C tasks stay incomplete.
+
+
+## Checkpoint C automatic source attachment — 2026-11-19
+
+An optional coordinator in the isolated diagnostic pool now discovers and attaches
+current eligible sources prospectively, with one pending probe and bounded active
+workers. Active eligibility is audited even at capacity. Exact connection lookup
+prevents pagination movement from retiring healthy sources. Capability-owned,
+one-use source proofs fence allocation, policy, grant and transport epoch; delayed
+readiness and attachment time out without changing operational speech. Coordinator
+failure retires its workers and output grants. The injected collector port is not
+yet connected to production persistence.
+
+Retained review regressions cover stale sources, collector races, timeouts, output
+retirement and pagination. Affected tests142/0, root static gates and Lean pass.
+Astra xhigh final re-review is clean with13 independent probes. The preceding full
+umbrella run passed but predates this checkpoint; current-source root acceptance
+remains required. Live collection/persistence, configured-call acceptance and
+production composition remain open, so the combined C tasks stay unchecked.

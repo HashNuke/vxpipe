@@ -45,9 +45,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   @doc "Coordinator request: announce one future accepted source; never wait for audio."
-  def discover_diagnostics(capability, agent, handoff) do
+  def discover_diagnostics(capability, agent, handoff, timeout \\ @call_timeout) do
     if SourceSupervisor.eligible_agent?(agent),
-      do: GenServer.call(capability, {:discover_diagnostics, handoff}, @call_timeout),
+      do: GenServer.call(capability, {:discover_diagnostics, handoff}, timeout),
       else: {:error, :unsupported_agent}
   catch
     :exit, _reason -> {:error, :unavailable}
@@ -66,6 +66,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       capability,
       {:attach_diagnostics, generation, revision, source, handoff},
       @call_timeout
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc "Consumes a source announcement only while its exact accepted source remains current."
+  def attach_diagnostics(
+        capability,
+        generation,
+        revision,
+        source,
+        handoff,
+        token,
+        timeout \\ @call_timeout
+      ) do
+    GenServer.call(
+      capability,
+      {:attach_discovered_source, generation, revision, source, handoff, token},
+      timeout
     )
   catch
     :exit, _reason -> {:error, :unavailable}
@@ -163,6 +182,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       error -> {:reply, error, state}
     end
   end
+
+  def handle_call(
+        {:attach_discovered_source, generation, revision, source, %CaptureHandoff{} = handoff,
+         token},
+        from,
+        state
+      ) do
+    if SourceDiscovery.validate(state, generation, revision, source, handoff, token) do
+      case handle_call({:attach_diagnostics, generation, revision, source, handoff}, from, state) do
+        {:reply, :ok, next} -> {:reply, :ok, %{next | diagnostic_source: nil}}
+        result -> result
+      end
+    else
+      {:reply, {:error, :unavailable}, state}
+    end
+  end
+
+  def handle_call({:attach_discovered_source, _, _, _, _, _}, _from, state),
+    do: {:reply, {:error, :unavailable}, state}
 
   def handle_call({:attach_diagnostics, generation, revision, source, handoff}, from, state) do
     if is_integer(revision) and revision >= 0 and

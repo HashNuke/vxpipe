@@ -507,6 +507,31 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     assert_receive {:vxpipe_diagnostic_capture, _, _, {:audio, _}, _}
   end
 
+  test "invalid discovered attachment cannot terminate the speech capability" do
+    {capability, generation, frame} = capability(:ok)
+
+    assert {:error, :unavailable} =
+             SpeechToText.attach_diagnostics(
+               capability,
+               generation,
+               0,
+               %{track_id: frame.track_id, source_epoch: frame.source_epoch},
+               nil,
+               make_ref()
+             )
+
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    assert_receive {:probe_input, _}
+  end
+
+  test "missing diagnostic track metadata cannot change accepted speech input" do
+    {capability, _generation, frame} = capability(:ok)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
+    assert :ok = SpeechToText.push_audio(capability, Map.delete(frame, :track_id))
+    assert_receive {:probe_input, _}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
   defp attach(capability, generation, frame, handoff),
     do:
       SpeechToText.attach_diagnostics(

@@ -34,6 +34,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
               [
                 diagnostic_tap: nil,
                 diagnostic_probe: nil,
+                diagnostic_source: nil,
                 activity_agent_id: nil,
                 readiness_generation: nil,
                 readiness_status: :preparing,
@@ -272,6 +273,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         | usage: nil,
           diagnostic_tap: nil,
           diagnostic_probe: nil,
+          diagnostic_source: nil,
           pending_policy: nil,
           turn_indexes: %{},
           next_turn_index: 0

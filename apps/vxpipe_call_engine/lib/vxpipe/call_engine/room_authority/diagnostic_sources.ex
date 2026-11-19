@@ -12,6 +12,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.DiagnosticSources do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @doc "Exact connection lookup for revalidation, independent of page insertion or removal."
+  def for_connection(room_authority, connection_id),
+    do: query(room_authority, {:connection, connection_id}, 1)
+
+  def read(%State{} = state, {:connection, connection_id}, 1) do
+    if identifier?(connection_id),
+      do:
+        candidates(%{state | connections: Map.take(state.connections, [connection_id])}, nil, 1),
+      else: {:error, :invalid_query}
+  end
+
   def read(%State{} = state, cursor, limit) do
     if (is_nil(cursor) or identifier?(cursor)) and is_integer(limit) and limit in 1..32,
       do: candidates(state, cursor, limit),

@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     do: %{id: __MODULE__, start: {__MODULE__, :start_link, [options]}, restart: :temporary}
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
-  def handoff(worker), do: GenServer.call(worker, :handoff)
+  def handoff(worker, timeout \\ 5_000), do: GenServer.call(worker, :handoff, timeout)
 
   @impl true
   def init(options) do
@@ -17,16 +17,19 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     output = Keyword.fetch!(options, :output)
     admission = Keyword.get(options, :admission)
     mode = Keyword.get(options, :mode, :benchmark_only)
+    coordinator = Keyword.get(options, :coordinator)
 
     capture_options =
       Keyword.take(options, [:projection, :maximum_count, :maximum_bytes])
       |> Keyword.put(:owner, owner)
 
-    with true <- output.owner == owner and CaptureHandoff.current?(output),
+    with true <- is_nil(coordinator) or (is_pid(coordinator) and node(coordinator) == node()),
+         true <- output.owner == owner and CaptureHandoff.current?(output),
          true <- valid_admission?(mode, admission),
          {:ok, input} <- CaptureHandoff.new(self(), capture_options),
          true <- input.grant == output.grant and input.projection == output.projection do
       Enum.each([owner, output.receiver], &Process.monitor/1)
+      if coordinator, do: Process.monitor(coordinator)
       if admission, do: Process.monitor(admission.runtime)
 
       timeline =
@@ -41,6 +44,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
        %{
          input: input,
          output: output,
+         coordinator: coordinator,
          admission: admission,
          mode: mode,
          reused: :queue.new(),
@@ -120,6 +124,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   @impl true
   def terminate(_reason, state) do
     CaptureHandoff.close(state.input)
+    if state.coordinator, do: CaptureHandoff.close(state.output)
     Process.cancel_timer(state.timer)
 
     if state.inference,

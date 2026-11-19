@@ -474,3 +474,55 @@ Lifecycle startup is coordinator-only and must not be invoked on the voice path.
 This composition has fixture acceptance but is not automatically attached to
 configured calls yet. Reused-inference consumption, collector correlation,
 production attachment and the full operational/benchmark on/off matrix remain open.
+
+
+## Automatic source attachment runtime
+
+The optional isolated source pool owns a node-local coordinator alongside its
+workers and inference runtime, under the same one-for-all supervision boundary.
+A coordinator crash retires that pool before a replacement starts. Workers also
+monitor their coordinator; none of these processes owns the operational speech
+allocation. The application must supply a collector factory before installing this
+coordinator. Production wiring waits for the live collector and configured-call
+acceptance; merely adding these modules does not enable capture.
+
+The coordinator walks room registry identities and asks one room for a bounded
+page of current human STT sources. It retains only room/connection cursors, at most
+one pending discovery, and at most16 active sources by default (configuration cap32).
+The default poll is250ms. Discovery uses the next provider-accepted frame and
+expires at the capability after250ms; the coordinator abandons missing replies
+after500ms and checks that deadline again when a reply arrives. Discovery and
+attachment RPCs use250ms budgets. The capability retains a one-use source proof
+for at most5s, invalidated by a subsequent accepted source change, policy change,
+allocation retirement or settings revocation. Attachment consumes this proof;
+a room snapshot alone cannot prove that a transport epoch stayed unchanged. The room and discovered policy/allocation/source are rechecked before
+attachment, including after collector startup. One active source is revalidated
+per enabled scan in round-robin order even when capacity is full; therefore a
+complete active audit takes at most the configured source count in scan steps.
+Operational source/policy fencing remains immediate at accepted audio; this audit
+also retires disappeared room/agent bindings. Revalidation queries the exact
+connection, so movement between discovery pages does not retire a healthy source.
+Unsupported, private, held and
+native speech-to-speech contexts do not grant
+a source. There is no pilot allowlist. Room selection uses a transient Registry
+identity snapshot, whose allocation scales with current registered rooms; the
+load gate must measure this cost rather than claiming constant-memory enumeration.
+No list of pending room work is retained.
+
+Collector creation, source-worker startup and capability attachment run only in
+the coordinator, never in a room/audio callback. The injected collector factory
+receives bounded call/source identity, run/clock origin, mode and coordinator PID
+and returns a bounded CaptureHandoff owned by the STT capability. It must start
+under its bounded collector supervisor, monitor the coordinator and apply its own
+finite drain deadline. Failure or stale authority prevents attachment. Queued
+metadata and audio remain subject to their existing byte/count grants; settings
+revocation closes active input/output grants, and workers independently recheck
+authority every250ms. Re-enable/source replacement uses new run identity and only
+future audio. A standalone worker is never selected for a known operational Silero
+source.
+
+Rejected: start a model/collector from the accepted-frame callback, retain a
+mailbox of room requests, or derive source epochs from allocation IDs. Those would
+respectively couple optional initialization to voice control, lose queue bounds,
+or join different transport sources. The coordinator is an attachment mechanism,
+not proof of persisted reports or acceptance of every live profile.

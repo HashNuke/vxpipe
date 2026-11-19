@@ -78,6 +78,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
         :tasks,
         :runtime,
         :classify,
+        :coordinator,
+        :collector,
+        registry: Vxpipe.CallEngine.RoomRegistry,
+        projection: Vxpipe.CallEngine.Diagnostics.SettingsProjection,
+        poll_interval_ms: 250,
         maximum_sources: 16,
         max_jobs: 1,
         load_timeout_ms: 15_000,
@@ -112,12 +117,32 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
       |> Keyword.put(:name, Keyword.fetch!(options, :inference))
       |> Keyword.put(:diagnostic_capacity, maximum)
 
+    coordinator =
+      case Keyword.get(options, :collector) do
+        nil ->
+          []
+
+        collector when is_function(collector, 1) ->
+          name = Keyword.fetch!(options, :coordinator)
+
+          unless is_atom(name) and name != nil and name not in names and
+                   is_atom(Keyword.fetch!(options, :registry)) and
+                   is_atom(Keyword.fetch!(options, :projection)) and
+                   Keyword.fetch!(options, :poll_interval_ms) in 10..1_000,
+                 do: raise(ArgumentError, "invalid diagnostic coordinator")
+
+          [{Vxpipe.CallEngine.Diagnostics.SourceCoordinator, options}]
+
+        _ ->
+          raise ArgumentError, "invalid diagnostic collector"
+      end
+
     Supervisor.init(
       [
         {ActivitySupervisor, inference},
         {DynamicSupervisor,
          name: Keyword.fetch!(options, :workers), strategy: :one_for_one, max_children: maximum}
-      ],
+      ] ++ coordinator,
       strategy: :one_for_all
     )
   end
