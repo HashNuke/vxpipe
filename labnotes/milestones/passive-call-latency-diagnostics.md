@@ -655,6 +655,10 @@ Open tasks (unchanged in scope; verify on the room-service path):
 
 ### E — Isolation and accuracy
 
+The [predeclared measurement plan](../../docs/design/latency-diagnostics-measurement-plan.md)
+records the reference hardware, paired warm/cold workloads and numerical budgets.
+The plan alone does not satisfy measured load or acoustic accuracy acceptance.
+
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
   error and incomplete rate; model frame size is not an accuracy guarantee.
@@ -667,7 +671,7 @@ Open tasks (unchanged in scope; verify on the room-service path):
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
   paired on/off measurements; publish measured results and limits. Any missed
   budget blocks enabling the pilot; revise architecture or reduce supported capacity.
-- [ ] Record the isolation choice (dedicated BEAM worker versus external inference
+- [x] Record the isolation choice (dedicated BEAM worker versus external inference
   process), native failure limits and evidence. Do not promise protection from
   VM-wide native faults or zero overhead from an in-process task.
 

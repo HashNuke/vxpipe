@@ -1,8 +1,8 @@
 # Passive diagnostics runtime limits
 
 > Architecture revision, 2026-11-19: [participant-owned room service](participant-vad-room-service.md)
-> supersedes agent-selected discovery/ownership described here. This document retains
-> prior implementation evidence; the revised runtime is not yet implemented. See the
+> supersedes agent-selected discovery/ownership. The room-service cutover is
+> implemented; performance and live acceptance remain open. See the
 > [milestone](../../labnotes/milestones/passive-call-latency-diagnostics.md) for current acceptance.
 
 These are implemented defaults and authority rules, not measured capacity or an
@@ -46,7 +46,7 @@ or increase resource use during an outage.
 
 | Boundary | Implemented default |
 | --- | --- |
-| Source discovery | One pending source probe; 250 ms scan interval |
+| Room source reconciliation | One pending source probe per room service; 250 ms scan interval |
 | Source/collector capacity | 16 per node; validated configurable range 1–32 |
 | Attachment startup lease | 500 ms; unresolved admission retains its permit |
 | Capture handoff | 64 packets and 262,144 charged bytes per handoff, including in-flight work |
@@ -64,12 +64,18 @@ These limits apply to their named boundaries; they are not a total process-memor
 budget. Copied payloads, model tensors, allocator overhead and multiple workers
 require the separate measured load gate. Saturation drops or marks diagnostics
 incomplete rather than changing provider input, commits or call-control decisions.
-The runtime and persistence subtrees are separate from call lifecycles; callbacks
-offer bounded work and do not wait for model initialization or database persistence.
+Shared inference and persistence are outside the room lifecycle. The optional
+room diagnostics subtree owns its source workers and stops with its room.
+Callbacks offer bounded work and do not wait for model initialization or database
+persistence.
 
 Sources: Engine `Diagnostics.SettingsLease`, `SettingsProjection`,
-`SourceSupervisor`, `AttachmentLease`, `CaptureHandoff`, `SourceCoordinator`,
+`SourceSupervisor`, `AttachmentLease`, `CaptureHandoff`, `RoomService`,
 `LiveReport`; Calls `Diagnostics.Supervisor` and `Writer`.
+
+The [measurement plan](latency-diagnostics-measurement-plan.md) records the
+in-process isolation choice, native failure limits and predeclared load budgets.
+These budgets have not yet been measured and do not establish supported capacity.
 
 ## Verification boundaries
 
