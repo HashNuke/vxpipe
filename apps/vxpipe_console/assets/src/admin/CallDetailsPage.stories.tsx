@@ -15,6 +15,7 @@ const meta = {
         "ended",
         "partial-archive",
         "long-content",
+        "metrics",
         "loading",
         "unavailable",
         "malformed-response",
@@ -32,6 +33,10 @@ export const Ongoing: Story = {};
 export const Ended: Story = { args: { scenario: "ended" } };
 export const PartialArchive: Story = { args: { scenario: "partial-archive" } };
 export const LongContent: Story = { args: { scenario: "long-content" } };
+export const Metrics: Story = {
+  args: { scenario: "metrics", initialTab: "metrics" },
+  parameters: { docs: { description: { story: "Twelve synthetic turns. Repeated measurements start collapsed to median, average and total; expand a target or all targets to inspect the recorded values." } } },
+};
 export const Loading: Story = { args: { scenario: "loading" } };
 export const Unavailable: Story = { args: { scenario: "unavailable" } };
 export const MalformedResponse: Story = { args: { scenario: "malformed-response" } };

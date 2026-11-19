@@ -321,7 +321,7 @@ export function CallConsole({
             />
           )}
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
-          {tab === "metrics" && <Metrics snapshot={snapshot} theme={theme} />}
+          {tab === "metrics" && <Metrics key={snapshot.callId} snapshot={snapshot} theme={theme} />}
           {tab === "participants" && (
             <div className="vx-participant-view">
               <ParticipantPicker

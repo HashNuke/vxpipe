@@ -14,11 +14,13 @@ export function CallDetailsPage({
   theme = "dark",
   contextHref = (path) => path,
   renderNavigationHeader,
+  initialTab = "chat",
 }: {
   state: CallDetailsPageState;
   theme?: "dark" | "light";
   contextHref?: (path: string) => string;
   renderNavigationHeader?: (state: CallDetailsPageState) => ReactNode;
+  initialTab?: "chat" | "variables" | "metrics" | "participants";
 }) {
   const callSpecLabel = state.callSpec
     ? state.callSpec.name ?? state.callSpec.id
@@ -69,6 +71,7 @@ export function CallDetailsPage({
           <h1 className="sr-only">Call details</h1>
           <CallConsole
             controller={state.controller}
+            initialTab={initialTab}
             header={header}
             headerContext={callContext}
             layout="fill"

@@ -13,10 +13,11 @@ import {
   useRole,
 } from "@floating-ui/react";
 import type { Metric } from "@vxpipe/core";
+import { metricUnit } from "./metricUnit.js";
 
 function metricValue(metric: Metric | null) {
   if (metric === null || metric.value === null) return "Unavailable";
-  return `${metric.value.toLocaleString()} ${metric.unit}`;
+  return `${metric.value.toLocaleString()} ${metricUnit(metric.unit)}`;
 }
 
 export function MetricCellTooltip({
@@ -65,7 +66,7 @@ export function MetricCellTooltip({
         ) : (
           <>
             <strong>{metric.value.toLocaleString()}</strong>
-            {!hideUnit && <small>{metric.unit}</small>}
+            {!hideUnit && <small> {metricUnit(metric.unit)}</small>}
           </>
         )}
       </button>

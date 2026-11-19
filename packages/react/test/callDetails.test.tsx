@@ -174,6 +174,8 @@ test("preserves repeated metric observations for the same target and label", () 
   const details = createCallDetailsStore(response);
   render(<CallConsole controller={{ details }} initialTab="metrics" />);
 
+  expect(screen.getByRole("group", { name: "Input tokens summary for LLM, Assistant" })).toHaveTextContent("Total30");
+  fireEvent.click(screen.getByRole("button", { name: "Expand metrics for LLM, Assistant" }));
   expect(
     screen.getByRole("button", { name: "Input tokens for LLM, Assistant: 10 tokens" }),
   ).toBeVisible();

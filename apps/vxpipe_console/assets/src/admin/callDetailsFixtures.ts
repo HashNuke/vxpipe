@@ -9,6 +9,7 @@ import { calls, demoCallSpec } from "./callFixtures";
 import type { CallSummary, CallSpecContext } from "./callTypes";
 import type { CallDetailsPageState } from "./callDetailsTypes";
 import { demoTenant } from "./callSpecFixtures";
+import { callMetricsFixture } from "./callMetricsFixture";
 import type { TenantContext } from "./callSpecTypes";
 
 export type CallDetailsFixtureScenario =
@@ -16,6 +17,7 @@ export type CallDetailsFixtureScenario =
   | "ended"
   | "partial-archive"
   | "long-content"
+  | "metrics"
   | "loading"
   | "unavailable"
   | "malformed-response";
@@ -34,7 +36,7 @@ const longCallSpec: CallSpecContext = {
 function snapshot(
   selectedCall: CallSummary,
   completeness: "complete" | "incomplete" | "unconfirmed",
-  content: "default" | "long" = "default",
+  content: "default" | "long" | "metrics" = "default",
 ): CallDetailsSnapshot {
   const ended = selectedCall.state === "ended" || selectedCall.state === "failed";
   const durationMs =
@@ -214,7 +216,7 @@ function snapshot(
           scope: { kind: "room" },
         },
       },
-      {
+      ...(content === "metrics" ? callMetricsFixture() : [{
         id: "metric-2",
         revision: 1,
         value: {
@@ -224,12 +226,12 @@ function snapshot(
           source: "LLM · local timing",
           description: "Model dispatch to first visible text",
           scope: {
-            kind: "participant-capability",
+            kind: "participant-capability" as const,
             participantId: "assistant",
             capability: "LLM",
           },
         },
-      },
+      }]),
     ] : [],
     metricsAvailability: { state: "available" },
     completeness: {
@@ -313,7 +315,7 @@ function readyState(
   completeness: "complete" | "incomplete" | "unconfirmed",
   callSpec: CallSpecContext = demoCallSpec,
   tenant: TenantContext = demoTenant,
-  content: "default" | "long" = "default",
+  content: "default" | "long" | "metrics" = "default",
 ): CallDetailsPageState {
   const details = snapshot(selectedCall, completeness, content);
   const store = createCallDetailsStore(details);
@@ -339,6 +341,7 @@ export function callDetailsFixture(
 ): CallDetailsPageState {
   if (scenario === "ongoing") return readyState(calls[0], "unconfirmed");
   if (scenario === "ended") return readyState(calls[1], "complete");
+  if (scenario === "metrics") return readyState(calls[1], "complete", demoCallSpec, demoTenant, "metrics");
   if (scenario === "partial-archive") return readyState(calls[1], "incomplete");
   if (scenario === "long-content") {
     return readyState(calls[0], "unconfirmed", longCallSpec, longTenant, "long");

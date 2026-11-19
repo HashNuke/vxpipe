@@ -1,7 +1,10 @@
 import type { Metric, MetricScope } from "@vxpipe/core";
+import { useId, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ConsoleSnapshot } from "./types.js";
 import { MetricCellTooltip } from "./MetricCellTooltip.js";
 import { MetricHeaderTooltip } from "./MetricHeaderTooltip.js";
+import { MetricSummary } from "./MetricSummary.js";
 import { participantDisplayName } from "./participantDisplayName.js";
 
 const metricOrder = [
@@ -106,7 +109,8 @@ function metricRows(snapshot: ConsoleSnapshot) {
     const current = rows.get(key);
     if (current) {
       const observations = current.metrics.get(metric.label) ?? [];
-      current.metrics.set(metric.label, [...observations, metric]);
+      observations.push(metric);
+      current.metrics.set(metric.label, observations);
       return;
     }
     rows.set(key, {
@@ -146,6 +150,11 @@ export function Metrics({
 }) {
   const columns = metricColumns(snapshot.metrics);
   const rows = metricRows(snapshot);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const tableId = useId();
+  const expandable = rows.filter((row) => [...row.metrics.values()].some((values) => values.length > 1));
+  const anyExpanded = expandable.some((row) => expanded.has(row.key));
+  const allExpanded = expandable.every((row) => expanded.has(row.key));
 
   if (snapshot.metricsAvailability === "unavailable") {
     return (
@@ -165,8 +174,16 @@ export function Metrics({
 
   return (
     <section className="vx-metrics" aria-label="Call metrics">
+      {expandable.length > 0 && <div className="vx-metric-toolbar">
+        <span>{anyExpanded ? (allExpanded ? "Individual measurements" : "Summary + individual measurements") : "Median · Avg · Total"}</span>
+        <button type="button" className="vx-metric-expand-toggle" aria-controls={tableId}
+          aria-expanded={anyExpanded}
+          onClick={() => setExpanded(anyExpanded ? new Set() : new Set(expandable.map((row) => row.key)))}>
+          {anyExpanded ? "Collapse all" : "Expand all"}
+        </button>
+      </div>}
       <div className="vx-metric-table-scroll">
-        <table aria-label="Call metrics">
+        <table aria-label="Call metrics" id={tableId}>
           <thead>
             <tr>
               <th scope="col">Target</th>
@@ -182,9 +199,21 @@ export function Metrics({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.key}>
+            {rows.map((row, rowIndex) => (
+              <tr key={row.key} id={`${tableId}-${rowIndex}`}>
                 <th scope="row" aria-label={row.accessibleName}>
+                  <div className="vx-metric-target">
+                  {expandable.includes(row) && <button type="button" className="vx-metric-row-toggle"
+                    aria-label={`${expanded.has(row.key) ? "Collapse" : "Expand"} metrics for ${row.accessibleName}`}
+                    aria-expanded={expanded.has(row.key)} aria-controls={`${tableId}-${rowIndex}`}
+                    onClick={() => setExpanded((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(row.key)) next.delete(row.key); else next.add(row.key);
+                      return next;
+                    })}>
+                    {expanded.has(row.key) ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+                  </button>}
+                  <div>
                   <strong>{row.target}</strong>
                   {row.participantName ? (
                     <span className="vx-metric-participant-badge">
@@ -193,9 +222,14 @@ export function Metrics({
                   ) : (
                     <small>{row.scopeLabel}</small>
                   )}
+                  </div>
+                  </div>
                 </th>
                 {columns.map((column) => (
                   <td key={column.label}>
+                    {!expanded.has(row.key) && (row.metrics.get(column.label)?.length ?? 0) > 1 ?
+                      <MetricSummary metrics={row.metrics.get(column.label)!} label={column.label}
+                        target={row.accessibleName} hideUnit={column.hideUnit} theme={theme} /> :
                     <div className="vx-metric-observations">
                       {(row.metrics.get(column.label) ?? [null]).map(
                         (metric, index) => (
@@ -209,7 +243,7 @@ export function Metrics({
                           />
                         ),
                       )}
-                    </div>
+                    </div>}
                   </td>
                 ))}
               </tr>
