@@ -517,3 +517,17 @@ rerun is pending; earlier runs are not claimed as acceptance for this source sta
 The B tasks above describe the completed offline report contracts. Live capture,
 settings, production transport timing, output correlation and live accuracy remain
 C–F work. No setting has been enabled and no deployment has occurred.
+
+## Checkpoint C partial settings-boundary evidence — 2026-11-19
+
+The isolated Identity settings domain accepts only admin/superadmin browser
+sessions, validates boolean and revision inputs, and preserves stale-save conflicts.
+Five focused tests pass and Astra review is clean. The dedicated persistence port
+requires current stored role/session validation; that adapter, migration, routes
+and Installation UI remain unimplemented, so the settings checklist stays open.
+
+The isolated Engine settings lease expires three seconds after an authoritative
+read starts. Seven tests cover expiration, stalled/reordered reads, revision
+conflicts and clock mismatch. A reviewer-proven conflict-history regression was
+fixed and retained. The projection, cross-node invalidation and audio admission
+checks remain unimplemented; no live collection can be enabled by these modules.

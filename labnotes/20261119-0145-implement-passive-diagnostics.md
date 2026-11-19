@@ -225,3 +225,33 @@
   Root format, compile warnings-as-errors, strict Credo and unused-lock checks pass.
   Full root test rerun is running in tmux `vxdiag-b-final` against fixed source:
   `/tmp/vxpipe-B-root-final.log`, completion code `/tmp/vxpipe-B-root-final.exit`.
+
+## Checkpoint C — settings authority foundations
+
+- Added the Identity diagnostics-settings domain and dedicated port. Five focused
+  tests first failed because the module did not exist, then passed: built-in admin/
+  superadmin browser sessions, denied member/custom/delegated/OAuth authority, strict
+  boolean/revision validation, conflict propagation and absent-port unavailability.
+  Astra xhigh review is clean. This does not replace adapter-level current stored
+  session/role validation, which remains to implement with persistence.
+- Added a pure Engine settings lease with a fixed 3000 ms lifetime measured from
+  the start of the authoritative read, not its completion. Six tests first failed
+  for the missing module, then passed. Covers negative monotonic timestamps, exact
+  expiry, slow reads, reordered replies, conflicting revision contents, clock
+  mismatch and malformed authority. It is not connected to live audio or startup.
+- The B umbrella run remains active (tmux vxdiag-b-final; actual BEAM process
+  confirmed). Identity and engine tests were already loaded before these new,
+  unreferenced modules/tests were added. No existing runtime modules or remaining
+  suite inputs have changed. Its result applies to B; C has separate focused
+  evidence and will need integrated/root gates after wiring.
+
+- Astra reproduced a lease bug: a malformed response overwrote the error reason
+  that remembered an earlier same-revision conflict, allowing the old enabled
+  revision to refresh. The failing regression is retained. Conflict revision now
+  has independent state that survives other errors and clears only on a valid
+  higher revision. Seven lease tests pass; review recheck requested.
+
+- Final Astra xhigh settings/lease review is clean; independent lease rerun7/0.
+  Whole Identity suite106/0; all Engine diagnostics45/0. Root format, compile
+  warnings-as-errors, strict Credo and unused-lock gates pass. Milestone/index
+  retain C unchecked because durable settings, UI and runtime are not wired.

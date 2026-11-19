@@ -257,3 +257,31 @@ Coverage distinguishes collecting, complete selected windows, incomplete capture
 storage loss and unconfirmed runs. A stale running heartbeat after restart cannot
 be presented as a graceful close. A complete run does not imply that the whole
 call was observed: disabling and call termination remain separate end reasons.
+
+## Settings authority implementation constraints
+
+The Identity diagnostics-settings port is separate from installation URL operations.
+Its domain accepts only built-in admin/superadmin browser-session principals and
+strict boolean/revision inputs. The persistence adapter must revalidate the current
+stored role and session on reads and writes; a principal's old role fields alone
+are insufficient. It must atomically update the boolean, revision and attribution
+with the audit event. A stale save conflicts, including a stale apparent no-op.
+The absence of a configured port is unavailable, never an enabled default.
+
+The Engine's local settings evidence has a fixed three-second lease measured from
+the authoritative database read's start on that node's monotonic clock. Measuring
+from response arrival would let a stalled pre-disable read extend enabled authority.
+Equal revisions can refresh only from a later read; conflicting contents for an
+equal revision fail closed until a higher revision arrives. Lower revisions and
+reordered replies cannot overwrite newer authority. Clock mismatches and expired
+leases cannot authorize capture. These pure contracts are tested; the projector
+and live admission/processing checks are not yet connected.
+
+Runtime integration must poll at most once per second with one bounded outstanding
+read per node, check the lease both before admission and before queued work runs,
+and discard queued capture on expiry/revocation. Invalidation messages can shorten
+propagation but cannot grant authority or extend the lease. A disabled save must
+remain visibly applying until acknowledgements or the lease bound establish that
+previous grants have expired. Native inference already executing may outlive task
+cancellation; its late result must be fenced from any new run. No claim of zero
+overhead or instantaneous native cancellation follows from the three-second lease.
