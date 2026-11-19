@@ -1,9 +1,9 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay, room-service cutover and STT eligibility implemented; effective-settings and failure-parity acceptance pending, 2026-11-19.
+Status: records/replay, room-service cutover and STT eligibility implemented; effective-settings acceptance pending, 2026-11-19.
 A, B and D, including participant/segment presentation, are implemented. C uses participant-owned
 observation managed by a room service; UI and local settings transitions are verified.
-Distributed effective-status and failure-parity acceptance remain.
+Distributed effective-status acceptance remains.
 Remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
@@ -641,8 +641,12 @@ Open tasks (unchanged in scope; verify on the room-service path):
   real settings-store unavailability and same-revision recovery. Controlled peer
   clocks model lost refresh/hints; this is not physical DB partition or global
   effective-status proof, which remains open above.
-- [ ] Red-test saturation, observer crash/hang, absent model, DB failure and teardown;
+- [x] Red-test saturation, observer crash/hang, absent model, DB failure and teardown;
   compare identical provider bytes, commits and production control traces on/off.
+  The [control-trace checkpoint](../20261119-2059-diagnostics-control-traces.md)
+  verifies 28 configured cases, 60 turns and 360 public connection events with
+  exact provider PCM/commit checks. This deterministic text-response matrix does
+  not claim private request counts or every feature/fault combination.
 - [x] Capture matching text/audio landmarks without intercepting output or delaying
   model dispatch; handle silent/tool-only responses, interruption and multi-agent routing.
 - [x] Demonstrate a configured Scribe fixture call persists the report, including
@@ -692,8 +696,9 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
   evidence. The [writer-crash checkpoint](../20261119-2022-diagnostics-writer-crash.md)
   checks idle-writer death, continued configured calls, fresh-run recovery and
   stale-heartbeat coverage through authorized reads in both local VAD modes,
-  with collection-off controls. Broader control-trace stress and measured memory
-  acceptance remain open.
+  with collection-off controls. The control-trace checkpoint also verifies the
+  complete public connection-event sequence across these five failure families.
+  Broader stress and measured memory acceptance remain open.
 - [ ] Establish before running load: hardware, concurrency, duration, warm/cold
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
   paired on/off measurements; publish measured results and limits. Any missed

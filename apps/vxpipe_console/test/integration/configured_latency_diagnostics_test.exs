@@ -691,7 +691,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @tag matrix: true, vad: vad, diagnostics_enabled: enabled, writer_crash: true
     test "writer death preserves the configured call and exposes interrupted coverage, Silero #{vad}, collection #{enabled}",
          c do
-      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      {call, connection, attachment, wire, identity} = call(c.options, c.vad, :llm, true)
       epoch = make_ref()
 
       sequence =
@@ -819,6 +819,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       refute_received {:scribe_commit, ^wire}
       refute_received {:vxpipe_connection_unavailable, _}
+
+      assert_complete_text_trace(connection, identity, [
+        "Writer failure turn 71.",
+        "Writer failure turn 72.",
+        "Writer failure turn 73."
+      ])
     end
   end
 
@@ -830,7 +836,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
          frame_samples: samples
     test "full diagnostic queue preserves calls with Silero #{vad}, collection #{enabled}, #{samples} samples",
          c do
-      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      {call, connection, attachment, wire, identity} = call(c.options, c.vad, :llm, true)
       epoch = make_ref()
 
       sequence =
@@ -902,6 +908,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
         assert output.text == "Acknowledged."
         assert output.correlation_id == input.correlation_id
+        turn_id = input.correlation_id
+
+        assert_receive {:vxpipe_event,
+                        %CallEngine.Event.AgentTurnCompleted{correlation_id: ^turn_id}},
+                       2_000
       end
 
       if held do
@@ -950,6 +961,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       refute_received {:scribe_commit, ^wire}
       refute_received {:vxpipe_connection_unavailable, _}
+
+      assert_complete_text_trace(
+        connection,
+        identity,
+        Enum.map(1..2, &"Continue during queue saturation #{&1}.")
+      )
     end
   end
 
@@ -1057,7 +1074,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @failure failure
     @enabled enabled
     test "configured call continues with diagnostic #{@failure} and enabled #{@enabled}", c do
-      {_call, _connection, attachment, wire, identity} = call(c.options)
+      {_call, connection, attachment, wire, identity} = call(c.options, false, :llm, true)
       epoch = make_ref()
 
       sequence =
@@ -1088,6 +1105,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
         assert output.text == "Acknowledged."
         assert output.correlation_id == input.correlation_id
+        turn_id = input.correlation_id
+
+        assert_receive {:vxpipe_event,
+                        %CallEngine.Event.AgentTurnCompleted{correlation_id: ^turn_id}},
+                       2_000
 
         next_pcm = :binary.copy(<<index, 0>>, 512)
 
@@ -1128,6 +1150,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute_received {:scribe_commit, ^wire}
       refute_received {:vxpipe_connection_unavailable, _}
       GenServer.stop(attachment.room_authority, :shutdown)
+
+      assert_complete_text_trace(
+        connection,
+        identity,
+        Enum.map(1..2, &"Continue the call #{&1}.")
+      )
     end
   end
 
@@ -1135,7 +1163,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @tag matrix: true, storage_failure: failure, vad: vad, diagnostics_enabled: enabled
     test "diagnostic storage #{failure} preserves calls with Silero #{vad} and collection #{enabled}",
          c do
-      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      {call, connection, attachment, wire, identity} = call(c.options, c.vad, :llm, true)
       pace(32)
       epoch = make_ref()
 
@@ -1165,6 +1193,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
         assert output.text == "Acknowledged."
         assert output.correlation_id == input.correlation_id
+        turn_id = input.correlation_id
+
+        assert_receive {:vxpipe_event,
+                        %CallEngine.Event.AgentTurnCompleted{correlation_id: ^turn_id}},
+                       2_000
       end
 
       # Prove both turns completed while the same repository attempt was held.
@@ -1205,6 +1238,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       refute_received {:scribe_commit, _}
       refute_received {:vxpipe_connection_unavailable, _}
+
+      assert_complete_text_trace(
+        connection,
+        identity,
+        Enum.map(1..2, &"Continue during diagnostic storage failure #{&1}.")
+      )
     end
   end
 
@@ -1212,7 +1251,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @tag matrix: true, missing_diagnostic_model: true, vad: vad, diagnostics_enabled: enabled
     test "missing benchmark model preserves call behavior with Silero #{vad} and collection #{enabled}",
          c do
-      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      {call, connection, attachment, wire, identity} = call(c.options, c.vad, :llm, true)
       pace(32)
       epoch = make_ref()
 
@@ -1235,6 +1274,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
         assert output.text == "Acknowledged."
         assert output.correlation_id == input.correlation_id
+        turn_id = input.correlation_id
+
+        assert_receive {:vxpipe_event,
+                        %CallEngine.Event.AgentTurnCompleted{correlation_id: ^turn_id}},
+                       2_000
+
         marker = :binary.copy(<<41 + index, 0>>, 512)
 
         send_audio(
@@ -1280,6 +1325,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       refute_received {:scribe_commit, _}
       refute_received {:vxpipe_connection_unavailable, _}
+
+      assert_complete_text_trace(
+        connection,
+        identity,
+        Enum.map(1..2, &"Continue without the benchmark model #{&1}.")
+      )
     end
   end
 
@@ -1995,6 +2046,80 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  defp assert_complete_text_trace(connection, identity, texts) do
+    # RoomAuthority publishes these events directly. Its DOWN reaches the same
+    # connection after its preceding events; the forwarded close is our barrier.
+    assert_receive {:configured_speech_closed, ^connection}, 2_000
+    assert_receive {:control_trace_agent, ^connection, agent}
+    events = collect_control_events()
+    assert length(events) == length(texts) * 6
+    assert Enum.all?(events, &(is_binary(&1.id) and byte_size(&1.id) > 0))
+    assert length(Enum.uniq_by(events, & &1.id)) == length(events)
+    sequences = Enum.map(events, & &1.sequence)
+    assert Enum.all?(sequences, &(is_integer(&1) and &1 > 0))
+    assert sequences == Enum.sort(Enum.uniq(sequences))
+    turns = Enum.chunk_every(events, 6)
+
+    assert length(Enum.uniq_by(turns, fn [start | _] -> start.correlation_id end)) ==
+             length(texts)
+
+    assert length(Enum.uniq_by(turns, fn [start | _] -> start.command_id end)) == length(texts)
+
+    for {{[start | _] = turn, text}, index} <- Enum.with_index(Enum.zip(turns, texts)) do
+      assert is_binary(start.command_id) and byte_size(start.command_id) > 0
+      assert is_binary(start.correlation_id) and byte_size(start.correlation_id) > 0
+
+      common = %{
+        tenant_id: identity.tenant_id,
+        room_id: identity.room_id,
+        incarnation_id: identity.incarnation_id,
+        connection_id: identity.connection_id,
+        command_id: start.command_id,
+        correlation_id: start.correlation_id,
+        schema_version: 1
+      }
+
+      human = identity.participant_id
+
+      expected = [
+        {CallEngine.Event.ParticipantTurnStarted, %{participant_id: human, modality: :audio}},
+        {ParticipantTranscription,
+         %{participant_id: human, text: text, final: false, provider_turn_index: index}},
+        {ParticipantTranscription,
+         %{participant_id: human, text: text, final: true, provider_turn_index: index}},
+        {CallEngine.Event.ParticipantTurnCompleted,
+         %{participant_id: human, modality: :audio, endpointing: nil}},
+        {CallEngine.Event.TextOutput,
+         %{
+           participant_id: agent,
+           source_participant_id: human,
+           text: "Acknowledged.",
+           aggregated_by: :sentence,
+           will_be_spoken: false,
+           agent_mode: :speaker
+         }},
+        {CallEngine.Event.AgentTurnCompleted,
+         %{participant_id: agent, source_participant_id: human, outcome: :completed}}
+      ]
+
+      for {event, {module, fields}} <- Enum.zip(turn, expected) do
+        assert event.__struct__ == module
+        assert %DateTime{} = event.occurred_at
+
+        assert event |> Map.from_struct() |> Map.drop([:id, :sequence, :occurred_at]) ==
+                 Map.merge(common, fields)
+      end
+    end
+  end
+
+  defp collect_control_events do
+    receive do
+      {:configured_public_event, event} -> [event | collect_control_events()]
+    after
+      0 -> []
+    end
+  end
+
   defp writer_failure_turn(c, attachment, wire, identity, epoch, sequence, marker) do
     pcm = :binary.copy(<<marker, 0>>, 512)
     pace(32)
@@ -2012,6 +2137,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
     assert output.text == "Acknowledged."
     assert output.correlation_id == input.correlation_id
+    turn_id = input.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.AgentTurnCompleted{correlation_id: ^turn_id}},
+                   2_000
+
     %{turn_id: input.correlation_id, pcm: pcm}
   end
 
@@ -2177,7 +2308,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
-  defp call(options, vad \\ false, scenario \\ :llm) do
+  defp call(options, vad \\ false, scenario \\ :llm, audit_events? \\ false) do
     routing? = scenario == :transfer
     input_only? = scenario == :humans
 
@@ -2367,8 +2498,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
            }}
         )
       else
-        start_supervised!({SpeechConnection, command: command, observer: self(), output: sink})
+        start_supervised!(
+          {SpeechConnection,
+           command: command, observer: self(), output: sink, audit_events?: audit_events?}
+        )
       end
+
+    if audit_events? do
+      agent = Map.fetch!(claim.call.plan.participants, claim.call.plan.entry_receiver)
+      send(self(), {:control_trace_agent, connection, agent.participant_id})
+    end
 
     assert {:ok, attachment} = SpeechConnection.attach(connection)
 
