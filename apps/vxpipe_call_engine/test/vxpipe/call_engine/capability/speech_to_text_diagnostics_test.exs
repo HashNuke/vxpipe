@@ -208,6 +208,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
 
     handoff = handoff(capability)
     assert :ok = attach(capability, generation, frame, handoff)
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
 
     assert {:ok, candidate} =
              Authority.preview_presence(
@@ -227,7 +229,265 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     assert {:ok, %{allocation_generation: ^generation}} = SpeechToText.input_binding(capability)
     assert :ok = SpeechToText.push_audio(capability, frame)
     assert_receive {:probe_input, _}
-    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:audio, _}, _}
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:source_ready, _, _, _, _, _, _, _, _}, _}
+  end
+
+  test "source discovery reports only the next accepted frame without retaining audio" do
+    {capability, generation, frame} = capability(:ok)
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    assert_receive {:probe_input, _}
+    assert_receive {:vxpipe_diagnostic_capture, _, _, packet, _} = message
+
+    assert {:source_ready, ^generation, 0, track, epoch, :linear16, 16_000, 1, :benchmark_only} =
+             packet
+
+    assert track == frame.track_id and epoch == frame.source_epoch
+    assert {:ok, ^packet, charge} = CaptureHandoff.message(probe, message)
+    CaptureHandoff.release(probe, charge, :processed)
+    assert :ok = SpeechToText.push_audio(capability, %{frame | sequence_number: 2})
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "discovery excludes non-LLM agents and rejected audio" do
+    {capability, _generation, frame} = capability({:error, :busy})
+    probe = handoff(capability)
+
+    assert {:error, :unsupported_agent} =
+             SpeechToText.discover_diagnostics(capability, nil, probe)
+
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert {:error, :unavailable} = SpeechToText.push_audio(capability, frame)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "revoked and policy-stale discovery cannot emit a source" do
+    {capability, _generation, frame} = capability(:ok)
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    CaptureHandoff.close(probe)
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    next = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), next)
+    assert :ok = Enforcer.apply(capability, policy(1, ["human"]), 1_000)
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "discovery has one pending slot and expired requests cannot affect replacements" do
+    {capability, _generation, frame} = capability(:ok)
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    token = :sys.get_state(capability).diagnostic_probe.token
+
+    assert {:error, :unavailable} =
+             SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
+
+    send(capability, {:diagnostic_probe_expired, token})
+    assert :sys.get_state(capability).diagnostic_probe == nil
+    refute CaptureHandoff.current?(probe)
+    next = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), next)
+    send(capability, {:diagnostic_probe_expired, token})
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:source_ready, _, _, _, _, _, _, _, _}, _}
+    assert CaptureHandoff.current?(next)
+  end
+
+  test "a delayed expiry message cannot let an expired request observe accepted audio" do
+    {capability, _generation, frame} = capability(:ok)
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+
+    :sys.replace_state(capability, fn state ->
+      %{
+        state
+        | diagnostic_probe: %{
+            state.diagnostic_probe
+            | deadline: System.monotonic_time(:millisecond) - 1
+          }
+      }
+    end)
+
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    assert_receive {:probe_input, _}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    refute CaptureHandoff.current?(probe)
+  end
+
+  test "prepared policy adoption does not resurrect a consumed discovery slot" do
+    alias Vxpipe.CallEngine.ResolvedCallPlan
+    alias Vxpipe.CallEngine.ResolvedCallPlan.{MediaPolicy, Participant}
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    incarnation = "discovery-review-#{System.unique_integer([:positive])}"
+
+    participants = %{
+      "human" =>
+        struct(Participant, participant_id: "human", while_present: MediaPolicy.inherit()),
+      "restrictor" =>
+        struct(Participant,
+          participant_id: "restrictor",
+          while_present: %{MediaPolicy.inherit() | transcript_routes: %{}}
+        )
+    }
+
+    plan =
+      struct(ResolvedCallPlan, media_policy: MediaPolicy.inherit(), participants: participants)
+
+    authority =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Authority, plan: plan, incarnation_id: incarnation},
+          significant: false
+        )
+      )
+
+    assert {:ok, base} = Authority.admit(authority, "human")
+
+    {capability, _generation, frame} =
+      capability(:ok, initial_policy: base, incarnation_id: incarnation)
+
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(base.present_participant_ids, "restrictor")
+             )
+
+    assert {:ok, %{change: :replace, resources: [resource]}} =
+             SpeechToText.prepare_policy(capability, candidate,
+               owner: self(),
+               attempt_id: "review",
+               deadline_ms: System.monotonic_time(:millisecond) + 5_000
+             )
+
+    assert_receive {:probe_initializing, _, _}
+    await_prepared_connection(resource)
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:source_ready, _, _, _, _, _, _, _, _}, _}
+    assert :sys.get_state(capability).diagnostic_probe == nil
+    assert :ok = Enforcer.apply(capability, candidate.snapshot, 1_000)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
+  end
+
+  defp await_prepared_connection(resource) do
+    collector =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Vxpipe.CallEngine.Readiness.Collector,
+           owner: self(),
+           incarnation_id: "prepared-stt-test",
+           attempt_id: "prepared-stt-ready",
+           resources: [resource],
+           deadline_ms: System.monotonic_time(:millisecond) + 1_000},
+          id: {:prepared_stt_collector, resource.generation}
+        )
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    stop_supervised!({:prepared_stt_collector, resource.generation})
+  end
+
+  test "retirement timeout does not strand a canceled discovery slot" do
+    alias Vxpipe.CallEngine.ResolvedCallPlan
+    alias Vxpipe.CallEngine.ResolvedCallPlan.{MediaPolicy, Participant}
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    incarnation = "discovery-retire-review-#{System.unique_integer([:positive])}"
+
+    participants = %{
+      "human" =>
+        struct(Participant, participant_id: "human", while_present: MediaPolicy.inherit()),
+      "restrictor" =>
+        struct(Participant,
+          participant_id: "restrictor",
+          while_present: %{MediaPolicy.inherit() | transcript_routes: %{}}
+        )
+    }
+
+    plan =
+      struct(ResolvedCallPlan, media_policy: MediaPolicy.inherit(), participants: participants)
+
+    authority =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Authority, plan: plan, incarnation_id: incarnation},
+          significant: false
+        )
+      )
+
+    assert {:ok, base} = Authority.admit(authority, "human")
+
+    {capability, generation, _frame} =
+      capability(:ok, initial_policy: base, incarnation_id: incarnation)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(base.present_participant_ids, "restrictor")
+             )
+
+    assert {:ok, %{change: :replace, resources: [resource]}} =
+             SpeechToText.prepare_policy(capability, candidate,
+               owner: self(),
+               attempt_id: "retire-review",
+               deadline_ms: System.monotonic_time(:millisecond) + 500
+             )
+
+    assert_receive {:probe_initializing, _, _}
+    await_prepared_connection(resource)
+    state = :sys.get_state(capability)
+    control = state.scope.control
+    parent = self()
+
+    hook = fn debug_state, event, _process_state ->
+      case event do
+        {:in, {:"$gen_call", _from, {:close, %{generation: ^generation}, _reason, _deadline}}} ->
+          send(parent, :retirement_blocked)
+
+          receive do
+            :release_retirement -> :ok
+          after
+            2_000 -> :ok
+          end
+
+        _ ->
+          :ok
+      end
+
+      debug_state
+    end
+
+    assert :ok = :sys.install(control, {hook, 0})
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    tasks = start_supervised!({Task.Supervisor, name: __MODULE__.Tasks})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        Enforcer.apply(capability, candidate.snapshot, 1_500)
+      end)
+
+    assert_receive :retirement_blocked, 1_000
+    Process.send_after(control, :release_retirement, 600)
+    assert {:error, :policy_not_ready} = Task.await(task, 1_500)
+    assert {:ok, %{allocation_generation: ^generation}} = SpeechToText.input_binding(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
+  end
+
+  defp llm_agent do
+    struct(Vxpipe.CallEngine.ResolvedCallPlan.Participant,
+      kind: :agent,
+      capabilities: %Vxpipe.CallEngine.ResolvedCallPlan.Capabilities{
+        model_inference:
+          struct(Vxpipe.CallEngine.CallSpec.CapabilitySelection, kind: :model_inference)
+      }
+    )
   end
 
   defp attach(capability, generation, frame, handoff),

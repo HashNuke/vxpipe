@@ -20,21 +20,24 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   @doc "Coordinator-only lifecycle operation; never invoke on the voice admission path."
   def start_source(options, workers, runtime) do
     {agent, options} = Keyword.pop(options, :agent)
-    start_eligible_source(agent, options, workers, runtime)
+
+    if eligible_agent?(agent),
+      do: start_eligible_source(options, workers, runtime),
+      else: {:error, :unsupported_agent}
   end
 
-  defp start_eligible_source(
-         %Participant{
-           kind: :agent,
-           capabilities: %Capabilities{
-             model_inference: %CapabilitySelection{kind: :model_inference},
-             speech_to_speech: nil
-           }
-         },
-         options,
-         workers,
-         runtime
-       ) do
+  def eligible_agent?(%Participant{
+        kind: :agent,
+        capabilities: %Capabilities{
+          model_inference: %CapabilitySelection{kind: :model_inference},
+          speech_to_speech: nil
+        }
+      }),
+      do: true
+
+  def eligible_agent?(_agent), do: false
+
+  defp start_eligible_source(options, workers, runtime) do
     case Keyword.get(options, :mode, :benchmark_only) do
       :operational_reuse ->
         DynamicSupervisor.start_child(
@@ -51,9 +54,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   catch
     :exit, _ -> {:error, :unavailable}
   end
-
-  defp start_eligible_source(_agent, _options, _workers, _runtime),
-    do: {:error, :unsupported_agent}
 
   defp start_benchmark(options, workers, runtime) do
     case ActivityRuntime.diagnostic_admission(runtime) do

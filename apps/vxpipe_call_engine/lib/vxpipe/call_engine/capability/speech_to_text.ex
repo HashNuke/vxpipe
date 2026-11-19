@@ -3,6 +3,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.Diagnostics.{SourceDiscovery, SourceSupervisor}
+
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
   alias Vxpipe.CallEngine.Capability.SpeechToText.{PolicyPreparation, PrivateAllocation, Usage}
@@ -38,6 +40,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   def input_binding(capability, resource) do
     GenServer.call(capability, {:input_binding, resource}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc "Coordinator request: announce one future accepted source; never wait for audio."
+  def discover_diagnostics(capability, agent, handoff) do
+    if SourceSupervisor.eligible_agent?(agent),
+      do: GenServer.call(capability, {:discover_diagnostics, handoff}, @call_timeout),
+      else: {:error, :unsupported_agent}
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -135,6 +146,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def handle_call({:input_binding, resource}, _from, state),
     do: {:reply, PolicyPreparation.input_binding(state, resource), state}
 
+  def handle_call({:discover_diagnostics, handoff}, _from, state) do
+    case SourceDiscovery.arm(state, handoff) do
+      {:ok, next} -> {:reply, :ok, next}
+      error -> {:reply, error, state}
+    end
+  end
+
   def handle_call({:attach_diagnostics, generation, source, handoff}, _from, state) do
     with nil <- state.private_allocation,
          %Snapshot{} <- state.policy,
@@ -152,7 +170,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   def handle_call({:push_audio, frame}, _from, state) do
     case State.send_audio(state, frame) do
-      :ok -> {:reply, :ok, Usage.accept_input(state)}
+      :ok -> {:reply, :ok, state |> SourceDiscovery.accept(frame) |> Usage.accept_input()}
       {:error, _reason} = error -> {:reply, error, state}
     end
   end
@@ -270,9 +288,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
       :ok ->
         acknowledge_audio(ingress, reference, frame.sequence_number, :ok)
-        {:noreply, Usage.accept_input(state)}
+        {:noreply, state |> SourceDiscovery.accept(frame) |> Usage.accept_input()}
     end
   end
+
+  def handle_info({:diagnostic_probe_expired, token}, state),
+    do: {:noreply, SourceDiscovery.expire(state, token)}
 
   def handle_info(_message, state), do: {:noreply, state}
 

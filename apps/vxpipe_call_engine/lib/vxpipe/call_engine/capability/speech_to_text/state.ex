@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Diagnostics.AudioTap
+  alias Vxpipe.CallEngine.Diagnostics.{AudioTap, SourceDiscovery}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Capability.SpeechToText.PrivateAllocation
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   defstruct @enforce_keys ++
               [
                 diagnostic_tap: nil,
+                diagnostic_probe: nil,
                 activity_agent_id: nil,
                 readiness_generation: nil,
                 readiness_status: :preparing,
@@ -270,6 +271,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         state
         | usage: nil,
           diagnostic_tap: nil,
+          diagnostic_probe: nil,
           pending_policy: nil,
           turn_indexes: %{},
           next_turn_index: 0
@@ -331,6 +333,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
     case Session.retire(session, deadline) do
       :ok ->
+        state = SourceDiscovery.cancel(state)
+
         retired = %{
           state
           | session: nil,
@@ -346,10 +350,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     end
   end
 
-  def retire_active(%__MODULE__{} = state, _deadline), do: {:ok, state}
+  def retire_active(%__MODULE__{} = state, _deadline), do: {:ok, SourceDiscovery.cancel(state)}
 
   @spec close(t()) :: t()
   def close(%__MODULE__{session: session} = state) when not is_nil(session) do
+    state = SourceDiscovery.cancel(state)
     AudioTap.close(state.diagnostic_tap)
     _ = Session.close(session)
 
@@ -357,7 +362,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     |> invalidate_readiness()
   end
 
-  def close(%__MODULE__{} = state), do: state
+  def close(%__MODULE__{} = state), do: SourceDiscovery.cancel(state)
 
   @spec readiness(t()) :: {:ok, Resource.t(), :preparing | :ready | :failed}
   def readiness(%__MODULE__{} = state) do

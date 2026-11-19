@@ -848,3 +848,20 @@ timeout (also passing1/0 in isolation). Static gates and Lean pass. Astra xhigh
 review is clean with27 independent tests. A full umbrella run is still in progress.
 Collector correlation/persistence, automatic attachment and configured-call
 acceptance remain open; combined C tasks are not yet complete.
+
+
+## Checkpoint C prospective source discovery — 2026-11-19
+
+An LLM-only coordinator request can now discover the next provider-accepted source
+without copying its audio. Each capability retains one request for at most250ms;
+settings, ownership, allocation and global-policy fences precede a bounded source
+announcement. The packet carries exact track/epoch, media format and known-wrapper
+inference mode. Discovery does not wait for worker/model readiness or change audio
+admission. Prepared sessions do not inherit requests; successful retirement cancels
+them, failed retirement preserves their expiry, and discarded preparation preserves
+active discovery. Both reviewer-proved lifecycle regressions are retained.
+
+Affected tests156/0, static gates and Lean pass. Astra xhigh final re-review is clean
+(six independent probes). The earlier umbrella run has passed through Persistence
+but predates this checkpoint. Automatic room enumeration/attachment, collection,
+persistence and configured-call acceptance remain open; C is still incomplete.
