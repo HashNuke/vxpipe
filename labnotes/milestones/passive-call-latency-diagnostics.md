@@ -355,7 +355,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
   preserve only pre-disable summaries and distinguish partially observed turns.
 - [ ] Red-test saturation, observer crash/hang, absent model, DB failure and teardown;
   compare identical provider bytes, commits and production control traces on/off.
-- [ ] Capture matching text/audio landmarks without intercepting output or delaying
+- [x] Capture matching text/audio landmarks without intercepting output or delaying
   model dispatch; handle silent/tool-only responses, interruption and multi-agent routing.
 - [x] Demonstrate a configured Scribe fixture call persists the report, including
   late confirmation after turn end and call termination while diagnostics drain.
@@ -1311,3 +1311,20 @@ independent positive-control playback probe passes and its final review is clean
 Root static gates pass. These are boundary fixtures for existing behavior; the
 combined C landmark task remains open for actual configured routing through
 matching text/audio. No runtime implementation, live provider or deployment changed.
+
+## Checkpoint C configured routing acceptance — 2026-11-19
+
+A persisted configured call now exercises synthetic Scribe input, an actual model
+transfer tool call, the specialist's response text, synthetic TTS and acknowledged
+playback. The caller keeps its STT session; the agent-scoped diagnostic run retires
+and normal discovery attaches a new run while caller audio continues. The second
+input's correlation and response command match its persisted text/audio landmarks.
+Audio start remains absent before egress acknowledgement, and the tool-only source
+turn has no fabricated response landmarks after shutdown drain.
+
+All six configured diagnostic tests and root static gates pass. Independent Astra
+review also passes the routing case and reproduces an expected failure when a
+mutation emits playback-start before acknowledgement. Together with the prior
+response-boundary checkpoint this completes the C matching-landmarks task.
+This checkpoint changes tests and documentation only. No live provider, Telnyx
+code or deployment changed.

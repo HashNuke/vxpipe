@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
   @behaviour Vxpipe.CallEngine.Media.ConnectionReadiness
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Media.Ingress
+  alias Vxpipe.CallEngine.Media.{Ingress, OutputSink}
   alias Vxpipe.CallEngine.Readiness.Resource
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
@@ -12,6 +12,25 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
   def attachment(connection), do: GenServer.call(connection, :attachment, 5_000)
   def readiness(connection), do: GenServer.call(connection, :readiness, 1_000)
   def send_text(connection, command), do: GenServer.call(connection, {:send_text, command}, 5_000)
+
+  def hold(binding, scope), do: OutputSink.hold(binding.output, scope.generation)
+  def recover(binding, scope), do: hold(binding, scope)
+  def release(binding, scope, _demand), do: OutputSink.release(binding.output, scope.generation)
+
+  @impl true
+  def prepare_candidate(binding, _candidate, demand, options) do
+    if demand.speech_to_text? do
+      provider = Keyword.fetch!(options, :speech_to_text)
+      ingress = binding.attachment.media_ingress
+
+      with :ok <- Ingress.prepare_track(ingress, binding.track, provider),
+           {:ok, resources} <- Ingress.readiness_resources(ingress, provider),
+           do: {:ok, [binding.resource | resources], binding.track, []}
+    else
+      track = if demand.audio_input?, do: binding.track
+      {:ok, [binding.resource], track, []}
+    end
+  end
 
   @impl true
   def prepare_binding(binding, _policy, demand) do
@@ -58,6 +77,15 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
          generation: make_ref(),
          attachment: nil,
          output: Keyword.get(options, :output),
+         policy_subscription: [
+           id: command.connection_id <> ":room-output",
+           tenant_id: command.tenant_id,
+           room_id: command.room_id,
+           incarnation_id: command.incarnation_id,
+           recipient_participant_id: command.participant_id,
+           subscriber: self(),
+           mode: :mix_minus
+         ],
          track: %{
            track_id: "configured-speech",
            codec: :linear16,

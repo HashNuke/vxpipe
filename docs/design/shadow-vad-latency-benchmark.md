@@ -1,6 +1,6 @@
 # Passive speech-end latency benchmark
 
-Status: researched design, not implemented. 2026-11-19. Implementation tasks live
+Status: implementation in progress. 2026-11-19. Remaining acceptance tasks live
 in [Passive call latency diagnostics and readable timelines](../../labnotes/milestones/passive-call-latency-diagnostics.md).
 
 ## Decision
@@ -586,8 +586,12 @@ factory. A configured Scribe fixture now exercises the real socket callback,
 acknowledged profile, LLM room, pinned Silero and database repository: a prospective
 partial first turn is persisted while inference is held, revised after confirmation,
 followed by a fully observed turn with available latency and matching response-text
-timing, and reread after shutdown. This is fixture evidence; response-audio timing,
-per-turn finalization policy and full on/off/live transport acceptance remain open.
+timing, and reread after shutdown. A separate configured transfer fixture preserves
+that caller's STT session while switching agents, then matches the specialist's
+text and acknowledged audio to the next input turn. Before playback acknowledgement,
+the persisted row has no audio-start landmark. Tool-only transfer output does not
+fabricate response timing. These are synthetic-provider fixtures; full failure/on-off,
+accuracy, load and live transport acceptance remain open.
 
 Finalization uses explicit writer acknowledgments, not a transient zero-pending
 counter snapshot. The observed-turn count includes storage-admission failures.

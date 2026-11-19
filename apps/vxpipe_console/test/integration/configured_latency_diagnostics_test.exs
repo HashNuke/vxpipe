@@ -37,6 +37,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   setup tags do
     parent = self()
     matrix? = Map.get(tags, :matrix, false)
+    routing? = Map.get(tags, :routing, false)
     enabled = Map.get(tags, :diagnostics_enabled, true)
     if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
@@ -78,6 +79,31 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           ]
         }
       )
+
+    runtime =
+      if routing? do
+        runtime
+        |> Keyword.update!(
+          :agent_runtime,
+          &Keyword.put(
+            &1,
+            :fixture,
+            {CallEngine.TestSelectiveAgentRuntimeModelProvider, [owner: parent]}
+          )
+        )
+        |> Keyword.put(:text_to_speech,
+          providers: %{
+            Vxpipe.Providers.Deepgram.TTSSession => [
+              enabled: true,
+              wire_module: CallEngine.TestTextToSpeechTransport,
+              wire_options: [observer: parent, ready_on_start: true],
+              maximum_requests: 2
+            ]
+          }
+        )
+      else
+        runtime
+      end
 
     Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, runtime)
 
@@ -519,6 +545,132 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  @tag matrix: true, routing: true
+  test "configured agent transfer preserves input identity through text and acknowledged audio",
+       c do
+    {call, connection, attachment, wire, identity} = call(c.options, false, true)
+    assert_receive {:test_tts_transport_started, source_voice, _}, 5_000
+    epoch = make_ref()
+    sequence = discover_with_audio(attachment, identity, epoch, wire)
+    await(fn -> SourceCoordinator.status(__MODULE__.Coordinator).active_sources == 1 end)
+    emit_scribe_turn(wire, "Please transfer me.")
+    assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = first_input}, 2_000
+    assert_receive {:test_agent_runtime_stream, source_model, _}, 2_000
+
+    {:ok, transfer} =
+      Vxpipe.AgentRuntime.ToolCall.new(
+        id: "timing-transfer",
+        name: "transfer",
+        arguments: %{"destination" => "specialist"}
+      )
+
+    {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "", tool_calls: [transfer])
+    send(source_model, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.ToolCallCompleted{tool_call_id: "timing-transfer"}},
+                   5_000
+
+    assert_receive {:test_tts_transport_started, destination_voice, _}, 5_000
+    refute source_voice == destination_voice
+    # Routing changes the agent, while the caller retains its STT session.
+    assert SpeechConnection.attachment(connection).media_ingress == attachment.media_ingress
+    refute_received {:scribe_started, _}
+    # The agent-scoped diagnostic run retires on routing; ongoing caller audio
+    # lets discovery attach a new run without replacing the STT session.
+    _ = discover_with_audio(attachment, identity, epoch, wire, sequence)
+    emit_scribe_turn(wire, "Please answer now.")
+    assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = second_input}, 2_000
+    refute second_input.correlation_id == first_input.correlation_id
+    {destination_model, request} = specialist_request()
+    assert hd(request.messages).content =~ "Handle specialist requests."
+
+    text =
+      JSON.encode!(%{
+        type: "participant_message",
+        participant_id: "agent",
+        agent_mode: "speaker",
+        message: "The specialist answers."
+      })
+
+    {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: text)
+    send(destination_model, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+    assert output.correlation_id == second_input.correlation_id
+    assert output.text == "The specialist answers."
+    assert_receive {:test_tts_control, ^destination_voice, _}, 2_000
+
+    CallEngine.TestTextToSpeechTransport.deliver_control(
+      destination_voice,
+      JSON.encode!(%{type: "SpeechStarted", speech_id: "diagnostic-spoken"})
+    )
+
+    CallEngine.TestTextToSpeechTransport.deliver_audio(destination_voice, <<1, 0, 2, 0>>)
+    correlation = second_input.correlation_id
+    assert_receive {:test_audio_output, sink, %{correlation_id: ^correlation} = audio}, 2_000
+    assert audio.command_id == output.command_id
+
+    text_only =
+      await(fn ->
+        case diagnostic_turn(call, second_input.correlation_id) do
+          %{landmarks_us: %{first_response_text: text}} = row when is_integer(text) -> row
+          _ -> nil
+        end
+      end)
+
+    assert is_integer(text_only.landmarks_us.first_response_text)
+    refute Map.has_key?(text_only.landmarks_us, :first_audio_started)
+    :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_event, %CallEngine.Event.AgentSpeechStarted{} = started}, 2_000
+    assert started.correlation_id == second_input.correlation_id
+    assert started.command_id == output.command_id
+
+    row =
+      await(fn ->
+        case diagnostic_turn(call, second_input.correlation_id) do
+          %{landmarks_us: %{first_audio_started: started}} = row when is_integer(started) -> row
+          _ -> nil
+        end
+      end)
+
+    assert row.response_turn_id == output.command_id
+    assert is_integer(row.landmarks_us.first_response_text)
+    assert row.landmarks_us.first_audio_started >= row.landmarks_us.first_response_text
+
+    CallEngine.TestTextToSpeechTransport.deliver_control(
+      destination_voice,
+      JSON.encode!(%{type: "SpeechMetadata", speech_id: "diagnostic-spoken"})
+    )
+
+    assert_receive {:test_audio_output_finish, ^sink, ^correlation}, 2_000
+    :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
+    GenServer.stop(attachment.room_authority, :shutdown)
+    await_diagnostic_drain()
+    tool_only = diagnostic_turn(call, first_input.correlation_id)
+    assert tool_only.response_turn_id == nil
+    refute Map.has_key?(tool_only.landmarks_us, :first_response_text)
+    refute Map.has_key?(tool_only.landmarks_us, :first_audio_started)
+  end
+
+  defp diagnostic_turn(call, turn_id) do
+    {:ok, %{entries: runs}} = LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+    Enum.find_value(runs, fn %{run: run} ->
+      {:ok, turns} = LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
+      Enum.find(turns, &(&1.turn_id == turn_id))
+    end)
+  end
+
+  defp emit_scribe_turn(wire, text) do
+    for {kind, value} <- [
+          {"partial_transcript", text},
+          {"committed_transcript", text},
+          {"partial_transcript", ""}
+        ] do
+      :ok = Wire.deliver_frame(wire, JSON.encode!(%{"message_type" => kind, "text" => value}))
+    end
+  end
+
   defp change_diagnostics(enabled, revision) do
     assert {:ok, %{enabled: ^enabled, revision: next}} =
              DiagnosticsSettingsStore.update(operator(), enabled, revision)
@@ -546,7 +698,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
-  defp call(options, vad \\ false) do
+  defp call(options, vad \\ false, routing? \\ false) do
     {:ok, tenant, key} = Administration.bootstrap_tenant("Diagnostic fixture", [:calls], options)
     {:ok, actor} = Calls.authenticate(tenant.key, key.secret, :calls, options)
 
@@ -587,6 +739,35 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         }
       }
     }
+
+    source =
+      if routing? do
+        assert {:ok, _} =
+                 ProviderCredentials.provision(
+                   :platform,
+                   "deepgram",
+                   "diagnostic-tts",
+                   "api_key",
+                   %{"api_key" => "synthetic"},
+                   options
+                 )
+
+        source
+        |> put_in([:defaults, :capabilities, :text_to_speech], %{
+          provider: "deepgram",
+          model: "flux-test-voice",
+          credential_name: "diagnostic-tts",
+          options: %{encoding: "linear16", sample_rate: 48_000}
+        })
+        |> put_in([:participants, "assistant", :transfers], ["specialist"])
+        |> put_in([:participants, "specialist"], %{
+          type: "agent",
+          prompt: "Handle specialist requests.",
+          first_message: %{mode: "wait_for_input"}
+        })
+      else
+        source
+      end
 
     assert {:ok, draft} = Calls.save_call_spec(tenant.key, source, options)
     assert draft.validation_errors == []
@@ -630,7 +811,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                deadline: DateTime.add(DateTime.utc_now(), 20, :second)
              )
 
-    connection = start_supervised!({SpeechConnection, command: command, observer: self()})
+    sink = if routing?, do: start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+
+    connection =
+      start_supervised!({SpeechConnection, command: command, observer: self(), output: sink})
+
     assert {:ok, attachment} = SpeechConnection.attach(connection)
 
     on_exit(fn ->
@@ -655,6 +840,32 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
     assert_receive {:configured_speech_ready, ^connection}, 5_000
     {claim.call, connection, SpeechConnection.attachment(connection), wire, command}
+  end
+
+  defp specialist_request do
+    deadline = System.monotonic_time(:millisecond) + 2_000
+    specialist_request(deadline)
+  end
+
+  defp specialist_request(deadline) do
+    receive do
+      {:test_agent_runtime_stream, provider, request} ->
+        if hd(request.messages).content =~ "Handle specialist requests." do
+          {provider, request}
+        else
+          {:ok, response} =
+            Vxpipe.AgentRuntime.ModelResponse.new(
+              text:
+                ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+            )
+
+          send(provider, {:test_agent_runtime_response, {:ok, response}})
+          specialist_request(deadline)
+        end
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        flunk("specialist did not receive the input")
+    end
   end
 
   defp send_audio(attachment, identity, epoch, sequence, timestamp, pcm) do
