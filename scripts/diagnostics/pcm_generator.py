@@ -24,7 +24,8 @@ def generate(pcm, inputs, frames, write, *, clock=time.monotonic_ns, sleep=time.
         raise ValueError('invalid bounded 16 kHz PCM workload')
     manifest = dict(inputs=inputs, frames_per_input=frames, sample_rate=16000,
                     samples_per_frame=512, fixture_sha256=hashlib.sha256(pcm).hexdigest(),
-                    generator_cpu_affinity=affinity, pacing_spin_ns=spin_ns)
+                    generator_cpu_affinity=affinity, pacing_spin_ns=spin_ns,
+                    input_encoding='first-sample-index' if inputs > 1 else 'fixture')
     write(b'\0' + json.dumps(manifest).encode())
     start = clock()
     cpu_start = time.process_time()
@@ -39,7 +40,10 @@ def generate(pcm, inputs, frames, write, *, clock=time.monotonic_ns, sleep=time.
             deadline = start + sequence * PERIOD_NS + PERIOD_NS * index // inputs
             wait_until(deadline, clock=clock, sleep=sleep, spin_ns=spin_ns)
             before_write = clock()
-            write(b'\1' + struct.pack('>HI', index, sequence) + chunk)
+            # Distinguish sources without changing frame size or pacing. These
+            # workload fixtures are not acoustic-accuracy ground truth.
+            payload = struct.pack('<h', index + 1) + chunk[2:] if inputs > 1 else chunk
+            write(b'\1' + struct.pack('>HI', index, sequence) + payload)
             after_write = clock()
             wake_lateness.append(max(0, before_write - deadline))
             write_durations.append(after_write - before_write)

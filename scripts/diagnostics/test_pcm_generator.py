@@ -28,6 +28,17 @@ class PCMGeneratorTest(unittest.TestCase):
         self.assertTrue(all(len(p[7:]) == 1024 for _, p in audio))
         self.assertEqual(packets[-1][0], 96_000_000)
 
+    def test_concurrent_inputs_have_distinct_audio_for_cross_source_checks(self):
+        packets = self.run_generator(inputs=2, frames=3)
+        audio = [packet for _, packet in packets if packet[0] == 1]
+        for sequence in range(3):
+            first, second = audio[2 * sequence:2 * sequence + 2]
+            self.assertEqual(first[7:9], b'\x01\x00')
+            self.assertEqual(second[7:9], b'\x02\x00')
+            self.assertEqual(first[9:], second[9:])
+            self.assertNotEqual(first[7:], second[7:])
+        self.assertEqual(json.loads(packets[0][1][1:])['input_encoding'], 'first-sample-index')
+
     def test_blocked_write_lateness_is_reported_without_shifting_deadlines(self):
         packets = self.run_generator(inputs=1, frames=3, delay=40_000_000)
         report = json.loads(packets[-1][1][1:])

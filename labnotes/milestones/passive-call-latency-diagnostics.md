@@ -686,7 +686,10 @@ four-case run reproducible with bounded lifetime, owned-unit cleanup, resource
 samples and source provenance. The
 [committed-write workload mode](../20261119-2219-diagnostics-committed-workload.md)
 uses disposable databases with independent committed-row checks, avoiding the
-sandbox's omitted commit costs. Full paired-load acceptance remains unchecked.
+sandbox's omitted commit costs. The
+[concurrent workload checkpoint](../20261119-2232-diagnostics-concurrent-workload.md)
+extends this smoke to independently checked room inputs with source-distinct PCM.
+Full paired-load acceptance remains unchecked.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

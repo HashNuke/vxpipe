@@ -120,7 +120,12 @@ must be at most max(100 ms, 10% of disabled p95). Report diagnostic attachment/m
 readiness and coverage separately; diagnostic readiness must never gate STT.
 
 Deliver 512-sample 16 kHz frames every 32 ms per input using an absolute schedule,
-with phases staggered across participants. Use deterministic repeating speech,
+with phases staggered across participants. In the synthetic multi-input workload,
+replace the first 16-bit sample of each frame with the input index plus one and
+record that encoding in the manifest; retain the other 511 samples. This makes
+source fingerprints distinct for routing/inference checks. It is not labelled
+acoustic-accuracy input. Single-input fixture samples remain unchanged.
+Use deterministic repeating speech,
 silence and pause/resume PCM with fixed provider settlements and response events.
 Record fixture hash and schedule. These fixtures test workload, not acoustic
 accuracy. Generate at least ten completed canonical turns per input per measured
@@ -158,6 +163,11 @@ mandatory. The four-case smoke watchdog is available with:
 ```shell
 python3 scripts/diagnostics/smoke_runner.py --committed-writes --output /tmp/diagnostics-smoke-unique
 ```
+
+`--rooms N` exercises N concurrent one-human rooms (1–16); each must deliver all
+64 frames and two complete turns. This is still a short functional smoke, not a
+full matrix cell or evidence that all allowed counts have passed. The two-human
+per-room topology is not yet supported by this runner.
 
 `--committed-writes` creates a separate migrated database for each of the four
 cases and verifies committed rows through an independent connection. Normal ExUnit

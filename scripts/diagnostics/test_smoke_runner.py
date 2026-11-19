@@ -125,6 +125,17 @@ class SmokeRunnerTest(unittest.TestCase):
         evidence[0]['persistence'] = 'sandbox'
         self.assertFalse(smoke_complete(evidence, samples, committed_writes=True))
 
+    def test_requested_concurrency_requires_the_complete_frame_workload(self):
+        evidence = reports()
+        samples = [dict(beams=[dict(rss_kib=100)])]
+        self.assertFalse(smoke_complete(evidence, samples, rooms=2))
+        for report in evidence:
+            report['rooms'] = 2
+            report['generator']['frames_sent'] = 128
+        self.assertTrue(smoke_complete(evidence, samples, rooms=2))
+        evidence[0]['generator']['frames_sent'] = 64
+        self.assertFalse(smoke_complete(evidence, samples, rooms=2))
+
     def test_sampler_failure_still_cleans_owned_units_and_cannot_pass(self):
         owned = OwnedUnits(RUN)
         unit = f'vxpipe-diagnostic-generator-{RUN}-{LEAF}.service'
