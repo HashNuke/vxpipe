@@ -630,9 +630,9 @@ Open tasks (unchanged in scope; verify on the room-service path):
   preserve only pre-disable summaries and distinguish partially observed turns.
 - [ ] Red-test saturation, observer crash/hang, absent model, DB failure and teardown;
   compare identical provider bytes, commits and production control traces on/off.
-- [ ] Capture matching text/audio landmarks without intercepting output or delaying
+- [x] Capture matching text/audio landmarks without intercepting output or delaying
   model dispatch; handle silent/tool-only responses, interruption and multi-agent routing.
-- [ ] Demonstrate a configured Scribe fixture call persists the report, including
+- [x] Demonstrate a configured Scribe fixture call persists the report, including
   late confirmation after turn end and call termination while diagnostics drain.
 
 ### D — Latency details UI
@@ -2163,3 +2163,18 @@ checks pass 43/43, Console host/API checks 18/18, and build/type/static gates pa
 Chrome inspection covers both hosts at desktop/mobile sizes, legacy rows, light
 and dark surfaces, keyboard disclosure/scrolling and top-aligned labels. Independent
 final visual review is clean, completing the scoped D participant/segment extension. See [checkpoint labnotes](../20261119-1915-participant-segment-presentation.md).
+
+## Checkpoint C — current timing acceptance audit, 2026-11-19
+
+Current room-service evidence covers matching published text/acknowledged audio,
+silent/tool-only replies, exact-request interruption, and configured multi-agent
+routing with continuous participant-owned input. The configured late-confirmation
+test persists pending then revised timing and explicitly holds the terminal write
+after room/collector termination until the independent writer drains. The source
+and assertion map is recorded in [audit labnotes](../20261119-1927-timing-acceptance-audit.md).
+
+The focused current Engine selection passes 44/44; configured late/drain and both
+transfer modes pass 3/3. No runtime/test change was required. Independent checklist
+closure review is clean; both scoped C timing tasks are now checked. Settings, broader failure/load parity, acoustic accuracy,
+remaining live acceptance and the intermittent mixed-STT/STS readiness failure are
+not resolved by this audit.
