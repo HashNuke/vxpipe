@@ -251,7 +251,12 @@ The missing-audio scenario omits a frame: its acoustic delay is null, its covera
 is incomplete, and independently valid provider stages remain available. Both
 reports are written through the bounded asynchronous writer and read in a new
 BEAM process. No ordinary call facts or raw audio/transcript are stored by this
-fixture. The output includes a JSON artifact in the system temporary directory.
+fixture. The output includes a JSON artifact in the system temporary directory,
+with `acoustic_segments` on each turn and `unattached_segments` on each run. The
+complete fixture retains the acoustic pair; the missing-audio fixture retains its
+unclosed onset with an explicit gap reason. Both collections have bounded entries
+and omitted counts. The admitted PCM sample range supplies the fixture's interval;
+receipt times are never converted into assumed provider sample positions.
 
 These provider offsets are deliberately synthetic. The command verifies timing
 semantics, correlation, persistence and restart reads; it does not measure live

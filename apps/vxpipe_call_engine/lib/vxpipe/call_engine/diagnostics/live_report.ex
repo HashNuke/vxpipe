@@ -62,6 +62,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
   def unattached_segments(state), do: state.unattached_segments
 
+  def project_segments(state, intervals),
+    do: SegmentProjection.build(Map.values(state.packets), intervals, state.closed_epochs)
+
   def counts(state) do
     matched = MapSet.new(state.reports, fn {_key, report} -> report.provider_turn_id end)
 
@@ -176,7 +179,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
           {{generation, reference}, segment_bounds(ids, packets)}
       end)
 
-    {segments, unattached} = SegmentProjection.build(packets, intervals, state.closed_epochs)
+    {segments, unattached} = project_segments(state, intervals)
 
     reports =
       Map.new(rows, fn {room, timing, provider_ids} ->

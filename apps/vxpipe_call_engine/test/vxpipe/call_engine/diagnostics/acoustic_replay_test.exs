@@ -72,6 +72,19 @@ defmodule Vxpipe.CallEngine.Diagnostics.AcousticReplayTest do
     assert endpoint.offset_us < endpoint.confirmed_offset_us
     refute inspect(result) =~ "pcm"
 
+    assert %{clock_id: "clock", source_epoch: "fixture", packets: packets} =
+             result.segment_evidence
+
+    assert Enum.any?(
+             packets,
+             &match?({:acoustic_boundary, 0, :speech_started, _, _, _, _, _}, &1)
+           )
+
+    assert [{:acoustic_progress, 0, 0, finalized}] =
+             Enum.filter(packets, &match?({:acoustic_progress, _, _, _}, &1))
+
+    assert finalized == length(frames) * 512
+
     assert {:ok, missing} =
              AcousticReplay.run(
                model,
@@ -81,5 +94,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.AcousticReplayTest do
              )
 
     assert :audio_gap in missing.notices
+    assert Enum.any?(missing.segment_evidence.packets, &match?({:reset, 1, :audio_gap, _}, &1))
+
+    assert Enum.any?(
+             missing.segment_evidence.packets,
+             &match?({:acoustic_progress, 1, 5_632, _}, &1)
+           )
   end
 end

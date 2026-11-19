@@ -43,7 +43,10 @@ defmodule Vxpipe.Tools.LatencyReplay do
            name: __MODULE__.Pool,
            task_supervisor: __MODULE__.Tasks,
            writer_supervisor: __MODULE__.Writers}
-        ], strategy: :one_for_one, name: __MODULE__.Supervisor)
+        ],
+        strategy: :one_for_one,
+        name: __MODULE__.Supervisor
+      )
 
     {CapabilityTree, tree, _, _} =
       Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
@@ -97,7 +100,13 @@ defmodule Vxpipe.Tools.LatencyReplay do
     ]
 
     {:ok, provider_turns} = ScribeReplay.run(scope, steps, pcm: pcm)
-    {:ok, reports} = ReplayReport.build(clock, source, provider_turns, trace)
+    # This fixture admits the full PCM once before its sole provider turn.
+    # The interval is an admitted sample range, not a conversion of receipt time.
+    [_provider_turn] = provider_turns
+
+    {:ok, %{turns: reports, unattached_segments: unattached}} =
+      ReplayReport.build(clock, source, provider_turns, trace, [{0, div(byte_size(pcm), 2)}])
+
     [report] = reports
     expected = if scenario == :complete, do: 300_000, else: nil
 
@@ -157,7 +166,8 @@ defmodule Vxpipe.Tools.LatencyReplay do
           landmarks_us: report.landmarks_us,
           acoustic_reason: report.acoustic_reason,
           acoustic_sample: report.acoustic_sample,
-          uncertainty_us: report.uncertainty_us
+          uncertainty_us: report.uncertainty_us,
+          acoustic_segments: report.acoustic_segments
         })
 
       :ok = Handoff.offer(handoff, {:turn, call.tenant_key, call.id, "offline-replay", turn})
@@ -170,6 +180,7 @@ defmodule Vxpipe.Tools.LatencyReplay do
       | revision: 2,
         heartbeat_at: ending,
         closed_at: ending,
+        unattached_segments: unattached,
         state: if(scenario == :complete, do: :closed, else: :incomplete),
         reasons: if(scenario == :complete, do: [], else: [:audio_gap]),
         counts: %{
@@ -264,6 +275,7 @@ defmodule Vxpipe.Tools.LatencyReplay do
 
         %{
           scenario: run.id,
+          unattached_segments: run.unattached_segments,
           coverage: Coverage.describe(run, count, DateTime.utc_now()),
           turns:
             Enum.map(turns, fn turn ->
@@ -271,7 +283,8 @@ defmodule Vxpipe.Tools.LatencyReplay do
                 turn_id: turn.turn_id,
                 quality: turn.quality,
                 durations_us: turn.durations_us,
-                acoustic_reason: turn.acoustic_reason
+                acoustic_reason: turn.acoustic_reason,
+                acoustic_segments: turn.acoustic_segments
               }
             end)
         }

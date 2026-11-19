@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.Diagnostics.AcousticReplay do
   @moduledoc "Offline replay of timestamped 16 kHz PCM windows through an explicitly supplied Silero model."
   alias Vxpipe.CallEngine.Diagnostics.AcousticObserver
+  alias Vxpipe.CallEngine.Speech.ActivityBoundary
   alias Vxpipe.CallEngine.Speech.Silero
   alias Vxpipe.CallEngine.Speech.Silero.Model
 
@@ -13,7 +14,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.AcousticReplay do
       previous_pcm: nil,
       events: [],
       notices: [],
-      frame_count: 0
+      frame_count: 0,
+      inference_epoch: 0,
+      epoch_origin: nil,
+      segment_packets: [],
+      progress: nil
     }
 
     frames
@@ -29,7 +34,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.AcousticReplay do
          %{
            events: Enum.reverse(state.events),
            notices: Enum.uniq(state.notices),
-           frame_count: state.frame_count
+           frame_count: state.frame_count,
+           segment_evidence: %{
+             clock_id: clock_id,
+             source_epoch: source_epoch,
+             packets: Enum.reverse(state.segment_packets) ++ [state.progress]
+           }
          }}
 
       error ->
@@ -78,6 +88,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.AcousticReplay do
     with {:ok, stream, [probability]} <- Silero.push(stream, model, pcm),
          {:ok, observer, events, notices} <-
            AcousticObserver.observe(state.observer, metadata, probability, processed) do
+      state = segment_evidence(state, observer, events, notices, metadata, processed)
+
       {:ok,
        %{
          state
@@ -90,6 +102,51 @@ defmodule Vxpipe.CallEngine.Diagnostics.AcousticReplay do
            frame_count: state.frame_count + 1
        }}
     end
+  end
+
+  defp segment_evidence(state, observer, events, notices, metadata, processed) do
+    epoch = if notices == [], do: state.inference_epoch, else: state.inference_epoch + 1
+
+    origin =
+      if notices == [],
+        do: state.epoch_origin || metadata.sample_timestamp,
+        else: metadata.sample_timestamp
+
+    packets =
+      if notices == [] do
+        state.segment_packets
+      else
+        [
+          {:reset, epoch, hd(notices), metadata.received_offset_us},
+          state.progress
+          | state.segment_packets
+        ]
+      end
+
+    packets =
+      Enum.reduce(events, packets, fn
+        {kind, position}, acc ->
+          reason = if kind == :speech_started and position.sample == origin, do: :partial_start
+
+          [
+            {:acoustic_boundary, epoch, kind, position.sample, position.offset_us,
+             position.confirmed_offset_us, position.uncertainty_us, reason}
+            | acc
+          ]
+
+        {:unmapped_boundary, kind, sample, reason}, acc ->
+          [{:acoustic_boundary, epoch, kind, sample, nil, processed, nil, reason} | acc]
+      end)
+
+    %{
+      state
+      | inference_epoch: epoch,
+        epoch_origin: origin,
+        segment_packets: packets,
+        progress:
+          {:acoustic_progress, epoch, origin,
+           ActivityBoundary.finalized_samples(observer.boundary)}
+    }
   end
 
   defp contiguous?(nil, _frame), do: true

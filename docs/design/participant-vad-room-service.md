@@ -123,6 +123,18 @@ a closed overlapping epoch instead records its gap/reset reason. Earlier adjacen
 epochs do not mark the next interval lost. Observed segments can be persisted before a scalar latency estimate becomes valid.
 Both per-turn and unattached collections retain 32 segments with omitted counts,
 and are charged inside LiveReport's existing packet/byte limits. Collector
-heartbeats and final drain persist the unattached collection. The offline replay
-extension and authorized API/UI presentation remain pending; component production
-is not acceptance of the room-service migration.
+heartbeats and final drain persist the unattached collection.
+
+Offline PCM replay emits the same boundary/reset/progress packets, including one
+final progress record per inference epoch. The interval-aware replay entry point
+validates that journal through LiveReport and uses its segment projection. Callers
+must supply admitted source-sample intervals; provider receipt times are not source
+positions. Scalar endpoints are selected from the same assigned evidence and are
+withheld for pending, lost or omitted coverage. The legacy scalar-only replay entry
+point remains compatible.
+
+The replay command admits its full synthetic PCM before the sole provider turn,
+uses that exact sample range, and writes both segment collections through the
+existing bounded writer. Fresh-process reads expose complete pairs and unattached
+partial/gap evidence. Authorized API/UI presentation remains pending; these
+records/replay checks do not accept the room-service migration.

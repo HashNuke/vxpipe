@@ -1,9 +1,9 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: architecture revised, implementation migration pending, 2026-11-19.
-A and existing B/D functionality remain implemented. C must migrate from agent-selected
+Status: records/replay extension implemented; room-service migration pending, 2026-11-19.
+A, B and existing D functionality are implemented. C must migrate from agent-selected
 background discovery to participant-owned observation managed by a room service.
-New start/end evidence and B/D extensions, C migration, E and F are incomplete.
+The new D segment/participant extensions, C migration, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
 ## Runnable outcome
@@ -33,7 +33,7 @@ This revision follows the user's request to rethink the milestone. It supersedes
 agent-selected source discovery and agent-owned acoustic runs in the earlier
 implementation notes. Those notes remain historical evidence, not acceptance of
 the revised architecture. This is a specification change; the runtime migration
-has not been implemented. Implementation resumed after the user reviewed and
+has not reached room-service cutover. Implementation resumed after the user reviewed and
 updated this plan; the migration order below now governs the next checkpoints.
 
 ### Local VAD and provider endpointing are different signals
@@ -183,9 +183,9 @@ accepted milestone evidence. No existing implementation changes were discarded.
 
 ### Migration order and acceptance gates
 
-These are new requirements, not completed implementation. Keep A and unaffected
-B/D checks as historical successes; reopen the affected C checks and add explicit
-B/D extensions below. Do not restart finished unrelated UI/storage work.
+These requirements govern the revised implementation; completion is tracked below.
+Keep A and unaffected B/D checks as historical successes, with affected C checks
+and explicit B/D extensions tracked separately. Do not restart finished unrelated UI/storage work.
 
 The order keeps exactly one owner per input at every checkpoint: the room service
 is exercised directly in tests and is never composed beside the old coordinator.
@@ -537,7 +537,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 
 ### B — Durable timing report
 
-- [ ] Extend the existing versioned records/replay with bounded acoustic speech-start
+- [x] Extend the existing versioned records/replay with bounded acoustic speech-start
   and speech-end segment evidence, confirmation provenance and reset/loss reasons;
   preserve old rows and null/partial semantics without conflating segments with turns.
   Bound segments per turn with an omitted count, and keep segments outside every
@@ -1695,3 +1695,29 @@ review is clean with ten independent regression probes passing; details are in
 The offline ReplayReport extension remains pending, so the B extension checkbox
 stays open. Room-service ownership/cutover and API/UI extensions remain separate
 unfinished tasks. No live provider, Telnyx behavior or deployment changed.
+
+
+## Migration step 2 replay completion — 2026-11-19
+
+AcousticReplay now emits source/clock-scoped boundary, reset and finalized-progress
+metadata. The interval-aware ReplayReport entry point validates it through
+LiveReport and uses the shared segment projection. Explicit admitted sample ranges
+constrain both segment assignment and scalar endpoints; pending/gap/omitted
+coverage cannot produce a valid scalar latency. The legacy scalar-only entry point
+remains compatible.
+
+The existing replay command now writes turn segments and run unattached evidence
+through the bounded writer, then reads both in a fresh BEAM process. Final artifact
+`vxpipe_latency_replay_1795104392_18023.json` contains the complete pair with separate
+confirmation times, preserved 300 ms fixture latency, and the missing-audio
+scenario's unattached partial onset/gap with null acoustic delay. Ordinary call
+facts remain zero. A pre-extension fixture database still reads with nil segment
+fields. These are synthetic offline timings, not live provider measurements.
+
+Engine diagnostics pass 195/195 and root static gates pass. Astra reproduced a
+scalar/segment interval mismatch, fixed with retained red/green coverage tests;
+final review is clean and two independent probes pass. See
+[checkpoint labnotes](../20261119-1559-acoustic-replay-segments.md).
+Together with the preceding storage and live-correlation checkpoints, this closes
+B's records/replay extension and migration step 2. Room-service work, D extensions,
+E/F and deployment remain incomplete; the milestone index stays unchecked.
