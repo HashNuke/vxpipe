@@ -7,7 +7,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     CaptureHandoff,
     SettingsProjection,
     SourceSupervisor,
-    SourceWorker
+    SourceWorker,
+    SourcePort
   }
 
   alias Vxpipe.CallEngine.RoomAuthority.{DiagnosticInputs, DiagnosticSources}
@@ -79,8 +80,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
 
   defp current_candidate?(%{ownership: :participant_input} = candidate) do
     case DiagnosticInputs.for_connection(candidate.room, candidate.source.connection_id) do
-      {:ok, page} -> page.identity == candidate.identity and candidate.source in page.sources
-      _ -> false
+      {:ok, page} ->
+        SourcePort.current?(Map.get(candidate, :source_port)) and
+          page.identity == candidate.identity and candidate.source in page.sources
+
+      _ ->
+        false
     end
   end
 
@@ -116,6 +121,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
 
   defp start_worker(candidate, context, track, output, options) do
     worker_options = [
+      source_port: Map.get(candidate, :source_port),
       owner: context.capability,
       coordinator: context.coordinator,
       attachment_lease: context.attachment_lease,

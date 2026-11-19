@@ -1814,3 +1814,36 @@ The old coordinator remains the only composed owner. RoomService/subtree, named
 Calls port resolution, notifications, canonical no-agent turns and cutover remain
 pending; no additional migration checkbox is complete. No live provider tests,
 Telnyx changes or deployment occurred.
+
+
+## Migration step 3 room-service component — 2026-11-19
+
+RoomService and its optional room diagnostics subtree are now exercised directly.
+The subtree owns source workers and one fixed attachment runner, with an isolated
+two-in-five-seconds restart budget. The service reconciles its own accepted STT
+snapshot; notifications and periodic retries cover changes without node-wide room
+scanning. Tests cover no-agent attachment, agent continuity, source removal,
+disable/re-enable, restart reconciliation and exhaustion, missing/recovered/lost
+ports, teardown, and two synthetic STT rooms sharing one source slot.
+
+SourcePort supplies the Calls-owned factory/runtime/configuration through a named
+Engine-defined boundary. Its captured PID fences pending attachment and active
+workers independently of service responsiveness. Independent review reproduced
+missing fences while the service was suspended; both regressions are retained.
+
+A suspended task supervisor exposed an unbounded startup wait inside the service.
+The final design uses one fixed AttachmentRunner instead: async request, immediate
+lease deadline, and a busy reference retained until completion even after expiry.
+Late queued work cannot invoke collection with a revoked lease, and hung work
+cannot accumulate replacements. Explicit brutal-kill shutdown prevents a collector
+that traps exits from delaying subtree teardown; the test bounds shutdown to one
+second. Shared admission conservatively retains unresolved debt.
+
+Final focused diagnostics pass 232/232 and root static gates pass. Scoped Astra
+review is clean with 14 retained cases and three independent port/startup probes.
+Separate design review confirms dependency direction and the pending cutover order. See
+[checkpoint labnotes](../20261119-1651-room-diagnostics-service.md).
+The old coordinator remains the only composed owner. The broader reuse/fallback
+and source/mode matrix, real room notifications, Calls port composition,
+canonical no-agent rows and single-owner cutover remain pending. No C migration
+checkbox is closed, no live provider tests ran, and nothing was deployed.

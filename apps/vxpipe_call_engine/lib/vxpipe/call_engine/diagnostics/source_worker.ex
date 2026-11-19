@@ -6,7 +6,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     AttachmentLease,
     AudioTimeline,
     CaptureHandoff,
-    InferenceAdmission
+    InferenceAdmission,
+    SourcePort
   }
 
   alias Vxpipe.CallEngine.Speech.{ActivityBoundary, Silero}
@@ -32,12 +33,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     mode = Keyword.get(options, :mode, :benchmark_only)
     coordinator = Keyword.get(options, :coordinator)
     lease = Keyword.get(options, :attachment_lease)
+    source_port = Keyword.get(options, :source_port)
 
     capture_options =
       Keyword.take(options, [:projection, :maximum_count, :maximum_bytes])
       |> Keyword.put(:owner, owner)
 
-    with true <- AttachmentLease.current?(lease),
+    with true <- AttachmentLease.current?(lease) and SourcePort.current?(source_port),
          true <- is_nil(coordinator) or (is_pid(coordinator) and node(coordinator) == node()),
          true <- output.owner == owner and CaptureHandoff.current?(output),
          true <- valid_admission?(mode, admission),
@@ -45,6 +47,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
          true <- input.grant == output.grant and input.projection == output.projection do
       Enum.each([owner, output.receiver], &Process.monitor/1)
       if coordinator, do: Process.monitor(coordinator)
+      if source_port, do: Process.monitor(source_port)
       if admission, do: Process.monitor(admission.runtime)
 
       timeline =
@@ -60,6 +63,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
          input: input,
          output: output,
          coordinator: coordinator,
+         source_port: source_port,
          attachment_lease: lease,
          admission: admission,
          mode: mode,
@@ -515,7 +519,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   defp current?(state) do
     stats = CaptureHandoff.stats(state.input)
 
-    AttachmentLease.current?(state.attachment_lease) and
+    AttachmentLease.current?(state.attachment_lease) and SourcePort.current?(state.source_port) and
       stats.overflow == 0 and stats.invalid == 0 and
       CaptureHandoff.current?(state.input) and CaptureHandoff.current?(state.output)
   end

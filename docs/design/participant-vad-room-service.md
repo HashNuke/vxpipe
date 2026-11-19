@@ -233,3 +233,45 @@ until worker termination. Missing admission fails closed.
 The old coordinator retains its original discovery and agent checks until cutover.
 These attachment primitives do not create a room service, start two owners, change
 operational turn dispatch or enable no-agent canonical-turn persistence.
+
+
+## Room service and attachment runner
+
+RoomService now exists as a directly exercised component. Its temporary,
+non-significant RoomSupervisor isolates a two-restarts-in-five-seconds budget and
+owns both source workers and one fixed AttachmentRunner. One-for-all recovery
+tears down old observation before restarting reconciliation. Exhausting this
+optional subtree leaves speech and the room authority running. Production room
+composition remains pending.
+
+The service reconciles only its own room through bounded snapshots, exact active
+source checks, asynchronous notifications and periodic retries. It holds at most
+one discovery or attachment attempt. Both rooms use the same Engine admission
+counter; capacity loss is explicit, and a waiting room can attach after a source
+retires. Agent selection does not own these attachments.
+
+SourcePort is a named Engine-defined injection boundary for the Calls-owned source
+pool's collector factory, shared inference runtime, settings projection and limit.
+Cutover must compose that port under the existing Calls-owned SourceSupervisor.
+Missing ports are unavailable. Each candidate captures the resolved port PID;
+attachment checks it and workers independently monitor/check it, so a stalled room
+service cannot keep observing through dependency loss.
+
+AttachmentRunner is a single fixed supervised IO slot, following SettingsReader's
+existing pattern. RoomService sends an asynchronous request and installs its
+500 ms lease deadline without waiting for task-supervisor startup. Timeout,
+disable and dependency loss revoke the lease but retain the busy reference until
+the runner replies. This prevents an unresponsive callback from accumulating
+queued replacements. A late queued request checks the revoked lease before doing
+collector work. The runner uses explicit brutal-kill shutdown because startup
+work needs no terminate callback; room teardown cannot wait for a trapped exit
+inside a collector. Unresolved capacity remains conservatively charged.
+
+Rejected implementation: starting a supervised Task synchronously from the service
+callback. A suspended Task.Supervisor reproduced a blocked service after lease
+expiry; exception handling for task-capacity errors did not bound that wait.
+No additional startup layer or generic room-service framework is needed.
+
+These direct synthetic tests establish component lifecycle and two-room admission,
+not production cutover, the full operational-Silero matrix, distributed settings
+acceptance, measured overhead or live provider acceptance.
