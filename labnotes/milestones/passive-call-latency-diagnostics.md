@@ -688,3 +688,19 @@ suite88/0; Astra xhigh re-review clean (independent34/0), final static gates pas
 and Lean behavior verification passes. Retained adoption, source-admission race
 and odd-byte coverage regressions are fixed. Standalone workers, automatic
 admission, complete source mapping and the full on/off/source matrix remain open.
+
+## Checkpoint C asynchronous inference admission — 2026-11-19
+
+An explicitly configured diagnostic runtime now supports bounded non-suspending
+inference offers. Queued/in-flight jobs share capacity; actual task termination
+releases it. Capture authority fences admission, loading, inference and delivery;
+revocation polling retires diagnostic jobs without changing the synchronous
+operational API. Nested binary views are detached, and the real pinned model
+preserves recurrent state across successive offers. Unknown interrupted offers
+conservatively retain capacity until runtime restart.
+
+Affected tests95/0; Astra xhigh re-review clean (18focused plus5 lifecycle probes).
+Static root gates and Lean pass; the full umbrella suite is running. This supplies
+admission for the isolated worker lifecycle; production pool composition,
+automatic source workers and transport mapping remain open. Combined C tasks are
+still unchecked pending their configured-call acceptance gates.

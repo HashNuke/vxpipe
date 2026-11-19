@@ -400,3 +400,25 @@ partial as well; diagnostics never change that retention. Per-epoch model cursor
 future run consumer must associate them with accepted-source mapping and report
 incomplete evidence when that association is absent or crosses a reset. This
 hook does not supply independent inference when call-spec VAD is off.
+
+### Standalone inference admission foundation
+
+A diagnostic ActivityRuntime instance may expose an explicitly configured
+`diagnostic_capacity` (1–32); ordinary operational instances do not expose this
+handle. `InferenceAdmission` reserves a slot before copying or sending, so a
+suspended runtime cannot accumulate more than its configured number of offers.
+Each offer permits at most 32,000 PCM bytes and 16,384 serialized stream bytes.
+BEAM binary views are detached; native tensors retain the pinned model's fixed
+shapes. Serialized sizes do not measure opaque native allocations.
+
+Queued and running requests share the reservation. Busy execution rejects rather
+than adding another queue. Result delivery does not free capacity until the task
+terminates. Unknown reservations after producer death conservatively consume
+capacity until runtime restart. This may degrade diagnostic availability and must
+be reported as missing coverage; it does not justify reclaiming uncertain slots.
+
+Capture authority is checked before enqueue, admission, model load, classification
+and delivery. Active diagnostic jobs check revocation every 250 ms, in addition
+to the existing load/inference deadlines. Native work keeps its execution slot
+until actual termination. This asynchronous API is a foundation for the isolated
+source workers; production composition and automatic call attachment remain open.
