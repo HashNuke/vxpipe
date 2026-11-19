@@ -28,7 +28,9 @@ establish the requested effective state; that integration remains open.
 Capture checks authority before admission and again before consuming work/results.
 Source workers check their grant every 250 ms for cleanup. The three-second lease
 bounds valid authority, not hard real-time scheduling or native thread termination.
-A stalled VM may delay cleanup but cannot accept stale work upon resuming. Historical
+A stalled process/projection may delay cleanup but cannot accept expired work on
+resuming while its underlying monotonic clock continues advancing. Host suspension
+is subject to the clock-progress caveat below. Historical
 summaries may finish their separately bounded persistence drain after capture stops.
 
 Rejected alternatives are unbounded retries, wall-clock comparisons across workers,
@@ -77,3 +79,33 @@ Focused handoff, inference-admission, source-supervision and writer tests exerci
 retained count/byte budgets, blocked resources, task cancellation, finite retries
 and drain. Configured Scribe fixtures separately prove mode selection, toggles and
 source replacement without changing operational inference or provider delivery.
+
+## Effective-status integration contract under review
+
+The settings API currently returns the saved setting only. The UI may refresh an
+explicit applying status, but must not invent applied status from its own timer.
+A local worker acknowledgement cannot certify an unknown set of remote workers.
+
+A proposed expiry proof would observe an authoritative disabled revision R, wait
+at least the maximum lease grace, then **start a new authoritative read** and
+require exactly R again. A read merely completing after the deadline is not enough:
+it could have captured R before a concurrent enable and returned late. Reads must
+use the primary store and a fresh transaction snapshot. Errors, conflicting values,
+newer revisions and process restart invalidate proof; late replies cannot restore
+it. Every API node would maintain its own proof, so load balancing could delay,
+but never accelerate, confirmation.
+
+This proposal is not implemented or accepted as an unconditional global proof.
+Independent monotonic clock origins are safe, but independent elapsed-time rates
+and host suspension are not interchangeable. A tracker advancing three seconds
+cannot prove a suspended worker's clock advanced three seconds. See Erlang's
+[time correction documentation](https://www.erlang.org/doc/apps/erts/time_correction.html).
+A lease-based global confirmation requires a documented clock-progress/rate bound
+and a conservative grace including drift and timestamp resolution. Without that
+operating guarantee, report applying/unknown or collect acknowledgements from all
+registered capture authorities; connected-node discovery alone is not membership.
+
+An eventual applied-disable claim means capture authority is revoked, not that
+all suspended processes/native tasks have terminated or historical persistence has
+drained. Enabled status must describe saved collection permission, not promise
+that every eligible call has model readiness, capacity or complete coverage.

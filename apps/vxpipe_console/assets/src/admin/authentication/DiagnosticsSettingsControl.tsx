@@ -25,9 +25,11 @@ export function DiagnosticsSettingsControl({ api, onSessionExpired }: {
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const generation = useRef(0);
+  const statusChecks = useRef(0);
 
   const load = useCallback(async () => {
     const request = ++generation.current;
+    statusChecks.current = 0;
     setLoading(true); setSettings(undefined); setError(undefined); setNotice(undefined);
     setNeedsReload(false); setPending(false);
     try {
@@ -48,9 +50,54 @@ export function DiagnosticsSettingsControl({ api, onSessionExpired }: {
     return retire;
   }, [load, retire]);
 
+  const enabled = settings?.enabled;
+  const revision = settings?.revision;
+  const collectionStatus = settings?.collection_status;
+  useEffect(() => {
+    if (enabled === undefined || revision === undefined || collectionStatus !== "applying" || pending || needsReload) return;
+    const observed = { enabled, revision };
+    const request = generation.current;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const current = () => active && request === generation.current;
+    const fail = () => {
+      if (!current()) return;
+      active = false;
+      setSettings(value => value && { ...value, collection_status: "unavailable" });
+      setNeedsReload(true);
+      setError("Could not confirm collection status. Reload diagnostics settings to check again.");
+    };
+    const check = async () => {
+      if (!current()) return;
+      if (statusChecks.current >= 10) { fail(); return; }
+      statusChecks.current++;
+      deadline = setTimeout(fail, 10000);
+      try {
+        const value = checked(await api.diagnosticsSettings());
+        if (!current()) return;
+        if (value.revision < observed.revision || (value.revision === observed.revision && value.enabled !== observed.enabled)) {
+          throw new Error("Stale collection status");
+        }
+        setSettings(value);
+        if (value.collection_status === "applying") {
+          if (statusChecks.current >= 10) fail();
+          else if (value.revision === observed.revision) timer = setTimeout(() => void check(), 1000);
+        }
+      } catch (error) {
+        if (!current()) return;
+        if (error instanceof AuthenticationError && error.status === 401) onSessionExpired?.();
+        fail();
+      } finally { clearTimeout(deadline); }
+    };
+    timer = setTimeout(() => void check(), 1000);
+    return () => { active = false; clearTimeout(timer); clearTimeout(deadline); };
+  }, [api, onSessionExpired, enabled, revision, collectionStatus, pending, needsReload]);
+
   async function save(enabled: boolean) {
     if (!settings || pending || needsReload) return;
-    const request = generation.current;
+    const request = ++generation.current;
+    statusChecks.current = 0;
     setPending(true); setError(undefined); setNotice(undefined);
     try {
       const value = checked(await api.updateDiagnosticsSettings(enabled, settings.revision));
@@ -59,6 +106,7 @@ export function DiagnosticsSettingsControl({ api, onSessionExpired }: {
     } catch (error) {
       if (request !== generation.current) return;
       if (error instanceof AuthenticationError && error.status === 401) onSessionExpired?.();
+      setSettings(value => value && { ...value, collection_status: "unavailable" });
       const stale = error instanceof AuthenticationError && error.status === 409;
       setNeedsReload(true);
       setError(stale ? "This setting changed elsewhere. Reload before saving again." : "Could not confirm this change. Reload diagnostics settings to check the saved value.");

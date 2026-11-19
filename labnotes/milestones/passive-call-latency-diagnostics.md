@@ -1279,3 +1279,20 @@ browser evidence, required correction of the temporary document mode/focus proof
 and returned clean. The temporary harness and server were removed. All D tasks
 are now checked; C settings UI/failure/landmark acceptance, E and F remain open.
 No deployment or live provider use occurred.
+
+## Checkpoint C bounded settings-status refresh — 2026-11-19
+
+The UI now refreshes explicit applying responses with a finite budget: ten
+sequential checks, one-second spacing and a ten-second response deadline. Newer
+pending revisions do not reset that budget. Save/load generations reject obsolete
+responses; uncertain saves invalidate the prior applied label without changing the
+last confirmed toggle. Errors/timeouts preserve the saved value and offer reload.
+Twelve focused tests pass, including the three reviewer-reproduced edge cases.
+Chrome Storybook explicitly shows applying then simulated applied on desktop and
+mobile; keyboard save works. TypeScript, scoped lint and root static gates pass.
+
+The production API still needs a sound effective-disable proof; C's combined UI
+task remains open. Design review rejected treating one API node's elapsed time as
+unconditional global lease expiry. The runtime-limits note records fresh-read,
+revision and clock-progress requirements and acknowledgement alternatives without
+claiming that an unimplemented proof exists. No production capture was enabled.

@@ -10,6 +10,7 @@ export function DiagnosticsSettingsFixture({ behavior, state }: { behavior?: str
       async diagnosticsSettings() {
         if (state === "loading") return new Promise<DiagnosticsSettings>(() => {});
         if (state === "unavailable") throw new Error("Unavailable fixture");
+        if (saved.current.collection_status === "applying") saved.current = { ...saved.current, collection_status: "applied" };
         return saved.current;
       },
       async updateDiagnosticsSettings(enabled, revision) {
