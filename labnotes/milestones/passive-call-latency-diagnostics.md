@@ -798,3 +798,20 @@ clean (13independent tests/probes). Automatic source discovery/attachment, manua
 instrumentation and report correlation remain pending. The prior umbrella run has
 a live-inspection projection timeout under investigation and is not passing root
 acceptance evidence for this checkpoint. Combined C tasks remain unchecked.
+
+
+## Checkpoint C provider-to-canonical turn links — 2026-11-19
+
+The optional wrapper now emits reference-only associations from inner provider
+allocation/turn to outer canonical allocation/turn, using its existing coordinator
+mapping. It covers queued turn drains and both VAD/native-hint orderings, retains
+original capture authority, and resets its bounded deduplication on subscription
+replacement. Source workers forward these links independently of acoustic work.
+Identical transcript text never participates in this association.
+
+Two retained VAD ordering regressions were red before correction. Affected suite
+678/0 (9excluded), static gates and Lean pass. Astra xhigh final re-review is clean
+(76focused tests and3independent probes). The prior umbrella failure was the now-
+corrected live baseline test barrier; a new run predates the final VAD correction.
+Room-turn and response association, collector persistence and automatic source
+attachment remain incomplete, so the combined C correlation tasks stay unchecked.

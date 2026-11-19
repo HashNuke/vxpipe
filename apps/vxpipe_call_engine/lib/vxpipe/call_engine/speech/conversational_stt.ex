@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
 
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, InferenceTap}
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, InferenceTap, ProviderTiming}
 
   alias Vxpipe.CallEngine.Speech.{
     ActivityBoundary,
@@ -98,6 +98,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          runtime_monitor: nil,
          inference: nil,
          diagnostic_tap: nil,
+         diagnostic_handoff: nil,
+         diagnostic_last_link: nil,
          diagnostic_inference: nil,
          inference_epoch: nil,
          recognition_epoch: 0,
@@ -178,7 +180,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   @impl true
   def handle_info({:diagnostic_observer, generation, %CaptureHandoff{} = handoff, channel}, state)
       when generation == state.allocation.generation do
-    if channel == GenServer.whereis(state.channel) do
+    with true <- channel == GenServer.whereis(state.channel),
+         {:ok, handoff} <- ProviderTiming.replace(state.diagnostic_handoff, handoff) do
       Channel.observe(state.inner, handoff)
 
       tap =
@@ -195,9 +198,17 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
           nil
         end
 
-      {:noreply, %{state | diagnostic_tap: tap}}
+      last_link = if state.diagnostic_handoff == handoff, do: state.diagnostic_last_link
+
+      {:noreply,
+       %{
+         state
+         | diagnostic_tap: tap,
+           diagnostic_handoff: handoff,
+           diagnostic_last_link: last_link
+       }}
     else
-      {:noreply, state}
+      _ -> {:noreply, state}
     end
   end
 
@@ -337,7 +348,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     with {:ok, turns, emissions} <- STTTurnStart.native(state.turns, event),
          :ok <- publish(state.channel, emissions) do
       settled? = Enum.any?(emissions, fn {kind, _fields} -> kind == :turn_ended end)
-      state = %{state | turns: turns}
+      state = diagnostic_links(%{state | turns: turns}, emissions)
 
       state =
         if settled? do
@@ -361,6 +372,29 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
       {:ok, update_orphan(state, emissions)}
     end
+  end
+
+  defp diagnostic_links(%{diagnostic_handoff: nil} = state, _emissions), do: state
+
+  defp diagnostic_links(state, emissions) do
+    emissions
+    |> Enum.map(fn {_kind, fields} -> Keyword.fetch!(fields, :turn_ref) end)
+    |> then(fn references ->
+      if state.turns.active, do: references ++ [state.turns.active], else: references
+    end)
+    |> Enum.uniq()
+    |> Enum.reduce(state, fn canonical, current ->
+      with {:ok, native} <- STTTurnStart.native_reference(current.turns, canonical),
+           packet =
+             {:turn_link, current.inner.generation, native, current.allocation.generation,
+              canonical},
+           false <- packet == current.diagnostic_last_link,
+           :ok <- CaptureHandoff.offer(current.diagnostic_handoff, packet) do
+        %{current | diagnostic_last_link: packet}
+      else
+        _ -> current
+      end
+    end)
   end
 
   defp activate(%{ready?: false, recognizer_ready?: true, detector_ready?: true} = state) do
@@ -482,7 +516,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
       {:speech_started, _sample}, {:ok, current} ->
         with {:ok, turns, emissions} <- STTTurnStart.activity_started(current.turns),
              :ok <- publish(current.channel, emissions) do
-          {:cont, {:ok, update_orphan(%{current | turns: turns}, emissions)}}
+          current = diagnostic_links(%{current | turns: turns}, emissions)
+          {:cont, {:ok, update_orphan(current, emissions)}}
         else
           _failure -> {:halt, {:error, :session_failed}}
         end

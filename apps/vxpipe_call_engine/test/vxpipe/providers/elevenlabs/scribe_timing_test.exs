@@ -206,6 +206,39 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
     assert %{pending_count: 0, open?: false} = CaptureHandoff.stats(old)
   end
 
+  test "provider turns link to canonical wrapper turns by references even with identical text" do
+    {session, wire, handoff} = start_session(initial_capture: false, wrapped: true)
+    assert :ok = Channel.observe(session, handoff)
+    assert_receive {:scribe_observing, ^wire, _}
+    inner = :sys.get_state(Session.provider(session)).inner
+    inner_generation = inner.generation
+    generation = session.generation
+
+    links =
+      for _ <- 1..2 do
+        socket_frame(session, wire, handoff, "committed_transcript", "same words")
+        started = event(session, :speech_started)
+        _ = event(session, :transcript)
+        canonical = started.turn_ref
+
+        assert_receive {:vxpipe_diagnostic_capture, _, _,
+                        {:turn_link, ^inner_generation, native, ^generation, ^canonical}, _} =
+                         message
+
+        assert is_reference(native)
+        assert native != canonical
+        assert {:ok, _, charge} = CaptureHandoff.message(handoff, message)
+        CaptureHandoff.release(handoff, charge, :processed)
+        socket_frame(session, wire, handoff, "partial_transcript", "")
+        assert event(session, :turn_ended).turn_ref == canonical
+        _ = :sys.get_state(Session.provider(session))
+        refute_received {:vxpipe_diagnostic_capture, _, _, {:turn_link, _, _, _, _}, _}
+        {native, canonical}
+      end
+
+    assert length(Enum.uniq(links)) == 2
+  end
+
   defp start_session(options \\ []) do
     {initial?, options} = Keyword.pop(options, :initial_capture, true)
     {wrapped?, options} = Keyword.pop(options, :wrapped, false)
@@ -261,6 +294,10 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
     assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
     assert {:ok, packet, charge} = CaptureHandoff.message(handoff, message)
     :ok = CaptureHandoff.release(handoff, charge, :processed)
-    packet
+    # These helpers inspect timing/probability evidence; links have dedicated assertions.
+    case packet do
+      {:turn_link, _, _, _, _} -> packet(handoff)
+      other -> other
+    end
   end
 end

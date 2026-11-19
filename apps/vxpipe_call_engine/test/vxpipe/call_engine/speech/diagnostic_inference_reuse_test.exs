@@ -307,6 +307,39 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert_receive {:classified, _, 2_048, ^pcm}
   end
 
+  test "VAD onset links a known native hint before any transcript arrives" do
+    {session, recognizer} = session(false)
+    capture = handoff()
+    assert :ok = ConversationalSTT.observe(session, capture)
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Channel.address(session))
+    _ = :sys.get_state(Session.provider(session))
+    native = make_ref()
+    assert :ok = GenServer.call(recognizer, {:emit, :speech_started, [turn_ref: native]})
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Channel.address(session))
+    _ = :sys.get_state(Session.provider(session))
+    assert :ok = Session.push_audio(session, :binary.copy(<<42, 0>>, 2_048))
+    canonical = event(session, :speech_started).turn_ref
+    _ = :sys.get_state(Session.provider(session))
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:turn_link, _, ^native, _, ^canonical}, _}
+  end
+
+  test "a native hint arriving after VAD onset links the active canonical turn" do
+    {session, recognizer} = session(false)
+    capture = handoff()
+    assert :ok = ConversationalSTT.observe(session, capture)
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Channel.address(session))
+    _ = :sys.get_state(Session.provider(session))
+    assert :ok = Session.push_audio(session, :binary.copy(<<43, 0>>, 2_048))
+    canonical = event(session, :speech_started).turn_ref
+    _ = :sys.get_state(Session.provider(session))
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:turn_link, _, _, _, _}, _}
+    native = make_ref()
+    assert :ok = GenServer.call(recognizer, {:emit, :speech_started, [turn_ref: native]})
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Channel.address(session))
+    _ = :sys.get_state(Session.provider(session))
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:turn_link, _, ^native, _, ^canonical}, _}
+  end
+
   defp session(hold?, prepared? \\ false) do
     parent = self()
 
@@ -367,6 +400,10 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
     assert {:ok, packet, charge} = CaptureHandoff.message(handoff, message)
     :ok = CaptureHandoff.release(handoff, charge, :processed)
-    packet
+    # These helpers inspect timing/probability evidence; links have dedicated assertions.
+    case packet do
+      {:turn_link, _, _, _, _} -> packet(handoff)
+      other -> other
+    end
   end
 end

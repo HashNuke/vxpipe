@@ -81,6 +81,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
          (offset == nil and uncertainty == nil and reason not in [nil, :partial_start]))
   end
 
+  defp valid?({:turn_link, source_generation, source_turn, generation, turn}) do
+    Enum.all?([source_generation, source_turn, generation, turn], &is_reference/1)
+  end
+
   defp valid?({:provider_landmark, generation, turn, kind, observed_at, samples}) do
     is_reference(generation) and is_reference(turn) and signed?(observed_at) and
       unsigned?(samples) and

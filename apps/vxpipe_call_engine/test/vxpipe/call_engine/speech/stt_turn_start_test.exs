@@ -481,7 +481,7 @@ defmodule Vxpipe.CallEngine.Speech.STTTurnStartTest do
                )
              )
 
-    assert {:ok, _state, emissions} =
+    assert {:ok, final_state, emissions} =
              STTTurnStart.native(
                state,
                native!(:turn_ended,
@@ -495,7 +495,7 @@ defmodule Vxpipe.CallEngine.Speech.STTTurnStartTest do
     assert kinds(emissions) == [:turn_ended, :speech_started, :transcript, :turn_ended]
 
     assert [
-             {:turn_ended, _},
+             {:turn_ended, first_end},
              {:speech_started, started},
              {:transcript, transcript},
              {:turn_ended, queued_end}
@@ -507,6 +507,13 @@ defmodule Vxpipe.CallEngine.Speech.STTTurnStartTest do
     assert Keyword.get(started, :provider_request_id) == "req-b-final"
     assert Keyword.get(transcript, :provider_request_id) == "req-b-final"
     assert Keyword.get(queued_end, :provider_request_id) == "req-b-final"
+
+    assert {:ok, ^first_provider} =
+             STTTurnStart.native_reference(final_state, Keyword.fetch!(first_end, :turn_ref))
+
+    assert {:ok, ^second_provider} =
+             STTTurnStart.native_reference(final_state, Keyword.fetch!(started, :turn_ref))
+
     assert_outer_valid(emissions)
   end
 

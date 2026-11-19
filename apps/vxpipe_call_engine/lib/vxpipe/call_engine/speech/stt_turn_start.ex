@@ -191,6 +191,14 @@ defmodule Vxpipe.CallEngine.Speech.STTTurnStart do
 
   def native(%__MODULE__{}, _event), do: {:error, :invalid_event}
 
+  @doc false
+  def native_reference(%__MODULE__{} = state, canonical) do
+    case Map.get(state.turns, canonical) do
+      %{native: native} when is_reference(native) -> {:ok, native}
+      _ -> :error
+    end
+  end
+
   defp validate_native(%Event{kind: :speech_started, turn_ref: turn_ref}) do
     if is_reference(turn_ref), do: :ok, else: {:error, :invalid_event}
   end

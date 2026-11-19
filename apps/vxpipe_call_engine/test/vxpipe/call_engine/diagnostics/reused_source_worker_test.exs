@@ -140,6 +140,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
 
+  test "turn links pass through unchanged without acoustic work", ctx do
+    link = {:turn_link, make_ref(), make_ref(), make_ref(), make_ref()}
+    offer(ctx, link)
+    assert ^link = packet(ctx)
+    _ = :sys.get_state(ctx.worker)
+    assert %{pending_count: 0} = CaptureHandoff.stats(ctx.input)
+  end
+
   defp offer(ctx, packet), do: assert(:ok == CaptureHandoff.offer(ctx.input, packet))
 
   defp packet(ctx) do
