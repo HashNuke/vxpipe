@@ -669,6 +669,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  def handle_info(
+        {:vxpipe_stt_signal, capability, identity, %Signal{} = signal, observation},
+        state
+      ) do
+    {:noreply, InputTurns.speech_to_text(capability, identity, signal, state, observation)}
+  end
+
   def handle_info({:vxpipe_stt_signal, capability, identity, %Signal{} = signal}, state) do
     {:noreply, InputTurns.speech_to_text(capability, identity, signal, state)}
   end

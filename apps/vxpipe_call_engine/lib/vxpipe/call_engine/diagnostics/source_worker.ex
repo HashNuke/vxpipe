@@ -244,6 +244,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     {:ok, state}
   end
 
+  defp process(state, {{:room_turn_completed, _, _, _, _, _} = packet, charge}) do
+    CaptureHandoff.release(state.input, charge, :processed)
+    emit(state, packet)
+  end
+
   defp process(state, {{:turn_link, _, _, _, _} = packet, charge}) do
     CaptureHandoff.release(state.input, charge, :processed)
     emit(state, packet)

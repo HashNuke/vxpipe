@@ -29,6 +29,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
      }}
   end
 
+  def copy({:room_turn_completed, generation, reference, turn, command, at}),
+    do:
+      {:room_turn_completed, generation, reference, :binary.copy(turn), :binary.copy(command), at}
+
   def copy(packet), do: packet
 
   defp valid?({:audio, %AudioFrame{codec: :linear16, channels: 1, activity_pcm: nil} = frame})
@@ -79,6 +83,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
       reason in [nil, :partial_start, :clock_uncertain, :unobserved_audio, :before_run] and
       ((offset?(offset) and offset <= confirmed and unsigned?(uncertainty)) or
          (offset == nil and uncertainty == nil and reason not in [nil, :partial_start]))
+  end
+
+  defp valid?({:room_turn_completed, generation, reference, turn, command, at}) do
+    is_reference(generation) and is_reference(reference) and identifier?(turn) and
+      identifier?(command) and signed?(at)
   end
 
   defp valid?({:turn_link, source_generation, source_turn, generation, turn}) do

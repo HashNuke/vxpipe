@@ -145,6 +145,35 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
     assert %{pending_count: 0} = CaptureHandoff.stats(handoff)
   end
 
+  test "room completion IDs are detached and bounded before retention" do
+    {:ok, handoff} = new_handoff()
+    backing = :binary.copy("x", 100_000)
+    id = binary_part(backing, 1, 128)
+    generation = make_ref()
+    reference = make_ref()
+
+    assert :ok =
+             CaptureHandoff.offer(
+               handoff,
+               {:room_turn_completed, generation, reference, id, id, 0}
+             )
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
+
+    assert {:ok, {:room_turn_completed, ^generation, ^reference, turn, command, 0}, charge} =
+             CaptureHandoff.message(handoff, message)
+
+    assert :binary.referenced_byte_size(turn) == 128
+    assert :binary.referenced_byte_size(command) == 128
+    CaptureHandoff.release(handoff, charge, :processed)
+
+    assert {:error, :invalid_evidence} =
+             CaptureHandoff.offer(
+               handoff,
+               {:room_turn_completed, generation, reference, :binary.copy("x", 257), id, 0}
+             )
+  end
+
   defp new_handoff(options \\ []),
     do: CaptureHandoff.new(self(), Keyword.put(options, :projection, @projection))
 

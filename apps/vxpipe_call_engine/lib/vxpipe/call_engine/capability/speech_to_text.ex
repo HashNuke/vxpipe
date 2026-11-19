@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
   alias Vxpipe.CallEngine.Capability.SpeechToText.{PolicyPreparation, PrivateAllocation, Usage}
-  alias Vxpipe.CallEngine.Diagnostics.AudioTap
+  alias Vxpipe.CallEngine.Diagnostics.{AudioTap, CaptureHandoff}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -306,9 +306,30 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     state = %{state | readiness_status: readiness} |> Usage.start_session()
     signal = %{signal | policy_revision: state.policy_revision}
     state = Usage.observe_signal(state, signal)
-    send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
+    notify_signal(state, signal)
     {:noreply, %{state | last_provider_sequence: signal.provider_sequence}}
   end
+
+  defp notify_signal(
+         %{
+           diagnostic_tap: %AudioTap{
+             generation: generation,
+             policy_revision: revision,
+             handoff: handoff
+           },
+           policy: %Snapshot{revision: revision}
+         } = state,
+         %Signal{kind: :turn_ended, allocation_generation: generation} = signal
+       ) do
+    if CaptureHandoff.current?(handoff) do
+      send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal, handoff})
+    else
+      send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
+    end
+  end
+
+  defp notify_signal(state, signal),
+    do: send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
 
   # Startup readiness collectors re-probe on this notification instead of waiting for a poll.
   defp announce_readiness({:noreply, state} = result, previous) do

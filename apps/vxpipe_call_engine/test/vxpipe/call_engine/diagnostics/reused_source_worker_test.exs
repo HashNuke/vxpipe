@@ -148,6 +148,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     assert %{pending_count: 0} = CaptureHandoff.stats(ctx.input)
   end
 
+  test "room completion keeps its original acceptance timestamp through the worker", ctx do
+    completion = {:room_turn_completed, make_ref(), make_ref(), "turn", "command", -123}
+    offer(ctx, completion)
+    assert ^completion = packet(ctx)
+  end
+
   defp offer(ctx, packet), do: assert(:ok == CaptureHandoff.offer(ctx.input, packet))
 
   defp packet(ctx) do

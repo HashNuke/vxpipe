@@ -29,6 +29,43 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     :ok
   end
 
+  test "only a current observation handle accompanies completion to the owning room" do
+    {capability, generation, frame} = capability(:ok)
+    handoff = handoff(capability)
+    assert :ok = attach(capability, generation, frame, handoff)
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    reference = make_ref()
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: reference]})
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended, [turn_ref: reference, text: "", endpointing: :provider_gap]}
+             )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{
+                      kind: :turn_ended,
+                      allocation_generation: ^generation,
+                      turn_ref: ^reference
+                    }, ^handoff}
+
+    CaptureHandoff.close(handoff)
+    next = make_ref()
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: next]})
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended, [turn_ref: next, text: "", endpointing: :provider_gap]}
+             )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :turn_ended, turn_ref: ^next}}
+  end
+
   test "accepted PCM reaches its exact source tap without changing provider admission" do
     {capability, generation, frame} = capability(:ok)
     handoff = handoff(capability, maximum_count: 1)

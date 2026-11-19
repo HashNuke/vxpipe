@@ -815,3 +815,19 @@ Two retained VAD ordering regressions were red before correction. Affected suite
 corrected live baseline test barrier; a new run predates the final VAD correction.
 Room-turn and response association, collector persistence and automatic source
 attachment remain incomplete, so the combined C correlation tasks stay unchecked.
+
+
+## Checkpoint C accepted room-turn timing — 2026-11-19
+
+STT completion now carries its current source capture to the owning room. After
+existing identity and active-turn validation, the room records its accepted turn
+and command IDs alongside canonical speech references and a monotonic timestamp
+before response dispatch. Bounded packets detach identifiers and preserve the
+original time through source forwarding. Missing/revoked/full observation does
+not alter completion; non-LLM and STS paths emit no room diagnostic evidence.
+
+Focused tests121/0 and broader room tests386/0 pass, as do static gates and Lean.
+Astra xhigh review is clean (eight independent probes). The preceding full umbrella
+run passed but predates this checkpoint and the final provider-link correction.
+Response association, automatic source attachment and collector persistence remain
+open; the combined C correlation tasks remain unchecked.

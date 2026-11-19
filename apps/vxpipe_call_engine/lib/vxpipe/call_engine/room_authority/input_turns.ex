@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.Diagnostics.CaptureHandoff
 
   alias Vxpipe.CallEngine.Event.{
     ParticipantTranscription,
@@ -69,7 +70,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   end
 
   @spec speech_to_text(pid(), map(), Signal.t(), State.t()) :: State.t()
-  def speech_to_text(capability, identity, %Signal{} = signal, %State{} = state) do
+  def speech_to_text(
+        capability,
+        identity,
+        %Signal{} = signal,
+        %State{} = state,
+        observation \\ nil
+      ) do
+    observation =
+      case observation do
+        %CaptureHandoff{owner: ^capability} -> observation
+        _ -> nil
+      end
+
     case ConnectionLifecycle.authorized_speech_to_text(capability, identity, state) do
       {:ok, connection_id, connection} ->
         if STSSourceCutover.private_input_held?(state, connection_id) and
@@ -77,7 +90,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
           state
         else
           if current_native_signal?(signal, connection, state),
-            do: apply_speech_to_text_signal(signal, connection_id, connection, state),
+            do:
+              apply_speech_to_text_signal(signal, connection_id, connection, state, observation),
             else: state
         end
 
@@ -90,7 +104,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
          %Signal{kind: :connected} = signal,
          connection_id,
          %{speech_to_text: %{capability: capability}},
-         state
+         state,
+         _observation
        ) do
     case STSSourceCutover.active?(state) do
       true ->
@@ -107,7 +122,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
          %Signal{kind: :turn_started} = signal,
          connection_id,
          connection,
-         state
+         state,
+         _observation
        ) do
     begin_audio_turn(signal, connection_id, connection, state)
   end
@@ -116,7 +132,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
          %Signal{kind: :transcript_updated} = signal,
          connection_id,
          _connection,
-         state
+         state,
+         _observation
        ) do
     update_audio_transcription(signal, connection_id, state)
   end
@@ -125,12 +142,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
          %Signal{kind: :turn_ended} = signal,
          connection_id,
          connection,
-         state
+         state,
+         observation
        ) do
-    complete_audio_turn(signal, connection_id, connection, state)
+    complete_audio_turn(signal, connection_id, connection, state, observation)
   end
 
-  defp apply_speech_to_text_signal(_signal, _connection_id, _connection, state), do: state
+  defp apply_speech_to_text_signal(_signal, _connection_id, _connection, state, _observation),
+    do: state
 
   defp begin_audio_turn(signal, connection_id, connection, state) do
     if not MapSet.member?(state.held_participant_ids, connection.participant_id) and
@@ -211,10 +230,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     end
   end
 
-  defp complete_audio_turn(signal, connection_id, connection, state) do
+  defp complete_audio_turn(signal, connection_id, connection, state, observation) do
     turn = connection.speech_to_text.turn
 
     if matching_active_turn?(turn, signal) and is_binary(signal.text) do
+      observe_completion(observation, turn, state)
       turn = %{turn | last_text: signal.text}
 
       state =
@@ -230,6 +250,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       state
     end
   end
+
+  defp observe_completion(%CaptureHandoff{} = handoff, turn, state) do
+    if state.text_capability != nil and state.speech_to_speech_runtime == nil and
+         state.speech_to_speech_capability == nil and is_reference(turn.allocation_generation) and
+         is_reference(turn.turn_ref) do
+      _ =
+        CaptureHandoff.offer(
+          handoff,
+          {:room_turn_completed, turn.allocation_generation, turn.turn_ref, turn.id,
+           turn.command_id, System.monotonic_time(:microsecond)}
+        )
+    end
+
+    :ok
+  end
+
+  defp observe_completion(_observation, _turn, _state), do: :ok
 
   defp emit_participant_transcription(connection_id, turn, text, final, state) do
     connection = Map.fetch!(state.connections, connection_id)
