@@ -74,13 +74,14 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
+    variables = CallVariables.whereis(room.incarnation_id)
+    # The baseline is published from handle_continue after child startup returns.
+    _ = :sys.get_state(variables)
 
     assert {:ok, initial} = await_snapshot(plan, &(&1.latest_variable_revision == 0))
     assert initial.incarnation_id == room.incarnation_id
     assert Enum.any?(initial.records, &match?(%Fact{kind: :room_opened}, &1))
     assert Enum.any?(initial.records, &match?(%BaselineSnapshot{global_revision: 0}, &1))
-
-    variables = CallVariables.whereis(room.incarnation_id)
 
     assert {:ok, command} =
              UpdateCallVariables.new(
