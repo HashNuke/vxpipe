@@ -1847,3 +1847,29 @@ The old coordinator remains the only composed owner. The broader reuse/fallback
 and source/mode matrix, real room notifications, Calls port composition,
 canonical no-agent rows and single-owner cutover remain pending. No C migration
 checkbox is closed, no live provider tests ran, and nothing was deployed.
+
+
+## Migration step 3 room-service mode and reconnect matrix — 2026-11-19
+
+Direct RoomService tests now exercise ConversationalSTT with synthetic Scribe and
+separate deterministic operational/benchmark classifiers. All four local-Silero /
+collection combinations use the expected inference path. Disable/re-enable leaves
+the operational sample cursor continuous while diagnostic fallback stops when
+collection is off. Both directions of mode change through accepted STT replacement
+retire the old observer before adopting a distinct run/allocation/source epoch;
+only one room worker and source slot remain occupied.
+
+Assertions cover exact provider bytes for discovery and marker frames, unexpected
+extra audio and commits, and no duplicate marker inference. Review mutations found
+and corrected gaps for corrupted discovery silence, late replayed audio and commits
+on the retired wire. Synthetic receipt timestamps are chosen after each fresh run
+origin; these tests establish routing and inference ownership, not measured latency
+or acoustic accuracy.
+
+The full room-service selection passes 20/20 and root static gates pass. Final
+scoped Astra review is clean: six baseline cases pass; each injected byte/commit
+fault is rejected by the affected cases. See
+[checkpoint labnotes](../20261119-1708-room-vad-matrix.md).
+The combined migration task remains open for the remaining lifecycle/stale-work
+coverage and production cutover. No runtime implementation, provider configuration,
+live tests or deployment changed in this checkpoint.

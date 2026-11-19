@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
         {Agent,
          fn ->
            %{
-             enabled: true,
+             enabled: Map.get(context, :collection, true),
              revision: 1,
              now: System.monotonic_time(:millisecond)
            }
@@ -72,6 +72,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
 
     {:ok, config} = Scribe.new(api_key: "synthetic", commit_strategy: :vad)
 
+    {provider, private} = provider_options(context, config, parent)
+
     capability =
       start_supervised!(
         {SpeechToText,
@@ -82,8 +84,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
          participant_id: "human",
          connection_id: "connection",
          speech_scope: Vxpipe.CallEngine.Speech.CapabilityTree.scope(tree),
-         provider: {STTSession, [commit_strategy: :vad]},
-         provider_private: [config: config, wire_module: Wire, wire_options: [observer: self()]],
+         provider: provider,
+         provider_private: private,
          initial_policy: policy}
       )
 
@@ -120,6 +122,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
          projection: __MODULE__.Projection,
          attachment_gate: AttachmentLease.gate(1),
          maximum_sources: 1,
+         load: fn -> {:ok, :fixture_model} end,
+         classify: classifier(parent, :benchmark),
          poll_interval_ms: 1_000}
       )
 
@@ -144,7 +148,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
       payload: <<0, 0, 1, 0>>
     }
 
-    %{settings: settings, capability: capability, room: room, pool: pool, frame: frame}
+    %{
+      settings: settings,
+      capability: capability,
+      room: room,
+      pool: pool,
+      frame: frame,
+      wire: wire
+    }
   end
 
   test "room service attaches its accepted input without a selected agent", ctx do
@@ -386,6 +397,271 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     attach(%{ctx | frame: %{ctx.frame | sequence_number: 2}})
   end
 
+  for vad <- [false, true], collection <- [false, true] do
+    @tag local_vad: vad, collection: collection
+    @vad vad
+    @collection collection
+    test "room input uses one inference path with local VAD #{@vad} and collection #{@collection}",
+         ctx do
+      start_port()
+      start_room(ctx)
+      frame = %{ctx.frame | payload: :binary.copy(<<0, 0>>, 512)}
+
+      if ctx.collection do
+        attach(%{ctx | frame: frame})
+        worker = :sys.get_state(ctx.capability).diagnostic_tap.handoff.receiver
+
+        assert :sys.get_state(worker).mode ==
+                 if(ctx.local_vad, do: :operational_reuse, else: :benchmark_only)
+      else
+        assert %{active_sources: 0, pending?: false} = RoomService.scan(__MODULE__.Service)
+        assert :ok = SpeechToText.push_audio(ctx.capability, frame)
+        assert DynamicSupervisor.which_children(__MODULE__.RoomWorkers) == []
+      end
+
+      wire = ctx.wire
+      initial_pcm = frame.payload
+      assert_receive {:scribe_audio, ^wire, ^initial_pcm}, 1_000
+      pcm = :binary.copy(<<7, 0>>, 512)
+
+      assert :ok =
+               SpeechToText.push_audio(ctx.capability, %{
+                 frame
+                 | payload: pcm,
+                   sequence_number: 2,
+                   timestamp: 512,
+                   received_at: System.monotonic_time(:millisecond) + 32
+               })
+
+      assert_receive {:scribe_audio, ^wire, ^pcm}, 1_000
+
+      cond do
+        ctx.local_vad -> assert_receive {:matrix_inference, :operational, 512, ^pcm}, 1_000
+        ctx.collection -> assert_receive {:matrix_inference, :benchmark, _, ^pcm}, 1_000
+        true -> :ok
+      end
+
+      unexpected = if ctx.local_vad, do: :benchmark, else: :operational
+      refute_receive {:matrix_inference, ^unexpected, _, ^pcm}, 100
+      refute_received {:matrix_inference, _, _, ^pcm}
+      refute_received {:scribe_audio, ^wire, ^pcm}
+      refute_received {:scribe_commit, ^wire}
+
+      if not ctx.collection do
+        refute_received {:collector_started, _}
+        refute_received {:matrix_inference, :benchmark, _, ^pcm}
+      end
+
+      old = :sys.get_state(ctx.capability).diagnostic_tap
+      monitor = if old, do: Process.monitor(old.handoff.receiver)
+      enable(ctx.settings, false, 2)
+
+      assert %{pending?: false, last_reason: :settings_unavailable} =
+               RoomService.scan(__MODULE__.Service)
+
+      if old do
+        send(old.handoff.receiver, :check_grant)
+        assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+        refute CaptureHandoff.current?(old.handoff)
+      end
+
+      off_pcm = :binary.copy(<<8, 0>>, 512)
+
+      assert :ok =
+               SpeechToText.push_audio(ctx.capability, %{
+                 frame
+                 | payload: off_pcm,
+                   sequence_number: 3,
+                   timestamp: 1_024,
+                   received_at: System.monotonic_time(:millisecond) + 32
+               })
+
+      assert_receive {:scribe_audio, ^wire, ^off_pcm}, 1_000
+
+      if ctx.local_vad,
+        do: assert_receive({:matrix_inference, :operational, 1_024, ^off_pcm}, 1_000)
+
+      refute_receive {:matrix_inference, _, _, ^off_pcm}, 100
+      assert DynamicSupervisor.which_children(__MODULE__.RoomWorkers) == []
+      enable(ctx.settings, true, 3)
+
+      restarted =
+        attach(%{
+          ctx
+          | frame: %{
+              frame
+              | sequence_number: 4,
+                timestamp: 1_536,
+                received_at: System.monotonic_time(:millisecond) + 32
+            }
+        })
+
+      assert_receive {:scribe_audio, ^wire, ^initial_pcm}, 1_000
+      assert restarted.mode == if(ctx.local_vad, do: :operational_reuse, else: :benchmark_only)
+      on_pcm = :binary.copy(<<9, 0>>, 512)
+
+      assert :ok =
+               SpeechToText.push_audio(ctx.capability, %{
+                 frame
+                 | payload: on_pcm,
+                   sequence_number: 5,
+                   timestamp: 2_048,
+                   received_at: System.monotonic_time(:millisecond) + 32
+               })
+
+      assert_receive {:scribe_audio, ^wire, ^on_pcm}, 1_000
+      expected = if ctx.local_vad, do: :operational, else: :benchmark
+      assert_receive {:matrix_inference, ^expected, samples, ^on_pcm}, 1_000
+      if ctx.local_vad, do: assert(samples == 2_048)
+      refute_receive {:matrix_inference, _, _, ^on_pcm}, 100
+      refute_received {:scribe_audio, ^wire, ^off_pcm}
+      refute_received {:scribe_audio, ^wire, _}
+      refute_received {:scribe_commit, ^wire}
+    end
+  end
+
+  for initial_vad <- [false, true] do
+    @tag local_vad: initial_vad
+    @initial_vad initial_vad
+    test "reconnecting STT replaces local VAD #{@initial_vad} with the other mode", ctx do
+      start_port()
+      start_room(ctx)
+      frame = %{ctx.frame | payload: :binary.copy(<<0, 0>>, 512)}
+      first = attach(%{ctx | frame: frame})
+      first_wire = ctx.wire
+      initial_pcm = frame.payload
+      assert_receive {:scribe_audio, ^first_wire, ^initial_pcm}, 1_000
+      old_input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
+      monitor = Process.monitor(old_input.receiver)
+      replacement = replacement_input(ctx, not ctx.local_vad)
+
+      :sys.replace_state(ctx.room, fn state ->
+        connection = Map.fetch!(state.connections, "connection")
+
+        %{
+          state
+          | connections:
+              Map.put(state.connections, "connection", %{
+                connection
+                | speech_to_text: %{capability: replacement.capability}
+              })
+        }
+      end)
+
+      RoomService.notify(__MODULE__.Service)
+      _ = RoomService.scan(__MODULE__.Service)
+      send(old_input.receiver, :check_grant)
+      assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+      refute CaptureHandoff.current?(old_input)
+      _ = RoomService.scan(__MODULE__.Service)
+      second = attach(replacement)
+      wire = replacement.wire
+      assert_receive {:scribe_audio, ^wire, ^initial_pcm}, 1_000
+      assert second.run_id != first.run_id
+      assert second.generation != first.generation
+      assert second.source_epoch != first.source_epoch
+      assert second.mode == if(ctx.local_vad, do: :benchmark_only, else: :operational_reuse)
+
+      assert %{occupied_slots: 1, active_sources: 1} =
+               SourceAdmission.status(__MODULE__.Admission)
+
+      assert length(DynamicSupervisor.which_children(__MODULE__.RoomWorkers)) == 1
+      pcm = :binary.copy(<<11, 0>>, 512)
+
+      assert :ok =
+               SpeechToText.push_audio(replacement.capability, %{
+                 replacement.frame
+                 | payload: pcm,
+                   sequence_number: 2,
+                   timestamp: 512,
+                   received_at: System.monotonic_time(:millisecond) + 32
+               })
+
+      assert_receive {:scribe_audio, ^wire, ^pcm}, 1_000
+      expected = if ctx.local_vad, do: :benchmark, else: :operational
+      assert_receive {:matrix_inference, ^expected, _, ^pcm}, 1_000
+      refute_receive {:matrix_inference, _, _, ^pcm}, 100
+      refute_received {:scribe_audio, _, _}
+      refute_received {:scribe_commit, _}
+    end
+  end
+
+  defp replacement_input(ctx, vad) do
+    tree =
+      start_supervised!({Vxpipe.CallEngine.Speech.CapabilityTree, owner: self()},
+        id: :replacement_tree
+      )
+
+    {:ok, config} = Scribe.new(api_key: "synthetic", commit_strategy: :vad)
+    {provider, private} = provider_options(%{local_vad: vad}, config, self())
+    policy = :sys.get_state(ctx.capability).policy
+
+    capability =
+      start_supervised!(
+        {SpeechToText,
+         owner: self(),
+         tenant_id: "tenant",
+         room_id: "room",
+         incarnation_id: "incarnation",
+         participant_id: "human",
+         connection_id: "connection",
+         speech_scope: Vxpipe.CallEngine.Speech.CapabilityTree.scope(tree),
+         provider: provider,
+         provider_private: private,
+         initial_policy: policy},
+        id: :replacement_capability
+      )
+
+    assert_receive {:scribe_started, wire}
+
+    Wire.deliver_frame(
+      wire,
+      JSON.encode!(%{
+        "message_type" => "session_started",
+        "session_id" => "replacement",
+        "config" => echoed_settings()
+      })
+    )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _, _}, 1_000
+    assert :ok = Enforcer.apply(capability, policy, 1_000)
+
+    %{
+      ctx
+      | capability: capability,
+        wire: wire,
+        frame: %{ctx.frame | source_epoch: make_ref(), payload: :binary.copy(<<0, 0>>, 512)}
+    }
+  end
+
+  defp provider_options(context, config, parent) do
+    private = [config: config, wire_module: Wire, wire_options: [observer: parent]]
+
+    if Map.has_key?(context, :local_vad) do
+      {{Vxpipe.CallEngine.Speech.ConversationalSTT,
+        [provider: STTSession, options: [commit_strategy: :vad], vad: context.local_vad]},
+       [
+         recognizer: STTSession,
+         recognizer_options: [commit_strategy: :vad],
+         recognizer_private: private,
+         activity_options: [
+           load: fn -> {:ok, :fixture_model} end,
+           classify: classifier(parent, :operational)
+         ]
+       ]}
+    else
+      {{STTSession, [commit_strategy: :vad]}, private}
+    end
+  end
+
+  defp classifier(parent, mode) do
+    fn _model, stream, pcm ->
+      send(parent, {:matrix_inference, mode, stream.samples, pcm})
+      count = div(byte_size(pcm), 1_024)
+      {:ok, %{stream | samples: stream.samples + count * 512}, List.duplicate(0.0, count)}
+    end
+  end
+
   defp wait_slots(expected, deadline) do
     case SourceAdmission.status(__MODULE__.Admission) do
       %{occupied_slots: ^expected} ->
@@ -553,6 +829,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     assert_receive {:collector_started, context}, 1_000
     assert context.participant_id == "human"
     assert %{active_sources: 1} = settled()
+    context
   end
 
   defp start_port(collector \\ nil) do
