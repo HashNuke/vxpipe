@@ -28,6 +28,8 @@ defmodule Vxpipe.Calls.Diagnostics.Writer do
         Keyword.get_lazy(options, :admission_gate, fn ->
           AdmissionGate.new(Keyword.get(options, :maximum_count, 128))
         end),
+      owner_monitor:
+        if(Keyword.get(options, :owner), do: Process.monitor(Keyword.fetch!(options, :owner))),
       repository: Keyword.fetch!(options, :repository),
       task_supervisor: Keyword.fetch!(options, :task_supervisor),
       observer: Keyword.get(options, :observer),
@@ -104,6 +106,20 @@ defmodule Vxpipe.Calls.Diagnostics.Writer do
     if state.task, do: Task.shutdown(state.task, :brutal_kill)
     Handoff.abandon(state.handoff)
     {:stop, :normal, %{state | task: nil}}
+  end
+
+  def handle_info(
+        {:DOWN, reference, :process, _owner, _reason},
+        %{owner_monitor: reference} = state
+      ) do
+    Handoff.close(state.handoff)
+
+    unless state.draining? do
+      Process.send_after(self(), :drain_deadline, state.drain_timeout_ms)
+      send(self(), :check_drained)
+    end
+
+    {:noreply, %{state | draining?: true}}
   end
 
   def handle_info(_message, state), do: {:noreply, state}

@@ -140,6 +140,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
 
+  test "provider sample mapping passes through without acoustic work", ctx do
+    mapping = {:provider_sample_mapping, make_ref(), 1_000, 50_000}
+    offer(ctx, mapping)
+    assert ^mapping = packet(ctx)
+  end
+
   test "turn links pass through unchanged without acoustic work", ctx do
     link = {:turn_link, make_ref(), make_ref(), make_ref(), make_ref()}
     offer(ctx, link)

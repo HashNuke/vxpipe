@@ -526,3 +526,43 @@ mailbox of room requests, or derive source epochs from allocation IDs. Those wou
 respectively couple optional initialization to voice control, lose queue bounds,
 or join different transport sources. The coordinator is an attachment mechanism,
 not proof of persisted reports or acceptance of every live profile.
+
+## Live report collection and coverage
+
+The source-run report builder joins transient provider/canonical references and
+accepted room/command IDs. It retains a bounded evidence window (default1,024
+packets and1MiB charged packets plus derived reports; caps4,096/4MiB). Full capacity
+fails collection explicitly; it does not silently remove history or borrow a later
+turn. Reports change revision only when their evidence changes. Conflicting
+provider associations cannot manufacture stage durations; valid room/response
+stages remain visible independently.
+
+Acoustic availability additionally requires an explicit mapping from cumulative
+provider samples to the same source's normalized16kHz sample positions. Receipt
+ordering alone is insufficient. The mapping packet and downstream consumer are
+implemented; adapter production of verified anchors remains pending. Until then,
+real collection cannot claim available acoustic durations from these modules.
+Late unmapped boundaries conservatively invalidate uncertain estimates. Resets,
+partial intervals, resumed speech and conflicting provenance remain nullable.
+
+Calls owns the collector pool (default16, maximum32) alongside its existing writer
+and task supervisors. Each collector uses byte/count-bounded capture, a bounded
+report builder and the existing asynchronous persistence handoff. A250ms check
+handles revocation and observed loss; heartbeats occur every second. On close,
+capture stops first. Already admitted writes have at most2s to acknowledge settlement before a
+terminal record is offered and the writer begins its independently bounded drain.
+A missed deadline, discarded revision or known capture gap prevents complete
+coverage. A failed terminal write leaves the prior running record to become
+unconfirmed, rather than claiming that failure counters were durably delivered.
+Writers monitor collector ownership, so abrupt collector loss starts finite drain.
+
+This supplies a directly testable durable collector, not production activation.
+Acknowledged provider profiles, actual sample-anchor emission, application wiring,
+per-turn finalization policy and configured Scribe acceptance remain required.
+
+Finalization uses explicit writer acknowledgments, not a transient zero-pending
+counter snapshot. The observed-turn count includes storage-admission failures.
+Unmatched-provider counts describe retained landmarks without one unambiguous
+reportable provider identity (including suppressed many-to-one associations), not
+raw wire-message traffic. Known losses prevent complete coverage even when the
+remaining stored-row count matches.

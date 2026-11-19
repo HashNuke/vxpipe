@@ -317,6 +317,94 @@ defmodule Vxpipe.Persistence.LatencyStoreTest do
              LatencyStore.list_runs(Repo, run.tenant_key, run.call_id, 101, nil)
   end
 
+  test "live collector revisions survive collector and writer shutdown", %{call: call} do
+    alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+    alias Vxpipe.Calls.Diagnostics.Collector
+    parent = self()
+
+    start_supervised!(
+      {SettingsSupervisor,
+       name: __MODULE__.Settings,
+       projection: __MODULE__.Projection,
+       reader: __MODULE__.Reader,
+       clock: fn -> 0 end,
+       send_after: fn _, _, _ -> make_ref() end,
+       loader: fn ->
+         send(parent, :settings_loaded)
+         {:ok, %{enabled: true, revision: 1}}
+       end}
+    )
+
+    assert_receive :settings_loaded
+    _ = :sys.get_state(__MODULE__.Reader)
+    _ = :sys.get_state(__MODULE__.Projection)
+
+    start_supervised!(
+      {Vxpipe.Calls.Diagnostics.Supervisor,
+       name: __MODULE__.WritersRoot,
+       writer_supervisor: __MODULE__.Writers,
+       task_supervisor: __MODULE__.Tasks}
+    )
+
+    generation = make_ref()
+    reference = make_ref()
+    run = run(call)
+
+    collector =
+      start_supervised!(
+        {Collector,
+         run: run,
+         generation: generation,
+         origin_us: 0,
+         owner: self(),
+         coordinator: self(),
+         projection: __MODULE__.Projection,
+         writer_supervisor: __MODULE__.Writers,
+         utc_now: fn -> @now end,
+         writer_options: [
+           repository: {LatencyStore, Repo},
+           task_supervisor: __MODULE__.Tasks,
+           observer: self()
+         ]}
+      )
+
+    capture = Collector.handoff(collector)
+    assert_receive {:diagnostic_settled, writer, :stored}, 1_000
+
+    for packet <- [
+          {:provider_sample_mapping, generation, 0, 0},
+          {:provider_landmark, generation, reference, :provider_end_evidence, 70_000, 3_000},
+          {:room_turn_completed, generation, reference, "live-turn", "command", 71_000}
+        ],
+        do: assert(:ok == CaptureHandoff.offer(capture, packet))
+
+    assert_receive {:diagnostic_settled, ^writer, :stored}, 1_000
+
+    assert {:ok, [%{revision: first_revision, durations_us: %{speech_end_to_provider_end: nil}}]} =
+             LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
+
+    for packet <- [
+          {:acoustic_boundary, 0, :speech_started, 0, 10_000, 12_000, 1_000, nil},
+          {:acoustic_boundary, 0, :speech_ended, 512, 40_000, 90_000, 1_000, nil}
+        ],
+        do: assert(:ok == CaptureHandoff.offer(capture, packet))
+
+    assert_receive {:diagnostic_settled, ^writer, :stored}, 1_000
+    writer_monitor = Process.monitor(writer)
+    assert :ok = Collector.close(collector, :call_ended)
+    assert_receive {:DOWN, ^writer_monitor, :process, ^writer, :normal}, 1_000
+    assert {:ok, stored} = LatencyStore.fetch_run(Repo, run.tenant_key, run.call_id, run.id)
+    assert stored.state == :closed
+    assert stored.counts.observed_turns == 1
+
+    assert {:ok, [turn]} =
+             LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
+
+    assert turn.revision > first_revision
+    assert turn.durations_us.speech_end_to_provider_end == 30_000
+    assert turn.durations_us.observer_confirmation == 50_000
+  end
+
   defp put_turn(run, turn),
     do: LatencyStore.put_turn(Repo, run.tenant_key, run.call_id, run.incarnation_id, turn)
 

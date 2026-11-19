@@ -1,0 +1,358 @@
+defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
+  @moduledoc "Bounded source-run evidence joined by provider, canonical turn and command identity."
+  alias Vxpipe.CallEngine.Diagnostics.{CapturePacket, TurnTiming}
+
+  @provider_kinds %{
+    provider_text_commit: :provider_text_commit,
+    provider_end_evidence: :provider_end_received,
+    adapter_end_emission: :adapter_end_emitted
+  }
+  @enforce_keys [:generation, :clock_id, :origin_us, :maximum_packets, :maximum_bytes]
+  @derive {Inspect, only: [:maximum_packets, :maximum_bytes]}
+  defstruct @enforce_keys ++ [packets: %{}, reports: %{}]
+
+  def new(context, options \\ []) do
+    %__MODULE__{
+      generation: context.generation,
+      clock_id: context.clock_id,
+      origin_us: context.origin_us,
+      maximum_packets: bounded!(options, :maximum_packets, 1_024, 1..4_096),
+      maximum_bytes: bounded!(options, :maximum_bytes, 1_048_576, 1..4_194_304)
+    }
+  end
+
+  def observe(state, packet) do
+    with {:ok, _} <- CapturePacket.charge(packet),
+         packet = CapturePacket.copy(packet),
+         {:ok, key} <- key(packet),
+         :ok <- generation(state, packet),
+         :ok <- unique_room(state, packet),
+         :ok <- unique_link(state, packet),
+         {:ok, packet} <- merge(Map.get(state.packets, key), packet),
+         packets = Map.put(state.packets, key, CapturePacket.copy(packet)),
+         true <- map_size(packets) <= state.maximum_packets,
+         next = %{state | packets: packets},
+         next = %{next | reports: build(next)},
+         true <-
+           4 * :erlang.external_size({next.packets, next.reports}) + 512 <= state.maximum_bytes do
+      {:ok, next}
+    else
+      false -> {:error, :full}
+      error -> error
+    end
+  end
+
+  def reports(state), do: state.reports |> Map.values() |> Enum.sort_by(& &1.turn_id)
+
+  def counts(state) do
+    matched = MapSet.new(state.reports, fn {_key, report} -> report.provider_turn_id end)
+
+    unmatched =
+      Enum.count(state.packets, fn
+        {{:provider, generation, reference, _kind}, _packet} ->
+          not MapSet.member?(matched, identifier({generation, reference}))
+
+        _ ->
+          false
+      end)
+
+    %{observed_turns: map_size(state.reports), unmatched_provider_events: unmatched}
+  end
+
+  defp key({:provider_sample_mapping, generation, _, _}), do: {:ok, {:mapping, generation}}
+
+  defp key({:provider_landmark, generation, turn, kind, _, _}),
+    do: {:ok, {:provider, generation, turn, kind}}
+
+  defp key({:turn_link, generation, turn, _, _}), do: {:ok, {:link, generation, turn}}
+
+  defp key({:room_turn_completed, generation, turn, _, _, _}),
+    do: {:ok, {:room, generation, turn}}
+
+  defp key({:response_landmark, turn, command, _, kind, _}),
+    do: {:ok, {:response, turn, command, kind}}
+
+  defp key({:acoustic_boundary, epoch, kind, sample, _, _, _, _}),
+    do: {:ok, {:acoustic, epoch, kind, sample}}
+
+  defp key({:reset, epoch, reason, at}), do: {:ok, {:reset, epoch, reason, at}}
+  defp key(_), do: {:error, :invalid_evidence}
+
+  defp generation(state, {:room_turn_completed, generation, _, _, _, _}),
+    do: expected_generation(state, generation)
+
+  defp generation(state, {:turn_link, _, _, generation, _}),
+    do: expected_generation(state, generation)
+
+  defp generation(_state, _), do: :ok
+  defp expected_generation(%{generation: generation}, generation), do: :ok
+  defp expected_generation(_, _), do: {:error, :foreign_generation}
+
+  defp unique_room(state, {:room_turn_completed, generation, reference, turn, command, _}) do
+    collision? =
+      Enum.any?(state.packets, fn
+        {{:room, g, r}, {:room_turn_completed, _, _, old_turn, old_command, _}} ->
+          {g, r} != {generation, reference} and (old_turn == turn or old_command == command)
+
+        _ ->
+          false
+      end)
+
+    if collision?, do: {:error, :conflicting_evidence}, else: :ok
+  end
+
+  defp unique_room(_state, _packet), do: :ok
+
+  defp unique_link(state, {:turn_link, g, t, target_g, target_t}) do
+    if {g, t} != {target_g, target_t} and Map.has_key?(state.packets, {:room, g, t}),
+      do: {:error, :conflicting_evidence},
+      else: :ok
+  end
+
+  defp unique_link(state, {:room_turn_completed, g, t, _, _, _}) do
+    case Map.get(state.packets, {:link, g, t}) do
+      {:turn_link, ^g, ^t, target_g, target_t} when {g, t} != {target_g, target_t} ->
+        {:error, :conflicting_evidence}
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp unique_link(_state, _packet), do: :ok
+
+  defp merge(nil, packet), do: {:ok, packet}
+  defp merge(packet, packet), do: {:ok, packet}
+
+  defp merge(
+         {:provider_landmark, g, t, k, old, old_samples},
+         {:provider_landmark, g, t, k, at, samples}
+       ) do
+    if k == :provider_text_commit do
+      {:ok, {:provider_landmark, g, t, k, max(old, at), max(old_samples, samples)}}
+    else
+      {:error, :conflicting_evidence}
+    end
+  end
+
+  defp merge(_, _), do: {:error, :conflicting_evidence}
+
+  defp build(state) do
+    packets = Map.values(state.packets)
+    rooms = for {:room_turn_completed, _, _, _, _, _} = room <- packets, do: room
+    rows = Enum.map(rooms, &provider_row(state, packets, &1))
+
+    ends =
+      for {:provider_landmark, _, _, :provider_end_evidence, at, _} <- packets,
+          at >= state.origin_us,
+          do: at - state.origin_us
+
+    Map.new(rows, fn {room, timing, provider_ids} ->
+      {:room_turn_completed, generation, reference, turn, command, _} = room
+      finish = timing.landmarks_us[:provider_end_received]
+      previous = Enum.filter(ends, &(finish != nil and &1 < finish)) |> Enum.max(fn -> -1 end)
+      {timing, endpoint} = acoustic(state, timing, packets, previous, finish)
+
+      timing =
+        if length(provider_ids) > 1 or (finish != nil and Enum.count(ends, &(&1 == finish)) > 1),
+          do: elem(TurnTiming.invalidate_acoustic(timing, :ambiguous_boundary), 1),
+          else: timing
+
+      timing = validate_coverage(timing, endpoint, provider_ids, packets)
+
+      report =
+        timing
+        |> TurnTiming.report()
+        |> Map.merge(%{
+          turn_id: turn,
+          stt_allocation_id: identifier(generation),
+          provider_turn_id: if(length(provider_ids) == 1, do: identifier(hd(provider_ids))),
+          response_turn_id:
+            if(
+              Map.has_key?(timing.landmarks_us, :first_response_text) or
+                Map.has_key?(timing.landmarks_us, :first_audio_started),
+              do: command
+            ),
+          acoustic_sample: if(endpoint, do: elem(endpoint, 3)),
+          uncertainty_us: if(endpoint, do: elem(endpoint, 6))
+        })
+
+      key = {generation, reference}
+      old = Map.get(state.reports, key)
+
+      revision =
+        cond do
+          old == nil -> 1
+          Map.delete(old, :revision) == report -> old.revision
+          true -> old.revision + 1
+        end
+
+      {key, Map.put(report, :revision, revision)}
+    end)
+  end
+
+  defp provider_row(
+         state,
+         packets,
+         {:room_turn_completed, generation, reference, turn, command, at} = room
+       ) do
+    canonical = {generation, reference}
+    providers = for {:turn_link, g, t, ^generation, ^reference} <- packets, do: {g, t}
+    providers = Enum.uniq([canonical | providers])
+
+    timing =
+      observe_time(TurnTiming.new(state.clock_id), :room_turn_completed, at - state.origin_us)
+
+    {timing, ids} =
+      Enum.reduce(packets, {timing, []}, fn
+        {:provider_landmark, g, t, kind, time, _samples}, {timing, ids} ->
+          if {g, t} in providers do
+            {observe_time(timing, Map.fetch!(@provider_kinds, kind), time - state.origin_us),
+             Enum.uniq([{g, t} | ids])}
+          else
+            {timing, ids}
+          end
+
+        {:response_landmark, ^turn, ^command, _, kind, time}, {timing, ids} ->
+          landmark = if kind == :first_audio_start, do: :first_audio_started, else: kind
+          {observe_time(timing, landmark, time - state.origin_us), ids}
+
+        _, acc ->
+          acc
+      end)
+
+    timing =
+      if length(ids) > 1 do
+        %{timing | landmarks_us: Map.drop(timing.landmarks_us, Map.values(@provider_kinds))}
+      else
+        timing
+      end
+
+    {room, timing, ids}
+  end
+
+  defp acoustic(_state, timing, _packets, _previous, nil), do: {timing, nil}
+
+  defp acoustic(state, timing, packets, previous, finish) do
+    boundaries =
+      for {:acoustic_boundary, _, _, _, offset, _, _, _} = packet <- packets,
+          is_integer(offset) and offset > previous and offset <= finish,
+          do: packet
+
+    endpoint =
+      boundaries
+      |> Enum.filter(&(elem(&1, 2) == :speech_ended))
+      |> Enum.max_by(&elem(&1, 4), fn -> nil end)
+
+    resets =
+      for {:reset, _, reason, at} <- packets,
+          at - state.origin_us > previous and at - state.origin_us <= finish,
+          do: reason
+
+    reason = acoustic_reason(packets, boundaries, endpoint, resets, previous, finish)
+    timing = if reason, do: elem(TurnTiming.invalidate_acoustic(timing, reason), 1), else: timing
+
+    if endpoint do
+      timing =
+        timing
+        |> observe_time(:acoustic_end, elem(endpoint, 4))
+        |> observe_time(:observer_confirmed, elem(endpoint, 5))
+
+      {timing, endpoint}
+    else
+      {timing, nil}
+    end
+  end
+
+  defp acoustic_reason(_packets, _boundaries, _endpoint, [_ | _] = resets, _previous, _finish) do
+    cond do
+      :audio_gap in resets -> :audio_gap
+      :partial_start in resets -> :partial_start
+      :source_replaced in resets -> :source_changed
+      true -> :inference_reset
+    end
+  end
+
+  defp acoustic_reason(packets, boundaries, endpoint, [], previous, _finish) do
+    cond do
+      Enum.any?(packets, fn
+        {:acoustic_boundary, _, _, _, nil, confirmed, _, _} ->
+          confirmed > previous
+
+        _ ->
+          false
+      end) ->
+        :clock_uncertain
+
+      endpoint == nil ->
+        nil
+
+      elem(endpoint, 7) != nil ->
+        boundary_reason(elem(endpoint, 7))
+
+      Enum.any?(boundaries, &(elem(&1, 2) == :speech_started and elem(&1, 4) > elem(endpoint, 4))) ->
+        :ambiguous_boundary
+
+      not Enum.any?(
+        boundaries,
+        &(elem(&1, 2) == :speech_started and elem(&1, 1) == elem(endpoint, 1) and
+              elem(&1, 4) <= elem(endpoint, 4))
+      ) ->
+        :partial_start
+
+      true ->
+        nil
+    end
+  end
+
+  defp validate_coverage(timing, nil, _ids, _packets), do: timing
+
+  defp validate_coverage(timing, endpoint, [{g, t}], packets) do
+    mapping = Enum.find(packets, &match?({:provider_sample_mapping, ^g, _, _}, &1))
+
+    provider =
+      Enum.find(packets, &match?({:provider_landmark, ^g, ^t, :provider_end_evidence, _, _}, &1))
+
+    case {mapping, provider} do
+      {{:provider_sample_mapping, ^g, provider_origin, source_origin},
+       {:provider_landmark, ^g, ^t, _, _, samples}} ->
+        source_end = source_origin + samples - provider_origin
+
+        if samples >= provider_origin and elem(endpoint, 3) >= source_origin and
+             elem(endpoint, 3) <= source_end,
+           do: timing,
+           else: elem(TurnTiming.invalidate_acoustic(timing, :clock_uncertain), 1)
+
+      _ ->
+        elem(TurnTiming.invalidate_acoustic(timing, :clock_uncertain), 1)
+    end
+  end
+
+  defp validate_coverage(timing, _endpoint, _ids, _packets),
+    do: elem(TurnTiming.invalidate_acoustic(timing, :ambiguous_boundary), 1)
+
+  defp boundary_reason(:partial_start), do: :partial_start
+  defp boundary_reason(_), do: :clock_uncertain
+
+  defp observe_time(timing, kind, offset) do
+    case TurnTiming.observe(timing, kind, offset, timing.clock_id) do
+      {:ok, timing} -> timing
+      _ -> timing
+    end
+  end
+
+  defp identifier(value),
+    do:
+      value
+      |> :erlang.term_to_binary()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.url_encode64(padding: false)
+
+  defp bounded!(options, key, default, range) do
+    value = Keyword.get(options, key, default)
+
+    if is_integer(value) and value in range,
+      do: value,
+      else: raise(ArgumentError, "invalid report capacity")
+  end
+end

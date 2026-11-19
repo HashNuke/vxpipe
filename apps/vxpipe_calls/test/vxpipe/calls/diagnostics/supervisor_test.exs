@@ -23,7 +23,7 @@ defmodule Vxpipe.Calls.Diagnostics.SupervisorTest do
     assert :ok = Writer.drain(writer)
     assert_receive {:DOWN, ^monitor, :process, ^writer, :normal}
     assert DynamicSupervisor.which_children(__MODULE__.Writers) == []
-    assert length(Elixir.Supervisor.which_children(supervisor)) == 2
+    assert length(Elixir.Supervisor.which_children(supervisor)) == 3
   end
 
   test "unresolved admission remains bounded across replacement writers" do

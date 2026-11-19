@@ -115,6 +115,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
     Enum.all?([source_generation, source_turn, generation, turn], &is_reference/1)
   end
 
+  defp valid?({:provider_sample_mapping, generation, provider_sample, source_sample}) do
+    is_reference(generation) and unsigned?(provider_sample) and unsigned?(source_sample)
+  end
+
   defp valid?({:provider_landmark, generation, turn, kind, observed_at, samples}) do
     is_reference(generation) and is_reference(turn) and signed?(observed_at) and
       unsigned?(samples) and

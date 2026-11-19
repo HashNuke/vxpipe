@@ -221,6 +221,18 @@ defmodule Vxpipe.Calls.Diagnostics.WriterTest do
     end
   end
 
+  test "collector owner death starts a finite drain instead of orphaning its writer", context do
+    owner = start_supervised!({Agent, fn -> :owner end})
+    {writer, handoff} = writer(context, owner: owner)
+    run = run()
+    assert :ok = Handoff.offer(handoff, {:run, run})
+    assert_receive {:diagnostic_write, task, ^run}
+    monitor = Process.monitor(writer)
+    Agent.stop(owner)
+    send(task, {:finish, {:ok, run}})
+    assert_receive {:DOWN, ^monitor, :process, ^writer, :normal}
+  end
+
   defp writer(context, options \\ []) do
     writer =
       start_supervised!(

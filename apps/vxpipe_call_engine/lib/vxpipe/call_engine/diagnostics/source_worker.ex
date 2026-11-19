@@ -264,6 +264,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     emit(state, packet)
   end
 
+  defp process(state, {{:provider_sample_mapping, _, _, _} = packet, charge}) do
+    CaptureHandoff.release(state.input, charge, :processed)
+    emit(state, packet)
+  end
+
   defp process(state, {{:provider_landmark, _, _, _, _, _} = packet, charge}) do
     CaptureHandoff.release(state.input, charge, :processed)
     emit(state, packet)

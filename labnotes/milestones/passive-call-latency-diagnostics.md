@@ -902,3 +902,27 @@ Astra xhigh final re-review is clean with13 independent probes. The preceding fu
 umbrella run passed but predates this checkpoint; current-source root acceptance
 remains required. Live collection/persistence, configured-call acceptance and
 production composition remain open, so the combined C tasks stay unchecked.
+
+
+## Checkpoint C live correlation and durable collector — 2026-11-19
+
+The live source-run builder joins provider/canonical references with accepted room
+turns and response commands. Revisions preserve late confirmation; uncertainty,
+resumed speech, gaps and ambiguous provider identities cannot yield fabricated
+durations. Provider/source sample alignment is now an explicit required contract;
+its packet/consumer exist but actual adapter emission remains pending.
+
+Calls has a bounded collector pool using the existing asynchronous writer. It
+waits for admitted writes before terminal coverage, with finite shutdown deadlines;
+lost revisions and known audio gaps remain incomplete. An actual database test
+writes a pending row, revises it after late confirmation, drains both processes,
+and rereads durable evidence. Current affected Engine135/0, Calls32/0 and
+Persistence16/0 pass. Builder and collector Astra xhigh final reviews are clean;
+root static gates and Lean pass. Explicit writer acknowledgments fence final
+coverage against a reproduced settlement-counter race.
+
+The prior umbrella run was not frozen: it exposed two independently reproduced
+fixture races now fixed, an unreproduced briefing-voice recovery deadline, and a
+new persistence fixture using an old loaded capture-packet module. It is not root
+acceptance evidence. Production profile/mapping/wiring and configured-call
+acceptance remain open; combined C tasks are intentionally still unchecked.

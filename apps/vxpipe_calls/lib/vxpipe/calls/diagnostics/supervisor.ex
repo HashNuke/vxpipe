@@ -2,7 +2,7 @@ defmodule Vxpipe.Calls.Diagnostics.Supervisor do
   @moduledoc "Independent capacity for diagnostic persistence, outside call control and publication."
   use Supervisor
 
-  alias Vxpipe.Calls.Diagnostics.{AdmissionGate, Writer}
+  alias Vxpipe.Calls.Diagnostics.{AdmissionGate, Collector, Writer}
 
   def start_link(options) do
     Supervisor.start_link(__MODULE__, options, name: Keyword.get(options, :name, __MODULE__))
@@ -11,12 +11,20 @@ defmodule Vxpipe.Calls.Diagnostics.Supervisor do
   def start_writer(options, supervisor \\ Vxpipe.Calls.Diagnostics.WriterSupervisor),
     do: DynamicSupervisor.start_child(supervisor, {Writer, options})
 
+  def start_collector(options, supervisor \\ Vxpipe.Calls.Diagnostics.CollectorSupervisor),
+    do: DynamicSupervisor.start_child(supervisor, {Collector, options})
+
   @impl true
   def init(options) do
     maximum = Keyword.get(options, :maximum_writers, 64)
 
     if not (is_integer(maximum) and maximum in 1..1_024),
       do: raise(ArgumentError, "invalid diagnostic writer capacity")
+
+    collectors = Keyword.get(options, :maximum_collectors, 16)
+
+    if not (is_integer(collectors) and collectors in 1..32),
+      do: raise(ArgumentError, "invalid diagnostic collector capacity")
 
     admission_gate = AdmissionGate.new(maximum)
 
@@ -28,7 +36,12 @@ defmodule Vxpipe.Calls.Diagnostics.Supervisor do
        strategy: :one_for_one,
        extra_arguments: [admission_gate],
        name: Keyword.get(options, :writer_supervisor, Vxpipe.Calls.Diagnostics.WriterSupervisor),
-       max_children: maximum}
+       max_children: maximum},
+      {DynamicSupervisor,
+       strategy: :one_for_one,
+       name:
+         Keyword.get(options, :collector_supervisor, Vxpipe.Calls.Diagnostics.CollectorSupervisor),
+       max_children: collectors}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
