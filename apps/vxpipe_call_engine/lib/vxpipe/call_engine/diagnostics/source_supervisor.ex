@@ -1,14 +1,12 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
-  @moduledoc "Separate bounded source and inference supervision; model initialization is lazy."
+  @moduledoc "Shared lazy inference and injected collector port; source workers belong to rooms."
   use Supervisor
-  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
-  alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, Participant}
 
   alias Vxpipe.CallEngine.Diagnostics.{
-    AttachmentLease,
     InferenceAdmission,
     SourceAdmission,
-    SourceWorker
+    SourceWorker,
+    SourcePort
   }
 
   alias Vxpipe.CallEngine.Speech.{ActivityRuntime, ActivitySupervisor, Silero}
@@ -24,43 +22,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   def start_link(options),
     do: Supervisor.start_link(__MODULE__, options, name: Keyword.fetch!(options, :name))
 
-  @doc "Coordinator-only lifecycle operation; never invoke on the voice admission path."
-  def start_source(options, workers, runtime) do
-    {agent, options} = Keyword.pop(options, :agent)
-
-    if eligible_agent?(agent),
-      do:
-        AttachmentLease.operation(Keyword.get(options, :attachment_lease), fn ->
-          start_eligible_source(options, workers, runtime)
-        end),
-      else: {:error, :unsupported_agent}
-  end
-
   @doc "Room-owned input worker; the caller must prove its accepted STT binding before attachment."
   def start_input_source(options, workers, runtime, admission) do
     lease = Keyword.fetch!(options, :attachment_lease)
 
     with {:ok, options} <- inference_options(options, runtime) do
       SourceAdmission.start_worker(admission, lease, workers, {SourceWorker, options})
-    end
-  catch
-    :exit, _ -> {:error, :unavailable}
-  end
-
-  def eligible_agent?(%Participant{
-        kind: :agent,
-        capabilities: %Capabilities{
-          model_inference: %CapabilitySelection{kind: :model_inference},
-          speech_to_speech: nil
-        }
-      }),
-      do: true
-
-  def eligible_agent?(_agent), do: false
-
-  defp start_eligible_source(options, workers, runtime) do
-    with {:ok, options} <- inference_options(options, runtime) do
-      DynamicSupervisor.start_child(workers, {SourceWorker, options})
     end
   catch
     :exit, _ -> {:error, :unavailable}
@@ -86,17 +53,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
     options =
       Keyword.validate!(options, [
         :name,
-        :workers,
         :inference,
         :tasks,
         :runtime,
         :classify,
-        :coordinator,
         :collector,
-        :attachment_gate,
-        registry: Vxpipe.CallEngine.RoomRegistry,
+        port: SourcePort,
         projection: Vxpipe.CallEngine.Diagnostics.SettingsProjection,
-        poll_interval_ms: 250,
         maximum_sources: 16,
         max_jobs: 1,
         load_timeout_ms: 15_000,
@@ -105,20 +68,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
       ])
 
     names =
-      Enum.map([:name, :workers, :inference, :tasks, :runtime], &Keyword.fetch!(options, &1))
+      Enum.map([:name, :inference, :tasks, :runtime], &Keyword.fetch!(options, &1))
 
     maximum = Keyword.fetch!(options, :maximum_sources)
     jobs = Keyword.fetch!(options, :max_jobs)
 
-    unless Enum.all?(names, &(is_atom(&1) and &1 != nil)) and length(Enum.uniq(names)) == 5 and
+    unless Enum.all?(names, &(is_atom(&1) and &1 != nil)) and length(Enum.uniq(names)) == 4 and
              is_integer(maximum) and maximum in 1..32 and is_integer(jobs) and
              jobs in 1..min(maximum, 8) and
              Keyword.fetch!(options, :load_timeout_ms) in 1..15_000 and
              Keyword.fetch!(options, :inference_timeout_ms) in 1..2_000,
            do: raise(ArgumentError, "invalid diagnostic source pool")
-
-    options =
-      Keyword.put_new_lazy(options, :attachment_gate, fn -> AttachmentLease.gate(maximum) end)
 
     inference =
       options
@@ -134,33 +94,25 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
       |> Keyword.put(:name, Keyword.fetch!(options, :inference))
       |> Keyword.put(:diagnostic_capacity, maximum)
 
-    coordinator =
+    port =
       case Keyword.get(options, :collector) do
         nil ->
           []
 
         collector when is_function(collector, 1) ->
-          name = Keyword.fetch!(options, :coordinator)
-
-          unless is_atom(name) and name != nil and name not in names and
-                   is_atom(Keyword.fetch!(options, :registry)) and
-                   is_atom(Keyword.fetch!(options, :projection)) and
-                   Keyword.fetch!(options, :poll_interval_ms) in 10..1_000,
-                 do: raise(ArgumentError, "invalid diagnostic coordinator")
-
-          [{Vxpipe.CallEngine.Diagnostics.SourceCoordinator, options}]
+          [
+            {SourcePort,
+             name: Keyword.fetch!(options, :port),
+             collector: collector,
+             runtime: Keyword.fetch!(options, :runtime),
+             projection: Keyword.fetch!(options, :projection),
+             maximum_sources: maximum}
+          ]
 
         _ ->
           raise ArgumentError, "invalid diagnostic collector"
       end
 
-    Supervisor.init(
-      [
-        {ActivitySupervisor, inference},
-        {DynamicSupervisor,
-         name: Keyword.fetch!(options, :workers), strategy: :one_for_one, max_children: maximum}
-      ] ++ coordinator,
-      strategy: :one_for_all
-    )
+    Supervisor.init([{ActivitySupervisor, inference}] ++ port, strategy: :one_for_all)
   end
 end

@@ -9,7 +9,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     AgentRuntimeModelProvider,
     ModelFixture,
     SettingsSupervisor,
-    SourceCoordinator
+    RoomService,
+    RoomSupervisor
   }
 
   alias Vxpipe.CallEngine.Event.ParticipantTranscription
@@ -56,6 +57,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         :agent_runtime,
         &Keyword.put(&1, :fixture, {AgentRuntimeModelProvider, [fixture: model]})
       )
+      |> Keyword.put(:diagnostics, port: __MODULE__.Port)
       |> Keyword.put(:speech_to_text,
         providers: %{
           STTSession => [
@@ -141,12 +143,10 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
        maximum_collectors: 1,
        source_options: [
          name: __MODULE__.Sources,
-         workers: __MODULE__.Workers,
          inference: __MODULE__.Inference,
          tasks: __MODULE__.Tasks,
          runtime: __MODULE__.Runtime,
-         coordinator: __MODULE__.Coordinator,
-         poll_interval_ms: 250,
+         port: __MODULE__.Port,
          classify:
            if(matrix?,
              do: benchmark_classifier(parent, Map.get(tags, :diagnostic_failure)),
@@ -184,7 +184,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     sequence = discover_with_audio(attachment, identity, epoch, wire)
     sample_origin = sequence * 512
 
-    await(fn -> SourceCoordinator.status(__MODULE__.Coordinator).active_sources == 1 end)
+    await(fn -> RoomService.status(RoomService.address(identity)).active_sources == 1 end)
 
     run =
       await(fn ->
@@ -396,8 +396,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         else
           send_audio(attachment, identity, epoch, 0, 0, <<0::size(8192)>>)
           assert_receive {:scribe_audio, ^wire, _}, 2_000
-          _ = SourceCoordinator.scan(__MODULE__.Coordinator)
-          assert SourceCoordinator.status(__MODULE__.Coordinator).active_sources == 0
+          _ = RoomService.scan(RoomService.address(identity))
+          assert RoomService.status(RoomService.address(identity)).active_sources == 0
           1
         end
 
@@ -427,7 +427,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert {:ok, %{entries: []}} =
                  LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
 
-        assert DynamicSupervisor.count_children(__MODULE__.Workers).active == 0
+        assert DynamicSupervisor.count_children(RoomSupervisor.address(identity, :workers)).active ==
+                 0
       end
 
       assert {:ok, %{entries: before_toggle}} =
@@ -438,8 +439,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       next_sequence =
         if @diagnostics do
           change_diagnostics(false, c.settings_revision)
-          _ = SourceCoordinator.scan(__MODULE__.Coordinator)
-          await_diagnostic_drain()
+          _ = RoomService.scan(RoomService.address(identity))
+          await_diagnostic_drain(identity)
           send_audio(attachment, identity, epoch, sequence + 1, (sequence + 1) * 512, off_pcm)
           assert_receive {:scribe_audio, ^wire, ^off_pcm}, 2_000
 
@@ -491,8 +492,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert samples == (next_sequence + 1) * 512
       end
 
-      _ = SourceCoordinator.scan(__MODULE__.Coordinator)
-      await_diagnostic_drain()
+      _ = RoomService.scan(RoomService.address(identity))
+      await_diagnostic_drain(identity)
 
       replacement_sequence = discover_with_audio(attachment, identity, replacement_epoch, wire, 1)
       replacement_pcm = :binary.copy(<<11, 0>>, 512)
@@ -529,7 +530,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
              end)
 
       GenServer.stop(attachment.room_authority, :shutdown)
-      await_diagnostic_drain()
+      await_diagnostic_drain(identity)
 
       refute_received {:matrix_inference, _, _, ^replacement_probe}
       refute_received {:matrix_inference, _, _, ^replacement_pcm}
@@ -604,7 +605,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       end
 
       change_diagnostics(false, c.settings_revision)
-      await_diagnostic_drain()
+      await_diagnostic_drain(identity)
 
       if inference do
         {task, monitor} = inference
@@ -631,7 +632,22 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     assert_receive {:test_tts_transport_started, source_voice, _}, 5_000
     epoch = make_ref()
     sequence = discover_with_audio(attachment, identity, epoch, wire)
-    await(fn -> SourceCoordinator.status(__MODULE__.Coordinator).active_sources == 1 end)
+    await(fn -> RoomService.status(RoomService.address(identity)).active_sources == 1 end)
+    original_service = GenServer.whereis(RoomService.address(identity))
+
+    [{_, original_worker, _, _}] =
+      DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+
+    original_input = Vxpipe.CallEngine.Diagnostics.SourceWorker.handoff(original_worker)
+
+    original_run =
+      await(fn ->
+        case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
+          {:ok, %{entries: [%{run: run}]}} -> run
+          _ -> nil
+        end
+      end)
+
     emit_scribe_turn(wire, "Please transfer me.")
     assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = first_input}, 2_000
     assert_receive {:test_agent_runtime_stream, source_model, _}, 2_000
@@ -655,9 +671,21 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     # Routing changes the agent, while the caller retains its STT session.
     assert SpeechConnection.attachment(connection).media_ingress == attachment.media_ingress
     refute_received {:scribe_started, _}
-    # The agent-scoped diagnostic run retires on routing; ongoing caller audio
-    # lets discovery attach a new run without replacing the STT session.
-    _ = discover_with_audio(attachment, identity, epoch, wire, sequence)
+    # Agent routing preserves the accepted input and its existing acoustic run.
+    assert GenServer.whereis(RoomService.address(identity)) == original_service
+    _ = RoomService.scan(RoomService.address(identity))
+
+    assert {:ok, %{entries: [%{run: after_transfer}]}} =
+             LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+    assert after_transfer.id == original_run.id
+    assert after_transfer.closed_at == nil
+
+    assert Vxpipe.CallEngine.Diagnostics.CaptureHandoff.current?(original_input)
+
+    send_audio(attachment, identity, epoch, sequence, sequence * 512, :binary.copy(<<7, 0>>, 512))
+    assert_receive {:scribe_audio, ^wire, _}, 2_000
+    refute_received {:scribe_observing, ^wire, _}
     emit_scribe_turn(wire, "Please answer now.")
     assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = second_input}, 2_000
     refute second_input.correlation_id == first_input.correlation_id
@@ -724,7 +752,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     assert_receive {:test_audio_output_finish, ^sink, ^correlation}, 2_000
     :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
     GenServer.stop(attachment.room_authority, :shutdown)
-    await_diagnostic_drain()
+    await_diagnostic_drain(identity)
     tool_only = diagnostic_turn(call, first_input.correlation_id)
     assert tool_only.response_turn_id == nil
     refute Map.has_key?(tool_only.landmarks_us, :first_response_text)
@@ -761,11 +789,17 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end)
   end
 
-  defp await_diagnostic_drain do
+  defp await_diagnostic_drain(identity) do
     await(fn ->
-      Enum.all?([__MODULE__.Workers, __MODULE__.Collectors, __MODULE__.Writers], fn supervisor ->
-        DynamicSupervisor.count_children(supervisor).active == 0
-      end)
+      Enum.all?(
+        [RoomSupervisor.address(identity, :workers), __MODULE__.Collectors, __MODULE__.Writers],
+        fn supervisor ->
+          case GenServer.whereis(supervisor) do
+            nil -> true
+            pid -> DynamicSupervisor.count_children(pid).active == 0
+          end
+        end
+      )
     end)
   end
 
@@ -1010,9 +1044,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     after
       0 ->
         assert System.monotonic_time(:millisecond) < deadline,
-               "No observer: #{inspect(SourceCoordinator.status(__MODULE__.Coordinator))}"
+               "No observer: #{inspect(RoomService.status(RoomService.address(identity)))}"
 
-        _ = SourceCoordinator.scan(__MODULE__.Coordinator)
+        _ = RoomService.scan(RoomService.address(identity))
         send_audio(attachment, identity, epoch, sequence, sequence * 512, <<0::size(8192)>>)
         pace(32)
         discover_with_audio(attachment, identity, epoch, wire, sequence + 1, deadline)

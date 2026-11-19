@@ -101,7 +101,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
       installed = handoff(capability)
       assert :ok = attach(capability, generation, frame, installed)
       probe = handoff(capability)
-      assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+      assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
       changed = policy(1, ["human"])
       changed = %{changed | effective: Map.put(changed.effective, @permission, false)}
       assert :ok = Enforcer.apply(capability, changed, 1_000)
@@ -152,7 +152,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     {:ok, initial} = Snapshot.prepare(policy(0, ["human"]), nil)
     {capability, generation, frame} = capability(:ok, initial_policy: initial)
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
     assert :ok = Enforcer.apply(capability, policy(1, ["human", "another"]), 1_000)
     assert :ok = SpeechToText.push_audio(capability, frame)
     assert_receive {:vxpipe_diagnostic_capture, _, _, packet, _} = message
@@ -293,7 +293,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     handoff = handoff(capability)
     assert :ok = attach(capability, generation, frame, handoff)
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
 
     assert {:ok, candidate} =
              Authority.preview_presence(
@@ -320,7 +320,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
   test "source discovery reports only the next accepted frame without retaining audio" do
     {capability, generation, frame} = capability(:ok)
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
     assert :ok = SpeechToText.push_audio(capability, frame)
     assert_receive {:probe_input, _}
@@ -337,14 +337,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
 
-  test "discovery excludes non-LLM agents and rejected audio" do
+  test "discovery excludes rejected audio independently of response agents" do
     {capability, _generation, frame} = capability({:error, :busy})
     probe = handoff(capability)
 
-    assert {:error, :unsupported_agent} =
-             SpeechToText.discover_diagnostics(capability, nil, probe)
-
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
     assert {:error, :unavailable} = SpeechToText.push_audio(capability, frame)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
@@ -352,12 +349,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
   test "revoked and policy-stale discovery cannot emit a source" do
     {capability, _generation, frame} = capability(:ok)
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
     CaptureHandoff.close(probe)
     assert :ok = SpeechToText.push_audio(capability, frame)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
     next = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), next)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, next)
     changed = put_in(policy(1, ["human"]).effective.record_audio, false)
     assert :ok = Enforcer.apply(capability, changed, 1_000)
     assert :ok = SpeechToText.push_audio(capability, frame)
@@ -367,17 +364,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
   test "discovery has one pending slot and expired requests cannot affect replacements" do
     {capability, _generation, frame} = capability(:ok)
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
     token = :sys.get_state(capability).diagnostic_probe.token
 
     assert {:error, :unavailable} =
-             SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
+             SpeechToText.discover_input_diagnostics(capability, handoff(capability))
 
     send(capability, {:diagnostic_probe_expired, token})
     assert :sys.get_state(capability).diagnostic_probe == nil
     refute CaptureHandoff.current?(probe)
     next = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), next)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, next)
     send(capability, {:diagnostic_probe_expired, token})
     assert :ok = SpeechToText.push_audio(capability, frame)
     assert_receive {:vxpipe_diagnostic_capture, _, _, {:source_ready, _, _, _, _, _, _, _, _}, _}
@@ -387,7 +384,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
   test "a delayed expiry message cannot let an expired request observe accepted audio" do
     {capability, _generation, frame} = capability(:ok)
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
 
     :sys.replace_state(capability, fn state ->
       %{
@@ -438,7 +435,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
       capability(:ok, initial_policy: base, incarnation_id: incarnation)
 
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
 
     assert {:ok, candidate} =
              Authority.preview_presence(
@@ -459,7 +456,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     assert_receive {:vxpipe_diagnostic_capture, _, _, {:source_ready, _, _, _, _, _, _, _, _}, _}
     assert :sys.get_state(capability).diagnostic_probe == nil
     assert :ok = Enforcer.apply(capability, candidate.snapshot, 1_000)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, handoff(capability))
   end
 
   defp await_prepared_connection(resource) do
@@ -551,7 +548,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
 
     assert :ok = :sys.install(control, {hook, 0})
     probe = handoff(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, probe)
     tasks = start_supervised!({Task.Supervisor, name: __MODULE__.Tasks})
 
     task =
@@ -563,17 +560,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     Process.send_after(control, :release_retirement, 600)
     assert {:error, :policy_not_ready} = Task.await(task, 1_500)
     assert {:ok, %{allocation_generation: ^generation}} = SpeechToText.input_binding(capability)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
-  end
-
-  defp llm_agent do
-    struct(Vxpipe.CallEngine.ResolvedCallPlan.Participant,
-      kind: :agent,
-      capabilities: %Vxpipe.CallEngine.ResolvedCallPlan.Capabilities{
-        model_inference:
-          struct(Vxpipe.CallEngine.CallSpec.CapabilitySelection, kind: :model_inference)
-      }
-    )
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, handoff(capability))
   end
 
   test "automatic attachment rejects the source intervals captured before a transition" do
@@ -613,7 +600,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
 
   test "missing diagnostic track metadata cannot change accepted speech input" do
     {capability, _generation, frame} = capability(:ok)
-    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), handoff(capability))
+    assert :ok = SpeechToText.discover_input_diagnostics(capability, handoff(capability))
     assert :ok = SpeechToText.push_audio(capability, Map.delete(frame, :track_id))
     assert_receive {:probe_input, _}
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}

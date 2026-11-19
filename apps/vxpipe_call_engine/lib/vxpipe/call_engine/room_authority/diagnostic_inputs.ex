@@ -81,6 +81,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.DiagnosticInputs do
 
   defp candidates(_state, _cursor, _limit), do: {:error, :unavailable}
 
+  # Dispatch holds (including agent preparation) do not revoke an accepted STT binding.
+  # These are candidates only; attachment and capture still enforce input-policy intervals.
   defp current_source?(
          %{
            role: :human,
@@ -93,8 +95,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.DiagnosticInputs do
        ) do
     is_pid(capability) and node(capability) == node() and identifier?(participant) and
       MapSet.member?(human_ids, participant) and
-      MapSet.member?(state.participant_ids, participant) and
-      not MapSet.member?(state.held_participant_ids, participant)
+      MapSet.member?(state.participant_ids, participant)
   end
 
   defp current_source?(_connection, _state, _human_ids), do: false

@@ -1,9 +1,9 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay extension implemented; room-service migration pending, 2026-11-19.
-A, B and existing D functionality are implemented. C must migrate from agent-selected
-background discovery to participant-owned observation managed by a room service.
-The new D segment/participant extensions, C migration, E and F remain incomplete.
+Status: records/replay and room-service cutover implemented; eligibility/UI acceptance pending, 2026-11-19.
+A, B and existing D functionality are implemented. C now uses participant-owned
+observation managed by a room service; broader eligibility and continuity acceptance remain.
+The new D segment/participant extensions, remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
 ## Runnable outcome
@@ -32,9 +32,8 @@ unchanged umbrella suite; they are not real calls or evidence of live Telnyx sup
 This revision follows the user's request to rethink the milestone. It supersedes
 agent-selected source discovery and agent-owned acoustic runs in the earlier
 implementation notes. Those notes remain historical evidence, not acceptance of
-the revised architecture. This is a specification change; the runtime migration
-has not reached room-service cutover. Implementation resumed after the user reviewed and
-updated this plan; the migration order below now governs the next checkpoints.
+the revised architecture. Implementation resumed after the user reviewed and updated this plan. Room-service
+cutover is now implemented; the migration order below governs the remaining checkpoints.
 
 ### Local VAD and provider endpointing are different signals
 
@@ -566,11 +565,11 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
   `attach_diagnostics/5` with the source's STT allocation generation plus
   `:speech_to_text`/`:audio_input` intervals. Unrelated revisions preserve the tap;
   interval change or `intervals: nil` authority change closes it.
-- [ ] Build the temporary, non-significant room diagnostics subtree with its own
+- [x] Build the temporary, non-significant room diagnostics subtree with its own
   restart intensity, the room service and room-local notification plus bounded
   snapshot reconciliation. Intensity exhaustion leaves the call open with
   incomplete coverage.
-- [ ] Start source workers inside that subtree, admitted through the node-wide
+- [x] Start source workers inside that subtree, admitted through the node-wide
   `AttachmentLease.gate` and `InferenceAdmission`; record `capacity_unavailable`
   and attach late as partial coverage when a slot frees. Test two rooms at the cap.
 - [ ] Resolve the Calls-composed node pool and collector by registered name; with
@@ -580,7 +579,7 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
 - [ ] Re-prove reuse/fallback through the room service: one inference execution per
   eligible frame, all local Silero/collection combinations, mid-call mode change,
   join/leave, reconnect, disable/re-enable and stale/late work.
-- [ ] Cut over in one checkpoint: compose the room service, stop starting
+- [x] Cut over in one checkpoint: compose the room service, stop starting
   `SourceCoordinator`, then remove scan and agent-identity checks from
   `SourceAttachment`, `DiagnosticSources` and `SourceSupervisor.eligible_agent?/1`.
   Port the configured tests, including the crash/hang parity tests.
@@ -1873,3 +1872,41 @@ fault is rejected by the affected cases. See
 The combined migration task remains open for the remaining lifecycle/stale-work
 coverage and production cutover. No runtime implementation, provider configuration,
 live tests or deployment changed in this checkpoint.
+
+
+## Migration step 4 — room-service cutover, 2026-11-19
+
+Planned rooms now compose one temporary, non-significant diagnostics subtree after
+RoomAuthority, owning per-input workers and bounded attachment work. Calls exposes
+its collector and shared inference through SourcePort. The node-wide coordinator,
+agent-selected source query and agent eligibility wrappers are removed. Lifecycle
+callbacks send asynchronous room-local hints; bounded source reconciliation remains
+authoritative. Calls restarts preserve Engine admission debt.
+
+Configured routing exposed a transient dispatch-hold bug: agent preparation holds
+connected participants although their accepted STT allocations survive. Excluding
+held candidates retired the acoustic run. Accepted-source candidates now survive
+that hold; allocation and source-policy interval gates still authorize all capture.
+Actual binding removal revokes observation. The input regression failed before the
+correction, and the configured test now preserves the same open run and capture
+through response-agent transfer. This does not yet prove the broader continuous
+input-during-transfer acceptance task.
+
+Design review, separate from implementation: source review confirmed that dispatch
+hold is not input revocation. The revised candidate contract retains source-policy,
+allocation, membership, admission and provider-profile checks at their existing
+boundaries. Scoped Astra review found no remaining correctness issues after this
+correction; no operational dispatch or provider behavior changed.
+
+Configured synthetic diagnostics pass 10/10, retaining collection on/off inference
+crash/hang and provider-byte assertions. Focused Engine diagnostic/source-boundary
+selection passes 296/296; subsequently retained room-service/composition probes pass
+30/30. Calls composition passes 4/4 and runtime configuration 12/12. Independent
+review passes 53/53, including completed-result expiry, real room teardown retaining
+capacity until worker DOWN, and optional restart exhaustion leaving the room open.
+Root static checks and Lean pass. See [cutover labnotes](../20261119-1722-room-service-cutover.md).
+
+The broad fresh-root/unresolved-start proof, complete source matrix, durable no-agent
+and mixed-room input rows, two-participant/API/UI extensions, distributed effective
+settings, E/F and final gates remain open. No live provider tests or deployment ran;
+the milestone index remains unchecked.

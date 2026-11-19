@@ -111,15 +111,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
       start_supervised!(
         {SourceSupervisor,
          name: __MODULE__.Pool,
-         workers: __MODULE__.Workers,
          inference: __MODULE__.Inference,
          tasks: __MODULE__.Tasks,
          runtime: __MODULE__.Runtime,
-         registry: __MODULE__.Rooms,
          projection: __MODULE__.Projection,
-         attachment_gate: AttachmentLease.gate(1),
-         maximum_sources: 1,
-         poll_interval_ms: 1_000}
+         maximum_sources: 1}
       )
 
     start_supervised!(
@@ -161,7 +157,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
     refute Map.has_key?(entry.context, :agent_id)
     assert [{_, worker, _, _}] = DynamicSupervisor.which_children(__MODULE__.RoomWorkers)
     assert worker == entry.worker
-    assert DynamicSupervisor.which_children(__MODULE__.Workers) == []
+    refute Process.whereis(__MODULE__.Workers)
     assert {:error, :capacity_unavailable} = SourceAdmission.reserve(__MODULE__.Admission, self())
 
     :sys.replace_state(

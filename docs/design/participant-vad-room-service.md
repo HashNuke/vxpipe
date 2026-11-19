@@ -1,6 +1,6 @@
 # Participant VAD observation owned by the room
 
-Status: input-interval fence implemented; room-service migration pending. 2026-11-19.
+Status: room-service cutover implemented; broader eligibility and acceptance pending. 2026-11-19.
 
 The implementation and acceptance plan is in
 [Passive call latency diagnostics and readable timelines](../../labnotes/milestones/passive-call-latency-diagnostics.md#architecture-revision--participant-owned-vad-2026-11-19).
@@ -170,12 +170,17 @@ coordinator or room composition changes in the admission primitive checkpoint.
 
 `RoomAuthority.DiagnosticInputs` exposes bounded pages and exact connection reads
 for accepted human STT bindings. It requires an open, ready room with matching
-plan/snapshot ownership, main admission, present unheld human membership and a
+plan/snapshot ownership, main admission, present human membership and a
 local STT capability binding. It returns only room/call/incarnation identity,
 participant/connection identity and the bound capability; no agent, prompt or
 provider configuration is returned. Selected response agents and room-level STS
 capabilities do not affect this input snapshot. An STT replacement changes the
 binding; an agent-only transfer leaves the same input identity intact.
+
+Dispatch holds are not source revocation: agent preparation temporarily holds
+connected participants while their accepted STT sessions survive. Such a hold does
+not remove a candidate or retire its acoustic run. Removing the binding, losing
+membership or changing accepted source authority still invalidates observation.
 
 This query is candidate evidence, not permission to inspect audio. Source policy
 intervals, current allocation, setting grants and source/profile proof still gate
@@ -275,3 +280,19 @@ No additional startup layer or generic room-service framework is needed.
 These direct synthetic tests establish component lifecycle and two-room admission,
 not production cutover, the full operational-Silero matrix, distributed settings
 acceptance, measured overhead or live provider acceptance.
+
+
+## Composed room ownership
+
+Planned RoomIncarnationSupervisor children now include the optional diagnostics
+subtree after RoomAuthority. The default port is the Calls-composed SourcePort;
+missing Calls infrastructure leaves the room available without observation.
+RoomAuthority sends asynchronous lifecycle hints through DiagnosticNotifications.
+The shared node pool owns model/inference and the injected collector boundary,
+while workers and the single attachment runner belong to the room. The old global
+coordinator and agent-selected query are removed; there is one observation owner.
+
+Real planned-room tests establish that room completion waits for admitted worker
+termination and retains its slot until DOWN. Exhausting diagnostic restarts leaves
+the authority open. The full fresh-Engine-root unresolved-start replacement proof
+and broader participant/turn acceptance remain separate open milestone checks.

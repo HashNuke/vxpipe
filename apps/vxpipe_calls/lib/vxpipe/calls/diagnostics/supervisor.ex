@@ -3,7 +3,7 @@ defmodule Vxpipe.Calls.Diagnostics.Supervisor do
   use Supervisor
 
   alias Vxpipe.Calls.Diagnostics.{AdmissionGate, Attachment, Collector, Writer}
-  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, SettingsProjection, SourceSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.{SettingsProjection, SourceSupervisor}
 
   def start_link(options) do
     Supervisor.start_link(__MODULE__, options, name: Keyword.get(options, :name, __MODULE__))
@@ -67,7 +67,6 @@ defmodule Vxpipe.Calls.Diagnostics.Supervisor do
           source_options
           |> Keyword.put(:projection, projection)
           |> Keyword.put(:maximum_sources, maximum)
-          |> Keyword.put(:attachment_gate, AttachmentLease.gate(maximum))
           |> Keyword.put(:collector, fn context -> Attachment.start(context, factory_options) end)
 
         [Supervisor.child_spec({SourceSupervisor, source_options}, restart: :permanent)]

@@ -3,7 +3,8 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
 
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
-    SourceCoordinator,
+    SourcePort,
+    SourceAdmission,
     SourceSupervisor,
     SettingsSupervisor
   }
@@ -38,11 +39,10 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
       repository: {Vxpipe.Calls.TestControlledLatencyRepository, self()},
       source_options: [
         name: __MODULE__.Sources,
-        workers: __MODULE__.SourceWorkers,
         inference: __MODULE__.Inference,
         tasks: __MODULE__.InferenceTasks,
         runtime: __MODULE__.Runtime,
-        coordinator: __MODULE__.Coordinator,
+        port: __MODULE__.Port,
         load: fn ->
           send(parent, :model_loaded)
           {:ok, :model}
@@ -59,41 +59,46 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
     %{root: root, options: options}
   end
 
-  test "configured diagnostics parent starts its source coordinator without enabling capture" do
-    assert %{active_sources: 0, pending?: false, last_reason: :settings_unavailable} =
-             SourceCoordinator.status(__MODULE__.Coordinator)
-
+  test "configured diagnostics parent exposes its named source port without capture" do
+    assert {:ok, %{maximum_sources: 1, runtime: runtime}} = SourcePort.read(__MODULE__.Port)
+    assert runtime == __MODULE__.Runtime
     assert DynamicSupervisor.which_children(__MODULE__.Collectors) == []
-    assert DynamicSupervisor.which_children(__MODULE__.SourceWorkers) == []
+
+    assert Enum.sort(Enum.map(Supervisor.which_children(__MODULE__.Sources), &elem(&1, 0))) ==
+             Enum.sort([Vxpipe.CallEngine.Speech.ActivitySupervisor, SourcePort])
+
     refute_received :model_loaded
     refute_received {:diagnostic_write, _, _}
   end
 
-  test "source subtree restart preserves parent admission reservations", c do
-    initial = :sys.get_state(__MODULE__.Coordinator)
-    {:ok, lease} = AttachmentLease.reserve(initial.attachment_gate, self())
-    assert AttachmentLease.pending(initial.attachment_gate) == 1
-    child_id = {SourceSupervisor, __MODULE__.Sources}
-    assert :ok = Supervisor.terminate_child(c.root, child_id)
-    assert {:ok, _} = Supervisor.restart_child(c.root, child_id)
-    restarted = :sys.get_state(__MODULE__.Coordinator)
-    assert restarted.attachment_gate == initial.attachment_gate
-    assert {:error, :unavailable} = AttachmentLease.reserve(restarted.attachment_gate, self())
+  test "Calls subtree and root replacement retain Engine admission debt", c do
+    {:ok, lease} = SourceAdmission.reserve(SourceAdmission, self(), 1)
 
-    stop_supervised!(DiagnosticsSupervisor)
-    start_supervised!({DiagnosticsSupervisor, c.options})
-    replaced = :sys.get_state(__MODULE__.Coordinator)
-    refute replaced.attachment_gate == initial.attachment_gate
-    assert AttachmentLease.pending(replaced.attachment_gate) == 0
-    AttachmentLease.cancel(lease)
-    AttachmentLease.finish(lease)
+    try do
+      child_id = {SourceSupervisor, __MODULE__.Sources}
+      assert :ok = Supervisor.terminate_child(c.root, child_id)
+      assert {:ok, _} = Supervisor.restart_child(c.root, child_id)
+      assert {:ok, _} = SourcePort.read(__MODULE__.Port)
+      assert {:error, :capacity_unavailable} = SourceAdmission.reserve(SourceAdmission, self(), 1)
+      stop_supervised!(DiagnosticsSupervisor)
+      start_supervised!({DiagnosticsSupervisor, c.options})
+      assert {:ok, _} = SourcePort.read(__MODULE__.Port)
+      assert {:error, :capacity_unavailable} = SourceAdmission.reserve(SourceAdmission, self(), 1)
+    after
+      SourceAdmission.cancel(SourceAdmission, lease)
+    end
   end
 
-  test "abrupt destination failure restarts every destination without resetting admission debt",
-       c do
-    initial = :sys.get_state(__MODULE__.Coordinator)
-    {:ok, lease} = AttachmentLease.reserve(initial.attachment_gate, self())
-    names = [__MODULE__.Sources, __MODULE__.Tasks, __MODULE__.Writers, __MODULE__.Collectors]
+  test "destination failure replaces the port without resetting Engine admission debt", c do
+    {:ok, lease} = SourceAdmission.reserve(SourceAdmission, self(), 1)
+
+    names = [
+      __MODULE__.Port,
+      __MODULE__.Sources,
+      __MODULE__.Tasks,
+      __MODULE__.Writers,
+      __MODULE__.Collectors
+    ]
 
     old =
       Enum.map(names, fn name ->
@@ -101,26 +106,28 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
         {name, pid, Process.monitor(pid)}
       end)
 
-    Process.exit(Process.whereis(__MODULE__.Writers), :kill)
+    try do
+      Process.exit(Process.whereis(__MODULE__.Writers), :kill)
 
-    Enum.each(old, fn {_name, pid, monitor} ->
-      assert_receive {:DOWN, ^monitor, :process, ^pid, _}, 1_000
-    end)
+      Enum.each(old, fn {_, pid, monitor} ->
+        assert_receive {:DOWN, ^monitor, :process, ^pid, _}, 1_000
+      end)
 
-    _ = Supervisor.which_children(c.root)
-    restarted = :sys.get_state(__MODULE__.Coordinator)
-    assert restarted.attachment_gate == initial.attachment_gate
-    assert {:error, :unavailable} = AttachmentLease.reserve(restarted.attachment_gate, self())
-    Enum.each(old, fn {name, pid, _monitor} -> refute Process.whereis(name) == pid end)
-    AttachmentLease.cancel(lease)
-    AttachmentLease.finish(lease)
+      _ = Supervisor.which_children(c.root)
+      assert {:ok, _} = SourcePort.read(__MODULE__.Port)
+      assert {:error, :capacity_unavailable} = SourceAdmission.reserve(SourceAdmission, self(), 1)
+      Enum.each(old, fn {name, pid, _} -> refute Process.whereis(name) == pid end)
+    after
+      SourceAdmission.cancel(SourceAdmission, lease)
+    end
   end
 
   @tag enabled: true
   test "injected factory propagates parent projection and pools and bounds collectors" do
-    coordinator = Process.whereis(__MODULE__.Coordinator)
-    state = :sys.get_state(coordinator)
-    {:ok, lease} = AttachmentLease.reserve(state.attachment_gate, coordinator)
+    coordinator = self()
+    {:ok, state} = SourcePort.read(__MODULE__.Port)
+    gate = AttachmentLease.gate(1)
+    {:ok, lease} = AttachmentLease.reserve(gate, coordinator)
 
     context = %{
       attachment_lease: lease,
@@ -169,7 +176,7 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
     assert [{_, _, _, _}] = DynamicSupervisor.which_children(__MODULE__.Writers)
     assert_receive {:diagnostic_write, task, run}
     send(task, {:finish, {:ok, run}})
-    {:ok, second_lease} = AttachmentLease.reserve(state.attachment_gate, coordinator)
+    {:ok, second_lease} = AttachmentLease.reserve(gate, coordinator)
 
     assert {:error, :unavailable} =
              state.collector.(%{context | attachment_lease: second_lease, run_id: "second"})

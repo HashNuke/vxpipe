@@ -153,11 +153,10 @@ if database_enabled? do
       repository: {Vxpipe.Persistence.LatencyStore, Vxpipe.Persistence.Repo},
       source_options: [
         name: Vxpipe.CallEngine.Diagnostics.SourceSupervisor,
-        workers: Vxpipe.CallEngine.Diagnostics.SourceWorkerSupervisor,
         inference: Vxpipe.CallEngine.Diagnostics.InferenceSupervisor,
         tasks: Vxpipe.CallEngine.Diagnostics.InferenceTaskSupervisor,
         runtime: Vxpipe.CallEngine.Diagnostics.InferenceRuntime,
-        coordinator: Vxpipe.CallEngine.Diagnostics.SourceCoordinator
+        port: Vxpipe.CallEngine.Diagnostics.SourcePort
       ]
     ]
 

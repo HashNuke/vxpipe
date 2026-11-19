@@ -66,8 +66,8 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
       assert Keyword.fetch!(settings, :repository) ==
                {Vxpipe.Persistence.LatencyStore, Vxpipe.Persistence.Repo}
 
-      assert settings |> Keyword.fetch!(:source_options) |> Keyword.fetch!(:coordinator) ==
-               Vxpipe.CallEngine.Diagnostics.SourceCoordinator
+      assert settings |> Keyword.fetch!(:source_options) |> Keyword.fetch!(:port) ==
+               Vxpipe.CallEngine.Diagnostics.SourcePort
 
       refute Keyword.has_key?(settings, :enabled)
 

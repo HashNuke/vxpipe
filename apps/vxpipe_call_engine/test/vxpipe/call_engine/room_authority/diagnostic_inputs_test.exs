@@ -52,7 +52,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.DiagnosticInputsTest do
     assert {:reply, {:ok, ^before}, ^changed} = query(changed)
   end
 
-  test "only admitted present unheld human STT bindings are candidates" do
+  test "only admitted present human STT bindings are candidates" do
     base = state()
 
     for state <- [
@@ -60,7 +60,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.DiagnosticInputsTest do
           put_in(base.connections["a"].admission, :transfer_preparation),
           put_in(base.connections["a"].role, :agent),
           put_in(base.participant_transfer_runtime.plan.participants["human-a"].kind, :agent),
-          %{base | held_participant_ids: MapSet.new(["human-a"])},
           %{base | participant_ids: MapSet.new(["human-b"])}
         ] do
       assert {:reply, {:ok, %{sources: [%{connection_id: "b"}]}}, ^state} = query(state)
@@ -68,6 +67,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.DiagnosticInputsTest do
 
     native = %{base | connections: %{}}
     assert {:reply, {:ok, %{sources: []}}, ^native} = query(native)
+  end
+
+  test "a dispatch hold preserves accepted STT candidates; actual binding removal does not" do
+    base = state()
+    assert {:reply, {:ok, before}, ^base} = query(base)
+    held = %{base | held_participant_ids: MapSet.new(["human-a", "human-b"])}
+    assert {:reply, {:ok, ^before}, ^held} = query(held)
+
+    removed = put_in(held.connections["a"].speech_to_text, nil)
+    assert {:reply, {:ok, %{sources: [%{connection_id: "b"}]}}, ^removed} = query(removed)
   end
 
   test "exact connection reads revalidate source replacement and survive page movement" do

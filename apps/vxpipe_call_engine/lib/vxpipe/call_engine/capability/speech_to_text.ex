@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.Diagnostics.{SourceDiscovery, SourceSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.SourceDiscovery
 
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
@@ -40,15 +40,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   def input_binding(capability, resource) do
     GenServer.call(capability, {:input_binding, resource}, @call_timeout)
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  @doc "Coordinator request: announce one future accepted source; never wait for audio."
-  def discover_diagnostics(capability, agent, handoff, timeout \\ @call_timeout) do
-    if SourceSupervisor.eligible_agent?(agent),
-      do: GenServer.call(capability, {:discover_diagnostics, handoff}, timeout),
-      else: {:error, :unsupported_agent}
   catch
     :exit, _reason -> {:error, :unavailable}
   end

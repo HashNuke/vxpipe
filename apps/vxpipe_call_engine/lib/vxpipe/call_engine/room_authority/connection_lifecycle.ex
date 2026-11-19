@@ -22,6 +22,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   @spec attach(struct(), pid(), pid(), pid() | nil, reference(), boolean(), State.t()) ::
           {:reply, {:ok, atom(), term()} | {:error, Error.t()}, State.t()}
+  def current_source_ingress?(state, ingress, identity) do
+    connection = Map.get(state.connections, Map.get(identity, :connection_id))
+
+    is_map(connection) and Map.get(connection, :source_control?, false) and
+      Map.get(connection, :participant_id) == Map.get(identity, :participant_id) and
+      Map.get(connection, :speech_to_text) != nil and
+      Map.get(connection.speech_to_text, :ingress) == ingress and
+      state.snapshot.tenant_id == Map.get(identity, :tenant_id) and
+      state.snapshot.room_id == Map.get(identity, :room_id) and
+      state.snapshot.incarnation_id == Map.get(identity, :incarnation_id)
+  end
+
   def attach(
         command,
         caller,

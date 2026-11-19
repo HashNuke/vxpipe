@@ -114,17 +114,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
       start_supervised!(
         {SourceSupervisor,
          name: __MODULE__.Pool,
-         workers: __MODULE__.Workers,
          inference: __MODULE__.Inference,
          tasks: __MODULE__.Tasks,
          runtime: __MODULE__.Runtime,
-         registry: __MODULE__.Rooms,
          projection: __MODULE__.Projection,
-         attachment_gate: AttachmentLease.gate(1),
          maximum_sources: 1,
          load: fn -> {:ok, :fixture_model} end,
-         classify: classifier(parent, :benchmark),
-         poll_interval_ms: 1_000}
+         classify: classifier(parent, :benchmark)}
       )
 
     start_supervised!(
@@ -158,13 +154,53 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     }
   end
 
+  test "completed attachment queued past deadline never becomes active", ctx do
+    parent = self()
+
+    start_port(fn context ->
+      send(parent, {:factory, self(), context})
+
+      receive do
+        :release -> :ok
+      end
+
+      CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
+    end)
+
+    start_room(ctx)
+    assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert_receive {:factory, runner, context}, 1_000
+    service = Process.whereis(__MODULE__.Service)
+    :ok = :sys.suspend(service)
+
+    try do
+      send(runner, :release)
+      _ = :sys.get_state(runner)
+      input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
+      monitor = Process.monitor(input.receiver)
+      delay = max(AttachmentLease.remaining(context.attachment_lease), 0) + 20
+      Process.send_after(self(), :deadline, delay)
+      assert_receive :deadline, 1_000
+      send(input.receiver, :check_grant)
+      assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+    after
+      :sys.resume(service)
+    end
+
+    assert %{active_sources: 0, pending?: false} = RoomService.status(service)
+    refute AttachmentLease.current?(context.attachment_lease)
+    assert %{occupied_slots: 0} = SourceAdmission.status(__MODULE__.Admission)
+    assert DynamicSupervisor.which_children(__MODULE__.RoomWorkers) == []
+  end
+
   test "room service attaches its accepted input without a selected agent", ctx do
     start_port()
     start_room(ctx)
     attach(ctx)
     assert [{_, worker, _, _}] = DynamicSupervisor.which_children(__MODULE__.RoomWorkers)
     assert worker == :sys.get_state(ctx.capability).diagnostic_tap.handoff.receiver
-    assert DynamicSupervisor.which_children(__MODULE__.Workers) == []
+    refute Process.whereis(__MODULE__.Workers)
   end
 
   test "agent-only changes preserve the attachment and run", ctx do
@@ -181,6 +217,57 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     assert %{active_sources: 1} = RoomService.scan(__MODULE__.Service)
     assert CaptureHandoff.current?(input)
     refute_received {:collector_started, _}
+  end
+
+  test "dispatch holds preserve capture while actual input removal retires it", ctx do
+    start_port()
+    start_room(ctx)
+    context = attach(ctx)
+    input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
+    :sys.replace_state(ctx.room, &%{&1 | held_participant_ids: MapSet.new(["human"])})
+    assert %{active_sources: 1} = RoomService.scan(__MODULE__.Service)
+    assert CaptureHandoff.current?(input)
+    assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
+    assert_receive {:scribe_audio, _, _}
+    refute_received {:collector_started, _}
+    assert context.participant_id == "human"
+
+    :sys.replace_state(ctx.room, &%{&1 | connections: %{}})
+    _ = RoomService.scan(__MODULE__.Service)
+    refute CaptureHandoff.current?(input)
+  end
+
+  test "collector exceptions leave room service and speech available", ctx do
+    start_port(fn _ -> raise "collector broke" end)
+    start_room(ctx)
+    assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert %{active_sources: 0, pending?: false, last_reason: :collector_unavailable} = settled()
+    assert :sys.get_state(ctx.capability).diagnostic_tap == nil
+    assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
+    assert_receive {:scribe_audio, _, _}
+  end
+
+  test "grant invalidation during collection rejects and closes the returned output", ctx do
+    parent = self()
+
+    start_port(fn context ->
+      {:ok, output} =
+        CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
+
+      SettingsProjection.invalidate(__MODULE__.Projection)
+      _ = :sys.get_state(__MODULE__.Projection)
+      send(parent, {:collector_output, output})
+      {:ok, output}
+    end)
+
+    start_room(ctx)
+    assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert_receive {:collector_output, output}, 1_000
+    assert %{active_sources: 0, pending?: false} = settled()
+    refute CaptureHandoff.current?(output)
+    assert :sys.get_state(ctx.capability).diagnostic_tap == nil
   end
 
   test "missing source port stays unavailable and later reconciliation can attach", ctx do
@@ -810,6 +897,93 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
           do: replacement(supervisor, previous, deadline),
           else: flunk("service did not restart")
     end
+  end
+
+  test "service rejects source readiness received after its pending deadline", ctx do
+    start_port()
+    start_room(ctx)
+    assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
+    service = Process.whereis(__MODULE__.Service)
+    :ok = :sys.suspend(service)
+
+    try do
+      assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+      Process.send_after(self(), :service_deadline_elapsed, 550)
+      assert_receive :service_deadline_elapsed, 1_000
+    after
+      :sys.resume(service)
+    end
+
+    assert %{active_sources: 0, pending?: false} =
+             settled(service, System.monotonic_time(:millisecond) + 2_000)
+
+    refute_received {:collector_started, _}
+  end
+
+  test "slow capability discovery stays within service scan call budget", ctx do
+    start_room(ctx)
+    assert %{last_reason: :unavailable} = RoomService.status(__MODULE__.Service)
+    :ok = :sys.suspend(ctx.capability)
+    start_port()
+
+    try do
+      result =
+        try do
+          RoomService.scan(__MODULE__.Service)
+        catch
+          :exit, reason -> {:scan_exit, reason}
+        end
+
+      assert %{active_sources: 0, pending?: false, last_reason: :source_unavailable} = result
+    after
+      :sys.resume(ctx.capability)
+    end
+  end
+
+  test "unrelated candidate insertion does not retire a still-current source", ctx do
+    start_port()
+    start_room(ctx)
+    assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    assert_receive {:collector_started, _}, 1_000
+    assert %{active_sources: 1} = settled()
+    input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
+
+    :sys.replace_state(ctx.room, fn state ->
+      original = Map.fetch!(state.connections, "connection")
+
+      additions =
+        Map.new(1..32, fn i ->
+          {"before_" <> String.pad_leading(Integer.to_string(i), 3, "0"),
+           %{original | speech_to_text: %{capability: self()}}}
+        end)
+
+      %{state | connections: Map.merge(state.connections, additions)}
+    end)
+
+    assert {:ok, %{sources: [_]}} =
+             Vxpipe.CallEngine.RoomAuthority.DiagnosticInputs.query(ctx.room, "before_032", 32)
+
+    _ = RoomService.scan(__MODULE__.Service)
+    assert CaptureHandoff.current?(input)
+  end
+
+  @tag echoes: %{}
+  test "unacknowledged settings cannot create a collector or observer", ctx do
+    start_port()
+    start_room(ctx)
+    assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    session = :sys.get_state(ctx.capability).session
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Channel.address(session))
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Session.provider(session))
+
+    assert %{active_sources: 0, pending?: false, last_reason: :profile_unavailable} =
+             settled()
+
+    refute_received {:collector_started, _}
+    assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
+    assert_receive {:scribe_audio, _, _}
   end
 
   defp enable(settings, enabled, revision) do

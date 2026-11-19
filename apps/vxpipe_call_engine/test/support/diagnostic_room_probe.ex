@@ -12,7 +12,4 @@ defmodule Vxpipe.CallEngine.DiagnosticRoomProbe do
 
   def handle_call({:diagnostic_inputs, _, _} = request, from, state),
     do: Vxpipe.CallEngine.RoomAuthority.handle_call(request, from, state)
-
-  def handle_call({:diagnostic_sources, _, _} = request, from, state),
-    do: Vxpipe.CallEngine.RoomAuthority.handle_call(request, from, state)
 end

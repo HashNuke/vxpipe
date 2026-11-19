@@ -17,6 +17,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
   def start_link(options),
     do: GenServer.start_link(__MODULE__, options, name: Keyword.fetch!(options, :service))
 
+  def address(identity),
+    do: Vxpipe.CallEngine.Diagnostics.RoomSupervisor.address(identity, :service)
+
+  def notify_room(identity) do
+    case GenServer.whereis(address(identity)) do
+      pid when is_pid(pid) -> notify(pid)
+      nil -> :ok
+    end
+  end
+
   def notify(service), do: GenServer.cast(service, :reconcile)
 
   def scan(coordinator), do: GenServer.call(coordinator, :scan, 2_000)
@@ -39,6 +49,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
 
     unless state.poll_interval_ms in 10..1_000,
       do: raise(ArgumentError, "invalid room diagnostics interval")
+
+    state = Map.update!(state, :room, &GenServer.whereis/1)
 
     state =
       Map.merge(state, %{

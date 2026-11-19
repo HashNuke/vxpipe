@@ -11,20 +11,20 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     SourcePort
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.{DiagnosticInputs, DiagnosticSources}
+  alias Vxpipe.CallEngine.RoomAuthority.DiagnosticInputs
 
   @doc "Attach a room-owned accepted STT input without assigning acoustic ownership to an agent."
   def start_input(candidate, packet, options) do
     AttachmentLease.operation(options.attachment_lease, fn ->
-      start(Map.put(candidate, :ownership, :participant_input), packet, options)
+      start(candidate, packet, options)
     end)
   end
 
-  def start(
-        candidate,
-        {:source_ready, generation, intervals, track, epoch, codec, rate, channels, mode},
-        options
-      ) do
+  defp start(
+         candidate,
+         {:source_ready, generation, intervals, track, epoch, codec, rate, channels, mode},
+         options
+       ) do
     with true <- AttachmentLease.current?(options.attachment_lease),
          {:ok, grant} <- SettingsProjection.grant(options.projection),
          true <- grant == candidate.grant,
@@ -51,12 +51,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         media_format: %{codec: codec, sample_rate: rate, channels: channels}
       }
 
-      context =
-        case candidate do
-          %{ownership: :participant_input} -> context
-          %{agent: agent} -> Map.put(context, :agent_id, agent.participant_id)
-        end
-
       attach(candidate, context, track, options)
     else
       _ -> {:error, :stale_source}
@@ -67,7 +61,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     :exit, _ -> {:error, :unavailable}
   end
 
-  def start(_candidate, _packet, _options), do: {:error, :invalid_source}
+  defp start(_candidate, _packet, _options), do: {:error, :invalid_source}
 
   def current?(entry), do: current_candidate?(entry.candidate)
 
@@ -78,23 +72,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     :ok
   end
 
-  defp current_candidate?(%{ownership: :participant_input} = candidate) do
+  defp current_candidate?(candidate) do
     case DiagnosticInputs.for_connection(candidate.room, candidate.source.connection_id) do
       {:ok, page} ->
         SourcePort.current?(Map.get(candidate, :source_port)) and
           page.identity == candidate.identity and candidate.source in page.sources
-
-      _ ->
-        false
-    end
-  end
-
-  defp current_candidate?(candidate) do
-    case DiagnosticSources.for_connection(candidate.room, candidate.source.connection_id) do
-      {:ok, page} ->
-        page.identity == candidate.identity and
-          page.agent.participant_id == candidate.agent.participant_id and
-          candidate.source in page.sources
 
       _ ->
         false
@@ -135,27 +117,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     ]
 
     result =
-      case candidate do
-        %{ownership: :participant_input} ->
-          SourceSupervisor.start_input_source(
-            worker_options,
-            options.workers,
-            options.runtime,
-            options.source_admission
-          )
-
-        %{agent: agent} ->
-          SourceSupervisor.start_source(
-            Keyword.put(worker_options, :agent, agent),
-            options.workers,
-            options.runtime
-          )
-      end
+      SourceSupervisor.start_input_source(
+        worker_options,
+        options.workers,
+        options.runtime,
+        options.source_admission
+      )
 
     case result do
       {:ok, worker} -> finish(worker, candidate, context, track, output, options.workers)
-      {:error, _} = error when candidate.ownership == :participant_input -> error
-      _ -> {:error, :source_capacity}
+      {:error, _} = error -> error
+      _ -> {:error, :unavailable}
     end
   end
 

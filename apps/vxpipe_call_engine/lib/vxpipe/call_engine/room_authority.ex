@@ -3,6 +3,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.RoomAuthority.DiagnosticNotifications, as: Diagnostics
+
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
 
   alias Vxpipe.CallEngine.Command.{
@@ -33,7 +35,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ParticipantTransfer,
     CallerIdle,
     ConnectionLifecycle,
-    DiagnosticSources,
     DiagnosticInputs,
     EndCall,
     FirstMessage,
@@ -219,9 +220,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   @impl true
-  def handle_call({:diagnostic_sources, cursor, limit}, _from, state),
-    do: {:reply, DiagnosticSources.read(state, cursor, limit), state}
-
   def handle_call({:diagnostic_inputs, cursor, limit}, _from, state),
     do: {:reply, DiagnosticInputs.read(state, cursor, limit), state}
 
@@ -254,7 +252,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_call({:join_participant, command, incarnation}, _from, state) do
-    ParticipantLifecycle.join(command, state, incarnation)
+    ParticipantLifecycle.join(command, state, incarnation) |> Diagnostics.notify()
   end
 
   def handle_call(
@@ -297,6 +295,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
             other
         end
     end
+    |> Diagnostics.notify()
   end
 
   def handle_call(
@@ -304,7 +303,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {caller, _tag},
         state
       ) do
-    ParticipantTransfer.control(command, caller, state)
+    ParticipantTransfer.control(command, caller, state) |> Diagnostics.notify()
   end
 
   def handle_call({:speech_to_text_configuration, command}, {caller, _tag}, state) do
@@ -341,12 +340,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       other ->
         other
     end
+    |> Diagnostics.notify()
   end
 
   def handle_call({:detach_connection, command, subscriber}, {caller, _tag}, state) do
     case ConnectionLifecycle.detach(command, caller, subscriber, state) do
       {:reply, reply, state} -> {:reply, reply, CallerIdle.reconcile(state)}
     end
+    |> Diagnostics.notify()
   end
 
   def handle_call({:send_text, command}, {caller, _tag}, state) do
@@ -396,7 +397,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
          producer_generation},
         state
       ) do
-    if current_source_ingress?(state, ingress, identity) do
+    if ConnectionLifecycle.current_source_ingress?(state, ingress, identity) do
       old_generation =
         if is_reference(producer_generation),
           do: producer_generation,
@@ -412,36 +413,47 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {ref, {:startup_prepared, result}},
         %{startup: %{task: %Task{ref: ref}}} = state
       ),
-      do: StartupReadiness.preparation_result(ref, result, state)
+      do:
+        StartupReadiness.preparation_result(ref, result, state)
+        |> Diagnostics.notify()
 
   def handle_info(
         {ref, {:opening_prepared, result}},
         %{startup: %{opening_task: %Task{ref: ref}}} = state
       ),
-      do: StartupReadiness.opening_preparation_result(ref, result, state)
+      do:
+        StartupReadiness.opening_preparation_result(ref, result, state)
+        |> Diagnostics.notify()
 
   def handle_info({reference, {:startup_output, id, result}}, state),
     do:
       StartupReadiness.reply(StartupReadiness.output_result(reference, id, result, state), state)
+      |> Diagnostics.notify()
 
   def handle_info({reference, {:outgoing_submitted, result}}, state),
-    do: OutgoingCall.submitted(reference, result, state)
+    do: OutgoingCall.submitted(reference, result, state) |> Diagnostics.notify()
 
   def handle_info({:vxpipe_outbound_leg, token, owner, event}, state),
-    do: OutgoingCall.report(token, owner, event, state)
+    do: OutgoingCall.report(token, owner, event, state) |> Diagnostics.notify()
 
   def handle_info({:vxpipe_call_lifecycle_timer, token, :outgoing_ring}, state),
     do: OutgoingCall.timeout(token, state)
 
   def handle_info({reference, {:startup_ready, result}}, state),
-    do: StartupReadiness.reply(StartupReadiness.room_result(reference, result, state), state)
+    do:
+      StartupReadiness.reply(StartupReadiness.room_result(reference, result, state), state)
+      |> Diagnostics.notify()
 
   def handle_info({reference, {:startup_release, result}}, state),
-    do: StartupReadiness.reply(StartupReadiness.release_result(reference, result, state), state)
+    do:
+      StartupReadiness.reply(StartupReadiness.release_result(reference, result, state), state)
+      |> Diagnostics.notify()
 
   def handle_info({:vxpipe_wait_playback, player, episode, status}, %{startup: startup} = state)
       when startup != nil,
-      do: StartupReadiness.reply(StartupReadiness.playback(player, episode, status, state), state)
+      do:
+        StartupReadiness.reply(StartupReadiness.playback(player, episode, status, state), state)
+        |> Diagnostics.notify()
 
   def handle_info({:vxpipe_opening_audio_ready, gate}, state) do
     opening = OpeningAudio.ready(state.opening_audio, gate)
@@ -450,13 +462,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       StartupReadiness.opening_changed(%{state | opening_audio: opening}),
       state
     )
+    |> Diagnostics.notify()
   end
 
   def handle_info({:vxpipe_transfer_progress, reference, progress}, state),
-    do: ParticipantTransfer.progress(reference, progress, state)
+    do: ParticipantTransfer.progress(reference, progress, state) |> Diagnostics.notify()
 
   def handle_info({:vxpipe_transfer_handoff_result, reference, stage, result}, state),
-    do: ParticipantTransfer.HumanHandoff.handoff_result(reference, stage, result, state)
+    do:
+      ParticipantTransfer.HumanHandoff.handoff_result(reference, stage, result, state)
+      |> Diagnostics.notify()
 
   def handle_info(
         {:vxpipe_transfer_prepared, reference, %ParticipantTransfer.Preparation{} = preparation},
@@ -464,6 +479,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       )
       when is_reference(reference) do
     ParticipantTransfer.prepared(reference, preparation, state)
+    |> Diagnostics.notify()
   end
 
   def handle_info(
@@ -473,6 +489,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       )
       when is_reference(reference) do
     ParticipantTransfer.prepared(reference, preparation, state)
+    |> Diagnostics.notify()
   end
 
   def handle_info({reference, :phase_finished}, state) when is_reference(reference),
@@ -480,11 +497,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({reference, {:error, reason}}, state) when is_reference(reference) do
     ParticipantTransfer.worker_failed(reference, reason, state)
+    |> Diagnostics.notify()
   end
 
   def handle_info({:vxpipe_participant_transfer_deadline, reference}, state)
       when is_reference(reference) do
-    ParticipantTransfer.deadline_elapsed(reference, state)
+    ParticipantTransfer.deadline_elapsed(reference, state) |> Diagnostics.notify()
   end
 
   def handle_info(
@@ -718,24 +736,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         state = ConnectionLifecycle.speech_to_text_unavailable(capability, identity, state)
         {:noreply, CallerIdle.reconcile(state)}
     end
+    |> Diagnostics.notify()
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state),
-    do: Vxpipe.CallEngine.RoomAuthority.ProcessDown.handle(monitor, reason, state)
+    do:
+      Vxpipe.CallEngine.RoomAuthority.ProcessDown.handle(monitor, reason, state)
+      |> Diagnostics.notify()
 
   def handle_info(_message, state), do: {:noreply, state}
-
-  defp current_source_ingress?(state, ingress, identity) do
-    connection = Map.get(state.connections, Map.get(identity, :connection_id))
-
-    is_map(connection) and Map.get(connection, :source_control?, false) and
-      Map.get(connection, :participant_id) == Map.get(identity, :participant_id) and
-      Map.get(connection, :speech_to_text) != nil and
-      Map.get(connection.speech_to_text, :ingress) == ingress and
-      state.snapshot.tenant_id == Map.get(identity, :tenant_id) and
-      state.snapshot.room_id == Map.get(identity, :room_id) and
-      state.snapshot.incarnation_id == Map.get(identity, :incarnation_id)
-  end
 
   defp room_source(options) do
     case Keyword.fetch(options, :plan) do

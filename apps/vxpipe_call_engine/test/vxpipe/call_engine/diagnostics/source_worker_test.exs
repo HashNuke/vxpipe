@@ -279,7 +279,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
     start_supervised!(
       {SourceSupervisor,
        name: __MODULE__.RealPool,
-       workers: __MODULE__.RealWorkers,
        inference: __MODULE__.RealInference,
        tasks: __MODULE__.RealTasks,
        runtime: __MODULE__.RealRuntime,
@@ -288,15 +287,18 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
 
     {:ok, output} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
 
+    alias Vxpipe.CallEngine.Diagnostics.SourceAdmission
+    start_supervised!({DynamicSupervisor, name: __MODULE__.RealWorkers, strategy: :one_for_one})
+
+    admission =
+      start_supervised!(
+        {SourceAdmission, name: __MODULE__.SourceAdmission, gate: AttachmentLease.gate(1)}
+      )
+
+    {:ok, lease} = SourceAdmission.reserve(admission, self())
+
     options = [
-      agent:
-        struct(Vxpipe.CallEngine.ResolvedCallPlan.Participant,
-          kind: :agent,
-          capabilities: %Vxpipe.CallEngine.ResolvedCallPlan.Capabilities{
-            model_inference:
-              struct(Vxpipe.CallEngine.CallSpec.CapabilitySelection, kind: :model_inference)
-          }
-        ),
+      attachment_lease: lease,
       owner: self(),
       output: output,
       projection: __MODULE__.Projection,
@@ -308,11 +310,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
     ]
 
     assert {:ok, worker} =
-             SourceSupervisor.start_source(
+             SourceSupervisor.start_input_source(
                options,
                __MODULE__.RealWorkers,
-               __MODULE__.RealRuntime
+               __MODULE__.RealRuntime,
+               admission
              )
+
+    assert :ok = SourceAdmission.adopt(admission, lease)
 
     input = SourceWorker.handoff(worker)
     audio = File.read!(Vxpipe.Providers.Deepgram.LiveFixture.pcm_path())

@@ -72,12 +72,35 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
         call_lifecycle_child(options) ++
         media_policy_child(options) ++
         transcript_router_child(options) ++
-        room_mixer_child(options) ++ [authority] ++ recording_children
+        room_mixer_child(options) ++
+        [authority] ++ diagnostic_child(options) ++ recording_children
 
     Supervisor.init(children,
       strategy: :one_for_one,
       auto_shutdown: :any_significant
     )
+  end
+
+  defp diagnostic_child(options) do
+    case Keyword.get(options, :plan) do
+      %ResolvedCallPlan{} = plan ->
+        identity = %{
+          tenant_id: plan.tenant_id,
+          room_id: plan.room_id,
+          incarnation_id: Keyword.fetch!(options, :incarnation_id)
+        }
+
+        room = {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}}}
+        settings = Keyword.get(options, :diagnostics, [])
+
+        [
+          {Vxpipe.CallEngine.Diagnostics.RoomSupervisor,
+           Vxpipe.CallEngine.Diagnostics.RoomSupervisor.options(identity, room, settings)}
+        ]
+
+      nil ->
+        []
+    end
   end
 
   defp dial_child(options) do

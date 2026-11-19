@@ -432,6 +432,9 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
     options = [
       plan: plan,
+      diagnostics:
+        Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+        |> Keyword.get(:diagnostics, []),
       incarnation_id: incarnation_id,
       start_command_id: Id.generate(:command),
       speech_runtime: Keyword.get(runtime_options, :speech_runtime, []),

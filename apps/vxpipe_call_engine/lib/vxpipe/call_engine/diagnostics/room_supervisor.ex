@@ -3,6 +3,28 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomSupervisor do
   use Supervisor
   alias Vxpipe.CallEngine.Diagnostics.{AttachmentRunner, RoomService}
 
+  def address(identity, role) when role in [:supervisor, :service, :workers, :runner],
+    do:
+      {:via, Registry,
+       {Vxpipe.CallEngine.RoomRegistry,
+        {:diagnostics, role, identity.tenant_id, identity.room_id, identity.incarnation_id}}}
+
+  def options(identity, room, settings) do
+    settings
+    |> Keyword.validate!(
+      port: Vxpipe.CallEngine.Diagnostics.SourcePort,
+      source_admission: Vxpipe.CallEngine.Diagnostics.SourceAdmission,
+      poll_interval_ms: 250
+    )
+    |> Keyword.merge(
+      name: address(identity, :supervisor),
+      service: address(identity, :service),
+      workers: address(identity, :workers),
+      runner: address(identity, :runner),
+      room: room
+    )
+  end
+
   def child_spec(options),
     do: %{
       id: {__MODULE__, Keyword.fetch!(options, :name)},
