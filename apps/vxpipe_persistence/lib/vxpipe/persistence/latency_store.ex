@@ -97,6 +97,19 @@ defmodule Vxpipe.Persistence.LatencyStore do
     do: {:error, :invalid_page}
 
   @impl true
+  def list_runs(repo, tenant_key, call_id, limit, cursor)
+      when is_integer(limit) and limit in 1..100 and
+             (is_nil(cursor) or (is_binary(cursor) and byte_size(cursor) in 1..256)) do
+    safely(fn ->
+      with {:ok, call} <- call(repo, tenant_key, call_id, false) do
+        Vxpipe.Persistence.LatencyRunQuery.fetch(repo, call.id, limit, cursor)
+      end
+    end)
+  end
+
+  def list_runs(_repo, _tenant_key, _call_id, _limit, _cursor), do: {:error, :invalid_page}
+
+  @impl true
   def summarize(repo, tenant_key, call_id) do
     safely(fn ->
       with {:ok, call} <- call(repo, tenant_key, call_id, false) do

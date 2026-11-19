@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+if [[ $# -eq 0 ]]; then
+  replay_database="vxpipe_latency_replay_$(date +%s)_${RANDOM}"
+  replay_mode="write"
+elif [[ $# -eq 2 && "$1" == "--read" && "$2" =~ ^vxpipe_latency_replay_[0-9]+_[0-9]+$ ]]; then
+  replay_database="$2"
+  replay_mode="read"
+else
+  echo 'Usage: bin/replay-latency-diagnostics [--read vxpipe_latency_replay_TIMESTAMP_RANDOM]' >&2
+  exit 2
+fi
+case "${PGHOST:-localhost}" in
+  localhost|127.0.0.1|::1|/*) ;;
+  *) echo 'Replay requires a local PostgreSQL connection.' >&2; exit 2 ;;
+esac
+export MIX_ENV=test
+export VXPIPE_TEST_DATABASE="$replay_database"
+unset VXPIPE_TEST_DATABASE_URL
+if [[ "$replay_mode" == "write" ]]; then
+  mix ecto.create --quiet
+  mix ecto.migrate --quiet
+  mix run --no-start scripts/diagnostics/replay_latency.exs write
+fi
+# A new BEAM process reads the persisted result: no in-memory replay state survives.
+mix run --no-start scripts/diagnostics/replay_latency.exs read
+printf 'Replay database: %s\nRead again: bin/replay-latency-diagnostics --read %s\n' "$replay_database" "$replay_database"

@@ -183,3 +183,45 @@
 - Final Calls suite passes 418 tests, zero failures. Astra xhigh approved the
   timeout-test correction and returned no new findings. Async writer subcheckpoint
   is ready to commit; full B coverage/replay/live wiring remains unfinished.
+
+## Checkpoint B — coverage and replay in progress
+
+- Coverage: six red/green tests distinguish absent collection, fresh/pending capture,
+  stale/future clocks, closed row-count mismatch and explicit loss. Completion means
+  a selected capture window, not whole-call coverage. Run pages aggregate all durable
+  turn counts independently of turn-page size; storage suite now passes 15 tests.
+- ScribeReplay drives the real ContinuousSTT adapter through an isolated in-memory
+  transport. Supplied logical fixture offsets are not actual network latency.
+  Four red/green tests cover segments/drafts, forced flush acknowledgment and duplicate
+  empty partials without duplicating endpoint rules. Review reproduced a queued manual
+  flush from a prior turn being misattributed; transport notifications now carry the
+  actual semantic turn reference and startup has a unique replay token. Five tests pass.
+- AcousticObserver combines the existing ActivityBoundary with SampleClock and keeps
+  confirmed callback time separate from backdated sample endpoints. Four red/green
+  tests cover gaps, conflicting duplicates, foreign sources and expired mappings.
+- Real Silero PCM replay passes against the existing synthetic short-answer fixture;
+  no new audio artifact created. Missing frames remain explicit. ReplayReport correlates
+  the final pre-provider boundary, rejects resumed-speech ambiguity and cross-clock/source
+  evidence, and preserves useful provider stages during acoustic loss (4 red/green tests).
+- Persisted offline demonstration/command and final review remain in progress. No
+  live benchmark capture or app setting has been enabled or deployed.
+
+- Reviewer reproduced duplicate PCM retransmission being re-inferred after a reset.
+  Exact repeated metadata/PCM now returns the unchanged replay before inference;
+  conflicting duplicates remain rejected. Retained regression passes (2 PCM tests).
+- `bin/replay-latency-diagnostics` completed against an isolated local fixture DB.
+  A fresh BEAM read returned two stored scenarios, zero ordinary call facts,
+  complete synthetic 300000 us endpoint delay and missing-audio null delay with
+  incomplete coverage. Evidence: `/tmp/vxpipe-B-replay-command.log`. This is not
+  live provider latency. The command prints a repeat-read invocation and JSON artifact.
+- Combined engine diagnostics: 38 tests, zero failures in
+  `/tmp/vxpipe-B-engine-diagnostics-final.log`. Final independent review and full
+  root verification remain pending; no live capture or deployment claimed.
+
+- Final Astra xhigh replay/coverage review returned no remaining findings. Reviewer
+  independently read the fixture DB in a fresh BEAM, verified remote-host rejection,
+  and passed 11 replay tests (`/tmp/vxpipe-review-replay-final.log`).
+- Final focused checks: Calls diagnostic/record tests 32/0; persistence storage15/0.
+  Root format, compile warnings-as-errors, strict Credo and unused-lock checks pass.
+  Full root test rerun is running in tmux `vxdiag-b-final` against fixed source:
+  `/tmp/vxpipe-B-root-final.log`, completion code `/tmp/vxpipe-B-root-final.exit`.

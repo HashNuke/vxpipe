@@ -16,4 +16,6 @@ defmodule Vxpipe.Calls.LatencyRepository do
             ) ::
               {:ok, [%TurnDiagnostic{}]} | {:error, atom()}
   @callback summarize(term(), String.t(), String.t()) :: {:ok, [map()]} | {:error, atom()}
+  @callback list_runs(term(), String.t(), String.t(), pos_integer(), String.t() | nil) ::
+              {:ok, %{entries: [map()], next_cursor: String.t() | nil}} | {:error, atom()}
 end

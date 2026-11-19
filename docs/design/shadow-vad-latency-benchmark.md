@@ -228,3 +228,32 @@ timeout would allow a suspended supervisor's mailbox to grow without bound.
 This conservative degradation affects diagnostics only and must be exposed as
 unavailable/incomplete coverage; it must never change call behavior or claim a
 complete latency sample. The pool is not yet connected to runtime capture.
+
+## Reproducible offline timing report
+
+Run `bin/replay-latency-diagnostics` after `bin/setup`. It creates a uniquely named
+local test database, applies migrations, and replays the existing synthetic speech
+fixture through real Silero inference and the actual Scribe adapter using an
+in-memory transport. It makes no provider network calls. The command prints the
+database name and a `--read DATABASE` command for inspecting it again; fixture
+databases are retained for this purpose. It requires local PostgreSQL and forces
+the test database configuration rather than using a production database URL.
+
+The complete scenario supplies a logical provider end 300 ms after the estimated
+acoustic boundary. Observer confirmation occurs later and is stored separately.
+The missing-audio scenario omits a frame: its acoustic delay is null, its coverage
+is incomplete, and independently valid provider stages remain available. Both
+reports are written through the bounded asynchronous writer and read in a new
+BEAM process. No ordinary call facts or raw audio/transcript are stored by this
+fixture. The output includes a JSON artifact in the system temporary directory.
+
+These provider offsets are deliberately synthetic. The command verifies timing
+semantics, correlation, persistence and restart reads; it does not measure live
+Scribe latency or acoustic endpoint accuracy. The offline correlator supports one
+identified source and clock, rejects resumed-speech ambiguity, and preserves gaps.
+Live source replacement and output correlation remain checkpoint C work.
+
+Coverage distinguishes collecting, complete selected windows, incomplete capture,
+storage loss and unconfirmed runs. A stale running heartbeat after restart cannot
+be presented as a graceful close. A complete run does not imply that the whole
+call was observed: disabling and call termination remain separate end reasons.

@@ -1,8 +1,8 @@
 # Passive call latency diagnostics and readable timelines
 
 Status: implementation in progress, 2026-11-19. Checkpoint A code, focused tests,
-rendered checks, Astra xhigh review and all root gates pass. Checkpoint B timing
-foundations are in progress; B–F acceptance remains open. The index owns implementation order.
+rendered checks, Astra xhigh review and all root gates pass. Checkpoint B now has a reviewed, durable offline replay; its current root test
+rerun is pending. C–F acceptance remains open. The index owns implementation order.
 
 ## Runnable outcome
 
@@ -298,19 +298,19 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 
 ### B — Durable timing report
 
-- [ ] Red-test acoustic/confirmation separation and exact Scribe end evidence;
+- [x] Red-test acoustic/confirmation separation and exact Scribe end evidence;
   fixtures include committed segment before empty partial, outstanding draft,
   forced commit, duplicate empty partial and manual commit acknowledgement.
-- [ ] Define typed observations, run/turn schema, clock mapping, correlation and
+- [x] Define typed observations, run/turn schema, clock mapping, correlation and
   quality reasons. Replay timestamped PCM plus provider events into one report;
   cover end receipt arriving before the observer confirms the boundary.
 - [x] Implement Calls ports and Persistence migration, constraints/indexes and
   revision/idempotency rules; test fresh and populated migration paths.
-- [ ] Add separately bounded asynchronous persistence, restart-readable reports,
+- [x] Add separately bounded asynchronous persistence, restart-readable reports,
   run coverage, cursor reads and valid-only aggregates. Keep publication independent.
 - [x] Prove two-tenant denial, wrong incarnation, late revisions, call deletion,
   duplicate/conflicting delivery, missing run and DB outage behavior.
-- [ ] Provide a reproducible fixture/replay command and document clock assumptions;
+- [x] Provide a reproducible fixture/replay command and document clock assumptions;
   demonstrate one complete and one intentionally incomplete stored report.
 
 ### C — Passive configured call
@@ -494,3 +494,26 @@ review is clean. Full Calls suite: 418 tests, zero failures. Format, compile, Cr
 and unused-lock checks pass. The pool is not
 yet wired to live settings/capture. Coverage classification and deterministic replay
 remain open, so the combined asynchronous-report checklist item stays unchecked.
+
+## Checkpoint B replay and coverage evidence — 2026-11-19
+
+The offline vertical slice now writes complete and intentionally incomplete reports
+through the separate bounded writer and reads them in a fresh BEAM. Run
+`bin/replay-latency-diagnostics`; the printed `--read DATABASE` invocation reproduces
+the durable read. The synthetic complete result is 300000 us; missing audio produces
+a null acoustic duration and incomplete coverage. Both retain independent provider
+stages. The fixture creates zero ordinary call facts and uses an isolated local
+test database, real pinned Silero inference, and an in-memory Scribe transport.
+These logical fixture offsets are not measurements of live provider latency.
+
+Combined engine diagnostics: 38 tests, zero failures. Calls diagnostics/records:
+32 tests, zero failures. Persistence storage: 15 tests, zero failures. Format,
+warnings-as-errors compile, strict Credo and unused-lock checks pass. Astra xhigh
+reproduced stale manual-flush correlation and duplicate PCM inference errors; both
+regressions are retained and green. Final review is clean and independently verified
+the fresh-process stored report and remote-host rejection. The final umbrella test
+rerun is pending; earlier runs are not claimed as acceptance for this source state.
+
+The B tasks above describe the completed offline report contracts. Live capture,
+settings, production transport timing, output correlation and live accuracy remain
+C–F work. No setting has been enabled and no deployment has occurred.

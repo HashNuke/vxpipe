@@ -286,6 +286,37 @@ defmodule Vxpipe.Persistence.LatencyStoreTest do
              LatencyStore.fetch_run(Repo, record.tenant_key, record.call_id, record.id)
   end
 
+  test "run coverage pages count all durable turns and preserve missing collection", %{call: call} do
+    run = run(call)
+
+    assert {:ok, %{entries: [], next_cursor: nil}} =
+             LatencyStore.list_runs(Repo, run.tenant_key, run.call_id, 1, nil)
+
+    for id <- ["run-a", "run-b"] do
+      record = %{run | id: id}
+      assert {:ok, _} = LatencyStore.put_run(Repo, record)
+
+      for turn_id <- ["turn-a", "turn-b"],
+          do: assert({:ok, _} = put_turn(record, %{turn(record) | turn_id: turn_id}))
+    end
+
+    assert {:ok, %{entries: [%{run: first, stored_turns: 2}], next_cursor: "run-a"}} =
+             LatencyStore.list_runs(Repo, run.tenant_key, run.call_id, 1, nil)
+
+    assert first.id == "run-a"
+
+    assert {:ok, %{entries: [%{run: last, stored_turns: 2}], next_cursor: nil}} =
+             LatencyStore.list_runs(Repo, run.tenant_key, run.call_id, 1, "run-a")
+
+    assert last.id == "run-b"
+
+    assert {:error, :call_not_found} =
+             LatencyStore.list_runs(Repo, "foreign", run.call_id, 50, nil)
+
+    assert {:error, :invalid_page} =
+             LatencyStore.list_runs(Repo, run.tenant_key, run.call_id, 101, nil)
+  end
+
   defp put_turn(run, turn),
     do: LatencyStore.put_turn(Repo, run.tenant_key, run.call_id, run.incarnation_id, turn)
 
