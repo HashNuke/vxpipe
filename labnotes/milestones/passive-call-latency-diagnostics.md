@@ -799,6 +799,11 @@ and full repeated performance acceptance remain open.
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
   error and incomplete rate; model frame size is not an accuracy guarantee.
+  The [frozen acoustic reference pilot](../20261120-0224-acoustic-sample-provenance.md)
+  supplies two attributed human recordings, visually reviewed uncertainty bands
+  and twelve reproducible controlled cases. Labels were frozen before detector
+  execution; no listening or natural-browser accuracy is claimed. Native per-mode
+  replay and measured errors remain outstanding.
 - [x] Verify loss/reordering, resampling and source/clock resets for WebRTC/Telnyx;
   uncertain segments remain invalid, not stitched into plausible timing values.
   Offline transport evidence is recorded in the

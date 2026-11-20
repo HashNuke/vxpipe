@@ -1,0 +1,65 @@
+{
+  "status": "frozen_before_detector_execution",
+  "reviewed_on": "2026-11-20",
+  "review": "Independent agent waveform/spectrogram inspection followed by root visual review; neither listened or consulted detector output. Root approved exact uncertainty bands.",
+  "claims": [
+    "Real human narrowband read English; two speakers.",
+    "Visual reference bands, not human listening annotations or exact acoustic truth.",
+    "Controlled variants are not natural conversational/browser accuracy.",
+    "Score outer boundaries; report internal acoustic segmentation separately."
+  ],
+  "attribution": "Open Speech Repository",
+  "license_url": "https://www.voiptroubleshooter.com/open_speech/american.html",
+  "sources": [
+    {
+      "file": "OSR_us_000_0010_8k.wav",
+      "url": "https://voiptroubleshooter.com/open_speech/american/OSR_us_000_0010_8k.wav",
+      "bytes": 538014,
+      "sha256": "a4bf9becd046d7aedb6d05b6e12347a6294a44f74d263089c636fb0a2b1e6561",
+      "sample_rate": 8000,
+      "channels": 1,
+      "sample_width": 2,
+      "frames": 268985,
+      "duration_seconds": 33.623125,
+      "id": "female",
+      "crop_samples": [
+        0,
+        27200
+      ],
+      "onset": [
+        4040,
+        4200
+      ],
+      "end": [
+        22720,
+        24240
+      ],
+      "visual_reason": "First broadband/voiced onset near .515. Final voiced burst fades near2.85; later low-level transient near2.995 makes acoustic end ambiguous without listening. Do not assign midpoint as exact truth."
+    },
+    {
+      "file": "OSR_us_000_0030_8k.wav",
+      "url": "https://voiptroubleshooter.com/open_speech/american/OSR_us_000_0030_8k.wav",
+      "bytes": 750886,
+      "sha256": "d3e1cfba98a44ddfc6e99508e663794c8dc41bdb2baced224f779c453143b622",
+      "sample_rate": 8000,
+      "channels": 1,
+      "sample_width": 2,
+      "frames": 375421,
+      "duration_seconds": 46.927625,
+      "id": "male",
+      "crop_samples": [
+        12000,
+        41600
+      ],
+      "onset": [
+        15736,
+        15816
+      ],
+      "end": [
+        36960,
+        37600
+      ],
+      "visual_reason": "Broadband onset followed by sustained voicing. Quiet harmonic tail fades into background; interval covers plausible end. Internal quiet interval about3.75\u20134.0 remains within this sentence candidate, not an independent conversational turn."
+    }
+  ]
+}
