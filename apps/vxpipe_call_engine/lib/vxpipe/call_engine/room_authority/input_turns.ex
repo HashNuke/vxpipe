@@ -123,9 +123,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
          connection_id,
          connection,
          state,
-         _observation
+         observation
        ) do
-    begin_audio_turn(signal, connection_id, connection, state)
+    begin_audio_turn(signal, connection_id, connection, state, observation)
   end
 
   defp apply_speech_to_text_signal(
@@ -151,7 +151,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   defp apply_speech_to_text_signal(_signal, _connection_id, _connection, state, _observation),
     do: state
 
-  defp begin_audio_turn(signal, connection_id, connection, state) do
+  defp begin_audio_turn(signal, connection_id, connection, state, observation) do
     if not MapSet.member?(state.held_participant_ids, connection.participant_id) and
          new_policy_session?(connection.speech_to_text.turn, signal) and is_binary(signal.text) do
       state = CallerIdle.activity(state)
@@ -167,7 +167,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
         turn_ref: signal.turn_ref
       }
 
-      case AgentOutput.interrupt(audio_turn_interrupter(turn, connection_id, connection), state) do
+      interruption_observation =
+        if observation != nil,
+          do:
+            {observation, signal.allocation_generation, signal.turn_ref, turn.id, turn.command_id}
+
+      case AgentOutput.interrupt(
+             audio_turn_interrupter(turn, connection_id, connection),
+             state,
+             interruption_observation
+           ) do
         {:ok, state} ->
           started = %ParticipantTurnStarted{
             id: Id.generate(:event),
@@ -184,6 +193,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
           }
 
           state = EventPublisher.publish(state, connection.pid, started)
+          _ = observe_turn(observation, turn, :room_turn_started)
 
           state =
             state
@@ -258,12 +268,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     end
   end
 
-  defp observe_completion(%CaptureHandoff{} = handoff, turn) do
+  defp observe_completion(observation, turn),
+    do: observe_turn(observation, turn, :room_turn_completed)
+
+  defp observe_turn(%CaptureHandoff{} = handoff, turn, kind) do
     if is_reference(turn.allocation_generation) and is_reference(turn.turn_ref) do
       case CaptureHandoff.offer(
              handoff,
-             {:room_turn_completed, turn.allocation_generation, turn.turn_ref, turn.id,
-              turn.command_id, System.monotonic_time(:microsecond)}
+             {kind, turn.allocation_generation, turn.turn_ref, turn.id, turn.command_id,
+              System.monotonic_time(:microsecond)}
            ) do
         :ok -> handoff
         _ -> nil
@@ -271,7 +284,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     end
   end
 
-  defp observe_completion(_observation, _turn), do: nil
+  defp observe_turn(_observation, _turn, _kind), do: nil
 
   defp emit_participant_transcription(connection_id, turn, text, final, state) do
     connection = Map.fetch!(state.connections, connection_id)

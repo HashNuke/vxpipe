@@ -58,6 +58,13 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @doc false
+  def interrupt_observed(capability, context) when is_pid(capability) do
+    GenServer.call(capability, {:interrupt_observed, context}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     owner = Keyword.fetch!(options, :owner)
@@ -140,6 +147,15 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     end
   end
 
+  def handle_call({:interrupt_observed, context}, from, state) do
+    if state.current == nil or state.cancellation != nil do
+      handle_call(:interrupt, from, state)
+    else
+      pending = Enum.map(:queue.to_list(state.pending), &{&1, 0})
+      interrupt_selected(from, state, pending, :queue.new(), context)
+    end
+  end
+
   def handle_call(:interrupt, _from, %{current: nil} = state) do
     interrupted = Enum.map(:queue.to_list(state.pending), &{&1, 0})
     {:reply, {:ok, interrupted}, %{state | pending: :queue.new()}}
@@ -156,11 +172,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     interrupt_selected(from, state, pending, :queue.new())
   end
 
-  defp interrupt_selected(from, state, pending, retained) do
+  defp interrupt_selected(from, state, pending, retained, observation \\ nil) do
     current = state.current
 
     with {:ok, ticket} <- Session.fence_output(state.session, current.handle),
-         {:ok, played_ms, state} <- interrupt_output(current, state),
+         {:ok, played_ms, state} <- interrupt_output(current, state, observation),
          {:ok, request_id} <- Session.request_cancel(state.session, ticket, played_ms) do
       cancellation = %{
         accepted?: false,
@@ -269,12 +285,13 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   def handle_info(
         {:vxpipe_audio_playback, sink, turn, :started},
-        %{current: %{phase: phase, request: request}} = state
+        %{current: %{phase: phase, request: request} = current} = state
       )
       when sink == request.output_sink and turn == request.correlation_id and
              phase != :cancelling do
+    current = Map.put_new(current, :playback_started_at, System.monotonic_time(:microsecond))
     send(state.owner, {:vxpipe_tts_playback, self(), request, :started})
-    {:noreply, state}
+    {:noreply, %{state | current: current}}
   end
 
   def handle_info(
@@ -479,6 +496,28 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     case :queue.out(state.pending) do
       {{:value, request}, pending} -> start_request(request, %{state | pending: pending})
       {:empty, _pending} -> {:ok, state}
+    end
+  end
+
+  defp interrupt_output(current, state, nil), do: interrupt_output(current, state)
+
+  defp interrupt_output(current, state, observation) do
+    requested_at = System.monotonic_time(:microsecond)
+
+    result =
+      Output.interrupt_with_receipt(state.output, current.handle.ref, current.request, self())
+
+    Vxpipe.CallEngine.Diagnostics.InterruptionTiming.observe(
+      observation,
+      current,
+      requested_at,
+      result
+    )
+
+    case result do
+      {:ok, played_ms, _receipt} -> {:ok, played_ms, state}
+      {:error, :wrong_turn} -> {:ok, 0, state}
+      {:error, _reason} -> {:error, :audio_output_failed, state}
     end
   end
 

@@ -2,14 +2,15 @@ import { useId, useState } from "react";
 import type { JsonValue, LatencyLoader, LatencyMetric, LatencyTurn, Message, Participant } from "@vxpipe/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { AcousticSegments } from "./AcousticSegments.js";
+import { BargeInEvidence, BargeInSummary } from "./BargeInEvidence.js";
 import { useLatencyReport } from "./useLatencyReport.js";
 
 const stages: ReadonlyArray<[LatencyMetric, string]> = [
-  ["speech_end_to_provider_end", "STT latency"], ["provider_to_room", "Dispatch"],
+  ["provider_to_room", "Dispatch"],
   ["room_to_first_text", "Response text"], ["text_to_first_audio", "Audio start"],
 ];
 const metricLabels: Record<LatencyMetric, string> = {
-  speech_end_to_provider_end: "STT latency", observer_confirmation: "Observer confirmation",
+  speech_end_to_provider_end: "End-of-turn detection", observer_confirmation: "Observer confirmation",
   commit_to_provider_end: "Transcript commit to STT turn end", provider_to_adapter: "STT turn end to adapter",
   provider_to_room: "Dispatch", room_to_first_text: "Response text", text_to_first_audio: "Audio start",
   speech_end_to_first_audio: "Speech end to audio start", speech_end_to_manual_commit: "Speech end to manual commit",
@@ -34,7 +35,7 @@ function ms(value: number | null | undefined) {
 }
 function reason(value: string | null | undefined) { return value?.replaceAll("_", " ") ?? "missing evidence"; }
 
-function TurnRow({ turn, index, onTranscript }: { turn: LatencyTurn; index: number; onTranscript?: () => void }) {
+function TurnRow({ turn, index, onTranscript, name }: { turn: LatencyTurn; index: number; onTranscript?: () => void; name: (participantId: string) => string }) {
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   return <>
@@ -43,13 +44,16 @@ function TurnRow({ turn, index, onTranscript }: { turn: LatencyTurn; index: numb
         onClick={() => setExpanded(value => !value)}>
         <span>Turn {index + 1}</span>{expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       </button><small title={turn.turnId}>{turn.turnId}</small>{onTranscript && <button type="button" aria-label={`View transcript for turn ${index + 1}`} onClick={onTranscript}>View transcript</button>}</th>
-      {stages.map(([key]) => <td key={key} title={turn.durationsUs[key] == null ? reason(turn.metricReasons[key]) : undefined}>
-        {ms(turn.durationsUs[key])}
-      </td>)}
-      <td>{turn.quality === "available" ? "Available" : turn.quality === "incomplete" ? "Incomplete" : "Unavailable"}
+      <td title={turn.durationsUs.speech_end_to_provider_end == null ? reason(turn.metricReasons.speech_end_to_provider_end) : "Estimated speech end to the STT signal that completes this turn"}>
+        {ms(turn.durationsUs.speech_end_to_provider_end)}
+      </td>
+      <td><BargeInSummary evidence={turn.bargeIn} /></td>
+      <td>End-of-turn: {turn.quality === "available" ? "Available" : turn.quality === "incomplete" ? "Incomplete" : "Unavailable"}
         {turn.acousticReason && <small>{reason(turn.acousticReason)}</small>}</td>
     </tr>
-    {expanded && <tr id={id}><td colSpan={6} className="vx-latency-evidence">
+    {expanded && <tr id={id}><td colSpan={4} className="vx-latency-evidence">
+      <BargeInEvidence evidence={turn.bargeIn} name={name} />
+      <dl>{stages.map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{ms(turn.durationsUs[key])}</dd></div>)}</dl>
       <p>Landmarks are offsets from this run’s clock origin. Audio started means acknowledged server egress, not remote hearing.</p>
       <dl>{Object.entries(landmarks).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{ms(turn.landmarksUs[key as keyof typeof landmarks])}</dd></div>)}</dl>
       <dl>{stages.filter(([key]) => turn.durationsUs[key] == null).map(([key, label]) => <div key={key}><dt>{label} unavailable</dt><dd>{reason(turn.metricReasons[key])}</dd></div>)}</dl>
@@ -74,7 +78,7 @@ export function LatencyDiagnostics({ loader, live, participants, messages = [], 
       <span>Latency diagnostics</span>{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
     </button>
     {open && <div id={id} className="vx-latency-body">
-      <p className="vx-latency-description">Estimated speech end to STT turn end, then dispatch, response text and audio. Includes silence detection and network time; this is not pure provider compute.</p>
+      <p className="vx-latency-description">End-of-turn detection measures estimated speech end to the STT signal that completes the turn. Barge-in stop delay measures human speech onset to acknowledged server playback stop. Expand a turn for the supporting timings.</p>
       {data.loading && <p role="status">{data.report ? "Refreshing diagnostics…" : "Loading diagnostics…"}</p>}
       {data.error && <div role="alert"><p>{data.error}</p>{data.report && <p>Showing previously loaded evidence.</p>}<button type="button" onClick={data.reload}>Retry diagnostics</button></div>}
       {!data.loading && !data.error && data.report?.runs.length === 0 && <p>{data.runCursor ? "No observations on this page." : "Not collected for this call. Collection may have been off, unsupported, or denied by the source policy."}</p>}
@@ -91,8 +95,8 @@ export function LatencyDiagnostics({ loader, live, participants, messages = [], 
         </div>
         <p className="vx-latency-description">{String(run.profile.provider)} · {String(run.profile.model)} · {reason(String(run.profile.inference_source))}. Coverage: {reason(run.coverage.status)}{run.coverage.reasons.length > 0 ? ` (${run.coverage.reasons.map(reason).join(", ")})` : ""}. {run.coverage.storedTurns} stored turns, {run.coverage.pendingTurns} pending.</p>
         <div className="vx-latency-table-scroll" tabIndex={0} role="region" aria-label="Per-turn latency, scroll for more stages"><table aria-label="Per-turn latency">
-          <thead><tr><th scope="col">Human turn</th>{stages.map(([key, label]) => <th scope="col" key={key}>{label}</th>)}<th scope="col">Evidence</th></tr></thead>
-          <tbody>{data.turns?.runId === run.id && data.turns.turns.map((turn, index) => <TurnRow key={`${run.id}:${turn.turnId}`} turn={turn} index={index}
+          <thead><tr><th scope="col">Human turn</th><th scope="col">End-of-turn detection</th><th scope="col">Barge-in stop delay</th><th scope="col">Evidence</th></tr></thead>
+          <tbody>{data.turns?.runId === run.id && data.turns.turns.map((turn, index) => <TurnRow key={`${run.id}:${turn.turnId}`} turn={turn} index={index} name={name}
             onTranscript={(() => {
               const message = messages.find(item => item.turnId === turn.turnId && item.participantId === run.participantId);
               return message && onTranscript ? () => onTranscript(message.id) : undefined;

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { LatencyDiagnostics } from "../src/LatencyDiagnostics.js";
+import { BargeInEvidence, BargeInSummary } from "../src/BargeInEvidence.js";
 import { createLatencyFixture, latencyReport, latencyTurns } from "../stories/latencyFixtures.js";
 
 const open = () => fireEvent.click(screen.getByRole("button", { name: "Latency diagnostics" }));
@@ -131,7 +132,7 @@ test("whole-call summaries retain every metric definition, counts and missing pe
   open();
   fireEvent.click(await screen.findByText("Whole-call summaries"));
   expect(screen.getByText(/Dispatch: median 13 ms, p95 25 ms · 120 valid, 3 excluded/)).toBeVisible();
-  expect(screen.getByText(/STT latency: median Unavailable, p95 Unavailable · 0 valid, 123 excluded/)).toBeVisible();
+  expect(screen.getByText(/End-of-turn detection: median Unavailable, p95 Unavailable · 0 valid, 123 excluded/)).toBeVisible();
   expect(screen.queryByText(/median 0 ms/)).not.toBeInTheDocument();
 });
 
@@ -318,4 +319,77 @@ test("refresh retains newer unattached evidence while equal-revision coverage ca
   fireEvent.click(screen.getByRole("button", { name: "Refresh diagnostics" }));
   await waitFor(() => expect(screen.getByText(/9 stored turns/)).toBeVisible());
   expect(screen.getByRole("table", { name: "Unattached speech segments" })).toBeVisible();
+});
+
+const bargeInEvidence = { version: 1 as const, omittedCount: 0, reasons: [], entries: [{
+  outputId: "old-output", agentParticipantId: "agent", responseSourceParticipantId: "other-human",
+  outputConnectionId: "other-browser", responseTurnId: "old-turn", responseCommandId: "old-command",
+  playbackStartedUs: 100000, interruptionRequestedUs: 350000, playbackStoppedUs: 380000,
+  speechStartedUs: 300000, speechStartConfirmedUs: 450000, speechStartSample: 4800,
+  epoch: 0, uncertaintyUs: 32000, durationUs: 80000, boundary: "server_egress" as const, reasons: [],
+}] };
+
+test("prioritizes end-of-turn and barge-in delays while preserving interrupted-output identity", async () => {
+  const turns = { ...latencyTurns, turns: [{ ...latencyTurns.turns[0]!, bargeIn: bargeInEvidence }] };
+  render(<LatencyDiagnostics loader={{ report: async () => latencyReport, turns: async () => turns }} live={false}
+    participants={[{ id: "agent", name: "Voice agent" }, { id: "other-human", name: "Other caller" }]} />);
+  open();
+  expect(await screen.findByText("80 ms")).toBeVisible();
+  expect(screen.getAllByRole("columnheader").map(item => item.textContent)).toEqual([
+    "Human turn", "End-of-turn detection", "Barge-in stop delay", "Evidence",
+  ]);
+  const toggle = screen.getByRole("button", { name: "Turn 1" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText("Dispatch")).not.toBeInTheDocument();
+  fireEvent.click(toggle);
+  const evidence = screen.getByRole("region", { name: "Barge-in evidence" });
+  expect(within(evidence).getByText("80 ms")).toBeVisible();
+  expect(within(evidence).getByText("300 ms")).toBeVisible();
+  expect(within(evidence).getByText("380 ms")).toBeVisible();
+  expect(within(evidence).getByText(/Confirmed 450 ms/)).toBeVisible();
+  expect(within(evidence).getByText(/Voice agent.*Other caller/)).toBeVisible();
+  expect(within(evidence).getByText("old-output")).toBeVisible();
+  expect(within(evidence).getByText(/server.*stop acknowledgement/i)).toBeVisible();
+  expect(screen.getByText("Dispatch")).toBeVisible();
+});
+
+test("late barge-in confirmation revises an unavailable duration without losing expansion", async () => {
+  const available = { ...latencyTurns, turns: [{ ...latencyTurns.turns[0]!, revision: 2, bargeIn: bargeInEvidence }] };
+  const pending = { ...available, turns: [{ ...available.turns[0]!, revision: 1, bargeIn: { ...bargeInEvidence,
+    entries: [{ ...bargeInEvidence.entries[0]!, durationUs: null, speechStartedUs: null,
+      speechStartConfirmedUs: null, speechStartSample: null, epoch: null, uncertaintyUs: null, reasons: ["missing_evidence"] }] } }] };
+  const loader = { report: async () => latencyReport, turns: vi.fn().mockResolvedValueOnce(pending).mockResolvedValue(available) };
+  render(<LatencyDiagnostics loader={loader} live={false} participants={[]} />);
+  open();
+  fireEvent.click(await screen.findByRole("button", { name: "Turn 1" }));
+  const evidence = screen.getByRole("region", { name: "Barge-in evidence" });
+  expect(within(evidence).getByText("missing evidence")).toBeVisible();
+  expect(within(evidence).queryByText("0 ms")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh diagnostics" }));
+  await waitFor(() => expect(within(evidence).getByText("80 ms")).toBeVisible());
+  expect(screen.getByRole("button", { name: "Turn 1" })).toHaveAttribute("aria-expanded", "true");
+});
+
+
+test("positive sub-millisecond barge-in uncertainty is not displayed as zero", () => {
+  const evidence = { ...bargeInEvidence, entries: [{ ...bargeInEvidence.entries[0]!,
+    playbackStartedUs: 10000, speechStartedUs: 20000, interruptionRequestedUs: 30000,
+    playbackStoppedUs: 35000, speechStartConfirmedUs: 40000, speechStartSample: 320,
+    uncertaintyUs: 100, durationUs: 15000,
+  }] };
+  render(<BargeInEvidence evidence={evidence} name={id => id} />);
+  expect(screen.getByText("20 ms")).toBeVisible();
+  expect(screen.getByText("35 ms")).toBeVisible();
+  expect(screen.getByText("15 ms")).toBeVisible();
+  expect(screen.getByText("Uncertainty <1 ms")).toBeVisible();
+  expect(screen.queryByText("Uncertainty 0 ms")).not.toBeInTheDocument();
+});
+
+test.each([
+  [1, "<1 ms"], [100, "<1 ms"], [999, "<1 ms"], [0, "0 ms"],
+  [null, "Unavailable"], [1000, "1 ms"], [15000, "15 ms"],
+] as const)("barge-in summary preserves the distinction for %s microseconds", (durationUs, label) => {
+  const evidence = { ...bargeInEvidence, entries: [{ ...bargeInEvidence.entries[0]!, durationUs }] };
+  render(<BargeInSummary evidence={evidence} />);
+  expect(screen.getByText(label)).toBeVisible();
 });

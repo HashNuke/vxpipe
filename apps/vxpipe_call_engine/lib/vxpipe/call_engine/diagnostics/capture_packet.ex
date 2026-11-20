@@ -29,9 +29,19 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
      }}
   end
 
-  def copy({:room_turn_completed, generation, reference, turn, command, at}),
-    do:
-      {:room_turn_completed, generation, reference, :binary.copy(turn), :binary.copy(command), at}
+  def copy({kind, generation, reference, turn, command, at})
+      when kind in [:room_turn_started, :room_turn_completed],
+      do: {kind, generation, reference, :binary.copy(turn), :binary.copy(command), at}
+
+  def copy(
+        {:barge_in_playback, generation, reference, turn, command, identity, started, requested,
+         stopped, reason}
+      ) do
+    identity = identity |> Tuple.to_list() |> Enum.map(&:binary.copy/1) |> List.to_tuple()
+
+    {:barge_in_playback, generation, reference, :binary.copy(turn), :binary.copy(command),
+     identity, started, requested, stopped, reason}
+  end
 
   def copy({:response_landmark, turn, command, output, kind, at}),
     do:
@@ -112,7 +122,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
          (offset == nil and uncertainty == nil and reason not in [nil, :partial_start]))
   end
 
-  defp valid?({:room_turn_completed, generation, reference, turn, command, at}) do
+  defp valid?({kind, generation, reference, turn, command, at})
+       when kind in [:room_turn_started, :room_turn_completed] do
     is_reference(generation) and is_reference(reference) and identifier?(turn) and
       identifier?(command) and signed?(at)
   end
@@ -121,6 +132,26 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
     is_reference(generation) and source_intervals?(intervals) and identifier?(track) and
       is_reference(epoch) and codec in [:linear16, :opus] and rate in [8_000, 16_000, 48_000] and
       channels == 1 and mode in [:benchmark_only, :operational_reuse]
+  end
+
+  defp valid?(
+         {:barge_in_playback, generation, reference, turn, command,
+          {agent, source, connection, old_turn, old_command, output}, started, requested, stopped,
+          reason}
+       ) do
+    is_reference(generation) and is_reference(reference) and
+      Enum.all?(
+        [turn, command, agent, source, connection, old_turn, old_command, output],
+        &identifier?/1
+      ) and
+      signed?(requested) and (started == nil or (signed?(started) and started <= requested)) and
+      (stopped == nil or (signed?(stopped) and stopped >= requested)) and
+      case reason do
+        nil -> started != nil and stopped != nil
+        :not_playing -> started == nil
+        :stop_unavailable -> started != nil and stopped == nil
+        _ -> false
+      end
   end
 
   defp valid?({:response_landmark, turn, command, output, kind, at}) do

@@ -225,9 +225,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   @spec interrupt(SendText.t() | TurnInterrupter.t(), State.t()) ::
           {:ok, State.t()} | {:error, term()}
-  def interrupt(%SendText{run_immediately: false}, %State{} = state), do: {:ok, state}
+  def interrupt(command, state), do: interrupt(command, state, nil)
 
-  def interrupt(%SendText{} = command, %State{} = state) do
+  def interrupt(%SendText{run_immediately: false}, %State{} = state, _observation),
+    do: {:ok, state}
+
+  def interrupt(%SendText{} = command, %State{} = state, observation) do
     interrupter = %TurnInterrupter{
       participant_id: command.participant_id,
       connection_id: command.connection_id,
@@ -235,26 +238,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
       correlation_id: command.correlation_id
     }
 
-    interrupt(interrupter, state)
+    interrupt(interrupter, state, observation)
   end
 
-  def interrupt(%TurnInterrupter{}, %State{agent_turns: agent_turns} = state)
+  def interrupt(%TurnInterrupter{}, %State{agent_turns: agent_turns} = state, _observation)
       when map_size(agent_turns) == 0,
       do: {:ok, state}
 
-  def interrupt(%TurnInterrupter{} = interrupter, %State{} = state) do
+  def interrupt(%TurnInterrupter{} = interrupter, %State{} = state, observation) do
     if FirstMessage.playing?(state) do
       {:ok, state}
     else
-      interrupt_active(interrupter, state)
+      interrupt_active(interrupter, state, observation)
     end
   end
 
-  defp interrupt_active(interrupter, state) do
+  defp interrupt_active(interrupter, state, observation) do
     turns = state.agent_turns |> Map.values() |> Enum.sort_by(& &1.order, :desc)
     turn_ids = Enum.map(turns, &TurnState.key(&1.command))
 
-    with {:ok, speech_requests} <- interrupt_text_to_speech(state),
+    with {:ok, speech_requests} <- interrupt_text_to_speech(state, observation),
          {:ok, _commands} <- interrupt_text_generation(state, turn_ids),
          {:ok, state} <- interrupt_speech_to_speech(state) do
       Enum.each(turns, &OutputHistory.settle(state, &1.command))
@@ -462,10 +465,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     state |> TurnState.delete(command) |> FirstMessage.complete(command)
   end
 
-  defp interrupt_text_to_speech(%{text_to_speech_capability: nil}), do: {:ok, []}
+  defp interrupt_text_to_speech(%{text_to_speech_capability: nil}, _observation), do: {:ok, []}
 
-  defp interrupt_text_to_speech(state) do
+  defp interrupt_text_to_speech(state, nil) do
     TextToSpeech.interrupt(state.text_to_speech_capability.pid)
+  end
+
+  defp interrupt_text_to_speech(state, observation) do
+    TextToSpeech.interrupt_observed(state.text_to_speech_capability.pid, observation)
   end
 
   defp interrupt_speech_to_speech(%{speech_to_speech_capability: nil} = state), do: {:ok, state}

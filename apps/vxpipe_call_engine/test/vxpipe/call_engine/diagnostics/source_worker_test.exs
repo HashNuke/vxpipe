@@ -392,8 +392,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
       {:provider_landmark, generation, turn, :provider_end_evidence, 0, 32_000},
       {:provider_sample_mapping, generation, 0, 0},
       {:turn_link, generation, turn, generation, turn},
+      {:room_turn_started, generation, turn, "turn", "command", -100},
       {:room_turn_completed, generation, turn, "turn", "command", 0},
-      {:response_landmark, "turn", "command", "output", :first_response_text, 0}
+      {:response_landmark, "turn", "command", "output", :first_response_text, 0},
+      {:barge_in_playback, generation, turn, "new-turn", "new-command",
+       {"agent", "old-human", "old-connection", "old-turn", "old-command", "output"}, -500, -200,
+       0, nil}
     ]
 
     for packet <- packets do

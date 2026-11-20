@@ -1,6 +1,11 @@
 defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
   @moduledoc "Bounded source-run evidence joined by provider, canonical turn and command identity."
-  alias Vxpipe.CallEngine.Diagnostics.{CapturePacket, SegmentProjection, TurnTiming}
+  alias Vxpipe.CallEngine.Diagnostics.{
+    BargeInTiming,
+    CapturePacket,
+    SegmentProjection,
+    TurnTiming
+  }
 
   @provider_kinds %{
     provider_text_commit: :provider_text_commit,
@@ -87,8 +92,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
   defp key({:turn_link, generation, turn, _, _}), do: {:ok, {:link, generation, turn}}
 
+  defp key({:room_turn_started, generation, turn, _, _, _}),
+    do: {:ok, {:room_start, generation, turn}}
+
   defp key({:room_turn_completed, generation, turn, _, _, _}),
     do: {:ok, {:room, generation, turn}}
+
+  defp key({:barge_in_playback, generation, reference, _, _, identity, _, _, _, _}),
+    do: {:ok, {:barge_in, generation, reference, identity}}
 
   defp key({:response_landmark, turn, command, _, kind, _}),
     do: {:ok, {:response, turn, command, kind}}
@@ -101,38 +112,67 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
   defp key({:reset, epoch, reason, at}), do: {:ok, {:reset, epoch, reason, at}}
   defp key(_), do: {:error, :invalid_evidence}
 
-  defp generation(state, {:room_turn_completed, generation, _, _, _, _}),
-    do: expected_generation(state, generation)
+  defp generation(state, {kind, generation, _, _, _, _})
+       when kind in [:room_turn_started, :room_turn_completed],
+       do: expected_generation(state, generation)
 
   defp generation(state, {:turn_link, _, _, generation, _}),
+    do: expected_generation(state, generation)
+
+  defp generation(state, {:barge_in_playback, generation, _, _, _, _, _, _, _, _}),
     do: expected_generation(state, generation)
 
   defp generation(_state, _), do: :ok
   defp expected_generation(%{generation: generation}, generation), do: :ok
   defp expected_generation(_, _), do: {:error, :foreign_generation}
 
-  defp unique_room(state, {:room_turn_completed, generation, reference, turn, command, _}) do
-    collision? =
-      Enum.any?(state.packets, fn
-        {{:room, g, r}, {:room_turn_completed, _, _, old_turn, old_command, _}} ->
-          {g, r} != {generation, reference} and (old_turn == turn or old_command == command)
+  defp unique_room(state, packet) do
+    case canonical_identity(packet) do
+      nil ->
+        :ok
 
-        _ ->
-          false
-      end)
+      {generation, reference, turn, command} ->
+        collision? =
+          Enum.any?(state.packets, fn {_key, existing} ->
+            case canonical_identity(existing) do
+              nil ->
+                false
 
-    if collision?, do: {:error, :conflicting_evidence}, else: :ok
+              {^generation, ^reference, old_turn, old_command} ->
+                old_turn != turn or old_command != command
+
+              {_generation, _reference, old_turn, old_command} ->
+                old_turn == turn or old_command == command
+            end
+          end)
+
+        if collision?, do: {:error, :conflicting_evidence}, else: :ok
+    end
   end
 
-  defp unique_room(_state, _packet), do: :ok
+  defp canonical_identity({kind, generation, reference, turn, command, _})
+       when kind in [:room_turn_started, :room_turn_completed],
+       do: {generation, reference, turn, command}
+
+  defp canonical_identity(
+         {:barge_in_playback, generation, reference, turn, command, _, _, _, _, _}
+       ),
+       do: {generation, reference, turn, command}
+
+  defp canonical_identity(_), do: nil
 
   defp unique_link(state, {:turn_link, g, t, target_g, target_t}) do
-    if {g, t} != {target_g, target_t} and Map.has_key?(state.packets, {:room, g, t}),
+    established? =
+      Map.has_key?(state.packets, {:room, g, t}) or
+        Map.has_key?(state.packets, {:room_start, g, t})
+
+    if {g, t} != {target_g, target_t} and established?,
       do: {:error, :conflicting_evidence},
       else: :ok
   end
 
-  defp unique_link(state, {:room_turn_completed, g, t, _, _, _}) do
+  defp unique_link(state, {kind, g, t, _, _, _})
+       when kind in [:room_turn_started, :room_turn_completed] do
     case Map.get(state.packets, {:link, g, t}) do
       {:turn_link, ^g, ^t, target_g, target_t} when {g, t} != {target_g, target_t} ->
         {:error, :conflicting_evidence}
@@ -200,8 +240,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
   defp build(state) do
     packets = Map.values(state.packets)
-    rooms = for {:room_turn_completed, _, _, _, _, _} = room <- packets, do: room
-    rows = Enum.map(rooms, &provider_row(state, packets, &1))
+    rows = packets |> input_rows() |> Enum.map(&provider_row(state, packets, &1))
 
     ends =
       for {:provider_landmark, _, _, :provider_end_evidence, at, _} <- packets,
@@ -210,7 +249,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
     intervals =
       Map.new(rows, fn
-        {{:room_turn_completed, generation, reference, _, _, _}, _, ids} ->
+        {{:input_turn, generation, reference, _, _, _}, _, ids} ->
           {{generation, reference}, segment_bounds(ids, packets)}
       end)
 
@@ -218,7 +257,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
     reports =
       Map.new(rows, fn {room, timing, provider_ids} ->
-        {:room_turn_completed, generation, reference, turn, command, _} = room
+        {:input_turn, generation, reference, turn, command, _} = room
         finish = timing.landmarks_us[:provider_end_received]
         previous = Enum.filter(ends, &(finish != nil and &1 < finish)) |> Enum.max(fn -> -1 end)
 
@@ -247,6 +286,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
           |> TurnTiming.report()
           |> Map.merge(%{
             acoustic_segments: Map.fetch!(segments, {generation, reference}),
+            barge_in:
+              BargeInTiming.build(
+                packets,
+                {generation, reference, turn, command},
+                state.origin_us,
+                Map.fetch!(intervals, {generation, reference}),
+                intervals
+              ),
             turn_id: turn,
             stt_allocation_id: identifier(generation),
             provider_turn_id: if(length(provider_ids) == 1, do: identifier(hd(provider_ids))),
@@ -276,17 +323,36 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
     {reports, unattached}
   end
 
+  defp input_rows(packets) do
+    packets
+    |> Enum.reduce(%{}, fn
+      {:room_turn_started, g, r, turn, command, _}, rows ->
+        Map.put_new(rows, {g, r}, {:input_turn, g, r, turn, command, nil})
+
+      {:room_turn_completed, g, r, turn, command, at}, rows ->
+        Map.put(rows, {g, r}, {:input_turn, g, r, turn, command, at})
+
+      _, rows ->
+        rows
+    end)
+    |> Map.values()
+  end
+
   defp provider_row(
          state,
          packets,
-         {:room_turn_completed, generation, reference, turn, command, at} = room
+         {:input_turn, generation, reference, turn, command, at} = room
        ) do
     canonical = {generation, reference}
     providers = for {:turn_link, g, t, ^generation, ^reference} <- packets, do: {g, t}
     providers = Enum.uniq([canonical | providers])
 
+    timing = TurnTiming.new(state.clock_id)
+
     timing =
-      observe_time(TurnTiming.new(state.clock_id), :room_turn_completed, at - state.origin_us)
+      if at == nil,
+        do: timing,
+        else: observe_time(timing, :room_turn_completed, at - state.origin_us)
 
     {timing, ids} =
       Enum.reduce(packets, {timing, []}, fn

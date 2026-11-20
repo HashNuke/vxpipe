@@ -31,7 +31,8 @@ defmodule Vxpipe.Console.CallLatencyPresenter do
     :acoustic_reason,
     :acoustic_sample,
     :uncertainty_us,
-    :acoustic_segments
+    :acoustic_segments,
+    :barge_in
   ]
   @summary_fields [:profile, :metric, :valid_count, :excluded_count, :p50_us, :p95_us]
 

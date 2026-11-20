@@ -4,7 +4,9 @@ Status: records/replay, room-service cutover and STT eligibility implemented; ef
 A, B and D, including participant/segment presentation, are implemented. C uses participant-owned
 observation managed by a room service; UI and local settings transitions are verified.
 Distributed effective-status acceptance remains.
-Remaining C acceptance, E and F remain incomplete.
+Primary end-of-turn detection and barge-in stop timing are implemented, including
+configured cross-human interruption and persisted/API/Storybook presentation.
+Remaining C acceptance, broader barge-in acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
 ## User-approved CPU acceptance change — 2026-11-20
@@ -39,10 +41,10 @@ first measurement. CPU measurements are advisory as specified above.
 
 The existing interruption acceptance proves exact-request cancellation and rejects
 late output; it does **not** prove the second measurement. Existing completed
-checkboxes retain their original narrow meaning. Barge-in implementation and
-acceptance remain open below; this clarification does not claim completion.
+checkboxes retain their original narrow meaning. The checkpoint below records
+completed implementation separately from the remaining acceptance work.
 
-- [ ] Persist and expose barge-in onset, interrupted playback identity and stop
+- [x] Persist and expose barge-in onset, interrupted playback identity and stop
   acknowledgement with source/connection/incarnation and clock provenance. Match
   the onset segment to the output already playing, including an output belonging
   to the previous human turn; do not attach it to the next agent response.
@@ -2337,3 +2339,50 @@ transfer modes pass 3/3. No runtime/test change was required. Independent checkl
 closure review is clean; both scoped C timing tasks are now checked. Settings, broader failure/load parity, acoustic accuracy,
 remaining live acceptance and the intermittent mixed-STT/STS readiness failure are
 not resolved by this audit.
+
+
+## Primary barge-in measurement — 2026-11-20
+
+The interrupting human's accepted STT source owns the measurement. It retains the
+separate identity of the interrupted TTS output, including an answer to another
+human or an earlier turn. TTS records its first accepted playback-start receipt;
+the stop timestamp is taken when the sink acknowledges interruption, before
+provider cancellation finishes. This is acknowledged server egress stop, not
+proof that the listener's already-buffered audio is inaudible.
+
+The bounded report joins a unique local acoustic onset with a proven finite source
+interval. Its duration is stop receipt minus onset estimate, independent of late
+Silero confirmation. Ambiguous/unfinished intervals, resets, missing stop evidence
+and unstarted playback stay unavailable. Accepted starts persist incomplete records
+without inventing a completion landmark, then revise the same record as evidence
+arrives. Legacy records remain readable with no barge-in evidence.
+
+Configured local-provider acceptance proves human B interrupting audio answering
+human A: B's stored participant/connection/run/clock remain authoritative, while
+the record names A's output/source/connection/turn. Sink acknowledgement and provider
+cancellation are held independently; final timing excludes the latter. The fixture
+uses deterministic observer probabilities and does not establish native Silero
+accuracy, operational-reuse acceptance or live-provider behavior.
+
+The shared admin/debug view shows end-of-turn detection and barge-in stop delay as
+primary metrics, with response timings available in expanded details. Available,
+missing, ambiguous and late-confirmation stories were rendered at desktop/mobile
+sizes and in the admin host. Positive sub-millisecond values display `<1 ms`, not
+zero. The preview remains available over Tailscale on port 6007.
+
+Independent GPT-6 Astra xhigh backend and frontend reviews are clean. Proven
+review findings have retained red-green regressions: canonical identity conflicts,
+pending-record coverage counts, overlapping/open interval ownership, start/redirect
+arrival order, and sub-millisecond uncertainty. Independent checks include the
+configured cross-human test, four boundary probes, 75 Engine tests and 37 component
+tests. Storage/API checks pass 40 focused tests; parser checks pass 13. Root format,
+compile with warnings-as-errors, strict Credo and unused-dependency checks pass.
+Lean models build without oracle drift and the focused conformance test passes.
+The full umbrella suite remains deferred until milestone implementation is complete.
+
+Evidence: [capture/projection labnotes](../20261120-0138-vad-barge-in-timing.md),
+[storage/API](../20261120-0149-barge-storage-api.md),
+[rendered UI](../20261120-0149-vad-barge-ui.md), and
+[configured cross-human acceptance](../20261120-0159-configured-barge-acceptance.md).
+The remaining barge-in acceptance checkboxes stay open for their unverified cases
+and live acceptance. No production deployment is claimed by this checkpoint.

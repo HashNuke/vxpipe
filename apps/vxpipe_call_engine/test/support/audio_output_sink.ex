@@ -13,6 +13,9 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def playback_completed(sink), do: GenServer.call(sink, :playback_completed)
 
+  def defer_interrupt(sink, deferred?), do: GenServer.call(sink, {:defer_interrupt, deferred?})
+  def complete_interrupt(sink), do: GenServer.call(sink, :complete_interrupt)
+
   def defer_finish(sink, deferred?), do: GenServer.call(sink, {:defer_finish, deferred?})
 
   def complete_finish(sink, result \\ :ok), do: GenServer.call(sink, {:complete_finish, result})
@@ -43,6 +46,8 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
        defer_drain: Keyword.get(options, :defer_drain, false),
        pending_drain: nil,
        defer_finish: false,
+       defer_interrupt: false,
+       pending_interrupt: nil,
        finish_result_on_interrupt:
          Keyword.get(options, :finish_result_on_interrupt, {:error, :interrupted}),
        settle_finish_on_interrupt: Keyword.get(options, :settle_finish_on_interrupt, true),
@@ -109,6 +114,17 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def handle_call({:defer_drain, deferred?}, _from, state) when is_boolean(deferred?),
     do: {:reply, :ok, %{state | defer_drain: deferred?}}
+
+  def handle_call({:defer_interrupt, deferred?}, _from, %{pending_interrupt: nil} = state)
+      when is_boolean(deferred?),
+      do: {:reply, :ok, %{state | defer_interrupt: deferred?}}
+
+  def handle_call(:complete_interrupt, _from, %{pending_interrupt: pending} = state)
+      when not is_nil(pending) do
+    {:reply, result, next} = finish_interrupt(state)
+    GenServer.reply(pending, result)
+    {:reply, :ok, %{next | pending_interrupt: nil, defer_interrupt: false}}
+  end
 
   def handle_call({:defer_finish, deferred?}, _from, %{pending_finish: nil} = state)
       when is_boolean(deferred?),
@@ -191,11 +207,21 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def handle_call(
         {:vxpipe_audio_output_interrupt, turn, callback},
-        _from,
+        from,
         %{callback: {callback, turn}} = state
       ) do
     send(state.observer, {:test_audio_output_interrupt, self(), turn, state.played_ms})
 
+    if state.defer_interrupt,
+      do: {:noreply, %{state | pending_interrupt: from}},
+      else: finish_interrupt(state)
+  end
+
+  def handle_call({:vxpipe_audio_output_interrupt, _turn, _callback}, _from, state) do
+    {:reply, {:error, :wrong_turn}, state}
+  end
+
+  defp finish_interrupt(state) do
     if state.pending_output != nil do
       GenServer.reply(state.pending_output, {:error, :interrupted})
     end
@@ -209,9 +235,5 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
     {:reply, {:ok, state.played_ms},
      %{state | callback: nil, pending_finish: pending_finish, pending_output: nil, played_ms: 0}}
-  end
-
-  def handle_call({:vxpipe_audio_output_interrupt, _turn, _callback}, _from, state) do
-    {:reply, {:error, :wrong_turn}, state}
   end
 end

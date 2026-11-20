@@ -56,6 +56,55 @@ defmodule Vxpipe.Persistence.LatencyStoreTest do
              LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
   end
 
+  test "barge-in evidence survives durable revisions while legacy absence remains nil", %{
+    call: call
+  } do
+    run = run(call)
+    original = turn(run)
+    assert {:ok, ^run} = LatencyStore.put_run(Repo, run)
+    assert {:ok, ^original} = put_turn(run, original)
+    import Ecto.Query
+
+    from(t in Vxpipe.Persistence.Schema.TurnDiagnostic, where: t.turn_id == ^original.turn_id)
+    |> Repo.update_all(
+      set: [
+        record: Map.delete(Vxpipe.Persistence.LatencyRecordCodec.encode(original), "barge_in")
+      ]
+    )
+
+    assert {:ok, [legacy]} =
+             LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
+
+    assert Map.get(legacy, :barge_in) == nil
+
+    evidence = Vxpipe.Calls.TestLatencyRecords.barge_in()
+
+    attributes =
+      original |> Map.from_struct() |> Map.drop([:durations_us, :metric_reasons, :quality])
+
+    assert {:ok, updated} =
+             TurnDiagnostic.new(Map.merge(attributes, %{revision: 2, barge_in: evidence}))
+
+    assert {:ok, ^updated} = put_turn(run, updated)
+
+    assert {:ok, [^updated]} =
+             LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
+
+    [entry] = evidence.entries
+    missing = %{entry | speech_started_us: nil, duration_us: nil, reasons: [:missing_evidence]}
+    revised = %{evidence | entries: [missing], omitted_count: 2, reasons: [:entry_limit]}
+
+    assert {:ok, incomplete} =
+             TurnDiagnostic.new(Map.merge(attributes, %{revision: 3, barge_in: revised}))
+
+    assert {:ok, ^incomplete} = put_turn(run, incomplete)
+
+    assert {:ok, [^incomplete]} =
+             LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
+
+    assert {:error, :stale_revision} = put_turn(run, updated)
+  end
+
   test "versioned turn and unattached segments survive storage revisions and legacy reads", %{
     call: call
   } do

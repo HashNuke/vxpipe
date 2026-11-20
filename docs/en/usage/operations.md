@@ -89,11 +89,26 @@ or response samples. Omitted-segment counts indicate bounded evidence loss.
 
 | Display | Meaning |
 | --- | --- |
-| STT latency | Estimated acoustic speech end to receipt of the STT turn-end signal. Includes silence detection, buffering and network time; it is not provider compute time alone. |
+| End-of-turn detection | Estimated acoustic speech end to receipt of the STT signal that completes the human turn. Includes silence detection, buffering and network time; an interim transcript alone is not this endpoint. |
+| Barge-in stop delay | Estimated human speech onset during agent playback to the matching server playback-stop acknowledgement. Cancellation dispatch and provider cancellation completion are not the stop endpoint. |
 | Dispatch | STT turn-end receipt to the room accepting the completed input turn. |
 | Response text | Room input completion to the first matching published response text. This need not be the model's first token. |
 | Audio start | First response text to acknowledged server audio egress. This does not prove playback at the caller's device or remote hearing. |
 | Observer confirmation | Delay between the estimated acoustic end and the detector confirming that end. |
+
+End-of-turn detection and barge-in stop delay are the primary measurements.
+Dispatch, response text and audio start are supporting breakdowns. For a barge-in,
+the interrupted output can belong to an earlier turn or an answer to another
+human; expand the record to inspect that output and participant identity. This
+measurement uses the TTS playback acknowledgement. It does not measure native
+speech-to-speech playback, and it cannot prove that the listener's device has
+finished playing already-buffered audio.
+
+A turn can appear with incomplete evidence before STT completes. Barge-in duration
+stays unavailable until its source interval and a unique acoustic onset are proven.
+Late detector confirmation revises the same record using the original onset
+estimate. Ambiguous onset, missing playback acknowledgement or an unstarted output
+never becomes a zero-duration sample.
 
 Values display in `ms`; landmark offsets share one observation's clock origin.
 Do not subtract offsets across observations. Missing stages are unavailable, not

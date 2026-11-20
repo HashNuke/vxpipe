@@ -13,13 +13,15 @@ defmodule Vxpipe.Calls.TurnDiagnostic do
                     :acoustic_reason,
                     :acoustic_sample,
                     :uncertainty_us,
-                    :acoustic_segments
+                    :acoustic_segments,
+                    :barge_in
                   ]
   @enforce_keys @identity_fields ++ [:landmarks_us, :durations_us, :metric_reasons, :quality]
   @derive {Inspect, only: [:run_id, :turn_id, :revision, :quality]}
   defstruct @enforce_keys ++
               [
                 acoustic_segments: nil,
+                barge_in: nil,
                 revision: 1,
                 provider_turn_id: nil,
                 response_turn_id: nil,
@@ -37,6 +39,7 @@ defmodule Vxpipe.Calls.TurnDiagnostic do
          true <- optional_count?(Map.get(attributes, :acoustic_sample)),
          true <- optional_count?(Map.get(attributes, :uncertainty_us)),
          true <- Vxpipe.Calls.AcousticSegments.valid?(Map.get(attributes, :acoustic_segments)),
+         true <- Vxpipe.Calls.BargeIn.valid?(Map.get(attributes, :barge_in)),
          {:ok, timing} <- timing(attributes),
          report = TurnTiming.report(timing) do
       fields = Map.merge(attributes, Map.take(report, [:durations_us, :metric_reasons, :quality]))

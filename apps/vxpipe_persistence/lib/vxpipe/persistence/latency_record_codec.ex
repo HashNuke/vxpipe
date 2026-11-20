@@ -6,6 +6,19 @@ defmodule Vxpipe.Persistence.LatencyRecordCodec do
   @keys Map.keys(LatencyRun.__struct__()) ++
           Map.keys(TurnDiagnostic.__struct__()) ++
           [
+            :output_id,
+            :agent_participant_id,
+            :response_source_participant_id,
+            :output_connection_id,
+            :response_command_id,
+            :playback_started_us,
+            :interruption_requested_us,
+            :playback_stopped_us,
+            :speech_started_us,
+            :speech_start_confirmed_us,
+            :speech_start_sample,
+            :duration_us,
+            :boundary,
             :version,
             :entries,
             :omitted_count,
@@ -50,6 +63,13 @@ defmodule Vxpipe.Persistence.LatencyRecordCodec do
           ]
   @key_lookup Map.new(@keys, &{Atom.to_string(&1), &1})
   @enums [
+    :entry_limit,
+    :server_egress,
+    :not_playing,
+    :stop_unavailable,
+    :missing_evidence,
+    :before_run,
+    :source_interval_unavailable,
     :segment_limit,
     :pending,
     :running,
@@ -106,7 +126,7 @@ defmodule Vxpipe.Persistence.LatencyRecordCodec do
   end
 
   defp decode_value(key, value)
-       when key in [:state, :commit_strategy, :inference_source, :acoustic_reason] and
+       when key in [:state, :commit_strategy, :inference_source, :acoustic_reason, :boundary] and
               not is_nil(value),
        do: Map.fetch!(@enum_lookup, value)
 

@@ -34,6 +34,14 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
     :exit, _reason -> {:error, :sink_unavailable}
   end
 
+  @doc "Returns the local monotonic receipt time of a successful sink stop acknowledgement."
+  def interrupt_with_receipt(output, request_ref, %TextToSpeechRequest{} = request, callback)
+      when is_pid(output) and is_reference(request_ref) and is_pid(callback) do
+    GenServer.call(output, {:interrupt, request_ref, request, callback, :receipt}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :sink_unavailable}
+  end
+
   @impl true
   def init(options) do
     request_timeout = Keyword.get(options, :request_timeout, @request_timeout)
@@ -81,8 +89,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
         %{interrupt: %{id: request_id} = pending} = state
       ) do
     result = deadline_result(pending)
+    reply = interruption_reply(result, pending)
     state = retire_interrupted_output(result, pending, state)
-    GenServer.reply(pending.from, result)
+    GenServer.reply(pending.from, reply)
     {:noreply, %{state | interrupt: nil}}
   end
 
@@ -97,8 +106,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
   def handle_info(message, state) do
     case response(message, state.interrupt) do
       {:reply, result, pending} ->
+        reply = interruption_reply(result, pending)
         state = retire_interrupted_output(result, pending, state)
-        GenServer.reply(pending.from, result)
+        GenServer.reply(pending.from, reply)
         {:noreply, %{state | interrupt: nil}}
 
       :no_reply ->
@@ -114,7 +124,16 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
   end
 
   @impl true
-  def handle_call({:interrupt, request_ref, request, callback}, from, %{interrupt: nil} = state) do
+  def handle_call({:interrupt, request_ref, request, callback}, from, state) do
+    handle_call({:interrupt, request_ref, request, callback, :legacy}, from, state)
+  end
+
+  def handle_call(
+        {:interrupt, request_ref, request, callback, mode},
+        from,
+        %{interrupt: nil} = state
+      )
+      when mode in [:legacy, :receipt] do
     {request_id, timer} =
       request(
         request.output_sink,
@@ -122,7 +141,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
         state.request_timeout
       )
 
-    pending = %{id: request_id, from: from, reference: request_ref, timer: timer}
+    pending = %{id: request_id, from: from, reference: request_ref, timer: timer, mode: mode}
     {:noreply, %{state | interrupt: pending}}
   end
 
@@ -157,6 +176,12 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
         :no_reply
     end
   end
+
+  defp interruption_reply({:ok, played_ms}, %{mode: :receipt})
+       when is_integer(played_ms) and played_ms >= 0,
+       do: {:ok, played_ms, System.monotonic_time(:microsecond)}
+
+  defp interruption_reply(result, _pending), do: result
 
   defp retire_interrupted_output(
          {:ok, _played_ms},

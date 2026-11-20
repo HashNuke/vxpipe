@@ -29,14 +29,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     :ok
   end
 
-  test "only a current observation handle accompanies completion to the owning room" do
+  test "only a current observation handle accompanies onset and completion to the owning room" do
     {capability, generation, frame} = capability(:ok)
     handoff = handoff(capability)
     assert :ok = attach(capability, generation, frame, handoff)
     provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
     reference = make_ref()
     assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: reference]})
-    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}, ^handoff}
 
     assert :ok =
              GenServer.call(

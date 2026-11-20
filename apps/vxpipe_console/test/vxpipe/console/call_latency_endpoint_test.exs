@@ -120,6 +120,26 @@ defmodule Vxpipe.Console.CallLatencyEndpointTest do
     assert_received {:list_turns, "AAAAAAAAAAAAAAAA", "call-1", "run-1", 50, nil}
   end
 
+  test "authorized turn reads expose barge-in timing with interrupted output provenance", c do
+    [turn] = c.context.turns
+    evidence = TestLatencyRecords.barge_in()
+    attrs = turn |> Map.from_struct() |> Map.drop([:durations_us, :metric_reasons, :quality])
+    assert {:ok, turn} = TurnDiagnostic.new(Map.put(attrs, :barge_in, evidence))
+    configure(%{c.context | turns: [turn]})
+    expected = evidence |> JSON.encode!() |> JSON.decode!()
+
+    for prefix <- ["/api/tenants/", "/tenants/"] do
+      response =
+        login() |> recycle() |> get(String.replace(turns_path(), "/api/tenants/", prefix))
+
+      assert [record] = json_response(response, 200)["turns"]
+      assert Map.fetch!(record, "barge_in") == expected
+      assert record["clock_id"] == c.context.run.clock_id
+      assert record["turn_id"] == "turn-1"
+      assert Plug.Conn.get_resp_header(response, "cache-control") == ["private, no-store"]
+    end
+  end
+
   test "authorized reads preserve versioned acoustic segments and unattached evidence", c do
     segment = %{
       epoch: 2,

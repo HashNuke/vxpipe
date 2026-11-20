@@ -132,3 +132,47 @@ test("rejects unsupported, unbounded or contradictory acoustic evidence", () => 
     expect(() => parseLatencyReport({ ...report, runs: [{ ...report.runs[0], unattached_segments: evidence }] }, "call-public-id")).toThrow(/malformed/i);
   }
 });
+
+const bargeEvidence = () => ({ version: 1, omitted_count: 0, reasons: [], entries: [{
+  output_id: "old-output", agent_participant_id: "agent", response_source_participant_id: "other-human",
+  output_connection_id: "other-browser", response_turn_id: "old-turn", response_command_id: "old-command",
+  playback_started_us: 100000, interruption_requested_us: 350000, playback_stopped_us: 380000,
+  speech_started_us: 300000, speech_start_confirmed_us: 450000, speech_start_sample: 4800,
+  epoch: 0, uncertainty_us: 32000, duration_us: 80000, boundary: "server_egress", reasons: [],
+}] });
+function parseBargeEvidence(evidence: unknown) {
+  const page = latencyTurnsFixture();
+  return parseLatencyTurns({ ...page, turns: [{ ...page.turns[0], barge_in: evidence }] }, "call-public-id", "run-one").turns[0];
+}
+
+test("decodes barge-in onset to acknowledged stop independently of later VAD confirmation", () => {
+  expect(parseBargeEvidence(bargeEvidence())).toMatchObject({ bargeIn: { version: 1, omittedCount: 0, reasons: [], entries: [{
+    outputId: "old-output", agentParticipantId: "agent", responseSourceParticipantId: "other-human",
+    outputConnectionId: "other-browser", responseTurnId: "old-turn", responseCommandId: "old-command",
+    playbackStartedUs: 100000, interruptionRequestedUs: 350000, playbackStoppedUs: 380000,
+    speechStartedUs: 300000, speechStartConfirmedUs: 450000, speechStartSample: 4800,
+    epoch: 0, uncertaintyUs: 32000, durationUs: 80000, boundary: "server_egress", reasons: [],
+  }] } });
+  expect(parseBargeEvidence(null)).toHaveProperty("bargeIn", null);
+  expect(parseLatencyTurns(latencyTurnsFixture(), "call-public-id", "run-one").turns[0]).toHaveProperty("bargeIn", null);
+});
+
+test("rejects fabricated, unbounded or contradictory barge-in durations", () => {
+  const base = bargeEvidence(), entry = base.entries[0]!;
+  for (const evidence of [
+    { ...base, version: 2 }, { ...base, entries: Array(33).fill(entry) },
+    { ...base, omitted_count: 1 }, { ...base, reasons: ["unknown"] },
+    { ...base, entries: [{ ...entry, transcript: "private" }] },
+    { ...base, entries: [{ ...entry, duration_us: 0 }] },
+    { ...base, entries: [{ ...entry, duration_us: null }] },
+    { ...base, entries: [{ ...entry, playback_stopped_us: 290000 }] },
+    { ...base, entries: [{ ...entry, interruption_requested_us: 390000 }] },
+    { ...base, entries: [{ ...entry, speech_start_confirmed_us: 299999 }] },
+    { ...base, entries: [{ ...entry, uncertainty_us: 604800000001 }] },
+    { ...base, entries: [{ ...entry, boundary: "remote_hearing" }] },
+    { ...base, entries: [{ ...entry, reasons: ["ambiguous_boundary"] }] },
+  ]) expect(() => parseBargeEvidence(evidence)).toThrow(/malformed/i);
+  expect(parseBargeEvidence({ ...base, entries: [{ ...entry, duration_us: null, speech_started_us: null,
+    speech_start_confirmed_us: null, speech_start_sample: null, epoch: null, uncertainty_us: null,
+    reasons: ["missing_evidence"] }] })).toMatchObject({ bargeIn: { entries: [{ durationUs: null, reasons: ["missing_evidence"] }] } });
+});

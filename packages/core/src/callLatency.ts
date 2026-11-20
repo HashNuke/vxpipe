@@ -42,6 +42,32 @@ export interface LatencyAcousticSegments {
   omittedCount: number;
   reasons: readonly string[];
 }
+/** A human onset and the interrupted output share the enclosing run's clock. */
+export interface LatencyBargeInEntry {
+  outputId: string;
+  agentParticipantId: string;
+  responseSourceParticipantId: string;
+  outputConnectionId: string;
+  responseTurnId: string;
+  responseCommandId: string;
+  playbackStartedUs: number | null;
+  interruptionRequestedUs: number | null;
+  playbackStoppedUs: number | null;
+  speechStartedUs: number | null;
+  speechStartConfirmedUs: number | null;
+  speechStartSample: number | null;
+  epoch: number | null;
+  uncertaintyUs: number | null;
+  durationUs: number | null;
+  boundary: "server_egress";
+  reasons: readonly string[];
+}
+export interface LatencyBargeIn {
+  version: 1;
+  entries: readonly LatencyBargeInEntry[];
+  omittedCount: number;
+  reasons: readonly string[];
+}
 export interface LatencyRun {
   id: string;
   revision: number;
@@ -77,6 +103,7 @@ export interface LatencyTurn {
   acousticSample: number | null;
   uncertaintyUs: number | null;
   acousticSegments?: LatencyAcousticSegments | null;
+  bargeIn?: LatencyBargeIn | null;
 }
 export interface LatencySummary {
   profile: LatencyProfile;

@@ -1,4 +1,4 @@
-import type { LatencyLoader, LatencyReport, LatencyTurnPage } from "@vxpipe/core";
+import type { LatencyBargeIn, LatencyLoader, LatencyReport, LatencyTurnPage } from "@vxpipe/core";
 
 export const latencyReport: LatencyReport = {
   runs: [{ id: "run-one", revision: 2, settingsRevision: 4, participantId: "caller", connectionId: "browser",
@@ -28,12 +28,15 @@ export const latencyTurns: LatencyTurnPage = {
       metricReasons: { speech_end_to_provider_end: "partial_start", room_to_first_text: "missing_evidence", text_to_first_audio: "missing_evidence" } },
   ],
 };
-export type LatencyFixtureMode = "participants" | "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large" | "late" | "retry";
+export type LatencyFixtureMode = "barge-in" | "barge-in-late" | "participants" | "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large" | "late" | "retry";
 export function createLatencyFixture(mode: LatencyFixtureMode = "available", secondParticipantId = "second-caller"): LatencyLoader {
   let reads = 0;
   return {
     async report() {
       reads++;
+      if (mode === "barge-in" || mode === "barge-in-late") return { ...latencyReport, summary: [],
+        runs: [{ ...latencyReport.runs[0]!, revision: mode === "barge-in-late" && reads === 1 ? 1 : 2,
+          coverage: { ...latencyReport.runs[0]!.coverage, observedTurns: mode === "barge-in" ? 3 : 1, storedTurns: mode === "barge-in" ? 3 : 1 } }] };
       if (mode === "participants") return participantReport(secondParticipantId);
       if (mode === "retry" && reads === 1) throw new Error("Fixture temporary outage");
       if (mode === "late" && reads === 1) return { ...latencyReport, summary: [], runs: [{ ...latencyReport.runs[0]!, revision: 1, state: "running", closedAt: null, reasons: [], coverage: { ...latencyReport.runs[0]!.coverage, status: "collecting", recordedState: "running", reasons: [], terminationReasons: [], storedTurns: 1, pendingTurns: 1 } }] };
@@ -47,6 +50,7 @@ export function createLatencyFixture(mode: LatencyFixtureMode = "available", sec
       return mode === "empty" ? { runs: [], summary: [], nextCursor: null } : latencyReport;
     },
     async turns(_runId, cursor) {
+      if (mode === "barge-in" || mode === "barge-in-late") return bargeInTurns(mode === "barge-in-late", reads === 1);
       if (mode === "participants") return participantTurns(_runId);
       if (mode === "late" && reads === 1) return { ...latencyTurns, turns: [{ ...latencyTurns.turns[0]!, revision: 1, quality: "incomplete", acousticReason: "missing_evidence", acousticSample: null, uncertaintyUs: null,
         landmarksUs: { provider_end_received: 3425000, room_turn_completed: 3437000 }, durationsUs: { speech_end_to_provider_end: null, provider_to_room: 12000 }, metricReasons: { speech_end_to_provider_end: "missing_evidence" } }] };
@@ -92,5 +96,27 @@ function participantTurns(runId: string): LatencyTurnPage {
         text_to_first_audio: 200000, speech_end_to_first_audio: 1400000 }, metricReasons: {},
       acousticSegments: { ...callerSegments, entries: [{ ...callerSegments.entries[0]!, startSample: 80000, endSample: 96000,
         startUs: 5000000, endUs: 6000000, startConfirmedUs: 5128000, endConfirmedUs: 6512000 }] } },
+  ] };
+}
+
+const bargeIn: LatencyBargeIn = { version: 1, omittedCount: 0, reasons: [], entries: [{
+  outputId: "previous-agent-output", agentParticipantId: "assistant", responseSourceParticipantId: "second-caller",
+  outputConnectionId: "browser-second-caller", responseTurnId: "previous-human-turn", responseCommandId: "previous-response-command",
+  playbackStartedUs: 1000000, interruptionRequestedUs: 2100000, playbackStoppedUs: 2160000,
+  speechStartedUs: 2000000, speechStartConfirmedUs: 2256000, speechStartSample: 32000,
+  epoch: 0, uncertaintyUs: 32000, durationUs: 160000, boundary: "server_egress", reasons: [],
+}] };
+function bargeInTurns(late: boolean, first: boolean): LatencyTurnPage {
+  const available = { ...latencyTurns.turns[0]!, bargeIn };
+  if (late) return { ...latencyTurns, turns: [{ ...available, revision: first ? 1 : 2,
+    bargeIn: first ? { ...bargeIn, entries: [{ ...bargeIn.entries[0]!, speechStartedUs: null,
+      speechStartConfirmedUs: null, speechStartSample: null, epoch: null, uncertaintyUs: null, durationUs: null,
+      reasons: ["missing_evidence"] }] } : bargeIn }] };
+  return { ...latencyTurns, turns: [available,
+    { ...latencyTurns.turns[1]!, bargeIn: { ...bargeIn, entries: [{ ...bargeIn.entries[0]!,
+      outputId: "ambiguous-output", speechStartedUs: null, speechStartConfirmedUs: null, speechStartSample: null,
+      epoch: null, uncertaintyUs: null, durationUs: null, reasons: ["ambiguous_boundary"] }] } },
+    { ...latencyTurns.turns[1]!, turnId: "turn-three", bargeIn: { ...bargeIn, entries: [{ ...bargeIn.entries[0]!,
+      outputId: "unconfirmed-stop", playbackStoppedUs: null, durationUs: null, reasons: ["stop_unavailable"] }] } },
   ] };
 }

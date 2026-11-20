@@ -301,6 +301,40 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
     assert id == command.id
   end
 
+  test "audio onset carries its own observation and new turn identity into interruption", ctx do
+    {current, _old_command} = response_turn(ctx.handoff)
+    parent = self()
+
+    speech =
+      start_supervised!(
+        {Task,
+         fn ->
+           receive do
+             {:"$gen_call", from, message} ->
+               send(parent, {:interruption_request, message})
+               GenServer.reply(from, {:ok, []})
+           end
+         end}
+      )
+
+    current = %{current | text_to_speech_capability: %{pid: speech, participant_id: "agent"}}
+    signal = %{turn_started(0) | allocation_generation: make_ref(), turn_ref: make_ref()}
+    next = InputTurns.speech_to_text(self(), @identity, signal, current, ctx.handoff)
+    turn = next.connections[@identity.connection_id].speech_to_text.turn
+    generation = signal.allocation_generation
+    reference = signal.turn_ref
+    handoff = ctx.handoff
+    new_turn = turn.id
+    command = turn.command_id
+
+    assert_receive {:interruption_request,
+                    {:interrupt_observed,
+                     {^handoff, ^generation, ^reference, ^new_turn, ^command}}}
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _,
+                    {:room_turn_started, ^generation, ^reference, ^new_turn, ^command, _}, _}
+  end
+
   test "interruption prevents late text and playback from fabricating a response", ctx do
     {state, command} = response_turn(ctx.handoff)
 

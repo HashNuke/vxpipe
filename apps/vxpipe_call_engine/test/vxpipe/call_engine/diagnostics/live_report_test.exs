@@ -13,6 +13,159 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReportTest do
     %{state: state, generation: generation, turn: turn}
   end
 
+  test "interrupted playback remains pending without inventing a completed human turn", c do
+    identity = {"agent", "other-human", "other-connection", "old-turn", "old-command", "output"}
+
+    packet =
+      {:barge_in_playback, c.generation, c.turn, "new-turn", "new-command", identity, -95_000,
+       -80_000, -75_000, nil}
+
+    assert {:ok, pending} = LiveReport.observe(c.state, packet)
+    assert LiveReport.reports(pending) == []
+    assert {:ok, ^pending} = LiveReport.observe(pending, packet)
+
+    assert {:error, :conflicting_evidence} =
+             LiveReport.observe(pending, put_elem(packet, 8, -74_000))
+
+    assert {:error, :foreign_generation} =
+             LiveReport.observe(c.state, put_elem(packet, 1, make_ref()))
+  end
+
+  for order <- [:playback_first, :completion_first] do
+    @tag order: order
+    test "rejects contradictory canonical identity in either arrival order: #{order}", %{
+      order: order
+    } do
+      generation = make_ref()
+      reference = make_ref()
+      state = LiveReport.new(%{generation: generation, clock_id: "clock", origin_us: -100_000})
+      output = {"agent", "old-human", "old-connection", "old-turn", "old-command", "output"}
+
+      playback =
+        {:barge_in_playback, generation, reference, "new-turn", "new-command", output, -95_000,
+         -80_000, -75_000, nil}
+
+      valid_completion =
+        {:room_turn_completed, generation, reference, "new-turn", "new-command", -70_000}
+
+      invalid_completion =
+        {:room_turn_completed, generation, reference, "different-turn", "different-command",
+         -70_000}
+
+      assert {:ok, valid} = LiveReport.observe(state, playback)
+      assert {:ok, _} = LiveReport.observe(valid, valid_completion)
+
+      [first, second] =
+        if order == :playback_first,
+          do: [playback, invalid_completion],
+          else: [invalid_completion, playback]
+
+      assert {:ok, pending} = LiveReport.observe(state, first)
+      assert {:error, :conflicting_evidence} = LiveReport.observe(pending, second)
+    end
+  end
+
+  test "accepted input start retains incomplete barge-in evidence before completion", c do
+    packet =
+      {:barge_in_playback, c.generation, c.turn, "new-turn", "new-command",
+       {"agent", "old-human", "old-connection", "old-turn", "old-command", "output"}, -90_000,
+       -70_000, -65_000, nil}
+
+    state =
+      observe(c.state, [
+        packet,
+        {:room_turn_started, c.generation, c.turn, "new-turn", "new-command", -60_000}
+      ])
+
+    [pending] = LiveReport.reports(state)
+    assert pending.turn_id == "new-turn"
+    assert pending.landmarks_us[:room_turn_completed] == nil
+    assert [%{duration_us: nil}] = pending.barge_in.entries
+    assert LiveReport.counts(state).observed_turns == 1
+
+    next =
+      observe(state, [
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -40_000, 960},
+        {:room_turn_completed, c.generation, c.turn, "new-turn", "new-command", -39_000}
+      ])
+
+    assert [%{turn_id: "new-turn", revision: revision}] = LiveReport.reports(next)
+    assert revision > pending.revision
+    assert LiveReport.counts(next).observed_turns == 1
+  end
+
+  test "overlapping canonical intervals cannot each claim the same onset" do
+    g = make_ref()
+    r = make_ref()
+    other = make_ref()
+    identity = {"agent", "human", "connection", "old-turn", "old-command", "output"}
+
+    state =
+      observe(LiveReport.new(%{generation: g, clock_id: "clock", origin_us: -100_000}), [
+        {:provider_sample_mapping, g, 0, 0},
+        {:acoustic_boundary, 0, :speech_started, 320, 20_000, 40_000, 100, nil},
+        {:acoustic_boundary, 0, :speech_ended, 480, 30_000, 41_000, 100, nil},
+        {:acoustic_progress, 0, 0, 1024},
+        {:barge_in_playback, g, r, "turn", "command", identity, -90_000, -70_000, -65_000, nil},
+        {:barge_in_playback, g, other, "other-turn", "other-command", identity, -90_000, -70_000,
+         -65_000, nil},
+        {:provider_landmark, g, r, :provider_end_evidence, -40_000, 960},
+        {:provider_landmark, g, other, :provider_end_evidence, -39_000, 960},
+        {:room_turn_completed, g, r, "turn", "command", -38_000},
+        {:room_turn_completed, g, other, "other-turn", "other-command", -37_000}
+      ])
+
+    assert %{entries: [%{reasons: reasons}]} = LiveReport.unattached_segments(state)
+    assert :ambiguous_boundary in reasons
+    reports = LiveReport.reports(state)
+    assert length(reports) == 2
+
+    assert Enum.all?(reports, fn report ->
+             [%{duration_us: duration}] = report.barge_in.entries
+             duration == nil
+           end)
+  end
+
+  for order <- [:start_first, :redirect_first] do
+    @tag order: order
+    test "accepted start fences conflicting canonical redirects: #{order}", c do
+      started = {:room_turn_started, c.generation, c.turn, "turn", "command", -60_000}
+      redirect = {:turn_link, c.generation, c.turn, c.generation, make_ref()}
+
+      [first, second] =
+        if c.order == :start_first, do: [started, redirect], else: [redirect, started]
+
+      assert {:ok, state} = LiveReport.observe(c.state, first)
+      assert {:error, :conflicting_evidence} = LiveReport.observe(state, second)
+    end
+  end
+
+  test "late onset revises the same human report with barge-in stop delay", c do
+    packet =
+      {:barge_in_playback, c.generation, c.turn, "new-turn", "new-command",
+       {"agent", "old-human", "old-connection", "old-turn", "old-command", "output"}, -90_000,
+       -70_000, -65_000, nil}
+
+    state =
+      observe(c.state, [
+        packet,
+        {:provider_landmark, c.generation, c.turn, :provider_end_evidence, -40_000, 960},
+        {:room_turn_completed, c.generation, c.turn, "new-turn", "new-command", -39_000}
+      ])
+
+    [pending] = LiveReport.reports(state)
+    assert [%{duration_us: nil, reasons: [:missing_evidence]}] = pending.barge_in.entries
+
+    state =
+      observe(state, [{:acoustic_boundary, 0, :speech_started, 320, 20_000, 40_000, 100, nil}])
+
+    [available] = LiveReport.reports(state)
+    assert available.turn_id == pending.turn_id
+    assert available.revision > pending.revision
+    assert [%{duration_us: 15_000, response_turn_id: "old-turn"}] = available.barge_in.entries
+    assert available.landmarks_us[:first_audio_started] == nil
+  end
+
   test "retains multiple acoustic segments per canonical turn and unattached speech", c do
     boundaries = [
       {:acoustic_boundary, 0, :speech_started, 0, 0, 1_000, 100, nil},

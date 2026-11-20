@@ -121,7 +121,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           providers: %{
             Vxpipe.Providers.Deepgram.TTSSession => [
               enabled: true,
-              wire_module: CallEngine.TestTextToSpeechTransport,
+              wire_module:
+                if(Map.get(tags, :barge_in, false),
+                  do: Vxpipe.Console.Test.HeldInterruptTransport,
+                  else: CallEngine.TestTextToSpeechTransport
+                ),
               wire_options: [
                 observer: parent,
                 ready_on_start: true,
@@ -186,6 +190,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
        maximum_collectors:
          cond do
            Map.get(tags, :external_pcm, false) -> 16
+           Map.get(tags, :barge_in, false) -> 2
            Map.get(tags, :input_only, false) -> 2
            true -> 1
          end,
@@ -218,6 +223,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
            cond do
              actual? ->
                actual_classifier(parent, :benchmark)
+
+             Map.get(tags, :barge_in, false) ->
+               barge_classifier(parent)
 
              matrix? ->
                benchmark_classifier(parent, Map.get(tags, :diagnostic_failure))
@@ -2526,6 +2534,228 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  @tag matrix: true, routing: true, barge_in: true
+  test "configured human B barge-in persists sink stop independently of provider cancellation",
+       c do
+    {call, _connection, attachment, wire, identity} = call(c.options, false, :barge_two)
+    assert_receive {:test_tts_transport_started, voice, _}, 5_000
+
+    assert_receive {:diagnostic_extra_input, _,
+                    {_, _guest, guest_attachment, guest_wire, guest_identity}}
+
+    epoch = make_ref()
+    guest_epoch = make_ref()
+    _ = discover_with_audio(attachment, identity, epoch, wire)
+
+    guest_sequence =
+      discover_with_audio(guest_attachment, guest_identity, guest_epoch, guest_wire)
+
+    await(fn -> RoomService.status(RoomService.address(identity)).active_sources == 2 end)
+    pace(32)
+
+    send_audio(
+      guest_attachment,
+      guest_identity,
+      guest_epoch,
+      guest_sequence,
+      guest_sequence * 512,
+      :binary.copy(<<0, 0>>, 512)
+    )
+
+    assert_receive {:scribe_audio, ^guest_wire, _}, 2_000
+    guest_sequence = guest_sequence + 1
+
+    guest_worker =
+      await(fn ->
+        DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+        |> Enum.find_value(fn {_, worker, _, _} ->
+          state = :sys.get_state(worker)
+
+          if state.timeline.identity != nil and
+               state.timeline.identity.participant_id == guest_identity.participant_id,
+             do: worker
+        end)
+      end)
+
+    guest_clock = :sys.get_state(guest_worker)
+    guest_origin = guest_clock.origin_us
+    guest_clock_id = guest_clock.timeline.clock.clock_id
+
+    # The first observed speech segment is intentionally partial. Finish a
+    # deterministic preroll segment before measuring a fully observed onset.
+    for index <- 0..19 do
+      pace(32)
+      pcm = :binary.copy(<<if(index < 4, do: 42, else: 0), 0>>, 512)
+      sequence = guest_sequence + index
+      send_audio(guest_attachment, guest_identity, guest_epoch, sequence, sequence * 512, pcm)
+      assert_receive {:scribe_audio, ^guest_wire, ^pcm}, 2_000
+      assert_receive {:matrix_inference, :benchmark, _, ^pcm}, 2_000
+    end
+
+    await(fn -> not :sys.get_state(guest_worker).partial? end)
+    guest_sequence = guest_sequence + 20
+
+    emit_scribe_turn(wire, "Please answer human A.")
+    assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = first_input}, 2_000
+    assert_receive {:test_agent_runtime_stream, model, _}, 2_000
+
+    text =
+      JSON.encode!(%{
+        type: "participant_message",
+        participant_id: "agent",
+        agent_mode: "speaker",
+        message: "The answer for human A."
+      })
+
+    {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: text)
+    send(model, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+    assert output.correlation_id == first_input.correlation_id
+    first_turn = first_input.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.ParticipantTurnStarted{correlation_id: ^first_turn}}
+
+    assert_receive {:test_tts_control, ^voice, _}, 2_000
+
+    CallEngine.TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{type: "SpeechStarted", speech_id: "barge-spoken"})
+    )
+
+    CallEngine.TestTextToSpeechTransport.deliver_audio(voice, :binary.copy(<<1, 0>>, 4_800))
+    correlation = output.correlation_id
+    assert_receive {:test_audio_output, sink, %{correlation_id: ^correlation}}, 2_000
+    :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.AgentSpeechStarted{correlation_id: ^correlation}},
+                   2_000
+
+    :ok = CallEngine.TestAudioOutputSink.playback_progress(sink, 10, 100)
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.AgentSpeechProgressed{correlation_id: ^correlation}},
+                   2_000
+
+    :ok = CallEngine.TestAudioOutputSink.defer_interrupt(sink, true)
+
+    # One receipt-aligned quiet packet after playback begins anchors B's onset;
+    # the four marker windows drive the ordinary AcousticObserver onset rule.
+    for index <- 0..4 do
+      pace(32)
+      pcm = :binary.copy(<<if(index == 0, do: 0, else: 42), 0>>, 512)
+      sequence = guest_sequence + index
+      send_audio(guest_attachment, guest_identity, guest_epoch, sequence, sequence * 512, pcm)
+      assert_receive {:scribe_audio, ^guest_wire, ^pcm}, 2_000
+      assert_receive {:matrix_inference, :benchmark, _, ^pcm}, 2_000
+    end
+
+    :ok =
+      Wire.deliver_frame(
+        guest_wire,
+        JSON.encode!(%{message_type: "partial_transcript", text: "Human B interrupts."})
+      )
+
+    assert_receive {:test_audio_output_interrupt, ^sink, ^correlation, 10}, 2_000
+    refute_receive {:held_provider_interrupt, _, _}, 0
+    stop_lower = System.monotonic_time(:microsecond)
+    :ok = CallEngine.TestAudioOutputSink.complete_interrupt(sink)
+    assert_receive {:held_provider_interrupt, ^voice, _}, 2_000
+    provider_held_at = System.monotonic_time(:microsecond)
+    pace(32)
+    provider_release_at = System.monotonic_time(:microsecond)
+    :ok = Vxpipe.Console.Test.HeldInterruptTransport.release(voice)
+
+    CallEngine.TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{
+        type: "SpeechInterrupted",
+        audio_played_ms: 10,
+        text_spoken: "The",
+        text_remaining: "answer",
+        metadata: %{speech_id: "barge-spoken"}
+      })
+    )
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.ParticipantTurnStarted{
+                      participant_id: participant,
+                      correlation_id: new_turn
+                    }},
+                   2_000
+
+    assert participant == guest_identity.participant_id
+
+    pending =
+      await(fn ->
+        case diagnostic_turn(call, new_turn) do
+          %{barge_in: %{entries: [_]}} = row -> row
+          _ -> nil
+        end
+      end)
+
+    [interruption] = pending.barge_in.entries
+    assert interruption.output_id == output.id
+    assert interruption.response_source_participant_id == identity.participant_id
+    assert interruption.output_connection_id == identity.connection_id
+    assert interruption.response_turn_id == first_input.correlation_id
+    assert interruption.playback_stopped_us + guest_origin >= stop_lower
+    assert interruption.playback_stopped_us + guest_origin <= provider_held_at
+    assert interruption.playback_stopped_us + guest_origin < provider_release_at
+    refute Map.has_key?(pending.landmarks_us, :room_turn_completed)
+
+    for index <- 5..20 do
+      pace(32)
+      sequence = guest_sequence + index
+      pcm = :binary.copy(<<0, 0>>, 512)
+      send_audio(guest_attachment, guest_identity, guest_epoch, sequence, sequence * 512, pcm)
+      assert_receive {:scribe_audio, ^guest_wire, ^pcm}, 2_000
+      assert_receive {:matrix_inference, :benchmark, _, ^pcm}, 2_000
+    end
+
+    for {kind, text} <- [
+          {"committed_transcript", "Human B interrupts."},
+          {"partial_transcript", ""}
+        ] do
+      :ok = Wire.deliver_frame(guest_wire, JSON.encode!(%{message_type: kind, text: text}))
+    end
+
+    row =
+      await(fn ->
+        case diagnostic_turn(call, new_turn) do
+          %{landmarks_us: %{room_turn_completed: _}, acoustic_segments: %{entries: [_ | _]}} = row ->
+            row
+
+          _ ->
+            nil
+        end
+      end)
+
+    [entry] = row.barge_in.entries
+
+    assert is_integer(entry.duration_us),
+           inspect(%{barge_in: row.barge_in, acoustic_segments: row.acoustic_segments})
+
+    assert entry.duration_us == entry.playback_stopped_us - entry.speech_started_us
+    assert entry.duration_us > 0
+    assert entry.playback_stopped_us == interruption.playback_stopped_us
+    assert row.run_id == pending.run_id
+    assert row.revision > pending.revision
+
+    assert {:ok, %{entries: runs}} =
+             LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+    guest_run = Enum.find_value(runs, fn %{run: run} -> if run.id == row.run_id, do: run end)
+    assert guest_run.participant_id == guest_identity.participant_id
+    assert guest_run.connection_id == guest_identity.connection_id
+    assert guest_run.clock_id == guest_clock_id
+    assert diagnostic_turn(call, first_input.correlation_id).barge_in == nil
+
+    GenServer.stop(attachment.room_authority, :shutdown)
+    await_diagnostic_drain(identity)
+  end
+
   for vad <- [false, true] do
     @tag matrix: true, routing: true, transfer_continuity: true, vad: vad
     test "configured agent transfer preserves continuous input and acknowledged audio, Silero #{vad}",
@@ -3106,6 +3336,18 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  defp barge_classifier(parent) do
+    fn _model, stream, pcm ->
+      send(parent, {:matrix_inference, :benchmark, stream.samples, pcm})
+
+      probabilities =
+        for <<window::binary-size(1_024) <- pcm>>,
+          do: if(window == :binary.copy(<<42, 0>>, 512), do: 0.9, else: 0.0)
+
+      {:ok, %{stream | samples: stream.samples + length(probabilities) * 512}, probabilities}
+    end
+  end
+
   defp matrix_classifier(parent, mode) do
     fn _model, stream, pcm ->
       send(parent, {:matrix_inference, mode, stream.samples, pcm})
@@ -3115,10 +3357,10 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   end
 
   defp call(options, vad \\ false, scenario \\ :llm, audit_events? \\ false) do
-    routing? = scenario == :transfer
+    routing? = scenario in [:transfer, :barge_two]
     input_only? = scenario == :humans
     concurrent? = match?({:concurrent_llm, _}, scenario)
-    two_inputs? = scenario == {:concurrent_llm, 2}
+    two_inputs? = scenario in [{:concurrent_llm, 2}, :barge_two]
 
     sts_mode =
       case scenario do

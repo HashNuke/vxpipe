@@ -1,5 +1,5 @@
 import { latencyLandmarks, latencyMetrics } from "@vxpipe/core";
-import type { JsonValue, LatencyAcousticSegment, LatencyAcousticSegments, LatencyCoverage, LatencyLoader, LatencyProfile, LatencyReport,
+import type { JsonValue, LatencyAcousticSegment, LatencyAcousticSegments, LatencyBargeIn, LatencyBargeInEntry, LatencyCoverage, LatencyLoader, LatencyProfile, LatencyReport,
   LatencyRun, LatencySummary, LatencyTurn, LatencyTurnPage } from "@vxpipe/core";
 
 type ObjectValue = Record<string, unknown>;
@@ -148,6 +148,44 @@ function acousticSegments(value: unknown): LatencyAcousticSegments | null {
   }
   return { version: 1, entries, omittedCount, reasons };
 }
+const bargeReasons = ["not_playing", "stop_unavailable", "missing_evidence", "ambiguous_boundary", "clock_uncertain",
+  "inference_reset", "audio_gap", "source_changed", "observer_overloaded", "before_run", "source_interval_unavailable"] as const;
+function bargeInEntry(value: unknown): LatencyBargeInEntry {
+  const input = object(value);
+  const fields = ["output_id", "agent_participant_id", "response_source_participant_id", "output_connection_id", "response_turn_id", "response_command_id",
+    "playback_started_us", "interruption_requested_us", "playback_stopped_us", "speech_started_us", "speech_start_confirmed_us", "speech_start_sample",
+    "epoch", "uncertainty_us", "duration_us", "boundary", "reasons"];
+  if (Object.keys(input).length !== fields.length || Object.keys(input).some(key => !fields.includes(key))) return invalid();
+  const entry: LatencyBargeInEntry = {
+    outputId: text(input.output_id), agentParticipantId: text(input.agent_participant_id), responseSourceParticipantId: text(input.response_source_participant_id),
+    outputConnectionId: text(input.output_connection_id), responseTurnId: text(input.response_turn_id), responseCommandId: text(input.response_command_id),
+    playbackStartedUs: nullable(input.playback_started_us, offset), interruptionRequestedUs: nullable(input.interruption_requested_us, offset),
+    playbackStoppedUs: nullable(input.playback_stopped_us, offset), speechStartedUs: nullable(input.speech_started_us, offset),
+    speechStartConfirmedUs: nullable(input.speech_start_confirmed_us, offset), speechStartSample: nullable(input.speech_start_sample, offset),
+    epoch: nullable(input.epoch, offset), uncertaintyUs: nullable(input.uncertainty_us, offset), durationUs: nullable(input.duration_us, offset),
+    boundary: member(input.boundary, ["server_egress"]), reasons: evidenceReasons(input.reasons, bargeReasons),
+  };
+  if (entry.reasons.length > 0) {
+    if (entry.durationUs !== null) return invalid();
+  } else {
+    if ([entry.playbackStartedUs, entry.interruptionRequestedUs, entry.playbackStoppedUs, entry.speechStartedUs,
+      entry.speechStartConfirmedUs, entry.speechStartSample, entry.epoch, entry.uncertaintyUs, entry.durationUs].includes(null) ||
+      !ordered(entry.playbackStartedUs, entry.speechStartedUs) || !ordered(entry.speechStartedUs, entry.interruptionRequestedUs) ||
+      !ordered(entry.interruptionRequestedUs, entry.playbackStoppedUs) || !ordered(entry.speechStartedUs, entry.speechStartConfirmedUs) ||
+      entry.durationUs !== entry.playbackStoppedUs! - entry.speechStartedUs!) return invalid();
+  }
+  return entry;
+}
+function bargeIn(value: unknown): LatencyBargeIn | null {
+  if (value === undefined || value === null) return null;
+  const input = object(value);
+  if (input.version !== 1 || Object.keys(input).length !== 4) return invalid();
+  const entries = array(input.entries, 32).map(bargeInEntry);
+  const omittedCount = offset(input.omitted_count);
+  const reasons = evidenceReasons(input.reasons, ["entry_limit"]);
+  if ((omittedCount > 0) !== reasons.includes("entry_limit")) return invalid();
+  return { version: 1, entries, omittedCount, reasons };
+}
 function turn(value: unknown, runId: string): LatencyTurn {
   const input = object(value);
   if (input.run_id !== runId) return invalid();
@@ -157,7 +195,7 @@ function turn(value: unknown, runId: string): LatencyTurn {
     durationsUs: mapping(input.durations_us, latencyMetrics, value => nullable(value, offset)),
     metricReasons: mapping(input.metric_reasons, latencyMetrics, value => nullable(value, text)),
     quality: member(input.quality, ["available", "incomplete", "unavailable"]), acousticReason: nullable(input.acoustic_reason, text),
-    acousticSample: nullable(input.acoustic_sample, integer), uncertaintyUs: nullable(input.uncertainty_us, offset), acousticSegments: acousticSegments(input.acoustic_segments) };
+    acousticSample: nullable(input.acoustic_sample, integer), uncertaintyUs: nullable(input.uncertainty_us, offset), acousticSegments: acousticSegments(input.acoustic_segments), bargeIn: bargeIn(input.barge_in) };
 }
 function envelope(value: unknown, callId: string): ObjectValue {
   const input = object(value);

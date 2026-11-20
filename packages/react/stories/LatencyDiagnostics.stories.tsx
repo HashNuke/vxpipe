@@ -34,3 +34,11 @@ export const RetryAfterOutage: Story = { render: function Render(args) {
 
 export const ParticipantSegments: Story = { args: { loader: createLatencyFixture("participants"),
   participants: [{ id: "caller", name: "Caller" }, { id: "second-caller", name: "Second participant" }] } };
+
+const bargeParticipants = [{ id: "caller", name: "Caller" }, { id: "second-caller", name: "Other caller" }, { id: "assistant", name: "Voice agent" }];
+export const BargeIn: Story = { args: { loader: createLatencyFixture("barge-in"), participants: bargeParticipants },
+  parameters: { docs: { description: { story: "Synthetic end-of-turn and barge-in measurements. Available stop timing, ambiguous onset and missing stop acknowledgement remain distinct. Collapsed by default." } } } };
+export const LateBargeInConfirmation: Story = { args: { participants: bargeParticipants }, render: function Render(args) {
+  const loader = useMemo(() => createLatencyFixture("barge-in-late"), []);
+  return <LatencyDiagnostics {...args} loader={loader} />;
+}, parameters: { docs: { description: { story: "Expand the first turn, then Refresh diagnostics. Late Silero confirmation adds the onset-to-stop delay without resetting the expanded row." } } } };

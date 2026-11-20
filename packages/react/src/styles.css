@@ -1907,5 +1907,10 @@ button.vx-tool-summary:hover {
 .vx-latency-unattached summary { cursor: pointer; }
 
 @media (max-width: 640px) {
-  .vx-latency-evidence > :is(p, dl, .vx-acoustic-segments) { width: calc(100vw - 48px); max-width: 100%; }
+  .vx-latency-evidence > :is(p, dl, .vx-acoustic-segments, .vx-barge-in-evidence) { width: calc(100vw - 48px); max-width: 100%; }
 }
+
+.vx-barge-in-evidence h4 { margin: 16px 0 8px; font-size: 13px; }
+.vx-barge-in-evidence th span { display: block; max-width: 28ch; }
+.vx-barge-in-evidence small { max-width: 28ch; }
+.vx-barge-in-evidence .vx-barge-in-reasons { white-space: normal; overflow: visible; }

@@ -55,3 +55,6 @@ export const LatencyLarge: Story = { args: { scenario: "metrics", initialTab: "m
 
 export const ParticipantSegments: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "participants" },
   parameters: { docs: { description: { story: "Synthetic participant-owned VAD evidence: two human STT observations, multiple segments per turn, agent-transfer continuity, and explicit missing/omitted evidence." } } } };
+
+export const BargeInLatency: Story = { args: { scenario: "metrics", initialTab: "metrics", latency: "barge-in" },
+  parameters: { docs: { description: { story: "Synthetic barge-in stop measurements in the shared collapsed latency panel." } } } };

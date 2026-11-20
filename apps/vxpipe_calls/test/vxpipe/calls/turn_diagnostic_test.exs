@@ -2,6 +2,73 @@ defmodule Vxpipe.Calls.TurnDiagnosticTest do
   use ExUnit.Case, async: true
   alias Vxpipe.Calls.TurnDiagnostic
 
+  test "retains barge-in identities and late confirmation independently of endpoint quality" do
+    evidence = Vxpipe.Calls.TestLatencyRecords.barge_in()
+    attrs = attributes() |> Map.put(:landmarks_us, %{}) |> Map.put(:barge_in, evidence)
+    assert {:ok, turn} = TurnDiagnostic.new(attrs)
+    assert turn.barge_in == evidence
+    assert turn.quality == :unavailable
+    assert turn.durations_us.speech_end_to_provider_end == nil
+    assert {:ok, legacy} = TurnDiagnostic.new(attributes())
+    assert legacy.barge_in == nil
+
+    [entry] = evidence.entries
+    missing = %{entry | speech_started_us: nil, duration_us: nil, reasons: [:missing_evidence]}
+
+    assert {:ok, partial} =
+             TurnDiagnostic.new(%{attrs | barge_in: %{evidence | entries: [missing]}})
+
+    assert hd(partial.barge_in.entries).duration_us == nil
+  end
+
+  test "rejects fabricated durations, unsupported boundaries and unbounded barge-in payloads" do
+    evidence = Vxpipe.Calls.TestLatencyRecords.barge_in()
+    [entry] = evidence.entries
+
+    invalid_entries = [
+      %{entry | duration_us: 24_999},
+      %{entry | duration_us: nil},
+      %{entry | playback_started_us: 20_001},
+      %{entry | interruption_requested_us: 19_999},
+      %{entry | playback_stopped_us: 29_999},
+      %{entry | speech_start_confirmed_us: 19_999},
+      %{entry | speech_started_us: nil},
+      %{entry | uncertainty_us: -1},
+      %{entry | epoch: 604_800_000_001},
+      %{entry | output_id: ""},
+      %{entry | output_id: String.duplicate("x", 257)},
+      %{entry | response_source_participant_id: <<255>>},
+      %{entry | boundary: :remote_audible},
+      %{entry | reasons: [:unknown]},
+      %{entry | reasons: [:missing_evidence]},
+      %{entry | duration_us: nil, reasons: [:missing_evidence, :missing_evidence]},
+      Map.put(entry, :transcript, "private"),
+      Map.delete(entry, :output_id)
+    ]
+
+    for invalid <- invalid_entries do
+      assert {:error, :invalid_turn_diagnostic} =
+               TurnDiagnostic.new(
+                 Map.put(attributes(), :barge_in, %{evidence | entries: [invalid]})
+               )
+    end
+
+    for invalid <- [
+          %{evidence | version: 2},
+          %{evidence | entries: List.duplicate(entry, 33)},
+          %{evidence | omitted_count: -1},
+          %{evidence | omitted_count: 1},
+          %{evidence | reasons: [:entry_limit]},
+          Map.put(evidence, :audio, "private")
+        ] do
+      assert {:error, :invalid_turn_diagnostic} =
+               TurnDiagnostic.new(Map.put(attributes(), :barge_in, invalid))
+    end
+
+    bounded = %{evidence | omitted_count: 1, reasons: [:entry_limit]}
+    assert {:ok, _} = TurnDiagnostic.new(Map.put(attributes(), :barge_in, bounded))
+  end
+
   test "derives partial timing while retaining correlation identities" do
     assert {:ok, turn} = TurnDiagnostic.new(attributes())
     assert turn.durations_us.speech_end_to_provider_end == 400_000

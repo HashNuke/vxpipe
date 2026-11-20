@@ -102,8 +102,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
              :provider_landmark,
              :provider_sample_mapping,
              :turn_link,
+             :room_turn_started,
              :room_turn_completed,
-             :response_landmark
+             :response_landmark,
+             :barge_in_playback
            ] ->
         if current?(state) do
           case process(state, {packet, charge}) do
@@ -297,7 +299,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     {:ok, state}
   end
 
-  defp process(state, {{:room_turn_completed, _, _, _, _, _} = packet, charge}) do
+  defp process(state, {{kind, _, _, _, _, _} = packet, charge})
+       when kind in [:room_turn_started, :room_turn_completed] do
+    CaptureHandoff.release(state.input, charge, :processed)
+    emit(state, packet)
+  end
+
+  defp process(state, {{:barge_in_playback, _, _, _, _, _, _, _, _, _} = packet, charge}) do
     CaptureHandoff.release(state.input, charge, :processed)
     emit(state, packet)
   end

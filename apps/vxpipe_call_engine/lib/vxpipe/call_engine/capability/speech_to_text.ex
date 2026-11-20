@@ -403,8 +403,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
              handoff: handoff
            }
          } = state,
-         %Signal{kind: :turn_ended, allocation_generation: generation} = signal
-       ) do
+         %Signal{kind: kind, allocation_generation: generation} = signal
+       )
+       when kind in [:turn_started, :turn_ended] do
     if intervals == State.diagnostic_intervals(state) and CaptureHandoff.current?(handoff) do
       send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal, handoff})
     else
