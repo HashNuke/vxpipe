@@ -72,3 +72,67 @@ def complete(data, rooms, humans, workload):
         return data['boundary'] == BOUNDARY and data['summary'] == summarize(data, rooms, humans, workload)
     except (KeyError, TypeError, ValueError, IndexError, AttributeError):
         return False
+
+
+EGRESS_BOUNDARY = 'canonical-audio-completion-publication-to-server-egress-ack-v1'
+
+
+def summarize_egress(data, rooms, humans, workload):
+    stages, clocks = {}, {}
+    order = ('completed', 'dispatched', 'egress_ack')
+    for event in data['events']:
+        source = identity(event)
+        key = source + (event['correlation_id'], event['command_id'])
+        index = stages.get(key, 0)
+        at = event['at_us']
+        if (index >= len(order) or event['stage'] != order[index]
+                or type(at) is not int or at < clocks.get(source[:2], at)):
+            raise ValueError('out-of-order egress trace')
+        stages[key] = index + 1
+        clocks[source[:2]] = at
+    dispatch = [e for e in data['events'] if e['stage'] != 'egress_ack']
+    summarize(dict(data, events=dispatch), rooms, humans, workload)
+    outputs = {}
+    for i, rows in data['turns'].items():
+        for row in rows:
+            output = row['output_id']
+            if not isinstance(output, str) or not output:
+                raise ValueError('missing acknowledged output identity')
+            outputs[identity(data['sources'][i]) + (row['correlation_id'], row['command_id'])] = output
+    dispatch_times = {identity(e)+(e['correlation_id'],e['command_id']): e['at_us']
+                      for e in dispatch if e['stage']=='dispatched'}
+    mapped = []
+    for event in data['events']:
+        if event['stage'] == 'dispatched':
+            continue
+        if event['stage'] == 'egress_ack':
+            key = identity(event)+(event['correlation_id'],event['command_id'])
+            if (outputs[key] != event['output_id'] or type(event['at_us']) is not int
+                    or event['at_us'] < dispatch_times[key]):
+                raise ValueError('conflicting acknowledged output')
+            event = dict(event, stage='dispatched')
+        mapped.append(event)
+    return summarize(dict(data, events=mapped), rooms, humans, workload)
+
+
+def complete_egress(data, rooms, humans, workload):
+    try:
+        return data['boundary'] == EGRESS_BOUNDARY and data['summary'] == summarize_egress(data, rooms, humans, workload)
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return False
+
+
+def same_dispatch_population(dispatch, egress):
+    """Both measurements must come from the same canonical run and trace."""
+    try:
+        def turns(data):
+            return {i: [{k: row[k] for k in ('turn', 'correlation_id', 'command_id')}
+                        for row in rows] for i, rows in data['turns'].items()}
+        def events(data):
+            fields = SOURCE_FIELDS + ('correlation_id', 'command_id', 'stage', 'at_us')
+            return [{k: event[k] for k in fields} for event in data['events']
+                    if event['stage'] in ('completed', 'dispatched')]
+        return (dispatch['sources'] == egress['sources'] and turns(dispatch) == turns(egress)
+                and events(dispatch) == events(egress))
+    except (KeyError, TypeError, AttributeError):
+        return False

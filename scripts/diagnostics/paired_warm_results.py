@@ -39,7 +39,7 @@ def validate_phase(phase):
             raise ValueError('invalid provenance')
         for key in ('cpu_cores', 'cpu_seconds', 'duration_seconds', 'process_high_water_kib'):
             number(phase['resources'][key], key, positive=key in ('duration_seconds', 'process_high_water_kib'))
-        for key in ('ingress', 'dispatch'):
+        for key in ('ingress', 'dispatch') + (('egress',) if 'egress' in phase else ()):
             if type(phase[key]['count']) is not int or phase[key]['count'] <= 0:
                 raise ValueError('invalid latency population')
             number(phase[key]['p95_us'], key)
@@ -69,11 +69,15 @@ def validate_artifact(artifact):
                      resources=report['generator']['resource_interval']['summary'],
                      ingress=report['ingress_latency']['summary'],
                      dispatch=report['response_dispatch']['summary'])
+        has_egress = 'response_egress' in report
+        if has_egress:
+            phase['egress'] = report['response_egress']['summary']
         validate_phase(phase)
         if (artifact['resource_samples'] != report['resource_samples']
                 or not smoke_complete(artifact['smoke_reports'], artifact['samples'],
                     rooms=phase['rooms'], inputs_per_room=phase['inputs_per_room'],
-                    workload='warm', selected_case=(phase['operational_vad'], phase['collection']))):
+                    workload='warm', selected_case=(phase['operational_vad'], phase['collection']),
+                    require_egress=has_egress)):
             raise ValueError('invalid warm workload evidence')
         return phase
     except (KeyError, TypeError, IndexError, OverflowError) as error:
@@ -85,6 +89,7 @@ def compare_validated(off, on):
     validate_phase(on)
     if (off['collection'] is not False or on['collection'] is not True
             or off['run_id'] == on['run_id']
+            or ('egress' in off) != ('egress' in on)
             or any(off[key] != on[key] for key in ('operational_vad', 'rooms', 'inputs_per_room'))
             or any(off['provenance'][key] != on['provenance'][key]
                    for key in ('source_commit', 'file_sha256'))):
@@ -95,7 +100,7 @@ def compare_validated(off, on):
     rss_delta = on['resources']['process_high_water_kib'] - off['resources']['process_high_water_kib']
     rss_limit = (128 + 8 * inputs) * 1024
     latencies = {}
-    for key in ('ingress', 'dispatch'):
+    for key in ('ingress', 'dispatch') + (('egress',) if 'egress' in off else ()):
         delta = on[key]['p95_us'] - off[key]['p95_us']
         limit = max(2000, off[key]['p95_us'] * .1)
         latencies[key] = dict(off=off[key], on=on[key], delta_us=delta,
@@ -111,7 +116,8 @@ def compare_validated(off, on):
                 latency=latencies,
                 measured_gates_pass=rss_delta <= rss_limit and all(x['passed'] for x in latencies.values()),
                 milestone_acceptance_complete=False,
-                missing_acceptance_evidence=['egress_latency', 'database_cpu', 'inference_coverage',
+                missing_acceptance_evidence=([] if 'egress' in off else ['egress_latency']) +
+                                            ['database_cpu', 'inference_coverage',
                                              'cold_phases', 'repeated_topology_matrix',
                                              'acoustic_accuracy', 'live_acceptance'])
 

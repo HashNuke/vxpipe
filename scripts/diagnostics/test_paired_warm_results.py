@@ -9,7 +9,7 @@ from paired_warm_results import compare_validated, validate_artifact
 from dataclasses import asdict
 from measurement import ProcessSample, summarize
 from test_ingress_latency import evidence as ingress_evidence
-from test_response_latency import evidence as response_evidence
+from test_response_latency import evidence as response_evidence, egress_evidence
 from test_smoke_runner import sample
 
 
@@ -48,6 +48,40 @@ def artifact():
 
 
 class PairedWarmResultsTest(unittest.TestCase):
+
+    def test_egress_is_validated_and_compared_when_both_phases_supply_it(self):
+        off, on = artifact(), artifact()
+        on['run_id'] = 'b' * 32
+        on['smoke_reports'][0]['collection'] = True
+        for value in (off, on):
+            value['smoke_reports'][0]['response_egress'] = egress_evidence('warm')
+        result = compare_validated(validate_artifact(off), validate_artifact(on))
+        self.assertTrue(result['latency']['egress']['passed'])
+        self.assertNotIn('egress_latency', result['missing_acceptance_evidence'])
+        self.assertFalse(result['milestone_acceptance_complete'])
+        bad = deepcopy(on)
+        bad['smoke_reports'][0]['response_egress']['events'][-1]['output_id'] = 'wrong'
+        with self.assertRaises(ValueError):
+            validate_artifact(bad)
+        unrelated = deepcopy(on)
+        egress = unrelated['smoke_reports'][0]['response_egress']
+        for item in list(egress['sources'].values()) + egress['events']:
+            item['room_id'] = 'unrelated-room'
+        with self.assertRaises(ValueError):
+            validate_artifact(unrelated)
+
+    def test_egress_regression_and_asymmetric_evidence_cannot_pass(self):
+        off, on = phase(False), phase(True)
+        off['egress'] = dict(count=10, p95_us=500)
+        with self.assertRaises(ValueError):
+            compare_validated(off, on)
+        on['egress'] = dict(count=10, p95_us=2500)
+        self.assertTrue(compare_validated(off, on)['measured_gates_pass'])
+        on['egress']['p95_us'] = 2501
+        self.assertFalse(compare_validated(off, on)['measured_gates_pass'])
+        on['egress']['p95_us'] = float('nan')
+        with self.assertRaises(ValueError):
+            compare_validated(off, on)
 
     def test_cli_rejects_invalid_elapsed_reset_and_turn_population(self):
         for mutation in ('elapsed', 'reset', 'turns', 'dirty', 'extra_provenance'):

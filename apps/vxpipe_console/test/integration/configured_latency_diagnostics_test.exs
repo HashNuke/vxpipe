@@ -141,6 +141,22 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       end
 
     runtime =
+      if Map.get(tags, :external_pcm, false) do
+        Keyword.put(runtime, :text_to_speech,
+          providers: %{
+            Vxpipe.Providers.Deepgram.TTSSession => [
+              enabled: true,
+              wire_module: CallEngine.TestTextToSpeechTransport,
+              wire_options: [observer: parent, ready_on_start: true],
+              maximum_requests: 32
+            ]
+          }
+        )
+      else
+        runtime
+      end
+
+    runtime =
       if Map.get(tags, :mixed_sts, false),
         do:
           Keyword.put(runtime, :speech_to_speech,
@@ -308,6 +324,75 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  @tag matrix: true, external_pcm: true, diagnostics_enabled: false
+  test "configured workload acknowledges distinct spoken outputs for two human sources", c do
+    {_, _, attachment, _, identity} =
+      first = call(c.options, false, {:concurrent_llm, 2}, :scoped)
+
+    room = identity.room_id
+    assert_receive {:diagnostic_extra_input, ^room, second}
+
+    probe =
+      start_supervised!(
+        {CallEngine.TestResponseTrace, rooms: [attachment.room_authority], maximum_events: 6}
+      )
+
+    for {_, _, _, wire, source} <- [first, second] do
+      emit_scribe_turn(wire, "External PCM input 1, turn 1.")
+
+      result =
+        external_pcm_loop(%{
+          port: make_ref(),
+          exited?: true,
+          report: %{},
+          inputs: %{
+            0 => %{
+              identity: source,
+              completed: 0,
+              expected_turns: 1,
+              received: [],
+              expected_frames: 0,
+              completion_times: %{}
+            }
+          },
+          source_indices: %{{source.room_id, source.participant_id} => 0}
+        })
+
+      assert result.inputs |> Map.fetch!(0) |> Map.fetch!(:completed) == 1
+    end
+
+    assert {:ok, events} = CallEngine.TestResponseTrace.snapshot(probe)
+
+    for {_, _, _, _, source} <- [first, second] do
+      selected = Enum.filter(events, &(&1.participant_id == source.participant_id))
+
+      assert [%{stage: :completed} = done, %{stage: :dispatched}, %{stage: :egress_ack} = ack] =
+               selected
+
+      source_id = source.participant_id
+
+      assert_receive {:vxpipe_event,
+                      %CallEngine.Event.TextOutput{source_participant_id: ^source_id} = output}
+
+      assert output.id == ack.output_id
+      assert ack.connection_id == source.connection_id
+      assert ack.command_id == done.command_id and ack.correlation_id == done.correlation_id
+      assert ack.at_us >= done.at_us
+    end
+
+    GenServer.stop(attachment.room_authority, :shutdown)
+
+    for {_, connection, _, _, source} <- [first, second] do
+      assert_complete_text_trace(
+        connection,
+        source,
+        ["External PCM input 1, turn 1."],
+        {:source, connection, source.connection_id},
+        true
+      )
+    end
+  end
+
   for vad <- [false, true], enabled <- [false, true] do
     @tag :integration
     @tag matrix: true,
@@ -431,7 +516,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           {CallEngine.TestResponseTrace,
            rooms: Enum.map(calls, fn {_, _, attachment, _, _} -> attachment.room_authority end),
            maximum_events:
-             2 *
+             3 *
                Enum.sum(
                  for index <- 0..(total_inputs - 1),
                      do:
@@ -600,7 +685,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
               connection,
               identity,
               Enum.map(1..input.expected_turns, &external_turn_text(index, &1)),
-              {:source, connection, identity.connection_id}
+              {:source, connection, identity.connection_id},
+              true
             )
 
           peers =
@@ -707,7 +793,19 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             |> Enum.filter(&match?(%CallEngine.Event.ParticipantTurnCompleted{}, &1))
             |> Enum.with_index(1)
             |> Enum.map(fn {event, turn} ->
-              %{turn: turn, correlation_id: event.correlation_id, command_id: event.command_id}
+              [output] =
+                Enum.filter(
+                  events,
+                  &(match?(%CallEngine.Event.TextOutput{}, &1) and
+                      &1.correlation_id == event.correlation_id)
+                )
+
+              %{
+                turn: turn,
+                correlation_id: event.correlation_id,
+                command_id: event.command_id,
+                output_id: output.id
+              }
             end)
 
           {index, %{measured: measured, turns: canonical}}
@@ -730,9 +828,25 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         boundary: "canonical-audio-completion-publication-to-dispatch-invocation-v1",
         sources: sources,
         turns: canonical_turns,
-        events: response_events,
+        events: Enum.reject(response_events, &(&1.stage == :egress_ack)),
         summary:
           DiagnosticsResponseLatency.summarize(
+            sources,
+            canonical_turns,
+            Enum.reject(response_events, &(&1.stage == :egress_ack)),
+            room_count,
+            inputs_per_room,
+            workload
+          )
+      }
+
+      response_egress = %{
+        boundary: "canonical-audio-completion-publication-to-server-egress-ack-v1",
+        sources: sources,
+        turns: canonical_turns,
+        events: response_events,
+        summary:
+          DiagnosticsResponseLatency.summarize_egress(
             sources,
             canonical_turns,
             response_events,
@@ -833,6 +947,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             measured_turn_counts: measured_turn_counts,
             ingress_latency: ingress_latency,
             response_dispatch: response_dispatch,
+            response_egress: response_egress,
             model_ready_at_us: readiness,
             model_ready_by_us:
               if(workload == :warm, do: pre_launch_us + div(plan.measurement_start_ns, 1_000)),
@@ -2988,14 +3103,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
-  defp assert_complete_text_trace(connection, identity, texts, scope \\ :all) do
+  defp assert_complete_text_trace(connection, identity, texts, scope \\ :all, spoken? \\ false) do
     # RoomAuthority publishes these events directly. Its DOWN reaches the same
     # connection after its preceding events; the forwarded close is our barrier.
     assert_receive {:configured_speech_closed, ^connection}, 2_000
     assert_receive {:control_trace_agent, ^connection, agent}
     events = collect_control_events(scope)
 
-    assert length(events) == length(texts) * 6,
+    width = if spoken?, do: 7, else: 6
+
+    assert length(events) == length(texts) * width,
            "unexpected event sequence: #{inspect(Enum.map(events, & &1.__struct__))}"
 
     assert Enum.all?(events, &(is_binary(&1.id) and byte_size(&1.id) > 0))
@@ -3003,7 +3120,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     sequences = Enum.map(events, & &1.sequence)
     assert Enum.all?(sequences, &(is_integer(&1) and &1 > 0))
     assert sequences == Enum.sort(Enum.uniq(sequences))
-    turns = Enum.chunk_every(events, 6)
+    turns = Enum.chunk_every(events, width)
 
     assert length(Enum.uniq_by(turns, fn [start | _] -> start.correlation_id end)) ==
              length(texts)
@@ -3040,12 +3157,26 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
            source_participant_id: human,
            text: "Acknowledged.",
            aggregated_by: :sentence,
-           will_be_spoken: false,
+           will_be_spoken: spoken?,
            agent_mode: :speaker
          }},
         {CallEngine.Event.AgentTurnCompleted,
          %{participant_id: agent, source_participant_id: human, outcome: :completed}}
       ]
+
+      expected =
+        if spoken? do
+          {before, [completion]} = Enum.split(expected, 5)
+
+          before ++
+            [
+              {CallEngine.Event.AgentSpeechStarted,
+               %{participant_id: agent, source_participant_id: human}},
+              completion
+            ]
+        else
+          expected
+        end
 
       for {event, {module, fields}} <- Enum.zip(turn, expected) do
         assert event.__struct__ == module
@@ -3465,6 +3596,32 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       end
 
     source =
+      if concurrent? do
+        assert {:ok, _} =
+                 ProviderCredentials.provision(
+                   :platform,
+                   "deepgram",
+                   "diagnostic-tts",
+                   "api_key",
+                   %{"api_key" => "synthetic"},
+                   options
+                 )
+
+        put_in(
+          Map.put(source, :wait_sounds, %{call_setup: nil}),
+          [:defaults, :capabilities, :text_to_speech],
+          %{
+            provider: "deepgram",
+            model: "flux-test-voice",
+            credential_name: "diagnostic-tts",
+            options: %{encoding: "linear16", sample_rate: 48_000}
+          }
+        )
+      else
+        source
+      end
+
+    source =
       if sts_mode do
         source =
           source
@@ -3540,8 +3697,13 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
              )
 
     sink =
-      if routing? or sts_mode != nil,
-        do: start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+      if routing? or sts_mode != nil or concurrent?,
+        do:
+          start_supervised!(
+            Supervisor.child_spec({CallEngine.TestAudioOutputSink, observer: self()},
+              id: {:sink, command.room_id, command.connection_id}
+            )
+          )
 
     connection =
       if sts_mode do
@@ -3685,7 +3847,19 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       guest_connection =
         start_supervised!(
           Supervisor.child_spec(
-            {SpeechConnection, command: guest_command, observer: self(), audit_events?: :scoped},
+            {SpeechConnection,
+             command: guest_command,
+             observer: self(),
+             audit_events?: :scoped,
+             output:
+               if(concurrent?,
+                 do:
+                   start_supervised!(
+                     Supervisor.child_spec({CallEngine.TestAudioOutputSink, observer: self()},
+                       id: {:sink, guest_command.room_id, guest_command.connection_id}
+                     )
+                   )
+               )},
             id: {:speech_connection, prepared.room_id, "diagnostic-guest"}
           )
         )
@@ -3852,6 +4026,46 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         }
 
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
+
+      {:test_tts_control, transport, payload} ->
+        case JSON.decode!(payload) do
+          %{"type" => "Speak"} ->
+            CallEngine.TestTextToSpeechTransport.deliver_control(
+              transport,
+              ~s({"type":"SpeechStarted","speech_id":"external"})
+            )
+
+            CallEngine.TestTextToSpeechTransport.deliver_audio(transport, <<1, 0, 2, 0>>)
+
+          %{"type" => "Flush"} ->
+            CallEngine.TestTextToSpeechTransport.deliver_control(
+              transport,
+              ~s({"type":"SpeechMetadata","speech_id":"external"})
+            )
+
+          other ->
+            flunk("Unexpected synthetic TTS control: #{inspect(other)}")
+        end
+
+        external_pcm_loop(state)
+
+      {:test_audio_output, sink, frame} ->
+        [input] =
+          state.inputs
+          |> Map.values()
+          |> Enum.filter(
+            &(&1.identity.room_id == frame.room_id and
+                &1.identity.connection_id == frame.connection_id)
+          )
+
+        assert frame.incarnation_id == input.identity.incarnation_id
+        assert frame.payload == <<1, 0, 2, 0>>
+        assert :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
+        external_pcm_loop(state)
+
+      {:test_audio_output_finish, sink, _correlation} ->
+        assert :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
+        external_pcm_loop(state)
 
       {:vxpipe_event, %CallEngine.Event.AgentTurnInterrupted{} = event} ->
         source = Map.fetch!(state.source_indices, {event.room_id, event.source_participant_id})

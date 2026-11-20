@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.ResponseTraceTest do
   alias Vxpipe.CallEngine.Archive.Recorder
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State, TextCapability}
   alias Vxpipe.CallEngine.Room.Snapshot
-  alias Vxpipe.CallEngine.Event.ParticipantTurnCompleted
+  alias Vxpipe.CallEngine.Event.{ParticipantTurnCompleted, AgentSpeechStarted}
   alias Vxpipe.CallEngine.Command.SendText
 
   test "captures only selected room boundaries, without arguments or content" do
@@ -14,14 +14,17 @@ defmodule Vxpipe.CallEngine.ResponseTraceTest do
     before_us = System.monotonic_time(:microsecond)
     publish(room, :audio)
     after_us = System.monotonic_time(:microsecond)
-    assert {:ok, [completed, dispatched]} = TestResponseTrace.snapshot(probe)
+    assert {:ok, [completed, dispatched, egress]} = TestResponseTrace.snapshot(probe)
     assert completed.stage == :completed
     assert dispatched.stage == :dispatched
+    assert egress.stage == :egress_ack
+    assert egress.participant_id == "human"
+    assert egress.output_id == "output"
     assert completed.room_id == "room" and completed.correlation_id == "turn"
     assert completed.command_id == "command" and completed.connection_id == "connection"
     assert completed.incarnation_id == "incarnation" and completed.participant_id == "human"
     assert before_us <= completed.at_us and completed.at_us <= dispatched.at_us
-    assert dispatched.at_us <= after_us
+    assert dispatched.at_us <= egress.at_us and egress.at_us <= after_us
 
     assert Enum.sort(Map.keys(completed)) ==
              Enum.sort([
@@ -38,7 +41,7 @@ defmodule Vxpipe.CallEngine.ResponseTraceTest do
     # Calls outside the selected PID and non-audio completion events are excluded.
     EventPublisher.publish(room_state(), self(), event(:audio))
     Agent.get(room, fn state -> EventPublisher.publish(state, parent, event(:text)) end)
-    assert {:ok, [^completed, ^dispatched]} = TestResponseTrace.snapshot(probe)
+    assert {:ok, [^completed, ^dispatched, ^egress]} = TestResponseTrace.snapshot(probe)
   end
 
   test "overflow invalidates the probe instead of silently dropping timing samples" do
@@ -50,13 +53,13 @@ defmodule Vxpipe.CallEngine.ResponseTraceTest do
 
   test "snapshot fences trace messages from an authority that already exited" do
     room = start_supervised!({Agent, fn -> room_state() end})
-    probe = start_supervised!({TestResponseTrace, rooms: [room], maximum_events: 2})
+    probe = start_supervised!({TestResponseTrace, rooms: [room], maximum_events: 4})
     publish(room, :audio)
     monitor = Process.monitor(room)
     stop_supervised!(Agent)
     assert_receive {:DOWN, ^monitor, :process, ^room, _}
 
-    assert {:ok, [%{stage: :completed}, %{stage: :dispatched}]} =
+    assert {:ok, [%{stage: :completed}, %{stage: :dispatched}, %{stage: :egress_ack}]} =
              TestResponseTrace.snapshot(probe)
   end
 
@@ -68,6 +71,13 @@ defmodule Vxpipe.CallEngine.ResponseTraceTest do
     Agent.get(room, fn state ->
       EventPublisher.publish(state, parent, event(modality))
       TextCapability.respond(%{module: __MODULE__, pid: self()}, command())
+      fields = event(:audio) |> Map.from_struct() |> Map.drop([:modality, :endpointing])
+      fields = Map.merge(fields, %{participant_id: "agent", source_participant_id: "human"})
+
+      EventPublisher.publish(state, parent, struct!(AgentSpeechStarted, fields),
+        source_policy: %{},
+        payload: %{"output_id" => "output", "text" => "not traced"}
+      )
     end)
   end
 

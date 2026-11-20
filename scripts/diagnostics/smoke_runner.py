@@ -5,7 +5,7 @@ It creates only uniquely named transient units and requires noninteractive sudo
 for its own system scope. The workload itself runs as the invoking normal user.
 """
 from ingress_latency import complete as ingress_latency_complete
-from response_latency import complete as response_latency_complete
+from response_latency import complete as response_latency_complete, complete_egress, same_dispatch_population
 import argparse
 import hashlib
 from dataclasses import asdict
@@ -192,7 +192,7 @@ def resource_complete(report, samples, workload='smoke'):
 
 
 def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_per_room=1,
-                   sample_resources=False, workload='smoke', selected_case=None):
+                   sample_resources=False, workload='smoke', selected_case=None, require_egress=True):
     plan = profile(workload)
     sample_resources = sample_resources or workload == 'warm'
     committed_writes = committed_writes or workload == 'warm'
@@ -206,6 +206,11 @@ def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_
         return False
     if not all(response_latency_complete(r.get('response_dispatch'), rooms, inputs_per_room, workload)
                for r in reports):
+        return False
+    if require_egress and not all(
+            complete_egress(r.get('response_egress'), rooms, inputs_per_room, workload)
+            and same_dispatch_population(r.get('response_dispatch'), r.get('response_egress'))
+            for r in reports):
         return False
     if sample_resources:
         if not all(resource_complete(r, samples, workload) for r in reports):

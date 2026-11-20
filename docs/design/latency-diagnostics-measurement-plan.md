@@ -177,8 +177,9 @@ before generator launch plus 25 seconds. Successful speech-bearing native infere
 must complete by the pre-launch timestamp plus five seconds for each required
 source. Neither model readiness nor response acknowledgements change pacing.
 
-This foundation does not implement the complete paired driver, cold phases,
-database CPU, response/egress latency or the full inference-coverage gate. See the
+The configured workload now records ingress, response dispatch and synthetic
+server-egress acknowledgement latency. It does not yet implement the complete
+paired driver, cold phases, database CPU or the full inference-coverage gate. See the
 [warm-workload checkpoint](../../labnotes/20261119-2345-diagnostics-warm-workload.md)
 for verification and limitations.
 
@@ -342,8 +343,17 @@ slow measured turn from being relabelled as warm-up. Dispatches may interleave;
 per-room timestamps must remain monotonic. Use the fixed provider-settlement frame
 schedule for the warm cohort and retain late dispatches beyond the nominal end.
 An independent external validator reconstructs the cohort and p95 from these raw
-records. Successful configured response traces remain mandatory. The current
-text-response fixture still does not establish audio egress acknowledgement.
+records. Successful configured response traces remain mandatory.
+
+The [egress checkpoint](../../labnotes/20261120-0226-completion-egress-benchmark.md)
+adds deterministic TTS and separate human output sinks. Its endpoint is publication
+of `AgentSpeechStarted` after the sink's playback-start acknowledgement, matched
+to the independently retained `TextOutput.id` and exact input/source/command.
+This synthetic server boundary does not prove remote audibility. All three trace
+stages must preserve per-room chronology, and the dispatch and egress reports must
+describe the same canonical population. The paired comparator enforces the same
+p95 budget when both phases supply egress; historical dispatch-only artifacts
+remain explicitly partial. Native repeated measurements remain outstanding.
 
 The same budgets apply to warm and cold phases; cold incomplete diagnostics must
 remain explicit. Additional correctness gates apply regardless of CPU results:

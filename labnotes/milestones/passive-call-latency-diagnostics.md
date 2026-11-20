@@ -796,6 +796,14 @@ known room processes; complete per-source canonical order and command matches
 prevent missing, duplicate or misclassified warm-up samples. Egress acknowledgement
 and full repeated performance acceptance remain open.
 
+The [completion-egress checkpoint](../20261120-0226-completion-egress-benchmark.md)
+extends the configured workload to acknowledged synthetic audio output for each
+human source. Three-stage trace ordering, exact output identities and matching
+dispatch/egress populations are verified. The
+[paired comparison extension](../20261120-0233-diagnostics-egress-comparison.md)
+enforces egress p95 budgets when present on both sides. This implements measurement
+plumbing; actual native paired runs and the remaining load gates stay open.
+
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
   error and incomplete rate; model frame size is not an accuracy guarantee.

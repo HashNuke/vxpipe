@@ -59,3 +59,47 @@ class ResponseLatencyTest(unittest.TestCase):
             data['events'][i+1]['at_us']=data['events'][i]['at_us']
         data['summary']['p95_us']=0
         self.assertTrue(complete(data,1,1,'smoke'))
+
+
+class EgressLatencyTest(unittest.TestCase):
+    def test_complete_acknowledged_outputs_and_late_cohort(self):
+        from response_latency import summarize_egress, complete_egress
+        data = egress_evidence('warm')
+        self.assertEqual(data['summary'], dict(count=10, p95_us=20))
+        data['events'][-1]['at_us'] += 50_000_000
+        self.assertFalse(complete_egress(data, 1, 1, 'warm'))
+        data['summary'] = summarize_egress(data, 1, 1, 'warm')
+        self.assertEqual(data['summary']['p95_us'], 50_000_020)
+        self.assertTrue(complete_egress(data, 1, 1, 'warm'))
+
+    def test_egress_cannot_precede_dispatch_in_the_trace(self):
+        from response_latency import complete_egress
+        data = egress_evidence()
+        data['events'][1], data['events'][2] = data['events'][2], data['events'][1]
+        self.assertFalse(complete_egress(data, 1, 1, 'smoke'))
+
+    def test_missing_duplicate_wrong_output_and_source_are_rejected(self):
+        from response_latency import complete_egress
+        original = egress_evidence('warm', 2, 2)
+        for mutate in [lambda d: d['events'].pop(),
+                       lambda d: d['events'].append(d['events'][-1]),
+                       lambda d: d['events'][-1].update(output_id='wrong'),
+                       lambda d: d['events'][-1].update(connection_id='wrong'),
+                       lambda d: d['events'][-1].update(at_us=d['events'][-1]['at_us']-11)]:
+            data = deepcopy(original)
+            mutate(data)
+            self.assertFalse(complete_egress(data, 2, 2, 'warm'))
+
+
+def egress_evidence(mode='smoke', rooms=1, humans=1):
+    from response_latency import summarize_egress, EGRESS_BOUNDARY
+    data = evidence(mode, rooms, humans)
+    for rows in data['turns'].values():
+        for row in rows:
+            row['output_id'] = 'output-' + row['command_id']
+    acks = [dict(e, stage='egress_ack', at_us=e['at_us']+10,
+                 output_id='output-'+e['command_id']) for e in data['events'] if e['stage']=='dispatched']
+    data['events'] = sorted(data['events'] + acks, key=lambda e: e['at_us'])
+    data['boundary'] = EGRESS_BOUNDARY
+    data['summary'] = summarize_egress(data, rooms, humans, mode)
+    return data

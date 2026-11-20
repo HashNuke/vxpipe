@@ -71,6 +71,52 @@ defmodule Vxpipe.Console.DiagnosticsResponseLatencyTest do
     end
   end
 
+  test "egress requires exact acknowledged output and retains the complete late cohort" do
+    {sources, turns, events} = fixture(1, 1, :warm)
+
+    turns =
+      Map.new(turns, fn {i, rows} ->
+        {i, Enum.map(rows, &Map.put(&1, :output_id, "output-#{&1.command_id}"))}
+      end)
+
+    acks =
+      for e <- events,
+          e.stage == :dispatched,
+          do:
+            e
+            |> Map.merge(%{
+              stage: :egress_ack,
+              at_us: e.at_us + 10,
+              output_id: "output-#{e.command_id}"
+            })
+
+    events = Enum.sort_by(events ++ acks, & &1.at_us)
+
+    assert %{count: 10, p95_us: 20} =
+             DiagnosticsResponseLatency.summarize_egress(sources, turns, events, 1, 1, :warm)
+
+    last = List.last(events)
+    late = List.replace_at(events, -1, %{last | at_us: last.at_us + 50_000_000})
+
+    assert %{count: 10, p95_us: 50_000_020} =
+             DiagnosticsResponseLatency.summarize_egress(sources, turns, late, 1, 1, :warm)
+
+    [completed, dispatched, ack | rest] = events
+
+    for bad <- [
+          [completed, ack, dispatched | rest],
+          Enum.drop(events, -1),
+          events ++ [last],
+          List.replace_at(events, -1, %{last | output_id: "wrong"}),
+          List.replace_at(events, -1, %{last | connection_id: "wrong"}),
+          List.replace_at(events, -1, %{last | at_us: last.at_us - 11})
+        ] do
+      assert_raise ArgumentError, fn ->
+        DiagnosticsResponseLatency.summarize_egress(sources, turns, bad, 1, 1, :warm)
+      end
+    end
+  end
+
   defp fixture(rooms, humans, mode) do
     sources =
       Map.new(0..(rooms * humans - 1), fn i ->

@@ -74,6 +74,52 @@ defmodule Vxpipe.Console.Test.DiagnosticsResponseLatency do
     %{count: count, p95_us: durations |> Enum.sort() |> Enum.at(div(95 * count + 99, 100) - 1)}
   end
 
+  def summarize_egress(sources, turns, events, rooms, humans, mode) do
+    _ =
+      Enum.reduce(events, {%{}, %{}}, fn event, {stages, clocks} ->
+        key = turn_key(event)
+        room = {event.room_id, event.incarnation_id}
+
+        expected =
+          case Map.get(stages, key) do
+            nil -> :completed
+            :completed -> :dispatched
+            :dispatched -> :egress_ack
+            _ -> :invalid
+          end
+
+        ensure!(event.stage == expected and is_integer(event.at_us))
+        ensure!(event.at_us >= Map.get(clocks, room, event.at_us))
+        {Map.put(stages, key, event.stage), Map.put(clocks, room, event.at_us)}
+      end)
+
+    dispatch = Enum.reject(events, &(&1.stage == :egress_ack))
+    _ = summarize(sources, turns, dispatch, rooms, humans, mode)
+
+    outputs =
+      for {i, rows} <- turns, row <- rows, into: %{} do
+        ensure!(is_binary(row.output_id) and row.output_id != "")
+        {turn_key(Map.merge(Map.fetch!(sources, i), row)), row.output_id}
+      end
+
+    dispatch_times =
+      Map.new(Enum.filter(dispatch, &(&1.stage == :dispatched)), &{turn_key(&1), &1.at_us})
+
+    mapped =
+      for event <- events, event.stage != :dispatched do
+        if event.stage == :egress_ack do
+          key = turn_key(event)
+          ensure!(Map.get(outputs, key) == event.output_id)
+          ensure!(is_integer(event.at_us) and event.at_us >= Map.fetch!(dispatch_times, key))
+          %{event | stage: :dispatched}
+        else
+          event
+        end
+      end
+
+    summarize(sources, turns, mapped, rooms, humans, mode)
+  end
+
   defp checked_turns(turns, index, rooms, humans, mode) do
     rows = Map.fetch!(turns, index)
     schedule = DiagnosticsSchedule.settlements(index, rooms, humans, mode)

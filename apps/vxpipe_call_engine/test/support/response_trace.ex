@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.TestResponseTrace do
   @moduledoc "Bounded, isolated room completion/dispatch tracing for configured measurements."
   use GenServer
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, TextCapability}
-  alias Vxpipe.CallEngine.Event.ParticipantTurnCompleted
+  alias Vxpipe.CallEngine.Event.{ParticipantTurnCompleted, AgentSpeechStarted}
   alias Vxpipe.CallEngine.Command.SendText
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
@@ -36,13 +36,26 @@ defmodule Vxpipe.CallEngine.TestResponseTrace do
         modality: :audio
       })
 
+    egress =
+      identity
+      |> Map.delete(:participant_id)
+      |> Map.merge(%{
+        __struct__: AgentSpeechStarted,
+        source_participant_id: :"$3",
+        command_id: :"$6"
+      })
+
     command = Map.merge(identity, %{__struct__: SendText, id: :"$6"})
 
     1 =
       :trace.function(
         session,
         {EventPublisher, :publish, 4},
-        [{[:_, :_, completion, :_], [], message(:completed)}],
+        [
+          {[:_, :_, completion, :_], [], message(:completed)},
+          {[:_, :_, egress, [source_policy: :_, payload: %{"output_id" => :"$7"}]], [],
+           [{:message, {{:egress_ack, :"$1", :"$2", :"$3", :"$4", :"$5", :"$6", :"$7"}}}]}
+        ],
         [:local]
       )
 
@@ -84,12 +97,36 @@ defmodule Vxpipe.CallEngine.TestResponseTrace do
   @impl true
   def handle_info(
         {:trace_ts, pid, :call, mfa,
+         {stage, room, incarnation, participant, connection, correlation, command, output}, ns},
+        state
+      )
+      when stage in [:egress_ack] do
+    {:noreply, next} =
+      handle_info(
+        {:trace_ts, pid, :call, mfa,
          {stage, room, incarnation, participant, connection, correlation, command}, ns},
         state
       )
-      when stage in [:completed, :dispatched] and is_integer(ns) do
+
+    next =
+      if next.count > state.count do
+        [event | rest] = next.events
+        %{next | events: [Map.put(event, :output_id, output) | rest]}
+      else
+        next
+      end
+
+    {:noreply, next}
+  end
+
+  def handle_info(
+        {:trace_ts, pid, :call, mfa,
+         {stage, room, incarnation, participant, connection, correlation, command}, ns},
+        state
+      )
+      when stage in [:completed, :dispatched, :egress_ack] and is_integer(ns) do
     expected =
-      if stage == :completed,
+      if stage != :dispatched,
         do: {EventPublisher, :publish, 4},
         else: {TextCapability, :respond, 2}
 
