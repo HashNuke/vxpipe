@@ -729,6 +729,12 @@ complete raw frame populations and independent nearest-rank p95 validation.
 Warm cohorts use fixed scheduled frame identities and retain delayed receipts;
 per-input clocks must be nondecreasing. Response-dispatch/egress timing, paired
 repetitions and the other performance/accuracy gates remain open.
+The [response-dispatch checkpoint](../20261120-0109-diagnostics-response-latency.md)
+adds collection-independent canonical completion publication to capability dispatch
+measurements. A bounded test-only trace session captures identity-only events on
+known room processes; complete per-source canonical order and command matches
+prevent missing, duplicate or misclassified warm-up samples. Egress acknowledgement
+and full repeated performance acceptance remain open.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

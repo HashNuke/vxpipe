@@ -315,6 +315,28 @@ p95 from raw pairs and rejects missing or conflicting summaries. Both collection
 off/on phases use the same instrumentation. These timestamps do not establish
 response-dispatch or egress acknowledgement latency, which remain separate gates.
 
+The response-dispatch stage uses a test-only isolated
+[OTP trace session](https://www.erlang.org/doc/apps/kernel/trace.html) on the exact
+configured RoomAuthority PIDs. Its boundaries are entry to audio
+`ParticipantTurnCompleted` publication and entry to `TextCapability.respond/2`.
+The latter includes any pending first-message queue delay; it does not include
+capability execution or model latency. Both collection states use the same trace.
+Local function matching covers the publication's default-argument wrapper; arity
+and bounded identity-only match messages exclude State and conversation content.
+Trace monotonic nanoseconds are converted explicitly to microseconds. Fence each
+exact authority PID after teardown, including dead PIDs, before finalizing samples.
+
+Retain source mappings, authoritative public canonical-turn order and raw trace
+events. Require one matching completion and dispatch per turn with all source,
+incarnation, connection, correlation and command identities preserved. Completion
+trace order must match canonical ordinals independently per input, preventing a
+slow measured turn from being relabelled as warm-up. Dispatches may interleave;
+per-room timestamps must remain monotonic. Use the fixed provider-settlement frame
+schedule for the warm cohort and retain late dispatches beyond the nominal end.
+An independent external validator reconstructs the cohort and p95 from these raw
+records. Successful configured response traces remain mandatory. The current
+text-response fixture still does not establish audio egress acknowledgement.
+
 The same budgets apply to warm and cold phases; cold incomplete diagnostics must
 remain explicit. Additional correctness gates apply regardless of CPU results:
 

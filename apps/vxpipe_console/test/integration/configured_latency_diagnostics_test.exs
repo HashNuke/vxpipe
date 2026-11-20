@@ -24,6 +24,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   alias Vxpipe.Console.Test.SpeechConnection
   alias Vxpipe.Console.Test.DiagnosticsSchedule
   alias Vxpipe.Console.Test.DiagnosticsIngressLatency
+  alias Vxpipe.Console.Test.DiagnosticsResponseLatency
 
   alias Vxpipe.Persistence.{
     CallSpecStore,
@@ -417,6 +418,26 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           {python, generator_args}
         end
 
+      response_trace =
+        start_supervised!(
+          {CallEngine.TestResponseTrace,
+           rooms: Enum.map(calls, fn {_, _, attachment, _, _} -> attachment.room_authority end),
+           maximum_events:
+             2 *
+               Enum.sum(
+                 for index <- 0..(total_inputs - 1),
+                     do:
+                       length(
+                         DiagnosticsSchedule.settlements(
+                           index,
+                           room_count,
+                           inputs_per_room,
+                           workload
+                         )
+                       )
+               )}
+        )
+
       pre_launch_us = System.monotonic_time(:microsecond)
 
       port =
@@ -561,7 +582,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
       end
 
-      measured_turn_counts =
+      turn_evidence =
         for {index, input} <- result.inputs, into: %{} do
           %{call: call, connection: connection, wire: wire, identity: identity} = input
           await_diagnostic_drain(identity)
@@ -673,8 +694,47 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
               count
             end
 
-          {to_string(index), measured}
+          canonical =
+            events
+            |> Enum.filter(&match?(%CallEngine.Event.ParticipantTurnCompleted{}, &1))
+            |> Enum.with_index(1)
+            |> Enum.map(fn {event, turn} ->
+              %{turn: turn, correlation_id: event.correlation_id, command_id: event.command_id}
+            end)
+
+          {index, %{measured: measured, turns: canonical}}
         end
+
+      measured_turn_counts =
+        Map.new(turn_evidence, fn {index, entry} -> {to_string(index), entry.measured} end)
+
+      canonical_turns = Map.new(turn_evidence, fn {index, entry} -> {index, entry.turns} end)
+
+      sources =
+        Map.new(result.inputs, fn {index, input} ->
+          {index,
+           Map.take(input.identity, [:room_id, :incarnation_id, :participant_id, :connection_id])}
+        end)
+
+      assert {:ok, response_events} = CallEngine.TestResponseTrace.snapshot(response_trace)
+
+      response_dispatch = %{
+        boundary: "canonical-audio-completion-publication-to-dispatch-invocation-v1",
+        sources: sources,
+        turns: canonical_turns,
+        events: response_events,
+        summary:
+          DiagnosticsResponseLatency.summarize(
+            sources,
+            canonical_turns,
+            response_events,
+            room_count,
+            inputs_per_room,
+            workload
+          )
+      }
+
+      stop_supervised!(CallEngine.TestResponseTrace)
 
       assert_diagnostic_slots_released()
       refute_received {:configured_public_event, _}
@@ -764,6 +824,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             workload: Atom.to_string(workload),
             measured_turn_counts: measured_turn_counts,
             ingress_latency: ingress_latency,
+            response_dispatch: response_dispatch,
             model_ready_at_us: readiness,
             model_ready_by_us:
               if(workload == :warm, do: pre_launch_us + div(plan.measurement_start_ns, 1_000)),
