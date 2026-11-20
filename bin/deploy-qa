@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Build and deploy one committed revision of this checkout to vxpipe.service.
+#
+# The QA release is built from the checkout's files on disk, so uncommitted
+# edits would otherwise ship. This refuses to start unless every build input is
+# committed, and refuses to install unless the tree is still at that commit
+# after the build. Untracked labnotes are allowed because they are not built.
+set -euo pipefail
+
+checkout="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$checkout"
+
+uncommitted_build_inputs() {
+  git status --porcelain --untracked-files=all | grep -v '^?? labnotes/' || true
+}
+
+require_committed() {
+  local dirty
+  dirty="$(uncommitted_build_inputs)"
+  if [[ -n "$dirty" ]]; then
+    echo "Refusing to deploy: commit or remove these changes first ($1):" >&2
+    echo "$dirty" >&2
+    exit 1
+  fi
+}
+
+require_committed "before build"
+revision="$(git rev-parse HEAD)"
+echo "Deploying $(git log -1 --format='%h %s' "$revision")"
+
+npm run build
+bin/patch-ortex
+MIX_ENV=prod mix deps.compile ortex --include-children
+bin/patch-req-llm
+MIX_ENV=prod mix deps.compile req_llm
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix release vxpipe --overwrite
+
+require_committed "changed during build"
+if [[ "$(git rev-parse HEAD)" != "$revision" ]]; then
+  echo "Refusing to deploy: HEAD moved from $revision during the build." >&2
+  exit 1
+fi
+
+VXPIPE_REVISION="$revision" scripts/qa/install-services
+echo "Deployed $revision"

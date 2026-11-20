@@ -17,6 +17,7 @@ caddy_path="$(command -v caddy)"
 
 "$docker_path" build --file "$service_sources/Dockerfile" \
   --build-arg "APP_UID=$(id -u)" --build-arg "APP_GID=$(id -g)" \
+  --label "org.opencontainers.image.revision=${VXPIPE_REVISION:-uncommitted}" \
   --tag vxpipe:local "$release"
 "$caddy_path" validate --config "$service_sources/vxpipe.caddy" --adapter caddyfile
 

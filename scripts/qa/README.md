@@ -1,17 +1,23 @@
 # QA system services
 
-These files run the QA checkout on this Ubuntu 26.04 host. Build the production
-release with compiled assets first, then run as the checkout owner with Docker
-access and sudo privileges:
+These files run the QA checkout on this Ubuntu 26.04 host. Deploy only
+committed code. Commit the changes first, then run as the checkout owner with
+Docker access and sudo privileges:
 
 ```sh
-bin/patch-ortex
-MIX_ENV=prod mix deps.compile ortex --include-children
-bin/patch-req-llm
-MIX_ENV=prod mix deps.compile req_llm
-MIX_ENV=prod mix assets.deploy
-MIX_ENV=prod mix release vxpipe --overwrite
-scripts/qa/install-services
+bin/deploy-qa
+```
+
+The release is built from the checkout's files on disk, so `bin/deploy-qa`
+refuses to start while any build input is uncommitted (untracked `labnotes/`
+are allowed), and refuses to install if the tree or `HEAD` changed during the
+build. It builds the workspace packages, applies the native dependency patches,
+compiles production assets and the release, then runs
+`scripts/qa/install-services`. The image records the deployed commit:
+
+```sh
+docker image inspect vxpipe:local \
+  --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
 ```
 
 The installer packages the existing release as `vxpipe:local`, installs both
