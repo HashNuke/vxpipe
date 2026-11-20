@@ -888,6 +888,10 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   native matrix execution remains pending. The configured fixture also now waits
   for its [asynchronously persisted completion landmark](../20261120-0320-diagnostics-persistence-wait.md)
   before asserting it; all four affected mixed-STT cases pass.
+  The [first cold native pair](../20261120-0328-diagnostics-native-matrix.md)
+  completed both phases but exceeded current RSS and dispatch-latency budgets;
+  the driver stopped without retry. Its raw evidence is retained. A user decision
+  on whether these costs are advisory is pending; no gate is marked complete.
 - [x] Record the isolation choice (dedicated BEAM worker versus external inference
   process), native failure limits and evidence. Do not promise protection from
   VM-wide native faults or zero overhead from an in-process task.
