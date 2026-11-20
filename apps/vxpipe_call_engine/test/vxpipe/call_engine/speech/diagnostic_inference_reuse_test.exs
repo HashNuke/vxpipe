@@ -187,6 +187,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
 
     _ = event(session, :transcript)
     _ = event(session, :turn_ended)
+    assert {:operational_epoch_closed, 0, 32_000, 34_048, _} = packet(handoff)
     assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
     assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048})
     assert_receive {:classified, _, 0, ^pcm}
@@ -254,6 +255,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     _ = event(session, :speech_started)
     _ = event(session, :transcript)
     _ = event(session, :turn_ended)
+    assert {:operational_epoch_closed, 0, 32_000, 34_048, _} = packet(handoff)
     assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
     assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048})
     send(worker, :finish)

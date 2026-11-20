@@ -107,6 +107,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
   defp key({:acoustic_boundary, epoch, kind, sample, _, _, _, _}),
     do: {:ok, {:acoustic, epoch, kind, sample}}
 
+  defp key({:endpoint_tail_certificate, epoch, _, _, _, _}), do: {:ok, {:endpoint_tail, epoch}}
+
   defp key({:acoustic_progress, epoch, _, _}), do: {:ok, {:progress, epoch}}
 
   defp key({:reset, epoch, reason, at}), do: {:ok, {:reset, epoch, reason, at}}
@@ -512,7 +514,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
           source_end = source_origin + samples - provider_origin
 
           samples >= provider_origin and origin <= elem(endpoint, 3) and
-            elem(endpoint, 3) <= source_end and source_end <= finalized
+            elem(endpoint, 3) <= source_end and elem(endpoint, 3) <= finalized and
+            (source_end <= finalized or
+               endpoint_tail?(packets, epoch, origin, finalized, source_end))
 
         _ ->
           false
@@ -612,8 +616,41 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
     after_start and before_end
   end
 
+  defp endpoint_tail?(packets, epoch, origin, finalized, source_end) do
+    Enum.any?(packets, fn
+      {:endpoint_tail_certificate, ^epoch, ^origin, ^finalized, accepted, _} ->
+        source_end <= accepted
+
+      _ ->
+        false
+    end)
+  end
+
+  defp current_progress(
+         state,
+         {:endpoint_tail_certificate, epoch, origin, finalized, _, _} = packet
+       ) do
+    cond do
+      Map.get(state.packets, {:endpoint_tail, epoch}) == packet ->
+        :ok
+
+      Map.has_key?(state.closed_epochs, epoch) ->
+        {:error, :conflicting_evidence}
+
+      Map.get(state.packets, {:progress, epoch}) != {:acoustic_progress, epoch, origin, finalized} ->
+        {:error, :conflicting_evidence}
+
+      true ->
+        :ok
+    end
+  end
+
   defp current_progress(state, {:acoustic_progress, epoch, _, finalized}) do
-    case {Map.has_key?(state.closed_epochs, epoch), Map.get(state.packets, {:progress, epoch})} do
+    closed? =
+      Map.has_key?(state.closed_epochs, epoch) or
+        Map.has_key?(state.packets, {:endpoint_tail, epoch})
+
+    case {closed?, Map.get(state.packets, {:progress, epoch})} do
       {true, {:acoustic_progress, _, _, old}} when finalized > old ->
         {:error, :conflicting_evidence}
 

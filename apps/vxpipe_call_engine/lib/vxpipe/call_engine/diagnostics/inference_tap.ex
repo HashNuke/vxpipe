@@ -80,6 +80,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.InferenceTap do
   def reset(nil, _epoch, _clean?), do: nil
 
   def reset(tap, epoch, clean?) do
+    if clean? and tap.armed? and tap.mapped? and epoch > 0 and
+         is_integer(tap.source_origin) and is_integer(tap.next_sample) and
+         tap.next_sample > tap.source_origin do
+      _ =
+        CaptureHandoff.offer(
+          tap.handoff,
+          {:operational_epoch_closed, epoch - 1, tap.source_origin, tap.next_sample,
+           System.monotonic_time(:microsecond)}
+        )
+    end
+
     notice(tap, epoch, :provider_turn_settled)
     if not clean?, do: notice(tap, epoch, :partial_start)
     %{tap | armed?: clean?, source_origin: nil, next_sample: nil, mapped?: true}

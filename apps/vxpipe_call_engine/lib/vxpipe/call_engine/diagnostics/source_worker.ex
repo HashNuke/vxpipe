@@ -223,6 +223,27 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
 
   defp process(
          %{mode: :operational_reuse} = state,
+         {{:operational_epoch_closed, epoch, origin, accepted, at}, charge}
+       ) do
+    CaptureHandoff.release(state.input, charge, :processed)
+    boundary = state.boundary
+    finalized = origin + ActivityBoundary.finalized_samples(boundary)
+    last = state.timeline.clock.last_input
+
+    if epoch == state.epoch and origin == state.sample_origin and not state.reuse_invalid? and
+         :queue.is_empty(state.reused) and not boundary.speaking? and
+         boundary.speech_frames == 0 and boundary.silence_frames == 0 and
+         accepted > finalized and accepted - finalized < 512 and last != nil and
+         last.sample_timestamp + last.sample_count >= accepted and
+         captured_start?(state.timeline, finalized) do
+      emit(state, {:endpoint_tail_certificate, epoch, origin, finalized, accepted, at})
+    else
+      {:ok, state}
+    end
+  end
+
+  defp process(
+         %{mode: :operational_reuse} = state,
          {{:mapped_probabilities, epoch, _, _, _, at} = packet, charge}
        ) do
     cond do

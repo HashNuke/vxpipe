@@ -272,6 +272,71 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     assert {:reset, 1, :provider_turn_settled, -100_000} = packet(ctx)
   end
 
+  test "clean close certifies only a captured fractional tail", ctx do
+    offer(ctx, {:audio, frame(ctx.epoch, 32_000, 1_280, -920)})
+    offer(ctx, {:mapped_probabilities, 0, 0, 32_000, [0.0, 0.0], 0})
+    assert {:acoustic_progress, 0, 32_000, 33_024} = packet(ctx)
+    offer(ctx, {:operational_epoch_closed, 0, 32_000, 33_280, 1})
+    assert {:endpoint_tail_certificate, 0, 32_000, 33_024, 33_280, 1} = packet(ctx)
+  end
+
+  for {epoch, origin, accepted} <- [
+        {1, 32_000, 33_280},
+        {0, 32_001, 33_280},
+        {0, 32_000, 33_536},
+        {0, 32_000, 33_300}
+      ] do
+    test "close rejects inconsistent witness #{epoch}/#{origin}/#{accepted}", ctx do
+      offer(ctx, {:audio, frame(ctx.epoch, 32_000, 1_280, -920)})
+      offer(ctx, {:mapped_probabilities, 0, 0, 32_000, [0.0, 0.0], 0})
+      assert {:acoustic_progress, 0, 32_000, 33_024} = packet(ctx)
+
+      offer(
+        ctx,
+        {:operational_epoch_closed, unquote(epoch), unquote(origin), unquote(accepted), 1}
+      )
+
+      _ = :sys.get_state(ctx.worker)
+      refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    end
+  end
+
+  for probabilities <- [[0.0, 0.9], [0.9, 0.9, 0.9, 0.9], [0.9, 0.9, 0.9, 0.9, 0.0]] do
+    test "close cannot certify pending or active speech #{inspect(probabilities)}", ctx do
+      probabilities = unquote(probabilities)
+      samples = length(probabilities) * 512 + 256
+      offer(ctx, {:audio, frame(ctx.epoch, 32_000, samples, -800)})
+      offer(ctx, {:mapped_probabilities, 0, 0, 32_000, probabilities, 0})
+      _ = :sys.get_state(ctx.worker)
+      while_packets(ctx)
+      offer(ctx, {:operational_epoch_closed, 0, 32_000, 32_000 + samples, 1})
+      _ = :sys.get_state(ctx.worker)
+      refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    end
+  end
+
+  test "close cannot reopen an invalid epoch", ctx do
+    offer(ctx, {:audio, frame(ctx.epoch, 32_000, 1_280, -920)})
+    offer(ctx, {:mapped_probabilities, 0, 0, 32_000, [0.0, 0.0], 0})
+    assert {:acoustic_progress, 0, 32_000, 33_024} = packet(ctx)
+    offer(ctx, {:reset, 0, :audio_gap, 1})
+    assert {:reset, 0, :audio_gap, 1} = packet(ctx)
+    offer(ctx, {:operational_epoch_closed, 0, 32_000, 33_280, 2})
+    _ = :sys.get_state(ctx.worker)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  defp while_packets(ctx) do
+    receive do
+      {:vxpipe_diagnostic_capture, _, _, _, _} = message ->
+        assert {:ok, _, charge} = CaptureHandoff.message(ctx.output, message)
+        CaptureHandoff.release(ctx.output, charge, :processed)
+        while_packets(ctx)
+    after
+      0 -> :ok
+    end
+  end
+
   defp offer(ctx, packet), do: assert(:ok == CaptureHandoff.offer(ctx.input, packet))
 
   defp packet(ctx) do

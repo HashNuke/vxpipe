@@ -110,6 +110,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
       ]
   end
 
+  defp valid?({:operational_epoch_closed, epoch, origin, accepted, at}) do
+    unsigned?(epoch) and unsigned?(origin) and unsigned?(accepted) and accepted > origin and
+      signed?(at)
+  end
+
+  defp valid?({:endpoint_tail_certificate, epoch, origin, finalized, accepted, at}) do
+    unsigned?(epoch) and unsigned?(origin) and unsigned?(finalized) and unsigned?(accepted) and
+      origin <= finalized and finalized < accepted and accepted - finalized < 512 and signed?(at)
+  end
+
   defp valid?({:acoustic_progress, epoch, origin, finalized}) do
     unsigned?(epoch) and unsigned?(origin) and unsigned?(finalized) and finalized >= origin
   end
