@@ -1,7 +1,9 @@
 # Agent backchannel responses
 
-Status: researched proposal, 2026-11-16; no implementation or listening prototype
-has run. The [combined milestone](../../labnotes/milestones/voice-agent-turns-and-listening.md)
+Status: deferred by user request, 2026-11-17; no implementation or listening
+prototype has run. The user shelved this work after discussing the unresolved
+timing of transcript-driven opportunities. The proposal below is retained for
+future reconsideration; neither prototyping nor runtime activation is active. The [combined milestone](../../labnotes/milestones/voice-agent-turns-and-listening.md)
 owns delivery and acceptance. This concerns acknowledgments the agent produces
 while listening. The [barge-in classifier proposal](barge-in-classifier.md)
 concerns human input during the agent's main response; its classifier predicts

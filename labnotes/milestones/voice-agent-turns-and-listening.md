@@ -1,15 +1,32 @@
 # Voice agent turns, listening cues and spoken transcripts
 
-Status: consolidated specification, 2026-11-16; checkpoints A–F are unimplemented.
+Status: amended 2026-11-17; checkpoints A–D and F remain unimplemented.
+Checkpoint E (agent listening cues/backchannel responses) is deferred by the user.
 This is the single implementation checklist for TTS timing, contextual barge-in,
 the CPU classifier and agent listening cues. Earlier milestone files redirect
 here and retain historical evidence. The milestone index owns overall order.
+
+## Approved scope change — 2026-11-17
+
+The user shelved outgoing agent backchannel responses after discussing the
+unproven timing of transcript-driven cue opportunities. Defer E in full,
+including its replay/listening experiment, and cue-specific implementation and
+acceptance in C/F. Retain their tasks below as deferred design, not active gates.
+A–D and F's non-cue work remain active, including recognition of human
+backchannels while the agent speaks. Shared speaker/listener modes remain active;
+they do not require audible listening cues.
+
+Dependency review: F now requires A–D for its supported profiles, not E. Active
+milestone completion requires A–D and non-cue F acceptance; deferred boxes stay
+unchecked and must be carried forward explicitly when recording completion.
+Resume cue work only on a new user request. No implementation or listening
+validation is claimed by this scope change.
 
 ## Runnable outcome and prerequisites
 
 An LLM-plus-TTS voice agent preserves generated output separately from what
 played, continues speaking through human acknowledgments, handles intentional
-interruptions, and can emit brief listening cues while the human continues.
+interruptions. Brief agent listening cues while the human continues are deferred.
 Provider timing and the CPU classifier are optional capabilities; local VAD
 remains off by default. Native speech-to-speech behavior remains separate.
 
@@ -52,12 +69,12 @@ ordinary-response target remains an acceptance gate in F.
 | B — Rime interrupted transcripts | The same call behavior works with Rime's estimated timing and truthful uncertainty. | A's shared timing/history contract. |
 | C — Structured interruption and modes | The shared message protocol drives acknowledgment, interruption and mode/purpose handling. | Message-format C/D and shared history projection; precise TTS timing is optional. |
 | D — CPU backchannel filter | A real shared classifier avoids unnecessary LLM requests in a configured call, with validated fallback. | C for the selected profile. |
-| E — Transcript-driven listening cues | A configured call produces useful acknowledgments with local VAD off and continuous human input. | C's mode/purpose boundary and E's experiment quality gate. |
-| F — Telephone calls and language coverage | The combined behavior works across declared providers, languages, transports and resource profiles. | A–E for the declared supported profiles. |
+| E — Transcript-driven listening cues (deferred) | A configured call produces useful acknowledgments with local VAD off and continuous human input. | C's mode/purpose boundary and E's experiment quality gate. |
+| F — Telephone calls and language coverage | The combined behavior works across declared providers, languages, transports and resource profiles. | A–D for the declared supported profiles; cue coverage deferred. |
 
 A can ship without C/D/E. C need not wait for B or a timing-capable provider:
 implement/reuse the shared coarse unknown-delivery projection if timing is absent.
-E's replay/listening experiment can start immediately; its runtime activation
+E's replay/listening experiment is deferred; if resumed, its runtime activation
 does not depend on D or TTS word alignment. Research and component commits sit
 inside a useful checkpoint; they are not standalone checkpoint completions.
 
@@ -284,9 +301,12 @@ validated language/profile; accepted backchannels avoid an LLM request.
 
 ## Checkpoint E — Transcript-driven listening cues
 
+**Deferred by user request, 2026-11-17.** All tasks in this section are shelved,
+including the experiment. The following exit describes future work only.
+
 **Exit:** one validated language/voice profile in an opt-in configured browser
 call produces useful audible cues, preserves human speech and answers once.
-The experiment tasks below can begin before A–D; runtime activation requires C.
+If resumed, the experiment can precede A–D; runtime activation requires C.
 
 - [ ] Build replay/listening evaluation from recorded human audio and real ASR
   replacement/segment/endpoint traces, preserving source and reception/audio
@@ -428,7 +448,8 @@ This expands deployment coverage, not merely reruns root tests.
   and privacy controls.
 - [ ] Update runtime/user/provider documentation, compatibility notes, acceptance
   evidence and checkpoint progress. Pass the common gates after the final changes;
-  mark the combined index entry complete only when all A–F exits pass. No source
+  mark the combined index entry complete only when A–D and non-cue F exits pass,
+  explicitly carrying forward deferred E and cue-specific C/F tasks. No source
   review or specification approval substitutes for recorded audible acceptance.
 
 ## Specification coverage and consolidation map

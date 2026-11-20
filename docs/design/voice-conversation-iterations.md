@@ -8,6 +8,16 @@ three active feature milestone files. The later requested generic
 has its own four checkpoints, including the explicit idle tool. The index owns
 overall implementation order.
 
+## Scope amendment — 2026-11-17
+
+The user deferred outgoing agent listening cues, including E's experiment and
+cue-specific C/F work, because natural timing from transcripts is unproven.
+The six-checkpoint design below is retained, but active delivery now comprises
+A–D and non-cue F acceptance. F no longer waits for E. Human backchannel
+classification and shared speaker/listener modes remain active. See the
+[owning milestone](../../labnotes/milestones/voice-agent-turns-and-listening.md#approved-scope-change--2026-11-17)
+for the authoritative scope and completion rules. Resume cues only when requested.
+
 ## Decision
 
 Keep one authoritative voice-feature checklist with six usable exits. The generic
@@ -23,7 +33,7 @@ competing pending checklists.
 | B — Rime interrupted transcripts | A second integrated provider through the same contract, preserving estimated timing and language-dependent availability. |
 | C — Structured interruption and modes | Consume the shared message protocol for semantic decisions without the classifier, endpoint/mode/purpose handling and ordered history in a call. |
 | D — CPU filter in configured calls | Artifact parity/build, thread-bounded shared serving, participant filtering, language/default settings and semantic fallback in the working call. |
-| E — Transcript-driven listening cues | Early replay/listening experiment, accepted selector, prepared voice bank, settings and real audible cues through C's shared boundary. |
+| E — Transcript-driven listening cues (deferred) | Early replay/listening experiment, accepted selector, prepared voice bank, settings and real audible cues through C's shared boundary. |
 | F — Telephone calls and language coverage | Combined behavior across declared transports/languages/providers and CPU profiles, with measured ordinary-response latency. |
 
 A provider adapter, worker pool or mode flag alone is not a completed checkpoint.
