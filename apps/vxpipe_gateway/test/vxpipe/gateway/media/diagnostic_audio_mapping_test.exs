@@ -53,8 +53,14 @@ defmodule Vxpipe.Gateway.Media.DiagnosticAudioMappingTest do
       assert {:error, :unobserved_audio} = AudioTimeline.at(timeline, 480)
 
       fourth = normalize.(source.(3, 1_065))
-      assert {:ok, uncertain, _, []} = AudioTimeline.push(timeline, fourth)
-      assert {:error, :clock_uncertain} = AudioTimeline.at(uncertain, 1_280)
+      assert {:ok, compressed, _, []} = AudioTimeline.push(timeline, fourth)
+      assert {:ok, %{offset_us: 62_500}} = AudioTimeline.at(compressed, 1_120)
+
+      assert {:ok, %{offset_us: 65_000, uncertainty_us: jitter}} =
+               AudioTimeline.at(compressed, 1_280)
+
+      assert jitter >= 16_000
+      assert {:error, :unobserved_audio} = AudioTimeline.at(compressed, 480)
     end
 
     test "#{transport} #{codec}/#{rate} cannot stitch source or clock resets" do

@@ -30,3 +30,10 @@ It now uses the existing barge-in fixture. In Chrome on the Tailscale Storybook
 server, the section opened collapsed. Expanding Latency diagnostics displayed
 End-of-turn detection (425 ms) and Barge-in stop delay (160 ms). These are
 synthetic example values. The live checks above used persisted real-call values.
+
+The first full suite exposed six Gateway fixture expectations for the old audio
+receipt clock. For two contiguous frames arriving 5 ms apart the mapper now
+places the midpoint at 62.5 ms and the endpoint at 65 ms, carrying at least
+16 ms uncertainty. The fixture checks those positions and that the earlier lost
+packet remains unobserved. All 13 local mapping tests passed after this test
+correction. The change only updates the offline contract expectation.
