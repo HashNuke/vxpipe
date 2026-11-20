@@ -4,7 +4,7 @@ export type ConversationFilters = Record<ConversationFilter, boolean>;
 export const defaultConversationFilters: ConversationFilters = {
   messages: true,
   logs: false,
-  events: true,
+  events: false,
   technical: false,
   tools: true,
 };

@@ -200,6 +200,8 @@ test("technical archive facts are opt-in without hiding conversation or losing s
   }))];
   const details = createCallDetailsStore(response);
   render(<CallConsole controller={{ details }} />);
+  for (const kind of kinds) expect(screen.queryByText(kind)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Show Events" }));
   for (const kind of technicalKinds) expect(screen.queryByText(kind)).not.toBeInTheDocument();
   for (const kind of kinds.slice(7)) expect(screen.getByText(kind)).toBeVisible();
   expect(screen.getByText("Loaded from call history")).toBeVisible();

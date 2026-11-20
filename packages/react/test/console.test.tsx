@@ -129,17 +129,17 @@ test("leaving keeps the transcript visible and disables further sending", async 
 test("Conversation filters messages, events, tool calls and raw RTVI logs", () => {
   render(<CallConsole controller={createFixtureController("human-handoff")} />);
 
-  expect(screen.getByText("Support joined")).toBeVisible();
+  expect(screen.queryByText("Support joined")).not.toBeInTheDocument();
   expect(screen.getByText("update_variables")).toBeVisible();
   expect(screen.queryByText("client-ready")).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Show Logs" }));
   expect(screen.getByText("client-ready")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Hide Events" }));
-  expect(screen.queryByText("Support joined")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Show Events" }));
+  expect(screen.getByText("Support joined")).toBeVisible();
 
   fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
-  expect(screen.getByText("Support joined")).toBeVisible();
+  expect(screen.queryByText("Support joined")).not.toBeInTheDocument();
   expect(screen.queryByText("client-ready")).not.toBeInTheDocument();
 });
 
@@ -149,22 +149,21 @@ test("conversation filter icons use one active treatment", () => {
   expect(screen.getByRole("button", { name: "Hide Messages" })).toHaveClass(
     "vx-filter-active",
   );
-  expect(screen.getByRole("button", { name: "Hide Events" })).toHaveClass(
-    "vx-filter-active",
-  );
   expect(screen.getByRole("button", { name: "Hide Tool calls" })).toHaveClass(
     "vx-filter-active",
   );
 
-  for (const name of ["Hide Messages", "Hide Events", "Hide Tool calls"]) {
+  for (const name of ["Hide Messages", "Hide Tool calls"]) {
     expect(screen.getByRole("button", { name }).className).toBe(
       "vx-filter-active",
     );
   }
 
-  expect(screen.getByRole("button", { name: "Show Logs" })).not.toHaveClass(
-    "vx-filter-active",
-  );
+  for (const name of ["Show Logs", "Show Events"]) {
+    expect(screen.getByRole("button", { name })).not.toHaveClass(
+      "vx-filter-active",
+    );
+  }
 });
 
 test("tool calls disclose optional request and response details", () => {
@@ -509,6 +508,7 @@ test("timeline times show local clock time and disclose the UTC instant", async 
   const { container } = render(
     <CallConsole controller={createFixtureController("conversation")} />,
   );
+  fireEvent.click(screen.getByRole("button", { name: "Show Events" }));
 
   const timestamp = container.querySelector(
     'time[datetime="2026-09-16T22:30:00.000Z"]',
