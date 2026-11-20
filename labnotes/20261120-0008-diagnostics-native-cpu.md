@@ -93,3 +93,10 @@ The reviewer independently passes installer tests 5/5, verifies all three warm
 artifacts against raw resource/pacing evidence and all 17 provenance hashes, and
 confirms API compatibility, argument validation, build paths and documentation.
 The remaining fallback CPU budget miss remains explicit and blocks pilot acceptance.
+
+The final staged whitespace check reported the unified patch's required single-space
+blank context markers; the commit command continued despite that nonzero check.
+A narrow Git attribute exempts the Ortex patch artifact from source whitespace
+rules without changing its bytes, checksum or applied source. `git show --check`
+then passes for the runtime checkpoint. This is a follow-up metadata correction;
+no history is rewritten and no native evidence is relabelled.

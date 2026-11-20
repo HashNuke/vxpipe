@@ -1,0 +1,2 @@
+# Unified patches require a leading context marker on otherwise empty lines.
+patches/ortex/*.patch -whitespace
