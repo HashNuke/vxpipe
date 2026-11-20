@@ -1,0 +1,159 @@
+{
+  "mode": "fallback",
+  "rooms": 1,
+  "inputs_per_room": 1,
+  "off_run_id": "761e27a214044f3692b735633c024db0",
+  "on_run_id": "524b153a67ec41038eee3809227ec98e",
+  "provenance": {
+    "off": {
+      "source_commit": "81b6aa2b98ff4a2007529d22efaa24bca2554fed",
+      "worktree_dirty": true,
+      "file_sha256": {
+        "scripts/diagnostics/smoke_runner.py": "dbbe1b0e81a791e1a5ec4e88f55f7aeee4986fdf7d5fda87d5708c2487f26669",
+        "scripts/diagnostics/measurement.py": "683b40115c151d3274f51aebfb8ad5a82e7f56126b5fac8f9553fc7f97aa09a1",
+        "scripts/diagnostics/resource_schedule.py": "d56373b3ccbb7b505316488e7c6d54b62f16c46f27379ba497cc6f9c2a97b723",
+        "scripts/diagnostics/workload_profile.py": "4414e55bbecac620b2b75c400de89bafd9e2a3ab9b4156b09c5e6aa549ab4a68",
+        "scripts/diagnostics/pcm_generator.py": "0c997eeaf0dceec375eed7e793a99bb4dac1ce8c51441353cd194ed4ca786dd6",
+        "scripts/diagnostics/ingress_latency.py": "4bab4eb7d7b10eae6198305eecaf3349af111673c5bc8400be367681b9cb8668",
+        "scripts/diagnostics/response_latency.py": "05401a18e2ea6da0c2cefd0be88755630815d4fe47e387bda3d6306285bcd1fc",
+        "mix.lock": "a74a2102e10cdbf7ee364d03c5c68f28f48d802e6d9603db9bf9913ba7ed552c",
+        "patches/ortex/session-threads.patch": "055c425fe5267ef4eccfa2ee061713ec68ca8538529ea7a2bfce2a7f650444ec",
+        "patches/ortex/session-threads.json": "3f55f6313fc176bb180c225286705158fdad235e793dd28d4063cb7a318f5e72",
+        "patches/ortex/cpu-scheduling-upgrade.patch": "85f31a3b2da62156bbaea08b276c5ecfc9ee3107435962b348d3c4a2e6ef692d",
+        "deps/ortex/lib/ortex.ex": "265d2bc309c859efc06f878e898255346134d7b9efddf2d08d39f27e02bb2967",
+        "deps/ortex/lib/ortex/model.ex": "565871ae06226a54452454819803ebc94062421a8261658f0a7a769610c3449f",
+        "deps/ortex/lib/ortex/native.ex": "d6ae1e63a4f292bf5500fe621f6f53f831dfd63536841b2e8509ee44cb891638",
+        "deps/ortex/native/ortex/src/model.rs": "de49d4a31b1f1e10935780b6978caaada23523345d3a9ae1144adb6971edbf8a",
+        "deps/ortex/native/ortex/src/lib.rs": "b3a688d50b0e5f9b3740bc994b2987261b210383f5a048b20ae47aa5d7567623",
+        "deps/ortex/priv/native/ortex.so": "b9ffbd7159e2683314677b02f978e869f9e6fe035960369fcfc156811e25b443",
+        "apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs": "382ef345a1c5f49bf5aadc6db162b57fe0d10ba9938f8f75f22e5e4c35148137",
+        "apps/vxpipe_console/test/support/diagnostics_database.ex": "0c6011ddd89d4d47eacf36cad2742e7d97048276303e6eeabb54923e69006265",
+        "apps/vxpipe_console/test/support/diagnostics_schedule.ex": "d10c123325356a63137653335b92cdd16fe3ccf53bf1c436a533ee2da82cebde",
+        "apps/vxpipe_console/test/support/diagnostics_ingress_latency.ex": "04c1091e66d7b1d85d0c5de06346ef957c47e0fdf9015601c5d04d5c5c45cfa8",
+        "apps/vxpipe_console/test/support/diagnostics_response_latency.ex": "6f1aab97473e180fb9fd3f67b13be376d722b886197ed237deb55cab89732dbb",
+        "apps/vxpipe_call_engine/test/support/response_trace.ex": "d361862ac3e70860610296f5b2f58195799fe61d16758bd0c25b3e6aecfce38a",
+        "apps/vxpipe_call_engine/test/support/elevenlabs_scribe_transport.ex": "f988dc8eb441b11219da29e362c27f06638fa02eb79acf3aea900741587cea5d",
+        "apps/vxpipe_console/test/support/speech_connection.ex": "60cf8dec0f757930971317d9002e0413936632878d8d1e03896a37b21def33a5",
+        "apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero/model.ex": "ed953b86f2e11ad9486c109ecc5a22c6b2109406f23b455b5eded2a96d058c15",
+        "apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero.ex": "79d4e867d892e23b900cc1092046c4c50b9363684a46cc52a8b6b0155b93dc8a",
+        "apps/vxpipe_call_engine/lib/vxpipe/call_engine/diagnostics/live_report.ex": "baa7f96ccb464fce6c76af728f7427ab204f7a3fe4ea7103fb6a1b1c6b12f729",
+        "apps/vxpipe_call_engine/priv/speech/silero_v6.2.3.onnx": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
+      }
+    },
+    "on": {
+      "source_commit": "81b6aa2b98ff4a2007529d22efaa24bca2554fed",
+      "worktree_dirty": true,
+      "file_sha256": {
+        "scripts/diagnostics/smoke_runner.py": "dbbe1b0e81a791e1a5ec4e88f55f7aeee4986fdf7d5fda87d5708c2487f26669",
+        "scripts/diagnostics/measurement.py": "683b40115c151d3274f51aebfb8ad5a82e7f56126b5fac8f9553fc7f97aa09a1",
+        "scripts/diagnostics/resource_schedule.py": "d56373b3ccbb7b505316488e7c6d54b62f16c46f27379ba497cc6f9c2a97b723",
+        "scripts/diagnostics/workload_profile.py": "4414e55bbecac620b2b75c400de89bafd9e2a3ab9b4156b09c5e6aa549ab4a68",
+        "scripts/diagnostics/pcm_generator.py": "0c997eeaf0dceec375eed7e793a99bb4dac1ce8c51441353cd194ed4ca786dd6",
+        "scripts/diagnostics/ingress_latency.py": "4bab4eb7d7b10eae6198305eecaf3349af111673c5bc8400be367681b9cb8668",
+        "scripts/diagnostics/response_latency.py": "05401a18e2ea6da0c2cefd0be88755630815d4fe47e387bda3d6306285bcd1fc",
+        "mix.lock": "a74a2102e10cdbf7ee364d03c5c68f28f48d802e6d9603db9bf9913ba7ed552c",
+        "patches/ortex/session-threads.patch": "055c425fe5267ef4eccfa2ee061713ec68ca8538529ea7a2bfce2a7f650444ec",
+        "patches/ortex/session-threads.json": "3f55f6313fc176bb180c225286705158fdad235e793dd28d4063cb7a318f5e72",
+        "patches/ortex/cpu-scheduling-upgrade.patch": "85f31a3b2da62156bbaea08b276c5ecfc9ee3107435962b348d3c4a2e6ef692d",
+        "deps/ortex/lib/ortex.ex": "265d2bc309c859efc06f878e898255346134d7b9efddf2d08d39f27e02bb2967",
+        "deps/ortex/lib/ortex/model.ex": "565871ae06226a54452454819803ebc94062421a8261658f0a7a769610c3449f",
+        "deps/ortex/lib/ortex/native.ex": "d6ae1e63a4f292bf5500fe621f6f53f831dfd63536841b2e8509ee44cb891638",
+        "deps/ortex/native/ortex/src/model.rs": "de49d4a31b1f1e10935780b6978caaada23523345d3a9ae1144adb6971edbf8a",
+        "deps/ortex/native/ortex/src/lib.rs": "b3a688d50b0e5f9b3740bc994b2987261b210383f5a048b20ae47aa5d7567623",
+        "deps/ortex/priv/native/ortex.so": "b9ffbd7159e2683314677b02f978e869f9e6fe035960369fcfc156811e25b443",
+        "apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs": "382ef345a1c5f49bf5aadc6db162b57fe0d10ba9938f8f75f22e5e4c35148137",
+        "apps/vxpipe_console/test/support/diagnostics_database.ex": "0c6011ddd89d4d47eacf36cad2742e7d97048276303e6eeabb54923e69006265",
+        "apps/vxpipe_console/test/support/diagnostics_schedule.ex": "d10c123325356a63137653335b92cdd16fe3ccf53bf1c436a533ee2da82cebde",
+        "apps/vxpipe_console/test/support/diagnostics_ingress_latency.ex": "04c1091e66d7b1d85d0c5de06346ef957c47e0fdf9015601c5d04d5c5c45cfa8",
+        "apps/vxpipe_console/test/support/diagnostics_response_latency.ex": "6f1aab97473e180fb9fd3f67b13be376d722b886197ed237deb55cab89732dbb",
+        "apps/vxpipe_call_engine/test/support/response_trace.ex": "d361862ac3e70860610296f5b2f58195799fe61d16758bd0c25b3e6aecfce38a",
+        "apps/vxpipe_call_engine/test/support/elevenlabs_scribe_transport.ex": "f988dc8eb441b11219da29e362c27f06638fa02eb79acf3aea900741587cea5d",
+        "apps/vxpipe_console/test/support/speech_connection.ex": "60cf8dec0f757930971317d9002e0413936632878d8d1e03896a37b21def33a5",
+        "apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero/model.ex": "ed953b86f2e11ad9486c109ecc5a22c6b2109406f23b455b5eded2a96d058c15",
+        "apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero.ex": "79d4e867d892e23b900cc1092046c4c50b9363684a46cc52a8b6b0155b93dc8a",
+        "apps/vxpipe_call_engine/lib/vxpipe/call_engine/diagnostics/live_report.ex": "baa7f96ccb464fce6c76af728f7427ab204f7a3fe4ea7103fb6a1b1c6b12f729",
+        "apps/vxpipe_call_engine/priv/speech/silero_v6.2.3.onnx": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
+      }
+    }
+  },
+  "cpu": {
+    "off": {
+      "cpu_cores": 0.03250241844958893,
+      "cpu_seconds": 0.6500000000000021,
+      "duration_seconds": 19.998511834070086,
+      "maximum_threads": 11,
+      "peak_sampled_rss_kib": 202216,
+      "process_high_water_kib": 202216,
+      "sample_count": 201
+    },
+    "on": {
+      "cpu_cores": 0.1340044773108798,
+      "cpu_seconds": 2.6799999999999997,
+      "duration_seconds": 19.99933176697232,
+      "maximum_threads": 11,
+      "peak_sampled_rss_kib": 247664,
+      "process_high_water_kib": 247664,
+      "sample_count": 201
+    },
+    "delta_cores": 0.10150205886129088,
+    "original_target_cores": 0.08,
+    "within_original_target": false,
+    "advisory": true
+  },
+  "rss": {
+    "delta_kib": 45448,
+    "limit_kib": 139264,
+    "passed": true
+  },
+  "latency": {
+    "ingress": {
+      "off": {
+        "count": 625,
+        "p95_us": 273
+      },
+      "on": {
+        "count": 625,
+        "p95_us": 279
+      },
+      "delta_us": 6,
+      "limit_us": 2000,
+      "passed": true
+    },
+    "dispatch": {
+      "off": {
+        "count": 10,
+        "p95_us": 434
+      },
+      "on": {
+        "count": 10,
+        "p95_us": 506
+      },
+      "delta_us": 72,
+      "limit_us": 2000,
+      "passed": true
+    },
+    "egress": {
+      "off": {
+        "count": 10,
+        "p95_us": 4917
+      },
+      "on": {
+        "count": 10,
+        "p95_us": 5210
+      },
+      "delta_us": 293,
+      "limit_us": 2000,
+      "passed": true
+    }
+  },
+  "measured_gates_pass": true,
+  "milestone_acceptance_complete": false,
+  "missing_acceptance_evidence": [
+    "database_cpu",
+    "inference_coverage",
+    "cold_phases",
+    "repeated_topology_matrix",
+    "acoustic_accuracy",
+    "live_acceptance"
+  ]
+}

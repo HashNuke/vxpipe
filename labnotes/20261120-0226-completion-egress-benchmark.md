@@ -82,3 +82,28 @@ Final independent GPT-6 Astra xhigh re-review is clean. It reran the 36 focused
 Python checks and inspected the final Elixir source and sink/identity linkage.
 The focused Elixir order suite passed 5/5 after its red regression. This completes
 the measurement-plumbing checkpoint, not the remaining native load acceptance.
+
+## First native warm pair
+
+After the reviewed egress checkpoint was pushed at `81b6aa2b`, one isolated
+fallback pair (one room, one STT input) completed with no abort, cleanup errors or
+retained databases. Both phases used identical recorded code/model hashes. The
+[paired result](20261120-0226-egress-warm-pair.json) retains phase provenance.
+
+| Metric | Off p95 | On p95 | Delta | Limit |
+| --- | ---: | ---: | ---: | ---: |
+| Ingress | 273 us | 279 us | 6 us | 2,000 us |
+| Dispatch | 434 us | 506 us | 72 us | 2,000 us |
+| Egress acknowledgement | 4,917 us | 5,210 us | 293 us | 2,000 us |
+
+Each phase retained 625 ingress and ten response samples. RSS increased by
+45,448 KiB against the 139,264 KiB budget. CPU increased by 0.101502 cores,
+reported as advisory. All measured non-CPU gates pass. This is one warm pair,
+not the complete repeated/cold matrix. It predates the subsequent immutable
+call-start settings cleanup and is retained as historical measurement evidence.
+The saved result's missing-evidence flags reflect its then-current scope; later
+user decisions remove database CPU, inference coverage and model accuracy gates.
+
+Independent Astra xhigh evidence review reproduced the saved pair exactly using
+the historical comparator and original raw reports. Current validation preserves
+all measurements and removes only the three superseded evidence flags.
