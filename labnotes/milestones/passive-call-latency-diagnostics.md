@@ -860,11 +860,35 @@ fix retains all metric identity assertions and passes all four affected cases.
   and final hangup. Verify both primary measurements through stored endpoints,
   source/turn identities, provider evidence and UI. Verify timestamp/duration
   relationships and explicit unavailable reasons; no model-accuracy benchmark is required.
-- [ ] Demonstrate admin and superadmin setting saves, persisted state after reload
+- [x] Demonstrate admin and superadmin setting saves, persisted state after reload
   and denied member requests. Existing calls retain their starting choice; new
   calls use the saved value. Calls started disabled collect no diagnostics and
   retain unchanged behavior;
   confirm technical events remain hidden by default but inspectable in production UI.
+  The [configured call-start settings checkpoint](../20261120-0255-configured-call-settings.md)
+  records four actual-DB snapshot/source-replacement cases inside a passing 19-case
+  selection, plus two production settings browser cases after a fresh asset build.
+  Admin/superadmin save/reload/conflict behavior is rendered and verified; the
+  [settings authorization checkpoint](../20261119-2040-diagnostics-settings-review.md)
+  records denied ordinary-role/member, anonymous and bearer requests. The current
+  [live browser checkpoint](../20261120-0239-live-browser-diagnostics.md) verifies
+  the actual admin page starts with Technical events off, exposes additional
+  archived events when enabled, and restores the hidden count when disabled.
+
+Fallback live mode is verified: the existing runner passed one real Scribe/browser
+scenario with native room-source Silero, five canonical human turns, pause/resume,
+interruption, a real tool completion, production whole-call hangup, durable ended
+state, and exact storage/API/production-UI readback. Four endpoint measurements and
+one exact interrupted-output barge measurement were available; one endpoint stayed
+explicitly unavailable. Values are informational, not pass/fail thresholds. See
+[the live browser evidence](../20261120-0239-live-browser-diagnostics.md).
+A traced operational-reuse call also passed all live assertions after the reset
+fixes. The measured speech-end-to-STT interval was 2061.980 ms and the matched
+barge-in-to-stop acknowledgement was 143.183 ms. Three other confirmed endpoints
+ended with 256, 256 and 448 accepted samples beyond the last complete Silero
+window and remained unavailable. Final verification of both modes follows the
+receipt cursor and endpoint coverage corrections.
+
 - [x] Update relevant usage/development handbook pages with configuration, supported
   profiles, timing meanings, privacy, failure/loss semantics and troubleshooting.
   The [handbook checkpoint](../20261119-2033-diagnostics-operator-handbook.md)
