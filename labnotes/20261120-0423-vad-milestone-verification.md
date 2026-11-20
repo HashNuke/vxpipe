@@ -24,3 +24,9 @@ The room-service rerun with the same sustained-playback fixture passed in 48.0 s
 It recorded endpoint delays of 2452.983, 2447.605, 2062.696 and 1954.948 ms,
 one partial endpoint and a 1135.930 ms acknowledged barge-in delay. Neither
 mode requires a target duration or measurement rate.
+
+The main Console Metrics story originally omitted the optional latency fixture.
+It now uses the existing barge-in fixture. In Chrome on the Tailscale Storybook
+server, the section opened collapsed. Expanding Latency diagnostics displayed
+End-of-turn detection (425 ms) and Barge-in stop delay (160 ms). These are
+synthetic example values. The live checks above used persisted real-call values.

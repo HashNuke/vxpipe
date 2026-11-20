@@ -34,8 +34,8 @@ export const Ended: Story = { args: { scenario: "ended" } };
 export const PartialArchive: Story = { args: { scenario: "partial-archive" } };
 export const LongContent: Story = { args: { scenario: "long-content" } };
 export const Metrics: Story = {
-  args: { scenario: "metrics", initialTab: "metrics" },
-  parameters: { docs: { description: { story: "Twelve synthetic turns and two participant STT sessions. STT stays summarized per participant; LLM and TTS measurements can expand. Labels stay at the top with expand controls on the right." } } },
+  args: { scenario: "metrics", initialTab: "metrics", latency: "barge-in" },
+  parameters: { docs: { description: { story: "Twelve synthetic turns and two participant STT sessions. STT stays summarized per participant; LLM and TTS measurements can expand. Expand Latency diagnostics to see end-of-turn detection and barge-in stop delay." } } },
 };
 export const Loading: Story = { args: { scenario: "loading" } };
 export const Unavailable: Story = { args: { scenario: "unavailable" } };
