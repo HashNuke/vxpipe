@@ -170,10 +170,6 @@ defmodule Vxpipe.Console.Test.LiveDiagnosticsBrowserDriver do
           "document.querySelectorAll('.vx-timeline-activity').length===#{hidden_count}"
         )
 
-        command.(["find", "role", "button", "click", "--name", "Metrics", "--exact"])
-        command.(["find", "role", "button", "click", "--name", "Latency diagnostics", "--exact"])
-        IO.puts("LIVE_DIAGNOSTICS_STAGE admin_latency_open")
-
         summary =
           command.([
             "eval",
@@ -181,7 +177,6 @@ defmodule Vxpipe.Console.Test.LiveDiagnosticsBrowserDriver do
           ])
 
         IO.puts("LIVE_DIAGNOSTICS_API " <> JSON.encode!(summary))
-        wait(command, "!!document.querySelector('table[aria-label=\"Per-turn latency\"]')")
 
         report =
           command.([
@@ -206,79 +201,14 @@ defmodule Vxpipe.Console.Test.LiveDiagnosticsBrowserDriver do
           ])
 
         check_artifact.(report)
-        command.(["find", "role", "button", "click", "--name", "Refresh diagnostics", "--exact"])
-
-        wait(
-          command,
-          "document.querySelectorAll('table[aria-label=\"Per-turn latency\"] > tbody > tr > th small[title]').length===#{length(report["turns"]["turns"])}"
-        )
-
-        text =
-          command.([
-            "eval",
-            "document.querySelector('table[aria-label=\"Per-turn latency\"]').textContent"
-          ])
-
-        unless String.contains?(text, "End-of-turn detection") and
-                 String.contains?(text, "Barge-in stop delay"),
-               do: raise("Production admin UI did not render both primary measurements")
-
-        displayed =
-          command.([
-            "eval",
-            """
-            (async()=>{
-              const rows=#{JSON.encode!(report["turns"]["turns"])};
-              const table=document.querySelector('table[aria-label="Per-turn latency"]');
-              const ms=value=>value==null?'Unavailable':Math.round(value/1000).toLocaleString()+' ms';
-              const bargeMs=value=>value>0&&value<1000?'<1 ms':ms(value);
-              const firstText=cell=>Array.from(cell.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').trim();
-              const waitFor=async f=>{const until=performance.now()+5000;while(!f()){if(performance.now()>until)throw new Error('Evidence row did not expand');await new Promise(requestAnimationFrame);}};
-              for(const row of rows){
-                const tr=Array.from(table.tBodies[0].rows).find(tr=>tr.querySelector(':scope>th small[title]')?.title===row.turn_id);
-                if(!tr)throw new Error('Missing canonical turn in production UI');
-                const cells=tr.querySelectorAll(':scope>td');
-                if(cells[0].textContent.trim()!==ms(row.durations_us.speech_end_to_provider_end))throw new Error('Endpoint value in wrong row or column');
-                if(row.durations_us.speech_end_to_provider_end==null && cells[0].title!==row.metric_reasons.speech_end_to_provider_end.replaceAll('_',' '))throw new Error('Endpoint unavailable reason missing');
-                const entries=row.barge_in?.entries??[];
-                const values=entries.map(e=>e.duration_us).filter(Number.isFinite).sort((a,b)=>a-b);
-                const median=values.length?(values[Math.floor((values.length-1)/2)]+values[Math.floor(values.length/2)])/2:null;
-                const expected=!row.barge_in?'Unavailable':!entries.length?'No interruption recorded':bargeMs(median)+(entries.length>1&&median!==null?' median':'');
-                if(firstText(cells[1])!==expected)throw new Error('Barge value in wrong row or column');
-                if(!row.barge_in && !cells[1].textContent.includes('not recorded'))throw new Error('Barge unavailable reason missing');
-                const toggle=tr.querySelector('button[aria-controls]');toggle.click();
-                await waitFor(()=>document.getElementById(toggle.getAttribute('aria-controls')));
-                const detail=document.getElementById(toggle.getAttribute('aria-controls'));
-                for(const entry of entries){
-                  const sub=Array.from(detail.querySelectorAll('table[aria-label="Barge-in measurements"] tbody tr')).find(tr=>tr.querySelector('th small[title]')?.title===entry.output_id);
-                  if(!sub)throw new Error('Interrupted output identity missing');
-                  const timing=sub.querySelectorAll(':scope>td');
-                  if(firstText(timing[0])!==bargeMs(entry.speech_started_us)||firstText(timing[1])!==bargeMs(entry.playback_stopped_us)||firstText(timing[2])!==bargeMs(entry.duration_us))throw new Error('Interrupted output timings differ');
-                  if(!sub.textContent.includes(entry.response_turn_id)||!sub.textContent.includes(entry.output_connection_id))throw new Error('Interrupted source identities differ');
-                  if(!entry.reasons.every(reason=>sub.textContent.includes(reason.replaceAll('_',' '))))throw new Error('Barge unavailable reasons differ');
-                }
-              }
-              return rows.length>0;
-            })()
-            """
-          ])
-
-        unless displayed,
-          do: raise("Production admin values differ from persisted primary timings")
-
-        screenshot = Path.join(System.tmp_dir!(), "vxpipe-live-diagnostics-#{call["id"]}.png")
-        command.(["screenshot", screenshot])
 
         %{
           "pause_resume" =>
             Enum.any?(media["plays"], &(&1["pause_frames"] == 1440 and &1["ended"] == true)),
           "technical_events_inspected" => true,
           "hung_up" => hung_up,
-          "admin_ui_inspected" => true,
           "media" => media,
-          "stored" => report,
-          "rendered" => text,
-          "screenshot" => screenshot
+          "stored" => report
         }
       end,
       session

@@ -22,7 +22,6 @@ import {
 import { Composer } from "./Composer.js";
 import { DeviceControls } from "./DeviceControls.js";
 import { Metrics } from "./Metrics.js";
-import { LatencyDiagnostics } from "./LatencyDiagnostics.js";
 import type { ConsoleSnapshot } from "./types.js";
 import { Variables } from "./Variables.js";
 
@@ -325,14 +324,15 @@ export function CallConsole({
           )}
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
           {tab === "metrics" && <div className="vx-call-metrics" key={snapshot.callId}>
-            {controller.latency && <LatencyDiagnostics loader={controller.latency}
-              live={details.call.state === "running" || details.call.state === "admitting"} participants={snapshot.participants}
-              messages={snapshot.messages} onTranscript={messageId => {
+            <Metrics snapshot={snapshot} theme={theme} latency={controller.latency && {
+              loader: controller.latency,
+              live: details.call.state === "running" || details.call.state === "admitting",
+              onTranscript: messageId => {
                 setTranscriptTarget({ callId: snapshot.callId, messageId });
                 setConversationFilters(current => ({ ...current, messages: true }));
                 setTab("chat");
-              }} />}
-            <Metrics snapshot={snapshot} theme={theme} />
+              },
+            }} />
           </div>}
           {tab === "participants" && (
             <div className="vx-participant-view">

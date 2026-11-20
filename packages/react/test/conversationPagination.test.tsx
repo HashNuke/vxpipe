@@ -65,8 +65,9 @@ test("diagnostic transcript links open the matching participant turn on its boun
   render(<CallConsole controller={{ details, latency: createLatencyFixture() }} />);
   fireEvent.click(screen.getByRole("button", { name: "Hide Messages" }));
   fireEvent.click(screen.getByRole("button", { name: "Metrics" }));
-  fireEvent.click(screen.getByRole("button", { name: "Latency diagnostics" }));
-  fireEvent.click(await screen.findByRole("button", { name: "View transcript for turn 1" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Expand metrics for VAD, Caller" }));
+  fireEvent.click(screen.getByRole("button", { name: /End-of-turn detection for VAD, Caller, turn 1:/ }));
+  fireEvent.click(screen.getByRole("button", { name: "View transcript" }));
   expect(screen.getByText("Live message 151")).toBeVisible();
   expect(screen.getByText("Page 2 of 3")).toBeVisible();
   expect(screen.getAllByRole("article")).toHaveLength(100);

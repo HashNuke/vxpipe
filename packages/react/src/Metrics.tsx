@@ -1,17 +1,29 @@
-import type { Metric, MetricScope } from "@vxpipe/core";
-import { useId, useState } from "react";
+import type { LatencyLoader, Metric, MetricScope } from "@vxpipe/core";
+import { useId, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ConsoleSnapshot } from "./types.js";
 import { MetricCellTooltip } from "./MetricCellTooltip.js";
 import { MetricHeaderTooltip } from "./MetricHeaderTooltip.js";
 import { MetricSummary } from "./MetricSummary.js";
 import { participantDisplayName } from "./participantDisplayName.js";
+import { LatencyRowDetails, LatencySummaryCell, LatencyTurnCells } from "./LatencyCells.js";
+import { bargeInLabel, endOfTurnLabel, latencyColumnDescriptions, latencyRows, type LatencyRow } from "./latencyRows.js";
+import { useLatencyRows } from "./useLatencyRows.js";
+
+/** Optional authorized diagnostics shown as VAD rows; failures never hide the call's metrics. */
+export interface MetricsLatency {
+  loader: LatencyLoader;
+  live: boolean;
+  onTranscript?: (messageId: string) => void;
+}
 
 const metricOrder = [
   "Call duration",
   "Turn duration",
   "Request duration",
   "Final transcript latency",
+  endOfTurnLabel,
+  bargeInLabel,
   "Median TTFT",
   "TTFT",
   "Median time to first audio",
@@ -31,6 +43,8 @@ const metricOrder = [
 const metricShortLabels: Readonly<Record<string, string>> = {
   "Call duration": "DUR",
   "Final transcript latency": "FTL",
+  [endOfTurnLabel]: "EOT",
+  [bargeInLabel]: "Barge-in",
   "Median TTFT": "Mdn TTFT",
   "Median time to first audio": "Mdn TTFA",
   "Round-trip time": "RTT",
@@ -61,6 +75,7 @@ interface MetricRow {
   accessibleName: string;
   participantName?: string;
   metrics: Map<string, Metric[]>;
+  latency?: LatencyRow;
 }
 
 function scopeKey(scope: MetricScope) {
@@ -127,8 +142,29 @@ function metricRows(snapshot: ConsoleSnapshot) {
   });
 }
 
-function metricColumns(metrics: readonly Metric[]) {
+function lastIndex<T>(items: readonly T[], predicate: (item: T) => boolean) {
+  for (let index = items.length - 1; index >= 0; index--) if (predicate(items[index]!)) return index;
+  return -1;
+}
+
+/** Each VAD row follows its participant's STT row, or that participant's last row. */
+function withLatencyRows(rows: MetricRow[], latency: readonly LatencyRow[], snapshot: ConsoleSnapshot) {
+  const result = [...rows];
+  for (const row of latency) {
+    const scope: MetricScope = { kind: "participant-capability", participantId: row.participantId, capability: "VAD" };
+    const entry: MetricRow = { key: row.key, scope, ...rowIdentity(scope, snapshot), metrics: new Map(), latency: row };
+    const owned = (candidate: MetricRow) => "participantId" in candidate.scope && candidate.scope.participantId === row.participantId;
+    const stt = lastIndex(result, candidate => owned(candidate) && "capability" in candidate.scope &&
+      ["STT", "VAD"].includes(candidate.scope.capability));
+    const anchor = stt >= 0 ? stt : lastIndex(result, owned);
+    result.splice(anchor >= 0 ? anchor + 1 : result.length, 0, entry);
+  }
+  return result;
+}
+
+function metricColumns(metrics: readonly Metric[], latency: boolean) {
   const labels = new Set(metrics.map((metric) => metric.label));
+  if (latency) { labels.add(endOfTurnLabel); labels.add(bargeInLabel); }
   const preferred = metricOrder.filter((label) => labels.delete(label));
   const ordered = [
     ...preferred,
@@ -144,45 +180,55 @@ function metricColumns(metrics: readonly Metric[]) {
 export function Metrics({
   snapshot,
   theme,
+  latency,
 }: {
   snapshot: ConsoleSnapshot;
   theme: "light" | "dark";
+  latency?: MetricsLatency;
 }) {
-  const columns = metricColumns(snapshot.metrics);
-  const rows = metricRows(snapshot);
+  const diagnostics = useLatencyRows(latency?.loader, latency?.live ?? false);
+  const latencyData = useMemo(() => latencyRows(diagnostics.runs, diagnostics.turns, diagnostics.truncatedRuns),
+    [diagnostics.runs, diagnostics.turns, diagnostics.truncatedRuns]);
+  const columns = metricColumns(snapshot.metrics, latencyData.length > 0);
+  const rows = withLatencyRows(metricRows(snapshot), latencyData, snapshot);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const tableId = useId();
-  const expandable = rows.filter((row) =>
+  const participantName = (id: string) => {
+    const participant = snapshot.participants.find((person) => person.id === id);
+    return participant ? participantDisplayName(participant) : id;
+  };
+  const expandable = rows.filter((row) => row.latency ? row.latency.turns.length > 0 :
     !("capability" in row.scope && ["STT", "Agent STT"].includes(row.scope.capability)) &&
     [...row.metrics.values()].some((values) => values.length > 1));
+  const latencyStatus = latency && <LatencyStatus diagnostics={diagnostics} />;
   const anyExpanded = expandable.some((row) => expanded.has(row.key));
   const allExpanded = expandable.every((row) => expanded.has(row.key));
 
-  if (snapshot.metricsAvailability === "unavailable") {
+  if (latencyData.length === 0 && (snapshot.metricsAvailability === "unavailable" || snapshot.metrics.length === 0)) {
     return (
       <section className="vx-metrics vx-metrics-empty" aria-label="Call metrics">
-        <p>Metrics unavailable.</p>
-      </section>
-    );
-  }
-
-  if (snapshot.metrics.length === 0) {
-    return (
-      <section className="vx-metrics vx-metrics-empty" aria-label="Call metrics">
-        <p>No metrics recorded.</p>
+        <p>{snapshot.metricsAvailability === "unavailable" ? "Metrics unavailable." : "No metrics recorded."}</p>
+        {latencyStatus}
       </section>
     );
   }
 
   return (
     <section className="vx-metrics" aria-label="Call metrics">
+      {latencyStatus}
       {expandable.length > 0 && <div className="vx-metric-toolbar">
-        <span>{anyExpanded ? (allExpanded ? "Individual measurements" : "Summary + individual measurements") : "Median · Avg · Total"}</span>
+        <span>{anyExpanded ? (allExpanded ? "Individual measurements" : "Summary + individual measurements") :
+          latencyData.length > 0 ? "Median · Avg · Total (VAD: Median · p95)" : "Median · Avg · Total"}</span>
+        <div className="vx-metric-toolbar-actions">
+        {latency && !latency.live && diagnostics.loaded && !diagnostics.error && diagnostics.runs.length > 0 &&
+          <button type="button" className="vx-metric-expand-toggle" onClick={diagnostics.reload}
+            disabled={diagnostics.loading}>Refresh diagnostics</button>}
         <button type="button" className="vx-metric-expand-toggle" aria-controls={tableId}
           aria-expanded={anyExpanded}
           onClick={() => setExpanded(anyExpanded ? new Set() : new Set(expandable.map((row) => row.key)))}>
           {anyExpanded ? "Collapse all" : "Expand all"}
         </button>
+        </div>
       </div>}
       <div className="vx-metric-table-scroll">
         <table aria-label="Call metrics" id={tableId}>
@@ -194,6 +240,7 @@ export function Metrics({
                   <MetricHeaderTooltip
                     label={column.label}
                     shortLabel={column.shortLabel}
+                    description={latencyColumnDescriptions[column.label]}
                     theme={theme}
                   />
                 </th>
@@ -206,7 +253,10 @@ export function Metrics({
                 <th scope="row" aria-label={row.accessibleName}>
                   <div className="vx-metric-target">
                   <div>
-                  <strong>{row.target}</strong>
+                  {row.latency ? <span className="vx-metric-target-label"><strong>{row.target}</strong>
+                    <LatencyRowDetails row={row.latency} target={row.accessibleName}
+                      participantName={row.participantName ?? row.latency.participantId} theme={theme} /></span> :
+                    <strong>{row.target}</strong>}
                   {row.participantName ? (
                     <span className="vx-metric-participant-badge">
                       {row.participantName}
@@ -229,7 +279,12 @@ export function Metrics({
                 </th>
                 {columns.map((column) => (
                   <td key={column.label}>
-                    {!expanded.has(row.key) && (row.metrics.get(column.label)?.length ?? 0) > 1 ?
+                    {row.latency && column.label in latencyColumnDescriptions ? (expanded.has(row.key) ?
+                      <LatencyTurnCells row={row.latency} label={column.label} target={row.accessibleName}
+                        participantName={row.participantName ?? row.latency.participantId} theme={theme}
+                        name={participantName} messages={snapshot.messages} onTranscript={latency?.onTranscript} /> :
+                      <LatencySummaryCell row={row.latency} label={column.label} target={row.accessibleName} />) :
+                    !expanded.has(row.key) && (row.metrics.get(column.label)?.length ?? 0) > 1 ?
                       <MetricSummary metrics={row.metrics.get(column.label)!} label={column.label}
                         target={row.accessibleName} hideUnit={column.hideUnit} theme={theme} /> :
                     <div className="vx-metric-observations">
@@ -255,4 +310,18 @@ export function Metrics({
       </div>
     </section>
   );
+}
+
+function LatencyStatus({ diagnostics }: { diagnostics: ReturnType<typeof useLatencyRows> }) {
+  const retry = <button type="button" className="vx-metric-expand-toggle" onClick={diagnostics.reload}
+    disabled={diagnostics.loading}>Retry diagnostics</button>;
+  if (diagnostics.error === "denied") return <div className="vx-metric-latency-status" role="alert">
+    <span>You do not have access to latency diagnostics, or the call is no longer available.</span></div>;
+  if (diagnostics.error) return <div className="vx-metric-latency-status" role="alert">
+    <span>Latency diagnostics could not be loaded.{diagnostics.loaded && " Showing previously loaded evidence."}</span>{retry}</div>;
+  if (!diagnostics.loaded) return diagnostics.loading
+    ? <div className="vx-metric-latency-status" role="status"><span>Loading latency diagnostics…</span></div> : null;
+  if (diagnostics.runs.length === 0) return <div className="vx-metric-latency-status">
+    <span>Latency diagnostics were not collected for this call. Collection may have been off, unsupported, or denied by the source policy.</span></div>;
+  return null;
 }

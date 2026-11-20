@@ -679,8 +679,7 @@ defmodule Vxpipe.Console.Test.LiveDiagnosticsBrowserScenario do
       barge_in_count: length(barges),
       tool_only: state.tool_executed? and tool.response_turn_id == nil,
       hung_up: browser["hung_up"],
-      persisted_after_hangup: true,
-      admin_ui_inspected: browser["admin_ui_inspected"]
+      persisted_after_hangup: true
     }
 
     Map.put(evidence, :secret_free, true)

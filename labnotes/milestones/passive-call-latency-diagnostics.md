@@ -6,6 +6,10 @@ rendered UI and Lean verification passed. The [verification record](../20261120-
 contains the measured values and test outcomes. Earlier entries retain the
 implementation and design history.
 
+Follow-up 2026-11-20: latency diagnostics moved from a separate collapsed section
+into the Metrics table as per-participant VAD rows (see the presentation change
+below and D follow-up tasks). Its final verification is recorded in the D section.
+
 ## User clarification — timing measurements, not performance gates, 2026-11-20
 
 VAD is a timing reference for the two measurements below. Measured delays are
@@ -111,13 +115,30 @@ completed implementation separately from the remaining acceptance work.
   offline presentation verification, not live acoustic acceptance.
 - [x] Confirm live acceptance exercises both measurements.
 
+## User-approved presentation change — VAD rows in the metrics table, 2026-11-20
+
+The separate collapsed Latency diagnostics section is replaced. The user found it
+redundant beside the Metrics table and approved folding it in. Each observed human
+gets a **VAD** row after their STT row (STT rows still never expand per turn), with
+**EOT** and **Barge-in** columns placed after FTL. Collapsed cells show median, p95
+and valid counts, never totals; an expanded row shows one value per turn with its
+missing-value reason, and selecting a value opens that turn's evidence. An info icon
+beside **VAD** opens profile, coverage and speech outside recorded turns. Sources read
+**Participant VAD** (operational reuse) or **Room VAD** (benchmark-only fallback).
+Different sources/profiles never share a row. Diagnostics load when the Metrics tab
+opens, with bounded paging (four report and four turn pages per run); load failure
+never hides call metrics. The observation selector, whole-call summary section and
+live admin-UI assertions in the live browser test are removed; UI behavior is
+covered by TypeScript tests. Text below that says "collapsed section" describes the
+earlier presentation. See [labnotes](../20261120-0501-latency-metrics-table.md).
+
 ## Runnable outcome
 
 An authorized operator opens a live or ended call and sees a readable conversation.
 Routine usage, playback and turn bookkeeping is available through an explicit
 Technical events control, off by default in both admin call details and the debug
 view. An opt-in, passive benchmark persists one timing summary per human turn and
-exposes a collapsed Latency diagnostics section. It distinguishes estimated speech
+shows it as a VAD row per observed human in the Metrics table. It distinguishes estimated speech
 end, provider turn-end evidence, application dispatch, response text and audio start.
 Observer or database failure never controls speech, delays admission, or ends a call.
 
@@ -611,8 +632,13 @@ Filtering all loaded rows must not falsely imply the conversation is empty when
 later permitted messages exist. Ensure both the default and technical history paths
 remain bounded; virtualize or page large technical views as needed.
 
-Latency diagnostics starts collapsed. Expanded: compact per-turn rows with readable
-participant/turn references and stage durations; expand a row for technical evidence.
+Latency diagnostics appear as a VAD row after each observed human's STT row in the
+Metrics table, with EOT and Barge-in columns after FTL. Collapsed cells show median,
+p95 and valid counts; an expanded row shows one value per turn with its missing-value
+reason, and selecting a value opens that turn's technical evidence. An info icon
+beside VAD opens source (Participant VAD or Room VAD), profile, coverage and speech
+outside recorded turns. (Superseded 2026-11-20: a separate collapsed section with
+per-turn rows.)
 Use permitted existing transcript references only, not a second stored transcript.
 Show Estimated speech end, STT turn ended, Response text ready and Audio started
 with clear units. Do not imply transcript commit equals turn completion. Display
@@ -629,7 +655,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 | A — Readable conversation | Both existing views hide routine facts by default; operators can reveal them. | Completed inspection/UI foundations only. |
 | B — Durable timing report | Deterministic replay produces a stored, tenant-safe per-turn report across restart. | Existing Calls/Persistence; independent of A. |
 | C — Passive configured call | Room-owned, per-STT-participant observation produces stored timing without control effects. | B; timing correlation fixtures. |
-| D — Latency details UI | An authorized live or ended call exposes a truthful collapsed timing report. | A–C; fixtures may start after B. |
+| D — Latency details UI | An authorized live or ended call exposes a truthful timing report as VAD rows in the Metrics table. | A–C; fixtures may start after B. |
 | E — Application isolation and performance | Failure/load tests verify application isolation and overhead bounds. | B–D. |
 | F — Live acceptance and handbook | Scribe/browser evidence plus documentation and root gates. | A–E. |
 
@@ -766,6 +792,28 @@ Room-service implementation and revised settings acceptance:
   late confirmation after turn end and call termination while diagnostics drain.
 
 ### D — Latency details UI
+
+Follow-up, 2026-11-20 — VAD rows in the metrics table (user-approved):
+
+- [x] Replace the collapsed section with one VAD row per participant and profile,
+  placed after that participant's STT row; STT rows stay summarized. EOT and
+  Barge-in columns follow FTL; summaries show median, p95 and valid counts.
+- [x] Expanded VAD rows show one value per turn with missing-value reasons; values
+  open per-turn evidence (stages, landmarks, segments, barge-in output identity,
+  permitted transcript link). An info icon opens source, profile, coverage and
+  speech outside recorded turns; sources read Participant VAD or Room VAD.
+- [x] Load diagnostics when the Metrics tab opens with bounded paging (four report
+  and four turn pages per run), revision-safe refresh, 5 s live refresh, retained
+  evidence on transient failure, cleared evidence on denial, and no effect on call
+  metrics when diagnostics fail.
+- [x] TypeScript coverage replaces the panel tests (React 80/0, Console assets
+  1,187/0, typecheck clean). The live browser test no longer asserts the admin
+  latency UI by user decision; its stored-report checks remain.
+- [x] Inspect the Metrics stories in headless Chrome: desktop collapsed, expanded
+  and both popovers; 390 px with no page overflow; light theme; loading, retry,
+  large, two-participant and barge-in states.
+
+Original D tasks (earlier collapsed-section presentation):
 
 - [x] Extend authorized reads and both hosts' fixtures for participant-owned runs,
   acoustic start/end evidence and two STT participants; preserve collapsed defaults

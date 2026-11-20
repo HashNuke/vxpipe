@@ -15,5 +15,4 @@ export {
   SelectTrigger,
   SelectValue,
 } from "./Select.js";
-
-export { LatencyDiagnostics } from "./LatencyDiagnostics.js";
+export type { MetricsLatency } from "./Metrics.js";

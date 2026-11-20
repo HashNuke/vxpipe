@@ -80,12 +80,22 @@ replacement starts a new observation.
 
 ### Read the timing evidence
 
-Open **Latency diagnostics** in call details or the debug view. It starts
-collapsed. Select an observation by participant and start time, then expand a
-human turn for its landmarks, source/clock identity, uncertainty and acoustic
-segments. Several speech segments can belong to one conversational turn.
-**Speech outside recorded turns** shows unmatched segments without inventing turns
-or response samples. Omitted-segment counts indicate bounded evidence loss.
+Open the **Metrics** tab in call details or the debug view. Each observed human
+has a **VAD** row below their STT row, with **EOT** (end-of-turn detection) and
+**Barge-in** (barge-in stop delay) columns. Collapsed, a cell shows the median,
+p95 and how many turns or interruptions had a valid value. Expand the row for one
+value per human turn; a missing value shows its reason. Select a value for that
+turn's landmarks, source/clock identity, uncertainty, acoustic segments and any
+interrupted output. Several speech segments can belong to one conversational turn.
+
+The info icon next to **VAD** opens the observation: its source, profile and
+coverage, and **Speech outside recorded turns**, which lists unmatched segments
+without inventing turns or response samples. **Participant VAD** means the
+participant's own Silero produced the evidence; **Room VAD** means the room ran
+Silero because the participant had none. Different sources or profiles for one
+participant get separate VAD rows and are never pooled. Omitted-segment counts
+indicate bounded evidence loss. A row reads at most four pages of turns and says
+so when more exist.
 
 | Display | Meaning |
 | --- | --- |
@@ -99,7 +109,7 @@ or response samples. Omitted-segment counts indicate bounded evidence loss.
 End-of-turn detection and barge-in stop delay are the primary measurements.
 Dispatch, response text and audio start are supporting breakdowns. For a barge-in,
 the interrupted output can belong to an earlier turn or an answer to another
-human; expand the record to inspect that output and participant identity. This
+human; select the value to inspect that output and participant identity. This
 measurement uses the TTS playback acknowledgement. It does not measure native
 speech-to-speech playback, and it cannot prove that the listener's device has
 finished playing already-buffered audio.
@@ -116,9 +126,9 @@ zero. Tool-only or silent responses can have no text/audio stages. Local Silero
 resets at provider settlement can leave an incomplete endpoint; diagnostics does
 not fill that gap with provider markers or a second detector.
 
-Whole-call summaries group compatible observation profiles and show median, p95,
-valid and excluded sample counts. Excluded samples do not enter percentiles.
-Check the profile, coverage and excluded counts before comparing results.
+VAD summaries show median, p95 and valid counts for one participant and profile.
+Unavailable values do not enter percentiles. Check the source, coverage and valid
+counts before comparing results.
 
 ### Coverage, troubleshooting and retention
 

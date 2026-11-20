@@ -28,7 +28,7 @@ export const latencyTurns: LatencyTurnPage = {
       metricReasons: { speech_end_to_provider_end: "partial_start", room_to_first_text: "missing_evidence", text_to_first_audio: "missing_evidence" } },
   ],
 };
-export type LatencyFixtureMode = "barge-in" | "barge-in-late" | "participants" | "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large" | "late" | "retry";
+export type LatencyFixtureMode = "combined" | "barge-in" | "barge-in-late" | "participants" | "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large" | "late" | "retry";
 export function createLatencyFixture(mode: LatencyFixtureMode = "available", secondParticipantId = "second-caller"): LatencyLoader {
   let reads = 0;
   return {
@@ -38,6 +38,8 @@ export function createLatencyFixture(mode: LatencyFixtureMode = "available", sec
         runs: [{ ...latencyReport.runs[0]!, revision: mode === "barge-in-late" && reads === 1 ? 1 : 2,
           coverage: { ...latencyReport.runs[0]!.coverage, observedTurns: mode === "barge-in" ? 3 : 1, storedTurns: mode === "barge-in" ? 3 : 1 } }] };
       if (mode === "participants") return participantReport(secondParticipantId);
+      if (mode === "combined") { const report = participantReport(secondParticipantId);
+        return { ...report, runs: report.runs.map(run => run.id === "run-one" ? { ...run, coverage: { ...run.coverage, observedTurns: 3, storedTurns: 3 } } : run) }; }
       if (mode === "retry" && reads === 1) throw new Error("Fixture temporary outage");
       if (mode === "late" && reads === 1) return { ...latencyReport, summary: [], runs: [{ ...latencyReport.runs[0]!, revision: 1, state: "running", closedAt: null, reasons: [], coverage: { ...latencyReport.runs[0]!.coverage, status: "collecting", recordedState: "running", reasons: [], terminationReasons: [], storedTurns: 1, pendingTurns: 1 } }] };
       if (mode === "loading") return new Promise(() => {});
@@ -52,6 +54,11 @@ export function createLatencyFixture(mode: LatencyFixtureMode = "available", sec
     async turns(_runId, cursor) {
       if (mode === "barge-in" || mode === "barge-in-late") return bargeInTurns(mode === "barge-in-late", reads === 1);
       if (mode === "participants") return participantTurns(_runId);
+      if (mode === "combined") {
+        if (_runId === "run-second") return participantTurns(_runId);
+        const turns = bargeInTurns(false, false);
+        return { ...turns, turns: turns.turns.map(turn => ({ ...turn, acousticSegments: callerSegments })) };
+      }
       if (mode === "late" && reads === 1) return { ...latencyTurns, turns: [{ ...latencyTurns.turns[0]!, revision: 1, quality: "incomplete", acousticReason: "missing_evidence", acousticSample: null, uncertaintyUs: null,
         landmarksUs: { provider_end_received: 3425000, room_turn_completed: 3437000 }, durationsUs: { speech_end_to_provider_end: null, provider_to_room: 12000 }, metricReasons: { speech_end_to_provider_end: "missing_evidence" } }] };
       if (mode === "pending" || mode === "unsupported") return { ...latencyTurns, turns: [] };

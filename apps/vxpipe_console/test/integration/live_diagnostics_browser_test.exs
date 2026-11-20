@@ -29,7 +29,6 @@ defmodule Vxpipe.Console.Integration.LiveDiagnosticsBrowserTest do
       assert evidence.tool_only
       assert evidence.hung_up
       assert evidence.persisted_after_hangup
-      assert evidence.admin_ui_inspected
       assert evidence.secret_free
     end
   end

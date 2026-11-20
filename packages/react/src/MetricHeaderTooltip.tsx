@@ -16,10 +16,12 @@ import {
 export function MetricHeaderTooltip({
   label,
   shortLabel,
+  description,
   theme,
 }: {
   label: string;
   shortLabel: string;
+  description?: string;
   theme: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
@@ -56,7 +58,7 @@ export function MetricHeaderTooltip({
             style={floatingStyles}
             {...getFloatingProps()}
           >
-            {label}
+            {description ? <><strong>{label}</strong><p>{description}</p></> : label}
           </div>
         </FloatingPortal>
       )}
