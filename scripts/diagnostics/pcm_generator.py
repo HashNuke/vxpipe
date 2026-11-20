@@ -17,12 +17,13 @@ import time
 from resource_schedule import ResourceSchedule
 from measurement import PinnedProcessReader
 from workload_profile import profile
+from cold_start import prepare, ReadyPacket
 
 PERIOD_NS = 32_000_000
 
 
 def generate(pcm, inputs, frames, write, *, clock=time.monotonic_ns, sleep=time.sleep, affinity=None,
-             spin_ns=0, settlement_inputs_per_room=None, resources=None, workload=None):
+             spin_ns=0, settlement_inputs_per_room=None, resources=None, workload=None, preparation=None):
     if (type(inputs) is not int or not 1 <= inputs <= 16
             or type(frames) is not int or not 1 <= frames <= 1000
             or len(pcm) < 1024 or len(pcm) % 2
@@ -63,11 +64,17 @@ def generate(pcm, inputs, frames, write, *, clock=time.monotonic_ns, sleep=time.
                     speech_clip=dict(offset_samples=0, samples=speech_frames * 512, sha256=hashlib.sha256(speech_clip).hexdigest()) if settlements else None,
                     tail_encoding='silence-outside-speech-windows' if settlements else 'fixture')
     write(b'\0' + json.dumps(manifest).encode())
+    if preparation is not None:
+        preparation()
     start = clock()
     cpu_start = time.process_time()
     wait = lambda deadline: wait_until(deadline, clock=clock, sleep=sleep, spin_ns=spin_ns)
     emit_resource = lambda event: write(b'\3' + json.dumps(event).encode())
-    if resources is not None:
+    if workload == 'cold':
+        if resources is None:
+            raise ValueError('cold audio requires preparation accounting')
+        resources.cold_audio_start(start)
+    elif resources is not None:
         resources.start(start, duration_ns)
     lateness = []
     wake_lateness = []
@@ -149,7 +156,7 @@ def main():
                         help='declare fixed 32-frame speech windows ending at provider settlements')
     parser.add_argument('--measure-pid', type=int, help='isolated workload VM whose audio interval is sampled')
     parser.add_argument('--measurement-start-ms', type=int)
-    parser.add_argument('--workload', choices=('smoke', 'warm'))
+    parser.add_argument('--workload', choices=('smoke', 'warm', 'cold'))
     args = parser.parse_args()
     start_ns = ((profile(args.workload).measurement_start_ns if args.workload else 0)
                 if args.measurement_start_ms is None else args.measurement_start_ms * 1_000_000)
@@ -165,9 +172,13 @@ def main():
             reader = owned.enter_context(PinnedProcessReader(args.measure_pid))
             resources = ResourceSchedule(args.measure_pid,
                 start_offset_ns=start_ns, reader=reader)
+        if args.workload == 'cold':
+            if resources is None:
+                parser.error('cold requires process resource sampling')
+        preparation = (lambda: prepare(resources, write, ReadyPacket(), start_ready=ReadyPacket(b'start'))) if args.workload == 'cold' else None
         generate(args.pcm.read_bytes(), args.inputs, args.frames, write, affinity=affinity,
                  spin_ns=args.spin_us * 1000, settlement_inputs_per_room=args.settlement_inputs_per_room,
-                 resources=resources, workload=args.workload)
+                 resources=resources, workload=args.workload, preparation=preparation)
 
 
 

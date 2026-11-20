@@ -1,4 +1,4 @@
-"""Compare two validated warm reports; this is partial performance evidence only."""
+"""Compare two validated warm or cold reports; this is partial performance evidence only."""
 import argparse
 import json
 import math
@@ -17,6 +17,14 @@ def number(value, name, *, positive=False):
 
 def validate_phase(phase):
     try:
+        if phase.get('fixture_sha256') is not None and not re.fullmatch('[0-9a-f]{64}', phase['fixture_sha256']):
+            raise ValueError('invalid emitted fixture digest')
+        if phase.get('workload', 'warm') not in ('warm', 'cold'):
+            raise ValueError('invalid workload')
+        if phase.get('workload') == 'cold':
+            preparation = phase['preparation_duration_ns']
+            if type(preparation) is not int or not 0 <= preparation <= 15_000_000_000:
+                raise ValueError('invalid preparation interval')
         for key in ('collection', 'operational_vad'):
             if type(phase[key]) is not bool:
                 raise ValueError(f'invalid {key}')
@@ -63,12 +71,14 @@ def validate_artifact(artifact):
                 or any(event['sample']['interval_start'] is not (index == 0)
                        for index, event in enumerate(report['resource_samples']))):
             raise ValueError('invalid elapsed time, turn population or interval reset')
-        phase = dict(collection=report['collection'], operational_vad=report['operational_vad'],
+        phase = dict(fixture_sha256=report['generator'].get('fixture_sha256'), workload=report['workload'], collection=report['collection'], operational_vad=report['operational_vad'],
                      rooms=report['rooms'], inputs_per_room=report['inputs_per_room'],
                      run_id=artifact['run_id'], provenance=artifact['provenance'],
                      resources=report['generator']['resource_interval']['summary'],
                      ingress=report['ingress_latency']['summary'],
                      dispatch=report['response_dispatch']['summary'])
+        if report['workload'] == 'cold':
+            phase['preparation_duration_ns'] = report['generator']['resource_interval']['preparation_duration_ns']
         has_egress = 'response_egress' in report
         if has_egress:
             phase['egress'] = report['response_egress']['summary']
@@ -76,7 +86,7 @@ def validate_artifact(artifact):
         if (artifact['resource_samples'] != report['resource_samples']
                 or not smoke_complete(artifact['smoke_reports'], artifact['samples'],
                     rooms=phase['rooms'], inputs_per_room=phase['inputs_per_room'],
-                    workload='warm', selected_case=(phase['operational_vad'], phase['collection']),
+                    workload=phase['workload'], selected_case=(phase['operational_vad'], phase['collection']),
                     require_egress=has_egress)):
             raise ValueError('invalid warm workload evidence')
         return phase
@@ -90,6 +100,8 @@ def compare_validated(off, on):
     if (off['collection'] is not False or on['collection'] is not True
             or off['run_id'] == on['run_id']
             or ('egress' in off) != ('egress' in on)
+            or off.get('workload', 'warm') != on.get('workload', 'warm')
+            or off.get('fixture_sha256') != on.get('fixture_sha256')
             or any(off[key] != on[key] for key in ('operational_vad', 'rooms', 'inputs_per_room'))
             or any(off['provenance'][key] != on['provenance'][key]
                    for key in ('source_commit', 'file_sha256'))):
@@ -105,7 +117,10 @@ def compare_validated(off, on):
         limit = max(2000, off[key]['p95_us'] * .1)
         latencies[key] = dict(off=off[key], on=on[key], delta_us=delta,
                               limit_us=limit, passed=delta <= limit)
-    return dict(mode='reuse' if off['operational_vad'] else 'fallback',
+    return dict(workload=off.get('workload', 'warm'), fixture_sha256=off.get('fixture_sha256'),
+                preparation_duration_ns=(dict(off=off['preparation_duration_ns'], on=on['preparation_duration_ns'])
+                                         if off.get('workload') == 'cold' else None),
+                mode='reuse' if off['operational_vad'] else 'fallback',
                 rooms=off['rooms'], inputs_per_room=off['inputs_per_room'],
                 off_run_id=off['run_id'], on_run_id=on['run_id'],
                 provenance=dict(off=off['provenance'], on=on['provenance']),

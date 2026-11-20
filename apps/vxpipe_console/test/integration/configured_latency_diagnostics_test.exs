@@ -390,6 +390,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         case System.get_env("VXPIPE_DIAGNOSTIC_WORKLOAD", "smoke") do
           "smoke" -> :smoke
           "warm" -> :warm
+          "cold" -> :cold
         end
 
       plan = DiagnosticsSchedule.profile(workload)
@@ -401,28 +402,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       assert inputs_per_room in 1..2
       assert room_count in 1..16 and room_count * inputs_per_room <= 16
 
-      primary_inputs =
-        Enum.map(1..room_count, fn _ ->
-          call(c.options, c.vad, {:concurrent_llm, inputs_per_room}, :scoped)
-        end)
-
-      calls =
-        Enum.flat_map(primary_inputs, fn {_, _, _, _, identity} = primary ->
-          if inputs_per_room == 2 do
-            room_id = identity.room_id
-            assert_receive {:diagnostic_extra_input, ^room_id, extra}
-            [primary, extra]
-          else
-            [primary]
-          end
-        end)
-
       total_inputs = room_count * inputs_per_room
-
-      for {call, _, _, _, _} <- calls do
-        assert Enum.count(Map.values(call.plan.participants), &(&1.kind == :human)) ==
-                 inputs_per_room
-      end
 
       pcm_path = Vxpipe.Providers.Deepgram.LiveFixture.pcm_path()
       generator = Path.expand("../../../../scripts/diagnostics/pcm_generator.py", __DIR__)
@@ -436,7 +416,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         end
 
       sample_resources? = System.get_env("VXPIPE_DIAGNOSTIC_RESOURCE_SAMPLES") == "1"
-      if workload == :warm, do: assert(sample_resources?)
+      if workload in [:warm, :cold], do: assert(sample_resources?)
       resource_args = if sample_resources?, do: ["--measure-pid", System.pid()], else: []
 
       generator_args =
@@ -494,6 +474,51 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           {python, generator_args}
         end
 
+      cold_port =
+        if workload == :cold do
+          Port.open({:spawn_executable, executable}, [
+            :binary,
+            :exit_status,
+            {:packet, 4},
+            args: arguments
+          ])
+        end
+
+      {initial_manifest, initial_resources, cold_started_us} =
+        if cold_port do
+          assert_receive {^cold_port, {:data, <<0, manifest_json::binary>>}}, 5_000
+          assert_receive {^cold_port, {:data, <<3, json::binary>>}}, 5_000
+          resource = Jason.decode!(json)
+          assert resource["sample"]["interval_start"] == true
+          IO.puts("DIAGNOSTIC_RESOURCE_SAMPLE " <> json)
+          {Jason.decode!(manifest_json), [resource], System.monotonic_time(:microsecond)}
+        else
+          {nil, [], nil}
+        end
+
+      primary_inputs =
+        Enum.map(1..room_count, fn _ ->
+          call(c.options, c.vad, {:concurrent_llm, inputs_per_room}, :scoped)
+        end)
+
+      calls =
+        Enum.flat_map(primary_inputs, fn {_, _, _, _, identity} = primary ->
+          if inputs_per_room == 2 do
+            room_id = identity.room_id
+            assert_receive {:diagnostic_extra_input, ^room_id, extra}
+            [primary, extra]
+          else
+            [primary]
+          end
+        end)
+
+      if cold_port, do: assert(Port.command(cold_port, "ready"))
+
+      for {call, _, _, _, _} <- calls do
+        assert Enum.count(Map.values(call.plan.participants), &(&1.kind == :human)) ==
+                 inputs_per_room
+      end
+
       response_trace =
         start_supervised!(
           {CallEngine.TestResponseTrace,
@@ -517,12 +542,18 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       pre_launch_us = System.monotonic_time(:microsecond)
 
       port =
-        Port.open({:spawn_executable, executable}, [
-          :binary,
-          :exit_status,
-          {:packet, 4},
-          args: arguments
-        ])
+        if cold_port do
+          assert pre_launch_us - cold_started_us <= 25_000_000
+          assert Port.command(cold_port, "start")
+          cold_port
+        else
+          Port.open({:spawn_executable, executable}, [
+            :binary,
+            :exit_status,
+            {:packet, 4},
+            args: arguments
+          ])
+        end
 
       inputs =
         calls
@@ -561,11 +592,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           inputs_per_room: inputs_per_room,
           inputs: inputs,
           exited?: false,
-          manifest: nil,
+          manifest: initial_manifest,
           report: nil,
-          resources: [],
+          resources: initial_resources,
           workload: workload,
-          measurement_started_us: nil,
+          measurement_started_us: cold_started_us,
           wire_indices: Map.new(inputs, fn {index, input} -> {input.wire, index} end),
           source_indices:
             Map.new(inputs, fn {index, input} ->
@@ -601,7 +632,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       assert result.report["frames_sent"] ==
                Enum.sum(Enum.map(result.inputs, fn {_, input} -> input.expected_frames end))
 
-      if workload == :warm,
+      if workload in [:warm, :cold],
         do: assert(result.report["measured_frames_sent"] == 625 * total_inputs)
 
       IO.puts(
@@ -629,7 +660,25 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         interval = result.report["resource_interval"]
         assert interval["timing_valid"] == true
         assert interval["pid"] == String.to_integer(System.pid())
-        samples = div(plan.duration_ns - plan.measurement_start_ns + 99_999_999, 100_000_000) + 1
+
+        preparation_ns =
+          if workload == :cold do
+            duration = interval["preparation_duration_ns"]
+            assert is_integer(duration) and duration in 0..15_000_000_000
+            assert interval["audio_start_ns"] == result.report["audio_start_ns"]
+            assert interval["scheduled_start_ns"] + duration == interval["ready_at_ns"]
+            assert interval["ready_at_ns"] <= interval["audio_start_ns"]
+            interval["audio_start_ns"] - interval["scheduled_start_ns"]
+          else
+            0
+          end
+
+        samples =
+          div(
+            plan.duration_ns - plan.measurement_start_ns + preparation_ns + 99_999_999,
+            100_000_000
+          ) + 1
+
         assert interval["summary"]["sample_count"] == samples
         assert length(result.resources) == samples
         resources = Enum.reverse(result.resources)
@@ -743,7 +792,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           refute_received {:scribe_commit, ^wire}
 
           measured =
-            if workload == :warm do
+            if workload in [:warm, :cold] do
               window =
                 DiagnosticsSchedule.measurement_window(
                   pre_launch_us,
@@ -935,7 +984,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             model_ready_by_us:
               if(workload == :warm, do: pre_launch_us + div(plan.measurement_start_ns, 1_000)),
             measurement_window:
-              if(workload == :warm,
+              if(workload in [:warm, :cold],
                 do:
                   DiagnosticsSchedule.measurement_window(
                     pre_launch_us,
@@ -964,6 +1013,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                 "generator_cpu_seconds",
                 "resource_interval"
               ])
+              |> Map.put("fixture_sha256", result.manifest["fixture_sha256"])
           })
       )
     end
@@ -2152,8 +2202,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       row =
         await(fn ->
           case LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil) do
-            {:ok, [row]} -> row
-            _ -> nil
+            {:ok, [%{landmarks_us: %{room_turn_completed: completed}} = row]}
+            when is_integer(completed) ->
+              row
+
+            _ ->
+              nil
           end
         end)
 

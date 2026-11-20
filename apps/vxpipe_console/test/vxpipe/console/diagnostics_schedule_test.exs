@@ -56,6 +56,24 @@ defmodule Vxpipe.Console.DiagnosticsScheduleTest do
     end
   end
 
+  test "cold interval begins before preparation with ten turns inside twenty audio seconds" do
+    plan = DiagnosticsSchedule.profile(:cold)
+    assert plan.duration_ns == 20_000_000_000
+    assert plan.measurement_start_ns == 0
+
+    for {rooms, humans} <- [{1, 1}, {8, 2}], index <- 0..(rooms * humans - 1) do
+      assert DiagnosticsSchedule.frame_count(index, rooms, humans, :cold) == 625
+      assert length(DiagnosticsSchedule.settlements(index, rooms, humans, :cold)) >= 10
+    end
+
+    assert DiagnosticsSchedule.measurement_window(12_000_000, 10_000_000, :cold) ==
+             %{start_us: 10_000_000, end_us: 32_000_000, ready_by_us: 25_000_000}
+
+    assert_raise ArgumentError, fn ->
+      DiagnosticsSchedule.measurement_window(35_000_001, 10_000_000, :cold)
+    end
+  end
+
   test "actual measurement uses conservative VM-clock causal bounds" do
     window = DiagnosticsSchedule.measurement_window(10_000_000, 15_100_000, :warm)
     assert window == %{start_us: 15_100_000, end_us: 35_000_000, ready_by_us: 15_000_000}

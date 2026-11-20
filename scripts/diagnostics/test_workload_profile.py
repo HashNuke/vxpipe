@@ -38,6 +38,15 @@ class WorkloadProfileTest(unittest.TestCase):
                             self.assertEqual(b - a, 30)
                             self.assertEqual((b - warm.speech_frames + 1) - a - 1, 6)
 
+    def test_cold_audio_is_twenty_seconds_with_ten_turns_per_input(self):
+        cold = profile('cold')
+        self.assertEqual((cold.measurement_start_ns, cold.duration_ns), (0, 20_000_000_000))
+        for rooms, humans in [(1, 1), (8, 2)]:
+            for index in range(rooms * humans):
+                self.assertEqual(cold.frame_count(index, rooms * humans), 625)
+                self.assertGreaterEqual(len(cold.settlements(index, rooms * humans, humans)), 10)
+                self.assertGreaterEqual(cold.settlements(index, rooms * humans, humans)[0], cold.speech_frames)
+
     def test_bad_profile_or_source_shape_cannot_be_used(self):
         with self.assertRaises(ValueError):
             profile('unknown')

@@ -38,4 +38,6 @@ def profile(name):
         return WorkloadProfile(name, 6_144_000_000, 0, 64, 64, 32)
     if name == 'warm':
         return WorkloadProfile(name, 25_000_000_000, 5_000_000_000, 60, 64, 24)
+    if name == 'cold':
+        return WorkloadProfile(name, 20_000_000_000, 0, 56, 32, 24)
     raise ValueError('unknown workload profile')

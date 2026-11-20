@@ -111,6 +111,37 @@ class ResourceScheduleTest(unittest.TestCase):
             schedule.advance(10_100_000_000, wait=self.wait, emit=lambda _: None)
         self.assertEqual(self.resets, [])
 
+    def test_cold_reset_precedes_preparation_and_readiness_keeps_same_interval(self):
+        now = [0]
+        def read(pid):
+            return ProcessSample(pid, 77, now[0] / 1e9, now[0] / 2e9, 100, 100, 1)
+        schedule = ResourceSchedule(123, reader=read,
+            begin=lambda pid, **_: replace(read(pid), interval_start=True), clock=lambda: now[0])
+        schedule.start_cold(0)
+        events = []
+        wait = lambda deadline: now.__setitem__(0, deadline)
+        schedule.advance(2_000_000_000, wait=wait, emit=events.append)
+        schedule.cold_ready(2_000_000_000)
+        schedule.cold_audio_start(2_000_000_000)
+        schedule.advance(22_000_000_000, wait=wait, emit=events.append)
+        report = schedule.report()
+        self.assertTrue(report['timing_valid'])
+        self.assertEqual(report['summary']['duration_seconds'], 22)
+        self.assertEqual(report['preparation_duration_ns'], 2_000_000_000)
+        self.assertEqual(report['preparation_cpu_seconds'], 1)
+        self.assertEqual(sum(e['sample']['interval_start'] for e in events), 1)
+        with self.assertRaises(ValueError):
+            schedule.cold_ready(3_000_000_000)
+
+    def test_cold_readiness_timeout_cannot_remove_initialization_cost(self):
+        schedule = self.fixture()
+        with self.assertRaises(ValueError):
+            schedule.start_cold(0)
+        fresh = ResourceSchedule(123, reader=lambda pid: ProcessSample(pid, 77, 0, 0, 100, 100, 1))
+        fresh.start_cold(0)
+        with self.assertRaises(ValueError):
+            fresh.cold_ready(15_000_000_001)
+
     def test_invalid_interval_cannot_start(self):
         for offset, duration in [(-1, 100), (100, 100), (True, 100), (0, 32_000_000_001)]:
             with self.subTest(offset=offset, duration=duration), self.assertRaises(ValueError):

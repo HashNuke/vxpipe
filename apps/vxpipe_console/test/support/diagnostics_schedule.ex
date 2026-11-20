@@ -6,6 +6,7 @@ defmodule Vxpipe.Console.Test.DiagnosticsSchedule do
       frames: 192,
       duration_ns: 6_144_000_000,
       measurement_start_ns: 0,
+      leading_frames: 64,
       cadence: 64,
       speech_frames: 32
     }
@@ -15,7 +16,18 @@ defmodule Vxpipe.Console.Test.DiagnosticsSchedule do
       frames: 782,
       duration_ns: 25_000_000_000,
       measurement_start_ns: 5_000_000_000,
+      leading_frames: 64,
       cadence: 60,
+      speech_frames: 24
+    }
+
+  def profile(:cold),
+    do: %{
+      frames: 625,
+      duration_ns: 20_000_000_000,
+      measurement_start_ns: 0,
+      leading_frames: 32,
+      cadence: 56,
       speech_frames: 24
     }
 
@@ -28,7 +40,7 @@ defmodule Vxpipe.Console.Test.DiagnosticsSchedule do
   def turn_at(index, frame, rooms, inputs_per_room, mode \\ :smoke) do
     plan = profile(mode)
     slot = rem(index, inputs_per_room) * rooms + div(index, inputs_per_room)
-    first = 64 + div(plan.cadence * (slot + 1), rooms * inputs_per_room)
+    first = plan.leading_frames + div(plan.cadence * (slot + 1), rooms * inputs_per_room)
 
     if frame >= first and rem(frame - first, plan.cadence) == 0,
       do: div(frame - first, plan.cadence) + 1
@@ -39,6 +51,19 @@ defmodule Vxpipe.Console.Test.DiagnosticsSchedule do
         turn = turn_at(index, frame, rooms, inputs_per_room, mode),
         not is_nil(turn),
         do: {frame, turn}
+  end
+
+  def measurement_window(pre_launch_us, first_resource_receipt_us, :cold) do
+    if not is_integer(first_resource_receipt_us) or
+         pre_launch_us < first_resource_receipt_us or
+         pre_launch_us - first_resource_receipt_us > 25_000_000,
+       do: raise(ArgumentError, "invalid cold preparation boundary")
+
+    %{
+      start_us: first_resource_receipt_us,
+      end_us: pre_launch_us + 20_000_000,
+      ready_by_us: first_resource_receipt_us + 15_000_000
+    }
   end
 
   def measurement_window(pre_launch_us, first_resource_receipt_us, mode) do

@@ -882,6 +882,12 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   dispatch deltas. Its historical one-input pair meets the measured non-CPU
   budgets; repeated warm/cold and egress evidence remain
   required before this task can close.
+  The [cold and repeated-pair harness](../20261120-0309-diagnostics-cold-pairs.md)
+  now measures preparation plus twenty seconds of audio and runs three alternating
+  pairs per declared cell. Focused tests and independent review verify its accounting;
+  native matrix execution remains pending. The configured fixture also now waits
+  for its [asynchronously persisted completion landmark](../20261120-0320-diagnostics-persistence-wait.md)
+  before asserting it; all four affected mixed-STT cases pass.
 - [x] Record the isolation choice (dedicated BEAM worker versus external inference
   process), native failure limits and evidence. Do not promise protection from
   VM-wide native faults or zero overhead from an in-process task.
@@ -904,8 +910,8 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   profiles, timing meanings, privacy, failure/loss semantics and troubleshooting.
   The [handbook checkpoint](../20261119-2033-diagnostics-operator-handbook.md)
   records source verification and the current automatic Scribe profile restriction.
-  Handbook text retains unresolved call-start migration, load and live-acceptance
-  limitations; this does not complete those gates.
+  Handbook text reflects the completed call-start settings contract and retains
+  unresolved load/live-acceptance limitations; this does not complete those gates.
 - [ ] Pass root format, compile warnings-as-errors, strict Credo, default tests and
   unused-lock checks; run Lean if speech/source state machines change. Run relevant
   frontend/core checks and finish rendered verification. Required unavailable live

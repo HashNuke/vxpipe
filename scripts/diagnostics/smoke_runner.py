@@ -21,6 +21,7 @@ import uuid
 
 from measurement import ProcessSample, read_process, summarize
 from workload_profile import profile
+from resource_schedule import summarize_resources, COLD_MAX_START_NS
 
 ROOT = Path(__file__).resolve().parents[2]
 MARKER = 'DIAGNOSTIC_GENERATOR_UNIT '
@@ -149,23 +150,41 @@ def stop_unit(unit, *, system=False):
 def resource_complete(report, samples, workload='smoke'):
     plan = profile(workload)
     duration_ns = plan.duration_ns - plan.measurement_start_ns
-    expected_count = (duration_ns + 99_999_999) // 100_000_000 + 1
     try:
         interval = report['generator']['resource_interval']
         events = report['resource_samples']
-        if (not isinstance(interval, dict) or len(events) != expected_count
+        if (not isinstance(interval, dict)
                 or interval.get('timing_contract') != 'boundary-2ms-no-skipped-slot-v1'):
             return False
         start, end = interval['scheduled_start_ns'], interval['scheduled_end_ns']
-        if type(start) is not int or type(end) is not int or end - start != duration_ns:
+        audio_start = report['generator']['audio_start_ns']
+        if any(type(value) is not int for value in (start, end, audio_start)):
             return False
-        if (start != report['generator']['audio_start_ns'] + plan.measurement_start_ns
-                or end != report['generator']['audio_start_ns'] + plan.duration_ns):
+        if workload == 'cold':
+            preparation = interval['preparation_duration_ns']
+            ready = ProcessSample(**interval['preparation_sample'])
+            if (type(preparation) is not int or not 0 <= preparation <= 15_000_000_000
+                    or preparation != interval['ready_at_ns'] - start
+                    or not interval['ready_at_ns'] <= audio_start <= start + COLD_MAX_START_NS
+                    or interval['audio_start_ns'] != audio_start
+                    or (ready.pid, ready.start_ticks) != (interval['pid'], interval['start_ticks'])
+                    or ready.interval_start is not False
+                    or not interval['ready_at_ns'] - 1 <= round(ready.at_seconds * 1e9) <= interval['ready_at_ns'] + 2_000_000
+                    or ready.cpu_seconds < events[0]['sample']['cpu_seconds']
+                    or ready.cpu_seconds > events[-1]['sample']['cpu_seconds']
+                    or interval['preparation_cpu_seconds'] != ready.cpu_seconds - events[0]['sample']['cpu_seconds']):
+                return False
+            duration_ns += audio_start - start
+        elif start != audio_start + plan.measurement_start_ns:
+            return False
+        expected_count = (duration_ns + 99_999_999) // 100_000_000 + 1
+        if (end - start != duration_ns or len(events) != expected_count
+                or end != audio_start + plan.duration_ns):
             return False
         if [e['deadline_ns'] for e in events] != list(range(start, end, 100_000_000)) + [end]:
             return False
         raw = [ProcessSample(**e['sample']) for e in events]
-        summary = summarize(raw)
+        summary = summarize_resources(raw, interval['preparation_sample'] if workload == 'cold' else None)
         identities = {(b['pid'], b['start_ticks']) for s in samples for b in s['beams']}
         identity = (interval['pid'], interval['start_ticks'])
         if identity not in identities or any((s.pid, s.start_ticks) != identity for s in raw):
@@ -187,15 +206,15 @@ def resource_complete(report, samples, workload='smoke'):
                 and interval['end_lateness_ns'] == lateness[-1]
                 and interval['maximum_lateness_ns'] == max(lateness)
                 and interval['maximum_sample_gap_ns'] == max(gaps))
-    except (KeyError, TypeError, ValueError, OverflowError):
+    except (KeyError, TypeError, ValueError, OverflowError, IndexError):
         return False
 
 
 def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_per_room=1,
                    sample_resources=False, workload='smoke', selected_case=None, require_egress=True):
     plan = profile(workload)
-    sample_resources = sample_resources or workload == 'warm'
-    committed_writes = committed_writes or workload == 'warm'
+    sample_resources = sample_resources or workload in ('warm', 'cold')
+    committed_writes = committed_writes or workload in ('warm', 'cold')
     expected = set(CASES.values()) if selected_case is None else {selected_case}
     if not expected <= set(CASES.values()) or len(reports) != len(expected) or {(r['operational_vad'], r['collection']) for r in reports} != expected:
         return False
@@ -228,7 +247,7 @@ def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_
            for r in reports):
         return False
     inputs = rooms * inputs_per_room
-    if workload == 'warm':
+    if workload in ('warm', 'cold'):
         for report in reports:
             turns = report.get('measured_turn_counts', {})
             if (set(turns) != {str(i) for i in range(inputs)}
@@ -248,7 +267,8 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
           committed_writes=False, rooms=1, inputs_per_room=1, sample_resources=False,
           workload='smoke', selected_case=None):
     plan = profile(workload)
-    resource_count = (plan.duration_ns - plan.measurement_start_ns + 99_999_999) // 100_000_000 + 1
+    maximum_duration = plan.duration_ns - plan.measurement_start_ns + (COLD_MAX_START_NS if workload == 'cold' else 0)
+    resource_count = (maximum_duration + 99_999_999) // 100_000_000 + 1
     maximum_resource_samples = resource_count * (4 if selected_case is None else 1)
     samples, reports, cleanup_errors = [], [], []
     resource_samples, current_resources = [], []
@@ -346,7 +366,7 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
 
 def provenance():
     paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py', 'scripts/diagnostics/resource_schedule.py', 'scripts/diagnostics/workload_profile.py',
-             'scripts/diagnostics/pcm_generator.py', 'scripts/diagnostics/ingress_latency.py', 'scripts/diagnostics/response_latency.py', 'mix.lock',
+             'scripts/diagnostics/pcm_generator.py', 'scripts/diagnostics/cold_start.py', 'apps/vxpipe_providers/test/fixtures/deepgram/final_word_16k_mono_s16le.pcm', 'scripts/diagnostics/ingress_latency.py', 'scripts/diagnostics/response_latency.py', 'mix.lock',
              'patches/ortex/session-threads.patch', 'patches/ortex/session-threads.json',
              'patches/ortex/cpu-scheduling-upgrade.patch',
              'deps/ortex/lib/ortex.ex', 'deps/ortex/lib/ortex/model.ex', 'deps/ortex/lib/ortex/native.ex',
@@ -381,11 +401,11 @@ def main():
                         help='concurrent rooms (total human inputs must be at most 16)')
     parser.add_argument('--inputs-per-room', type=int, choices=(1, 2), default=1)
     parser.add_argument('--sample-resources', action='store_true', help='sample the audio-only VM interval on the generator clock')
-    parser.add_argument('--workload', choices=('smoke', 'warm'), default='smoke')
+    parser.add_argument('--workload', choices=('smoke', 'warm', 'cold'), default='smoke')
     parser.add_argument('--case', choices=tuple(CASES), help='one isolated phase instead of all four cases')
     args = parser.parse_args()
     selected_case = None if args.case is None else CASES[args.case]
-    if args.workload == 'warm':
+    if args.workload in ('warm', 'cold'):
         args.sample_resources = True
         args.committed_writes = True
     if args.rooms * args.inputs_per_room > 16:

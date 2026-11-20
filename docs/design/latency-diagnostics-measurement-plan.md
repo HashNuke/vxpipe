@@ -115,8 +115,8 @@ writers through a shared connection. Complete database creation/migrations befor
 the resource interval; room preparation and diagnostic writes stay within their
 specified warm/cold intervals. Verify call and diagnostic rows from an independent
 connection after drain. The ordinary sandbox smoke remains functional evidence
-only. The committed-write smoke mode exercises this database contract before the
-full paired driver is implemented.
+only. The committed-write smoke mode exercises the same database contract used
+by the warm/cold repeated-pair runner; native matrix acceptance remains pending.
 No benchmark bypass of room service, settings authority, capture admission or
 durable writes is allowed. The generator runs outside the measured VM; report its
 CPU separately. Operational VAD configuration stays fixed within each pair.
@@ -185,11 +185,39 @@ before generator launch plus 25 seconds. Successful speech-bearing native infere
 must complete by the pre-launch timestamp plus five seconds for each required
 source. Neither model readiness nor response acknowledgements change pacing.
 
-The configured workload now records ingress, response dispatch and synthetic
-server-egress acknowledgement latency. It does not yet implement the complete
-paired driver or cold phases. See the
+The configured workload records ingress, response dispatch and synthetic
+server-egress acknowledgement latency. See the
 [warm-workload checkpoint](../../labnotes/20261119-2345-diagnostics-warm-workload.md)
-for verification and limitations.
+for its original verification and limitations.
+
+### Cold workload and repeated cells
+
+The cold extension uses a 20-second audio window (625 frames per input), a fixed
+56-frame settlement cadence, 32 leading frames and 24-frame speech clips. This
+provides at least ten canonical turns per source, including two non-overlapping
+human windows in each room. Static fixture reading/hashing and manifest output
+finish before the resource reset. The reset is acknowledged before room creation;
+periodic sampling then continues through preparation and audio without restarting.
+
+A `ready` packet sent immediately after final STT attachment records readiness
+and a separate CPU/RSS sample. A `start` packet after response-trace setup releases
+the fixed audio schedule. STT readiness is bounded by fifteen seconds; post-ready trace setup stays within
+the existing 45-second generator lifetime, reserving twenty seconds for audio. This separates STT
+readiness from trace setup while including both in combined CPU/RSS accounting.
+The readiness sample contributes peak RSS/HWM/thread counts and must fit the
+chronological CPU samples around it. Its raw counters are retained separately
+from the periodic sample population. All timestamps in each subtraction share
+one clock; VM and external generator timestamps are never subtracted.
+
+`scripts/diagnostics/repeated_pairs.py` runs one declared topology/mode cell as
+three serial pairs in off/on, on/off, off/on order, each through the existing
+watchdog. It retains commands, all artifacts, per-pair comparisons and worst
+deltas. Invalid phases or measured-budget failures stop without automatic retry.
+Cold readiness uses nearest-rank p95 across three phases of each collection state.
+Source hashes and the actual emitted PCM digest must agree across all six phases.
+A completed cell is not the entire topology matrix or milestone. Native execution
+and acceptance evidence remain pending in the
+[cold-pairs checkpoint](../../labnotes/20261120-0309-diagnostics-cold-pairs.md).
 
 ## Measurements and predeclared pass criteria
 
@@ -296,7 +324,8 @@ Missing/reset-failed/incomplete or replaced-PID intervals fail. Linux-reported H
 may dip slightly; retain its maximum observed value after reset. A generator start
 offset also applies to the short smoke; 5000 ms there leaves only
 1.144 seconds. The separate warm profile above provides the full 20-second interval.
-Cold preparation and the complete paired driver remain outstanding.
+Cold preparation accounting and the serial repeated-pair runner are implemented;
+actual native warm/cold matrix acceptance remains outstanding.
 
 
 Compare each matched pair separately. All valid repetitions must pass; also

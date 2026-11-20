@@ -34,7 +34,7 @@ def artifact():
                   workload='warm', persistence='committed', database_pool_size=10,
                   measured_turn_counts={'0': 10}, resource_samples=raw,
                   ingress_latency=ingress_evidence('warm'), response_dispatch=response_evidence('warm'),
-                  generator=dict(frames_sent=782, measured_frames_sent=625,
+                  generator=dict(fixture_sha256='d' * 64, frames_sent=782, measured_frames_sent=625,
                     measured_p95_lateness_ns=1000, p95_lateness_ns=1000,
                     audio_start_ns=1_000_000_000, elapsed_ns=25_000_000_000,
                     resource_interval=dict(pid=123, start_ticks=77, scheduled_start_ns=6_000_000_000,
@@ -47,7 +47,76 @@ def artifact():
                 run_id='a' * 32, provenance=phase(False)['provenance'])
 
 
+def cold_artifact():
+    value = artifact()
+    report = value['smoke_reports'][0]
+    raw = [dict(deadline_ns=1_000_000_000 + ms * 1_000_000,
+                read_started_ns=1_000_000_000 + ms * 1_000_000,
+                read_finished_ns=1_000_000_000 + ms * 1_000_000,
+                sample=asdict(ProcessSample(123, 77, 1 + ms / 1000, .5 + ms / 2000,
+                                           100, 100, 2, ms == 0)))
+           for ms in range(0, 22001, 100)]
+    report.update(workload='cold', resource_samples=raw, ingress_latency=ingress_evidence('cold'),
+                  response_dispatch=response_evidence('cold'), response_egress=egress_evidence('cold'))
+    report['ingress_latency']['summary']['count'] = 625
+    report['generator'].update(frames_sent=625, audio_start_ns=3_000_000_000, elapsed_ns=20_000_000_000)
+    report['generator']['resource_interval'].update(scheduled_start_ns=1_000_000_000,
+        scheduled_end_ns=23_000_000_000, audio_start_ns=3_000_000_000, ready_at_ns=3_000_000_000,
+        preparation_duration_ns=2_000_000_000, preparation_cpu_seconds=1,
+        preparation_sample=asdict(ProcessSample(123,77,3,1.5,100,100,2)),
+        summary=summarize([ProcessSample(**e['sample']) for e in raw]))
+    value['resource_samples'] = deepcopy(raw)
+    return value
+
+
 class PairedWarmResultsTest(unittest.TestCase):
+
+    def test_cold_artifact_includes_preparation_and_cannot_pair_with_warm(self):
+        cold = validate_artifact(cold_artifact())
+        self.assertEqual(cold['workload'], 'cold')
+        self.assertEqual(cold['resources']['duration_seconds'], 22)
+        self.assertEqual(cold['preparation_duration_ns'], 2_000_000_000)
+        on = deepcopy(cold)
+        on['collection'], on['run_id'] = True, 'b' * 32
+        result = compare_validated(cold, on)
+        self.assertEqual(result['workload'], 'cold')
+        self.assertTrue(result['measured_gates_pass'])
+        warm = validate_artifact(artifact())
+        with self.assertRaises(ValueError):
+            compare_validated(warm, on)
+        for key, bad in [('preparation_duration_ns', 15_000_000_001),
+                         ('preparation_cpu_seconds', -1), ('audio_start_ns', 4_000_000_000),
+                         ('scheduled_start_ns', 3_000_000_000)]:
+            wrong = cold_artifact()
+            wrong['smoke_reports'][0]['generator']['resource_interval'][key] = bad
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                validate_artifact(wrong)
+
+    def test_cold_ready_sample_cannot_hide_memory_peak_or_nonmonotonic_cpu(self):
+        for key, value in [('high_water_kib', 65536), ('cpu_seconds', 9.2), ('threads', True)]:
+            wrong = cold_artifact()
+            interval = wrong['smoke_reports'][0]['generator']['resource_interval']
+            interval['preparation_sample'][key] = value
+            if key == 'cpu_seconds':
+                interval['preparation_cpu_seconds'] = value - .5
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                validate_artifact(wrong)
+
+    def test_cold_ready_sample_peak_is_retained_when_summary_includes_it(self):
+        value = cold_artifact()
+        interval = value['smoke_reports'][0]['generator']['resource_interval']
+        interval['preparation_sample']['high_water_kib'] = 65536
+        interval['summary']['process_high_water_kib'] = 65536
+        self.assertEqual(validate_artifact(value)['resources']['process_high_water_kib'], 65536)
+
+    def test_actual_emitted_fixture_hash_must_match_between_phases(self):
+        off, on = artifact(), artifact()
+        on['run_id'] = 'b' * 32
+        on['smoke_reports'][0]['collection'] = True
+        off['smoke_reports'][0]['generator']['fixture_sha256'] = 'a' * 64
+        on['smoke_reports'][0]['generator']['fixture_sha256'] = 'b' * 64
+        with self.assertRaises(ValueError):
+            compare_validated(validate_artifact(off), validate_artifact(on))
 
     def test_egress_is_validated_and_compared_when_both_phases_supply_it(self):
         off, on = artifact(), artifact()
