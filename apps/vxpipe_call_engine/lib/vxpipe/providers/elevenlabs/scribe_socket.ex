@@ -12,6 +12,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
         model: public.model,
         commit_strategy: public.commit_strategy,
         keepalive_interval: 10_000,
+        sent_samples: 0,
         diagnostic_handoff: Keyword.get(options, :diagnostic_handoff)
       })
     end
@@ -19,7 +20,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
 
   def send_audio(socket, audio) do
     with {:ok, payload} <- Scribe.encode_audio(audio),
-         do: Socket.send_frame(socket, {:text, payload})
+         do:
+           Socket.send_frame(socket, {:text, payload}, {:audio_samples, div(byte_size(audio), 2)})
   end
 
   def observe(socket, handoff), do: Socket.observe(socket, handoff)
@@ -30,11 +32,20 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
     do: Socket.send_frame_with_receipt(socket, {:text, Scribe.commit()})
 
   @impl true
+  def handle_sent({:audio_samples, samples}, state),
+    do: %{state | sent_samples: state.sent_samples + samples}
+
+  @impl true
   def keepalive_frame(_state), do: {:text, Scribe.keepalive()}
 
   @impl true
   def handle_frame({:text, payload}, state) do
-    receipt = ProviderTiming.stamp(Map.get(state, :diagnostic_handoff))
+    receipt =
+      case {ProviderTiming.stamp(Map.get(state, :diagnostic_handoff)),
+            Map.get(state, :sent_samples)} do
+        {{token, time}, samples} when is_integer(samples) -> {token, time, samples}
+        {stamp, _} -> stamp
+      end
 
     case Scribe.decode_with_profile(payload, state.commit_strategy, state.model) do
       {:ok, {:ready, session_id, profile}} ->

@@ -34,6 +34,16 @@ frame endpoint ownership so eviction cannot reassign an old boundary to a newer
 receipt. A long receipt stall keeps nominal mapping rather than stretching audio
 over the entire stall.
 
+## Scribe event receipts
+
+The Scribe socket records both the monotonic receipt time and the cumulative
+number of audio samples successfully sent when it receives a transcript event.
+The adapter uses that pair to associate the event with the human audio stream.
+Its own sample count can already include a later write by the time it handles
+the socket message. For example, an event received after 320 samples still
+refers to 320 samples if another 320-sample write completes before the adapter
+handles it.
+
 ## Alternatives rejected
 
 - Rejecting every compressed interval discarded normal WebRTC observations.

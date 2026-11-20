@@ -49,6 +49,28 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
     end
   end
 
+  test "inbound receipt keeps its sample cursor when a synchronous audio write overlaps" do
+    {session, wire, handoff} = start_session()
+    assert :ok = Session.push_audio(session, :binary.copy(<<0, 0>>, 320))
+    socket_frame(session, wire, handoff, "committed_transcript", "synthetic")
+    started = event(session, :speech_started)
+    _ = event(session, :transcript)
+    assert {:provider_landmark, generation, turn, :provider_text_commit, _, 320} = packet(handoff)
+    assert turn == started.turn_ref
+
+    payload = JSON.encode!(%{"message_type" => "partial_transcript", "text" => ""})
+    assert :ok = GenServer.call(wire, {:next_audio_event, payload})
+    # The transport delivers receipt before acknowledging this newer write.
+    assert :ok = Session.push_audio(session, :binary.copy(<<0, 0>>, 320))
+    _ = event(session, :turn_ended)
+
+    assert {:provider_landmark, ^generation, ^turn, :provider_end_evidence, _, 320} =
+             packet(handoff)
+
+    assert {:provider_landmark, ^generation, ^turn, :adapter_end_emission, _, 640} =
+             packet(handoff)
+  end
+
   test "explicit draft flush records successful send evidence on the current provider turn" do
     {session, wire, handoff} = start_session()
     socket_frame(session, wire, handoff, "committed_transcript", "first")

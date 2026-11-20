@@ -17,6 +17,7 @@ defmodule Vxpipe.Console.Test.LiveDiagnosticsScribeSocket do
       observer: observer,
       model: Keyword.fetch!(options, :model),
       commit_strategy: Keyword.fetch!(options, :commit_strategy),
+      sent_samples: 0,
       keepalive_interval: 10_000,
       diagnostic_handoff: Keyword.get(options, :diagnostic_handoff)
     })
@@ -34,6 +35,9 @@ defmodule Vxpipe.Console.Test.LiveDiagnosticsScribeSocket do
   defdelegate commit_with_receipt(socket), to: ScribeSocket
   @impl true
   defdelegate keepalive_frame(state), to: ScribeSocket
+
+  @impl true
+  defdelegate handle_sent(context, state), to: ScribeSocket
 
   @impl true
   def handle_frame({:text, payload} = frame, state) do

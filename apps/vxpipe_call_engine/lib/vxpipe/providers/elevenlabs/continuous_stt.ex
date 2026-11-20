@@ -413,6 +413,17 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     end
   end
 
+  defp landmark(state, kind, {token, time, received_samples}) do
+    ProviderTiming.emit(
+      state.diagnostic_handoff,
+      state.allocation.generation,
+      state.turn,
+      kind,
+      {token, time},
+      received_samples
+    )
+  end
+
   defp landmark(state, kind, stamp) do
     ProviderTiming.emit(
       state.diagnostic_handoff,

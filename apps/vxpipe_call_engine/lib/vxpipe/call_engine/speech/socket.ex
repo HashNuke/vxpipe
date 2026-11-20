@@ -19,7 +19,11 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   @callback handle_peer_close(peer_close_status(), map()) :: {:ok, map()}
   @callback handle_peer_close(peer_close_status(), binary(), map()) :: {:ok, map()}
   @callback keepalive_frame(map()) :: tuple()
-  @optional_callbacks handle_peer_close: 2, handle_peer_close: 3, keepalive_frame: 1
+  @callback handle_sent(term(), map()) :: map()
+  @optional_callbacks handle_peer_close: 2,
+                      handle_peer_close: 3,
+                      keepalive_frame: 1,
+                      handle_sent: 2
 
   @send_timeout 5_000
   @output_timeout 15_000
@@ -43,6 +47,7 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   end
 
   def send_frame(socket, frame), do: request(socket, {:send, frame})
+  def send_frame(socket, frame, context), do: request(socket, {:send, frame, context})
   def send_frame_with_receipt(socket, frame), do: request(socket, {:send_with_receipt, frame})
   def close(socket, payload), do: request(socket, {:close, payload})
 
@@ -124,6 +129,21 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   end
 
   @impl true
+  def handle_call({:send, frame, context}, from, state) do
+    case handle_call({:send, frame}, from, state) do
+      {:reply, :ok, next} ->
+        callback_state =
+          if function_exported?(next.callback, :handle_sent, 2),
+            do: next.callback.handle_sent(context, next.callback_state),
+            else: next.callback_state
+
+        {:reply, :ok, %{next | callback_state: callback_state}}
+
+      result ->
+        result
+    end
+  end
+
   def handle_call({operation, _frame}, _from, %{retiring?: true} = state)
       when operation in [:send, :send_with_receipt],
       do: {:reply, {:error, :retiring}, state}

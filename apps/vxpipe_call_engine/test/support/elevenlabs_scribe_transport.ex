@@ -19,6 +19,7 @@ defmodule Vxpipe.CallEngine.TestElevenLabsScribeTransport do
        owner: Keyword.fetch!(options, :owner),
        observer: observer,
        audio_count: 0,
+       sent_samples: 0,
        timed_audio?:
          Keyword.get(Keyword.fetch!(options, :transport_options), :timed_audio, false),
        fail_audio_at: Keyword.get(Keyword.fetch!(options, :transport_options), :fail_audio_at),
@@ -30,6 +31,18 @@ defmodule Vxpipe.CallEngine.TestElevenLabsScribeTransport do
 
   @impl true
   def handle_call({:audio, audio}, _from, state) do
+    state =
+      case Map.pop(state, :next_audio_event) do
+        {nil, state} ->
+          state
+
+        {payload, state} ->
+          {:ok, state} =
+            Vxpipe.Providers.ElevenLabs.ScribeSocket.handle_frame({:text, payload}, state)
+
+          state
+      end
+
     message =
       if state.timed_audio?,
         do:
@@ -39,8 +52,17 @@ defmodule Vxpipe.CallEngine.TestElevenLabsScribeTransport do
     send(state.observer, message)
     count = state.audio_count + 1
     result = if count == state.fail_audio_at, do: {:error, :transport_failed}, else: :ok
-    {:reply, result, %{state | audio_count: count}}
+
+    samples =
+      if result == :ok,
+        do: state.sent_samples + div(byte_size(audio), 2),
+        else: state.sent_samples
+
+    {:reply, result, %{state | audio_count: count, sent_samples: samples}}
   end
+
+  def handle_call({:next_audio_event, payload}, _from, state),
+    do: {:reply, :ok, Map.put(state, :next_audio_event, payload)}
 
   def handle_call({:commit_mode, mode}, _from, state),
     do: {:reply, :ok, Map.put(state, :commit_mode, mode)}
