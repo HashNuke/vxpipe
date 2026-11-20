@@ -831,6 +831,11 @@ and full repeated performance acceptance remain open.
   paired on/off measurements; publish measured results and limits. CPU targets are
   advisory under the user's 2026-11-20 decision and do not block completion.
   Other missed acceptance budgets require correction or documented supported-capacity limits.
+  The [paired warm comparison](../20261120-0216-diagnostics-paired-results.md)
+  validates matching single-phase artifacts and reports CPU, RSS, ingress and
+  dispatch deltas. Its historical one-input pair meets the measured non-CPU
+  budgets; repeated warm/cold, egress, database CPU and coverage evidence remain
+  required before this task can close.
 - [x] Record the isolation choice (dedicated BEAM worker versus external inference
   process), native failure limits and evidence. Do not promise protection from
   VM-wide native faults or zero overhead from an in-process task.
