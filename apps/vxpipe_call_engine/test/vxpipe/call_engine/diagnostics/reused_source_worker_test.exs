@@ -58,6 +58,85 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     assert %{pending_count: 0} = CaptureHandoff.stats(ctx.input)
   end
 
+  for {epoch, silent_windows, interrupted} <- [
+        {0, 16, false},
+        {5, 16, false},
+        {1, 15, false},
+        {1, 16, false},
+        {1, 16, true}
+      ] do
+    @tag epoch_number: epoch, silent_windows: silent_windows, interrupted: interrupted
+    test "epoch #{epoch} with #{silent_windows} silent windows interrupted #{interrupted} classifies its first segment",
+         ctx do
+      epoch = ctx.epoch_number
+
+      silence =
+        if ctx.interrupted,
+          do: List.duplicate(0.0, 8) ++ [0.35] ++ List.duplicate(0.0, 8),
+          else: List.duplicate(0.0, ctx.silent_windows)
+
+      silence_samples = length(silence) * 512
+      speech_start = 32_000 + silence_samples
+      speech_end = speech_start + 2_048
+
+      if epoch == 1 do
+        offer(ctx, {:reset, epoch, :provider_turn_settled, 0})
+        assert {:reset, ^epoch, :provider_turn_settled, 0} = packet(ctx)
+      end
+
+      offer(
+        ctx,
+        {:audio, frame(ctx.epoch, 32_000, silence_samples, -1_000 + div(silence_samples, 16))}
+      )
+
+      offer(ctx, {:mapped_probabilities, epoch, 0, 32_000, silence, 0})
+      if epoch == 5, do: assert({:reset, ^epoch, :provider_turn_settled, 0} = packet(ctx))
+      assert {:acoustic_progress, ^epoch, 32_000, ^speech_start} = packet(ctx)
+
+      offer(
+        ctx,
+        {:audio,
+         %{
+           frame(ctx.epoch, speech_start, 2_048, -1_000 + div(silence_samples + 2_048, 16))
+           | sequence_number: 2
+         }}
+      )
+
+      offer(
+        ctx,
+        {:mapped_probabilities, epoch, silence_samples, speech_start, List.duplicate(0.9, 4), 0}
+      )
+
+      reason =
+        if epoch == 1 and ctx.silent_windows == 16 and not ctx.interrupted,
+          do: nil,
+          else: :partial_start
+
+      assert {:acoustic_boundary, ^epoch, :speech_started, ^speech_start, _, _, _, ^reason} =
+               packet(ctx)
+
+      assert {:acoustic_progress, ^epoch, 32_000, ^speech_end} = packet(ctx)
+
+      offer(
+        ctx,
+        {:audio,
+         %{
+           frame(ctx.epoch, speech_end, 8_192, -1_000 + div(silence_samples + 10_240, 16))
+           | sequence_number: 3
+         }}
+      )
+
+      offer(
+        ctx,
+        {:mapped_probabilities, epoch, silence_samples + 2_048, speech_end,
+         List.duplicate(0.0, 16), 0}
+      )
+
+      assert {:acoustic_boundary, ^epoch, :speech_ended, ^speech_end, _, _, _, ^reason} =
+               packet(ctx)
+    end
+  end
+
   test "reset discards waiting old results and ignores late retired-epoch results", ctx do
     offer(ctx, {:mapped_probabilities, 0, 0, 32_000, List.duplicate(0.9, 4), 0})
     offer(ctx, {:reset, 1, :provider_turn_settled, 0})

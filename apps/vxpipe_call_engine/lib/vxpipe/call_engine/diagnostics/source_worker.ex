@@ -70,6 +70,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
          mode: mode,
          reused: :queue.new(),
          reuse_invalid?: false,
+         clean_reuse_epoch?: false,
+         silence_prefix_frames: 0,
          timeline: timeline,
          origin_us: Keyword.fetch!(options, :origin_us),
          clock: Keyword.get(options, :clock, fn -> System.monotonic_time(:microsecond) end),
@@ -230,8 +232,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
 
       epoch > state.epoch ->
         case reuse_reset(state, epoch, :provider_turn_settled, at, false) do
-          {:ok, next} -> process(next, {packet, charge})
-          {:stop, next} -> discard(next, charge)
+          {:ok, next} ->
+            # A first observed epoch is not evidence of a witnessed clean settlement.
+            process(%{next | clean_reuse_epoch?: false}, {packet, charge})
+
+          {:stop, next} ->
+            discard(next, charge)
         end
 
       true ->
@@ -350,6 +356,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
         | epoch: epoch,
           reused: :queue.new(),
           reuse_invalid?: invalid?,
+          clean_reuse_epoch?: reason == :provider_turn_settled and not invalid?,
+          silence_prefix_frames: 0,
           boundary: ActivityBoundary.new(),
           sample_origin: nil,
           partial?: true
@@ -450,6 +458,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
 
   defp boundaries(state, probabilities) do
     Enum.reduce_while(probabilities, {:ok, state}, fn probability, {:ok, state} ->
+      state = observe_silence_prefix(state, probability)
       {:ok, boundary, events} = ActivityBoundary.push(state.boundary, probability)
 
       case emit_boundaries(%{state | boundary: boundary}, events) do
@@ -469,6 +478,22 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
         stopped
     end
   end
+
+  defp observe_silence_prefix(
+         %{mode: :operational_reuse, clean_reuse_epoch?: true, partial?: true} = state,
+         probability
+       ) do
+    profile = ActivityBoundary.profile()
+
+    frames =
+      if not state.boundary.speaking? and probability < profile.offset_threshold,
+        do: state.silence_prefix_frames + 1,
+        else: 0
+
+    %{state | silence_prefix_frames: frames, partial?: frames < profile.offset_frames}
+  end
+
+  defp observe_silence_prefix(state, _probability), do: state
 
   defp emit_boundaries(state, []), do: {:ok, state}
 
@@ -513,6 +538,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
         boundary: ActivityBoundary.new(),
         sample_origin: nil,
         partial?: true,
+        clean_reuse_epoch?: false,
+        silence_prefix_frames: 0,
         epoch: state.epoch + 1
     }
 
