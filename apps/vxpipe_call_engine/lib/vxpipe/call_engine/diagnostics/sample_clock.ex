@@ -36,11 +36,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.SampleClock do
           clock.last_input != nil and
             input.received_offset_us - duration < clock.last_input.received_offset_us
 
+        compressed_span =
+          if reversed? and notices == [],
+            do: input.received_offset_us - clock.last_input.received_offset_us,
+            else: nil
+
         frame =
           input
           |> Map.put(:uncertainty_us, uncertainty(clock, input, notices))
           |> Map.put(:includes_start?, clock.last_input == nil)
-          |> Map.put(:clock_uncertain?, reversed?)
+          |> Map.put(:compressed_span_us, compressed_span)
+          |> Map.put(:clock_uncertain?, reversed? and notices != [])
 
         frames = Enum.take([frame | clock.frames], clock.maximum_frames)
         {:ok, %{clock | last_input: input, frames: frames}, notices}
@@ -132,7 +138,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SampleClock do
 
   defp position(clock, frame, sample) do
     trailing_samples = frame.sample_timestamp + frame.sample_count - sample
-    offset = frame.received_offset_us - div(trailing_samples * 1_000_000, clock.sample_rate)
+
+    trailing_us =
+      case frame.compressed_span_us do
+        nil -> div(trailing_samples * 1_000_000, clock.sample_rate)
+        span -> div(trailing_samples * span, frame.sample_count)
+      end
+
+    offset = frame.received_offset_us - trailing_us
 
     if offset < 0 do
       {:error, :before_run}

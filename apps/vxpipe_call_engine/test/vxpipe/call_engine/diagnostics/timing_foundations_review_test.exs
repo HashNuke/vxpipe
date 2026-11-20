@@ -9,10 +9,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.TimingFoundationsReviewTest do
     {:ok, clock, _notices} = SampleClock.push(clock, frame(512, 2, 110_000))
     {:ok, previous} = SampleClock.at(clock, 512)
 
-    case SampleClock.at(clock, 513) do
-      {:error, _reason} -> :ok
-      {:ok, next} -> assert next.offset_us >= previous.offset_us
-    end
+    assert {:ok, next} = SampleClock.at(clock, 513)
+    assert next.offset_us >= previous.offset_us
+    assert next.offset_us == 100_020
+    assert next.uncertainty_us == 23_000
   end
 
   test "retention cannot silently remap an already observed shared frame boundary" do

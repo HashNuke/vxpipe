@@ -63,6 +63,42 @@ defmodule Vxpipe.CallEngine.Diagnostics.SampleClockTest do
     assert {:error, :before_run} = SampleClock.at(clock, 0)
   end
 
+  test "contiguous WebRTC frames compressed to 16ms retain monotone receipt estimates" do
+    clock = SampleClock.new("clock-1", "source-1", 16_000)
+    {:ok, clock, []} = SampleClock.push(clock, frame(149_358_612, 320, 279, 5_673_029))
+    {:ok, clock, []} = SampleClock.push(clock, frame(149_358_932, 320, 280, 5_689_029))
+    {:ok, clock, []} = SampleClock.push(clock, frame(149_359_252, 320, 281, 5_705_029))
+    assert {:ok, %{offset_us: 5_673_029}} = SampleClock.at(clock, 149_358_932)
+
+    assert {:ok, %{offset_us: 5_681_029, uncertainty_us: 5_000}} =
+             SampleClock.at(clock, 149_359_092)
+
+    assert {:ok, %{offset_us: 5_689_029}} = SampleClock.at(clock, 149_359_252)
+    assert {:ok, %{offset_us: 5_689_079}} = SampleClock.at(clock, 149_359_253)
+    assert {:ok, %{offset_us: 5_705_029}} = SampleClock.at(clock, 149_359_572)
+  end
+
+  test "equal-receipt batches collapse their interiors to receipt with duration uncertainty" do
+    clock = SampleClock.new("clock-1", "source-1", 16_000)
+    {:ok, clock, []} = SampleClock.push(clock, frame(0, 320, 1, 100_000))
+    {:ok, clock, []} = SampleClock.push(clock, frame(320, 320, 2, 100_000))
+
+    for sample <- [321, 480, 640] do
+      assert {:ok, %{offset_us: 100_000, uncertainty_us: 21_000}} = SampleClock.at(clock, sample)
+    end
+
+    assert {:ok, %{offset_us: 100_000, uncertainty_us: 1_000}} = SampleClock.at(clock, 320)
+  end
+
+  test "compression across missing audio remains unavailable" do
+    clock = SampleClock.new("clock-1", "source-1", 16_000)
+    {:ok, clock, []} = SampleClock.push(clock, frame(0, 320, 1, 100_000))
+    {:ok, clock, [:audio_gap]} = SampleClock.push(clock, frame(640, 320, 3, 116_000))
+    assert {:error, :unobserved_audio} = SampleClock.at(clock, 480)
+    assert {:error, :clock_uncertain} = SampleClock.at(clock, 800)
+    assert {:error, :clock_uncertain} = SampleClock.at(clock, 960)
+  end
+
   defp frame(timestamp, count, sequence, received) do
     %{
       sample_timestamp: timestamp,

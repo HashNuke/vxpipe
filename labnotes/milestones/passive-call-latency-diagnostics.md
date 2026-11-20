@@ -81,6 +81,10 @@ The two primary measurements are:
    browser has played its last already-buffered packet. Do not label server-only
    evidence as remote audible stop. Record this uncertainty in the report.
 
+Audio sample mapping follows the [server receipt-clock contract](../../docs/design/diagnostic-receipt-clock.md):
+ordinary contiguous WebRTC batching is represented with explicit uncertainty,
+while actual gaps, backwards receipts and expired samples remain unavailable.
+
 Agent response text, dispatch and first audio remain supplementary breakdowns.
 Neither completion-to-dispatch nor speech-end-to-first-audio substitutes for the
 first measurement. CPU measurements are advisory as specified above.

@@ -196,9 +196,10 @@ frames. A frame owns positions after its start through its endpoint; only the
 first frame also owns its start. Eviction therefore expires a shared boundary
 instead of reassigning it to a neighboring packet with a different receipt time.
 Mapping subtracts remaining sample duration from packet receipt time and carries
-receipt jitter as uncertainty. If compressed arrivals would make the inferred
-sample timeline move backward, that frame is unavailable (`clock_uncertain`).
-These are server-receipt estimates, not microphone capture timestamps.
+receipt jitter as uncertainty. The [receipt-clock correction](diagnostic-receipt-clock.md)
+handles contiguous compressed receipts with monotone interpolation; genuine gaps
+and reversed inputs remain unavailable. These are server-receipt estimates, not
+microphone capture timestamps.
 
 Turn evidence uses one clock identity and bounded integer offsets. Missing stages
 remain null, and an inverted causal chain invalidates affected stage durations.
