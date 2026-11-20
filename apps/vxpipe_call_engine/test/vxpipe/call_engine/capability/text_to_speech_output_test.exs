@@ -65,6 +65,50 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.OutputTest do
     assert received_at <= System.monotonic_time(:microsecond)
   end
 
+  test "missing acknowledgement returns no receipt and a late reply cannot create one" do
+    parent = self()
+
+    sink =
+      start_supervised!(
+        {Task,
+         fn ->
+           receive do
+             {:"$gen_call", from, {:vxpipe_audio_output_interrupt, _, _}} ->
+               send(parent, {:stop_requested, self()})
+
+               receive do
+                 :acknowledge ->
+                   GenServer.reply(from, {:ok, 25})
+                   send(parent, :late_acknowledgement_sent)
+               end
+           end
+         end}
+      )
+
+    output = start_supervised!({Output, request_timeout: 10})
+
+    start_supervised!(
+      Supervisor.child_spec(
+        {Task,
+         fn ->
+           send(
+             parent,
+             {:stop_receipt,
+              Output.interrupt_with_receipt(output, make_ref(), request(sink), parent)}
+           )
+         end},
+        id: :receipt_caller
+      )
+    )
+
+    assert_receive {:stop_requested, ^sink}
+    assert_receive {:stop_receipt, {:error, :sink_unavailable}}
+    send(sink, :acknowledge)
+    assert_receive :late_acknowledgement_sent
+    _ = :sys.get_state(output)
+    refute_received {:stop_receipt, _}
+  end
+
   test "a rejected interruption has no stop receipt" do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     output = start_supervised!(Output)

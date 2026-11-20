@@ -30,6 +30,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.BargeInTimingTest do
     later = put_elem(c.onset, 5, 60_000)
     assert [%{duration_us: 15_000}] = project(c, [later]).entries
 
+    assert [%{duration_us: 15_000}] =
+             project(%{c | packet: put_elem(c.packet, 7, -66_000)}, [later]).entries
+
     assert [%{duration_us: 25_000}] =
              project(%{c | packet: put_elem(c.packet, 8, -55_000)}, [later]).entries
   end
@@ -79,6 +82,27 @@ defmodule Vxpipe.CallEngine.Diagnostics.BargeInTimingTest do
 
     assert [%{duration_us: nil, reasons: [:inference_reset]}] =
              project(c, [c.onset, {:reset, 1, :inference_failed, -75_000}]).entries
+  end
+
+  test "retained interrupted outputs are bounded with explicit omissions", c do
+    packets =
+      for index <- 1..33 do
+        identity = c.packet |> elem(5) |> put_elem(5, "output-#{index}")
+        put_elem(c.packet, 5, identity)
+      end
+
+    evidence = BargeInTiming.build([c.onset | packets], c.canonical, -100_000, {0, 960})
+    assert length(evidence.entries) == 32
+    assert evidence.omitted_count == 1
+    assert evidence.reasons == [:entry_limit]
+    assert Enum.all?(evidence.entries, &(&1.duration_us == 15_000))
+  end
+
+  test "a playback landmark outside the run clock cannot create a duration", c do
+    earlier_clock = put_elem(c.packet, 6, -110_000)
+
+    assert [%{duration_us: nil, reasons: [:before_run]}] =
+             project(%{c | packet: earlier_clock}, [c.onset]).entries
   end
 
   defp project(c, evidence, bounds \\ {0, 960}),

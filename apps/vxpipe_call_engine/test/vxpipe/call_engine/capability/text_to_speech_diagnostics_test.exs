@@ -69,7 +69,135 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
     assert_receive {:interrupted, {:ok, [{^old, 0}]}}, 500
   end
 
-  for scenario <- [:unstarted, :wrong_turn, :revoked] do
+  @tag :capture_log
+  test "missing stop acknowledgement preserves failure semantics without inventing a turn" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability(output_request_timeout: 10)
+    assert {:ok, _, :ready} = await_ready(capability)
+    old = request("old-turn", sink)
+    assert :ok = TextToSpeech.synthesize(capability, old)
+    assert_receive {:usage_probe_submitted, reference, _}
+    assert_receive {:test_audio_output, ^sink, _}
+    assert_receive {:usage_probe_audio_credited, ^reference, _}
+    assert :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
+    :ok = TestAudioOutputSink.defer_interrupt(sink, true)
+    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+    generation = make_ref()
+    context = {handoff, generation, make_ref(), "new-turn", "new-command"}
+    monitor = Process.monitor(capability)
+    assert {:error, :unavailable} = TextToSpeech.interrupt_observed(capability, context)
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :audio_output_failed}
+    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
+    assert {:ok, packet, charge} = CaptureHandoff.message(handoff, message)
+    assert elem(packet, 8) == nil
+    assert elem(packet, 9) == :stop_unavailable
+
+    state =
+      Vxpipe.CallEngine.Diagnostics.LiveReport.new(%{
+        generation: generation,
+        clock_id: "clock",
+        origin_us: 0
+      })
+
+    assert {:ok, state} = Vxpipe.CallEngine.Diagnostics.LiveReport.observe(state, packet)
+    assert Vxpipe.CallEngine.Diagnostics.LiveReport.reports(state) == []
+    :ok = CaptureHandoff.release(handoff, charge, :processed)
+    :ok = TestAudioOutputSink.complete_interrupt(sink)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert {:error, :unavailable} = TextToSpeech.synthesize(capability, old)
+  end
+
+  test "stale callbacks are ignored and duplicate starts retain the first timestamp" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability([])
+    assert {:ok, _, :ready} = await_ready(capability)
+    old = request("old-turn", sink)
+    assert :ok = TextToSpeech.synthesize(capability, old)
+    assert_receive {:usage_probe_submitted, reference, _}
+    assert_receive {:test_audio_output, ^sink, _}
+    assert_receive {:usage_probe_audio_credited, ^reference, _}
+    send(capability, {:vxpipe_audio_playback, sink, "stale-turn", :started})
+    send(capability, {:vxpipe_audio_playback, self(), old.correlation_id, :started})
+    _ = :sys.get_state(capability)
+    refute_received {:vxpipe_tts_playback, ^capability, _, :started}
+    first_before = System.monotonic_time(:microsecond)
+    :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
+    first_after = System.monotonic_time(:microsecond)
+    :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
+    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+    assert {:ok, [{^old, 0}]} =
+             TextToSpeech.interrupt_observed(
+               capability,
+               {handoff, make_ref(), make_ref(), "new-turn", "new-command"}
+             )
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
+    assert {:ok, packet, charge} = CaptureHandoff.message(handoff, message)
+    assert elem(packet, 6) >= first_before
+    assert elem(packet, 6) <= first_after
+    assert elem(packet, 9) == nil
+    :ok = CaptureHandoff.release(handoff, charge, :processed)
+  end
+
+  test "an idle capability has no playback to measure" do
+    capability = start_capability([])
+    assert {:ok, _, :ready} = await_ready(capability)
+    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+    assert {:ok, []} =
+             TextToSpeech.interrupt_observed(
+               capability,
+               {handoff, make_ref(), make_ref(), "new-turn", "new-command"}
+             )
+
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert CaptureHandoff.stats(handoff).pending_count == 0
+  end
+
+  test "source replacement during sink wait cannot move evidence into the new source clock" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability([])
+    assert {:ok, _, :ready} = await_ready(capability)
+    old = request("old-turn", sink)
+    assert :ok = TextToSpeech.synthesize(capability, old)
+    assert_receive {:usage_probe_submitted, reference, _}
+    assert_receive {:test_audio_output, ^sink, _}
+    assert_receive {:usage_probe_audio_credited, ^reference, _}
+    :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
+    :ok = TestAudioOutputSink.defer_interrupt(sink, true)
+    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+    parent = self()
+
+    start_supervised!(
+      {Task,
+       fn ->
+         send(
+           parent,
+           {:interrupted,
+            TextToSpeech.interrupt_observed(
+              capability,
+              {handoff, make_ref(), make_ref(), "new-turn", "new-command"}
+            )}
+         )
+       end}
+    )
+
+    assert_receive {:test_audio_output_interrupt, ^sink, "old-turn", 0}
+    :ok = CaptureHandoff.close(handoff)
+    {:ok, replacement} = CaptureHandoff.new(self(), projection: @projection)
+    assert CaptureHandoff.closed_reason(handoff) == :source_changed
+    :ok = TestAudioOutputSink.complete_interrupt(sink)
+    assert_receive {:interrupted, {:ok, [{^old, 0}]}}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert CaptureHandoff.stats(replacement).pending_count == 0
+  end
+
+  for scenario <- [:unstarted, :wrong_turn, :revoked, :full] do
     @tag scenario: scenario
     test "#{scenario} interruption does not fabricate available playback evidence", ctx do
       scenario = ctx.scenario
@@ -88,7 +216,13 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
       end
 
       if scenario == :wrong_turn, do: TestAudioOutputSink.playback_completed(sink)
-      assert {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+      assert {:ok, handoff} =
+               CaptureHandoff.new(self(), projection: @projection, maximum_count: 1)
+
+      if scenario == :full,
+        do: assert(:ok = CaptureHandoff.offer(handoff, {:reset, 0, :partial_start, 0}))
+
       if scenario == :revoked, do: CaptureHandoff.close(handoff)
       context = {handoff, make_ref(), make_ref(), "new-turn", "new-command"}
       parent = self()
@@ -102,7 +236,14 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
 
       assert_receive {:usage_probe_cancel_held, provider, ^reference}, 500
 
-      if scenario == :revoked do
+      if scenario in [:revoked, :full] do
+        if scenario == :full do
+          assert_receive {:vxpipe_diagnostic_capture, _, _, {:reset, _, _, _}, _} = queued
+          {:ok, _, charge} = CaptureHandoff.message(handoff, queued)
+          :ok = CaptureHandoff.release(handoff, charge, :processed)
+          assert CaptureHandoff.stats(handoff).overflow == 1
+        end
+
         refute_receive {:vxpipe_diagnostic_capture, _, _, _, _}, 0
       else
         assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message

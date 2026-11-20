@@ -48,14 +48,21 @@ completed implementation separately from the remaining acceptance work.
   acknowledgement with source/connection/incarnation and clock provenance. Match
   the onset segment to the output already playing, including an output belonging
   to the previous human turn; do not attach it to the next agent response.
-- [ ] Prove delayed stop acknowledgement changes the barge-in duration while
+- [x] Prove delayed stop acknowledgement changes the barge-in duration while
   early cancellation does not. Cover missing acknowledgement, no agent playback,
   stale/wrong output, multiple human sources, duplicate callbacks, late Silero
   confirmation, source replacement and incompatible clocks without fabricated
   durations. Observation must remain passive and bounded.
-- [ ] Verify persisted/API/UI presentation of both primary measurements with
+  The [barge-in edge acceptance](../20261120-0217-barge-edge-acceptance.md)
+  maps each case to focused evidence; 67 Engine tests pass and independent
+  GPT-6 Astra xhigh review found no blocking issues. Missing sink acknowledgement
+  cannot manufacture an accepted human turn or a durable duration.
+- [x] Verify persisted/API/UI presentation of both primary measurements with
   explicit unavailable reasons and millisecond units, including a rendered
-  barge-in example. Confirm live acceptance exercises both measurements.
+  barge-in example. The [presentation evidence audit](../20261120-0225-primary-metrics-presentation.md)
+  maps durable revision, authorized API, parser and rendered UI checks; this is
+  offline presentation verification, not live acoustic acceptance.
+- [ ] Confirm live acceptance exercises both measurements.
 
 ## Runnable outcome
 

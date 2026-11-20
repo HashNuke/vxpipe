@@ -335,6 +335,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
                     {:room_turn_started, ^generation, ^reference, ^new_turn, ^command, _}, _}
   end
 
+  test "failed interruption does not invent an accepted human turn for diagnostics", ctx do
+    {current, old_command} = response_turn(ctx.handoff)
+    old_turn = old_command.correlation_id
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: ^old_turn}}
+
+    speech =
+      start_supervised!(
+        {Task,
+         fn ->
+           receive do
+             {:"$gen_call", from, {:interrupt_observed, _}} ->
+               GenServer.reply(from, {:error, :unavailable})
+           end
+         end}
+      )
+
+    current = %{current | text_to_speech_capability: %{pid: speech, participant_id: "agent"}}
+    signal = %{turn_started(0) | allocation_generation: make_ref(), turn_ref: make_ref()}
+    assert ^current = InputTurns.speech_to_text(self(), @identity, signal, current, ctx.handoff)
+    refute_received {:vxpipe_event, %ParticipantTurnStarted{}}
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:room_turn_started, _, _, _, _, _}, _}
+  end
+
   test "interruption prevents late text and playback from fabricating a response", ctx do
     {state, command} = response_turn(ctx.handoff)
 
