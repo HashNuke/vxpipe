@@ -1,26 +1,37 @@
 {
   "revision": "450dbe6ec6cc96e4e5509a746937ccde25de0144",
-  "patch_sha256": "e0d536a0326143eeeb638a3dfc72e41fc7b98f0607e799b848880e4205b5c428",
+  "patch_sha256": "055c425fe5267ef4eccfa2ee061713ec68ca8538529ea7a2bfce2a7f650444ec",
   "files": {
     "lib/ortex.ex": {
       "original": "1f3e48ac461843d16646cc679c9e1d9b9c1839ab85c4bf650c4de11b6498d22e",
-      "patched": "650f17a02020076299ffd625bd27e675019526728114e10a7d00582e7a4f977b"
+      "patched": "265d2bc309c859efc06f878e898255346134d7b9efddf2d08d39f27e02bb2967"
     },
     "lib/ortex/model.ex": {
       "original": "505d9880dd3d9772602325a1175d228e66ebaa77d19ecce17a8e8be56bd672d1",
-      "patched": "39ad9f847625ff4f19f8996ffd0c83864a799682fa49e0796e6228fd921b6d78"
+      "patched": "565871ae06226a54452454819803ebc94062421a8261658f0a7a769610c3449f"
     },
     "lib/ortex/native.ex": {
       "original": "de80ef7bdb9f3f0460c9d7de5337da4e733e044e5c01f499d178f864a3d88e98",
-      "patched": "71075cb9fab71723ff2b3becf3a2445663baf0c70caebc2c5d15973d07094377"
+      "patched": "d6ae1e63a4f292bf5500fe621f6f53f831dfd63536841b2e8509ee44cb891638"
     },
     "native/ortex/src/lib.rs": {
       "original": "73b4ee446a392af295d28dd84377848df7ca6d0070a7ea86c249c751ac1a3c54",
-      "patched": "2a73303423c2ca97a25e1b6f38e13f39cdcf35c4626e259367f6c008ef4cadc9"
+      "patched": "b3a688d50b0e5f9b3740bc994b2987261b210383f5a048b20ae47aa5d7567623"
     },
     "native/ortex/src/model.rs": {
       "original": "6ffb74e4bb3c3faa91035285bb05b546f89c8d170994eb7d040a2ce1f0849870",
       "patched": "de49d4a31b1f1e10935780b6978caaada23523345d3a9ae1144adb6971edbf8a"
+    }
+  },
+  "previous": {
+    "patch_file": "cpu-scheduling-upgrade.patch",
+    "patch_sha256": "85f31a3b2da62156bbaea08b276c5ecfc9ee3107435962b348d3c4a2e6ef692d",
+    "files": {
+      "lib/ortex.ex": "650f17a02020076299ffd625bd27e675019526728114e10a7d00582e7a4f977b",
+      "lib/ortex/model.ex": "39ad9f847625ff4f19f8996ffd0c83864a799682fa49e0796e6228fd921b6d78",
+      "lib/ortex/native.ex": "71075cb9fab71723ff2b3becf3a2445663baf0c70caebc2c5d15973d07094377",
+      "native/ortex/src/lib.rs": "2a73303423c2ca97a25e1b6f38e13f39cdcf35c4626e259367f6c008ef4cadc9",
+      "native/ortex/src/model.rs": "de49d4a31b1f1e10935780b6978caaada23523345d3a9ae1144adb6971edbf8a"
     }
   }
 }

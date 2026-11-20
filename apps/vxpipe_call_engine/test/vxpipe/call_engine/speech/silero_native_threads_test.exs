@@ -47,12 +47,47 @@ defmodule Vxpipe.CallEngine.Speech.SileroNativeThreadsTest do
     end
   end
 
+  test "CPU Silero inference does not use the dirty I/O inference entry" do
+    assert {:ok, model} = Silero.load()
+    audio = :binary.copy(<<0>>, 1_024)
+    assert {:ok, stream, [_]} = Silero.push(Silero.new(), model, audio)
+    function = {Ortex.Native, :run, 2}
+    cpu_function = {Ortex.Native, :run_cpu, 2}
+    assert :erlang.trace_pattern(cpu_function, true, [:call_count]) == 1
+    assert :erlang.trace_pattern(function, true, [:call_count]) == 1
+    :erlang.trace(self(), true, [:call])
+
+    try do
+      assert {:ok, next, [probability]} = Silero.push(stream, model, audio)
+      assert next.samples == 1_024
+      assert probability < 0.35
+      assert {:call_count, 0} = :erlang.trace_info(function, :call_count)
+      assert {:call_count, 1} = :erlang.trace_info(cpu_function, :call_count)
+    after
+      :erlang.trace(self(), false, [:call])
+      :erlang.trace_pattern(function, false, [:call_count])
+      :erlang.trace_pattern(cpu_function, false, [:call_count])
+    end
+  end
+
   test "patched native boundary rejects invalid thread counts before model loading" do
     for threads <- [-1, 1.5, "1", 2_147_483_648] do
       assert_raise ArgumentError, fn ->
         Ortex.load("missing-model.onnx", [:cpu], 3, threads)
       end
     end
+  end
+
+  test "CPU and legacy inference entries preserve tensor results" do
+    assert {:ok, model} = Silero.load()
+    audio = Nx.iota({1, 576}, type: :f32) |> Nx.divide(32_768)
+    recurrent = Nx.broadcast(Nx.tensor(0, type: :f32), {2, 1, 128})
+    inputs = {audio, recurrent, model.sample_rate}
+    legacy = Ortex.run(model.resource, inputs)
+    cpu = Ortex.run_cpu(model.resource, inputs)
+
+    assert Enum.map(Tuple.to_list(cpu), &Nx.to_binary/1) ==
+             Enum.map(Tuple.to_list(legacy), &Nx.to_binary/1)
   end
 
   test "legacy model loading arities remain available" do

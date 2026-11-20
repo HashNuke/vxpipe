@@ -1,6 +1,8 @@
 """Verify exact pinned native-thread patch preparation and preservation."""
 from pathlib import Path
 import shutil
+import hashlib
+import json
 import subprocess
 import tempfile
 import unittest
@@ -52,6 +54,29 @@ class OrtexPatchTest(unittest.TestCase):
         result = self.apply()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('revision', result.stderr)
+
+    def test_upgrades_the_previous_thread_only_patch(self):
+        manifest = json.loads((self.root / 'patches/ortex/session-threads.json').read_text())
+        dependency = self.root / 'deps/ortex'
+        patch = self.root / 'patches/ortex/session-threads.patch'
+        upgrade = patch.parent / manifest['previous']['patch_file']
+        subprocess.run(['git', 'apply', str(patch)], cwd=dependency, check=True, capture_output=True)
+        subprocess.run(['git', 'apply', '--reverse', str(upgrade)], cwd=dependency, check=True, capture_output=True)
+        actual = {name: hashlib.sha256((dependency / name).read_bytes()).hexdigest()
+                  for name in manifest['files']}
+        self.assertEqual(actual, manifest['previous']['files'])
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.apply().returncode, 0)
+
+    def test_tampered_upgrade_is_rejected_before_mutation(self):
+        manifest = json.loads((self.root / 'patches/ortex/session-threads.json').read_text())
+        upgrade = self.root / 'patches/ortex' / manifest['previous']['patch_file']
+        upgrade.write_bytes(upgrade.read_bytes() + b'\n')
+        source = self.root / 'deps/ortex/native/ortex/src/model.rs'
+        before = source.read_bytes()
+        self.assertNotEqual(self.apply().returncode, 0)
+        self.assertEqual(source.read_bytes(), before)
 
     def test_mixed_states_are_preserved(self):
         self.assertEqual(self.apply().returncode, 0)

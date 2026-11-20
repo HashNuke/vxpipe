@@ -335,6 +335,8 @@ def provenance():
     paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py', 'scripts/diagnostics/resource_schedule.py', 'scripts/diagnostics/workload_profile.py',
              'scripts/diagnostics/pcm_generator.py', 'mix.lock',
              'patches/ortex/session-threads.patch', 'patches/ortex/session-threads.json',
+             'patches/ortex/cpu-scheduling-upgrade.patch',
+             'deps/ortex/lib/ortex.ex', 'deps/ortex/lib/ortex/model.ex', 'deps/ortex/lib/ortex/native.ex',
              'deps/ortex/native/ortex/src/model.rs', 'deps/ortex/native/ortex/src/lib.rs',
              'deps/ortex/priv/native/ortex.so',
              'apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs',

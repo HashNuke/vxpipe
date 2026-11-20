@@ -20,6 +20,18 @@
  
    @doc """
    Run a forward pass through a model.
+@@ -51,4 +55,11 @@
+ 
+   """
+   defdelegate run(model, tensors), to: Ortex.Model
++
++  @doc """
++  Run CPU-bound inference on a dirty CPU scheduler. Use with CPU execution
++  providers; `run/2` retains its existing dirty I/O scheduler behavior.
++  Tensor conversion, results and error handling are otherwise identical.
++  """
++  defdelegate run_cpu(model, tensors), to: Ortex.Model
+ end
 --- a/lib/ortex/model.ex
 +++ b/lib/ortex/model.ex
 @@ -22,8 +22,8 @@
@@ -33,9 +45,32 @@
        {:error, msg} ->
          raise msg
  
+@@ -38,10 +38,20 @@
+   end
+ 
+   @doc false
+-  def run(%Ortex.Model{reference: model}, tensors) do
++  def run(%Ortex.Model{} = model, tensors),
++    do: run_with(model, tensors, &Ortex.Native.run/2)
++
++  @doc false
++  def run_cpu(%Ortex.Model{} = model, tensor) when not is_tuple(tensor),
++    do: run_cpu(model, {tensor})
++
++  def run_cpu(%Ortex.Model{} = model, tensors),
++    do: run_with(model, tensors, &Ortex.Native.run_cpu/2)
++
++  defp run_with(%Ortex.Model{reference: model}, tensors, native_run) do
+     # Move tensors into Ortex backend and pass the reference to the Ortex NIF
+     output =
+-      case Ortex.Native.run(
++      case native_run.(
+              model,
+              tensors
+              |> Tuple.to_list()
 --- a/lib/ortex/native.ex
 +++ b/lib/ortex/native.ex
-@@ -25,7 +25,10 @@
+@@ -25,10 +25,14 @@
  
    # When loading a NIF module, dummy clauses for all NIF function are required.
    # NIF dummies usually just error out when called when the NIF is not loaded, as that should never normally happen.
@@ -47,6 +82,10 @@
      do: :erlang.nif_error(:nif_not_loaded)
  
    def run(_model, _inputs), do: :erlang.nif_error(:nif_not_loaded)
++  def run_cpu(_model, _inputs), do: :erlang.nif_error(:nif_not_loaded)
+   def from_binary(_bin, _shape, _type), do: :erlang.nif_error(:nif_not_loaded)
+   def to_binary(_reference, _bits, _limit), do: :erlang.nif_error(:nif_not_loaded)
+   def show_session(_model), do: :erlang.nif_error(:nif_not_loaded)
 --- a/native/ortex/src/lib.rs
 +++ b/native/ortex/src/lib.rs
 @@ -22,9 +22,13 @@
@@ -64,6 +103,29 @@
          .map_err(|e| rustler::Error::Term(Box::new(e.to_string())))?;
      Ok(ResourceArc::new(model))
  }
+@@ -41,6 +45,14 @@
+ 
+ #[rustler::nif(schedule = "DirtyIo")]
+ fn run(
++    model: ResourceArc<model::OrtexModel>,
++    inputs: Vec<ResourceArc<OrtexTensor>>,
++) -> NifResult<Vec<(ResourceArc<OrtexTensor>, Vec<usize>, Atom, usize)>> {
++    model::run(model, inputs).map_err(|e| rustler::Error::Term(Box::new(e.to_string())))
++}
++
++#[rustler::nif(schedule = "DirtyCpu")]
++fn run_cpu(
+     model: ResourceArc<model::OrtexModel>,
+     inputs: Vec<ResourceArc<OrtexTensor>>,
+ ) -> NifResult<Vec<(ResourceArc<OrtexTensor>, Vec<usize>, Atom, usize)>> {
+@@ -108,6 +120,7 @@
+     "Elixir.Ortex.Native",
+     [
+         run,
++        run_cpu,
+         init,
+         from_binary,
+         to_binary,
 --- a/native/ortex/src/model.rs
 +++ b/native/ortex/src/model.rs
 @@ -35,14 +35,21 @@

@@ -1,8 +1,8 @@
 # Passive diagnostics measurement plan
 
-Status: predeclared evaluation plan, 2026-11-19. No load results or acoustic
-accuracy claims yet. This implements the planning part of milestone E; its paired
-measurement gate remains open. Thresholds below are engineering acceptance budgets,
+Status: evaluation plan declared 2026-11-19, with preliminary configured warm
+measurements recorded in the milestone. Acoustic accuracy and full paired
+measurement acceptance remain open. Thresholds below are engineering acceptance budgets,
 not measurements or promises of production capacity.
 
 ## Candidate isolation and its limits
@@ -14,8 +14,10 @@ submit additional model work. Each source has independent recurrent state.
 
 `Speech.ActivityRuntime` retains a retired job's admission until its task reports
 DOWN. A timeout or cancellation fences results; it does not establish that native
-execution stopped. The pinned Ortex binding schedules model initialization and
-model execution on DirtyIo schedulers; tensor binary conversion uses DirtyCpu.
+execution stopped. The patched Ortex binding keeps model initialization on DirtyIo schedulers.
+Production Silero uses an explicit DirtyCpu inference entry; tensor binary
+conversion also uses DirtyCpu. The legacy Ortex inference entry retains DirtyIo
+for other callers.
 Dirty scheduling keeps these calls off normal schedulers, but does not isolate
 memory, native threads, process crashes or CPU contention from the BEAM VM.
 There is no promise of protection from a VM-wide native fault or zero overhead.

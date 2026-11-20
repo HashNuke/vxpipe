@@ -717,6 +717,12 @@ The [tensor-reuse checkpoint](../20261120-0030-diagnostics-tensor-reuse.md)
 removes the repeated native sample-rate upload and preserves PCM/model results.
 The warm run remains correct but does not demonstrate further total CPU reduction;
 scheduler waiting and the remaining performance gates still need work.
+The [CPU-scheduling checkpoint](../20261120-0037-diagnostics-cpu-scheduling.md)
+uses an explicit dirty CPU inference entry for production Silero, preserving the
+legacy Ortex entry and model outputs. Preliminary same-revision enabled/disabled
+warm phases pass functional and pacing checks, but the measured 0.100005-core
+CPU delta exceeds the unchanged 0.08-core one-input budget. Performance acceptance
+remains open; this checkpoint does not enable the pilot.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

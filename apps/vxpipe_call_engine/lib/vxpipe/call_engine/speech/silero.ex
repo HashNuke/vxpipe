@@ -45,7 +45,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero do
     input = Nx.concatenate([context, frame_input], axis: 1)
 
     {probability, recurrent} =
-      Ortex.run(model.resource, {input, recurrent, model.sample_rate})
+      Ortex.run_cpu(model.resource, {input, recurrent, model.sample_rate})
 
     probability = probability |> Nx.reshape({}) |> Nx.to_number()
 

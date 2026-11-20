@@ -69,3 +69,24 @@ caches the native signed-64 16 kHz scalar in the model while leaving all recurre
 state per stream. PCM normalization now constructs the same float32 bytes directly.
 This removes a repeated native upload; it does not change scheduler policy or
 establish a CPU-budget pass. The configured run retains the outstanding CPU cost.
+
+## CPU inference scheduling
+
+The production CPU-only Silero path now explicitly calls `Ortex.run_cpu/2`.
+[OTP's NIF scheduling guidance](https://www.erlang.org/docs/26/man/erl_nif.html)
+classifies CPU-bound dirty work as dirty CPU work. The upstream inference entry
+used DirtyIo; the explicit CPU entry corrects that classification without changing
+other callers' scheduling. Both entries call the same model implementation and
+share tensor/result/error conversion. Model initialization remains DirtyIo.
+
+This preserves source ownership, operational concurrency, diagnostic admission,
+model outputs and the in-process fault boundary. It does not make native execution
+interruptible. No VM scheduler flags or benchmark budgets change. Changing every
+Ortex caller globally was rejected because other execution providers may wait on
+external devices. The checksum-verified upgrade preserves previously patched
+checkouts and rejects unknown edits.
+
+The focused native contract checks positive CPU-entry invocation, no legacy-entry
+invocation and byte-identical outputs. Existing reference probabilities, chunking
+and reset checks pass. See the [scheduling checkpoint](../../labnotes/20261120-0037-diagnostics-cpu-scheduling.md)
+for measurements; full paired and topology acceptance remains open.
