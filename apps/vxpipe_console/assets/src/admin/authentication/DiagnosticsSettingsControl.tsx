@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../Button";
+import { PageToast } from "../PageToast";
 import { FormMessage } from "./FormField";
 import { AuthenticationError, type DiagnosticsSettings } from "./authenticationApi";
 
@@ -42,6 +43,7 @@ export function DiagnosticsSettingsControl({ api, onSessionExpired }: {
     }
   }, [api, onSessionExpired]);
 
+  const dismissNotice = useCallback(() => setNotice(undefined), []);
   const retire = useCallback(() => { generation.current++; }, []);
   useEffect(() => {
     void load();
@@ -68,7 +70,6 @@ export function DiagnosticsSettingsControl({ api, onSessionExpired }: {
   }
 
   return <div className="access-form">
-    <p className="access-muted">Compare estimated speech end with speech recognition turn timing. Existing Silero VAD results are reused when available.</p>
     {loading ? <p role="status">Loading diagnostics settings…</p> : settings ? <>
       <label className="installation-benchmark-control">
         <input type="checkbox" checked={settings.enabled} disabled={pending || needsReload}
@@ -76,8 +77,8 @@ export function DiagnosticsSettingsControl({ api, onSessionExpired }: {
         <span>Benchmark using Silero VAD</span>
       </label>
       {pending ? <p role="status">Saving diagnostics setting…</p> : null}
-      {notice ? <FormMessage>{notice}</FormMessage> : null}
     </> : null}
+    {notice ? <PageToast message={notice} onDismiss={dismissNotice} /> : null}
     {error ? <FormMessage error>{error}</FormMessage> : null}
     {!loading && (!settings || needsReload) ? <Button onClick={() => void load()}>Reload diagnostics settings</Button> : null}
   </div>;

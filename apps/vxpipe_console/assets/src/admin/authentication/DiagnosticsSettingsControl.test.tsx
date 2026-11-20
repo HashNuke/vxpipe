@@ -100,8 +100,21 @@ test("saved settings need no propagation status or background polling", async ()
     await act(async () => {});
     await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
     expect(screen.getByRole("checkbox")).toBeChecked();
-    expect(screen.getByText("Diagnostics setting saved.")).toBeVisible();
     expect(api.diagnosticsSettings).toHaveBeenCalledOnce();
     expect(screen.queryByText(/Applies to new calls/)).not.toBeInTheDocument();
+  } finally { view.unmount(); vi.useRealTimers(); }
+});
+
+test("a successful save confirms with a dismissing toast instead of inline page text", async () => {
+  vi.useFakeTimers();
+  const api = { diagnosticsSettings: vi.fn().mockResolvedValue(off), updateDiagnosticsSettings: vi.fn().mockResolvedValue({ enabled: true, revision: 1 }) };
+  const view = render(<DiagnosticsSettingsControl api={api} />);
+  try {
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("checkbox", { name: label }));
+    await act(async () => {});
+    expect(screen.getByLabelText("Notification")).toHaveTextContent("Diagnostics setting saved.");
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    expect(screen.queryByText("Diagnostics setting saved.")).not.toBeInTheDocument();
   } finally { view.unmount(); vi.useRealTimers(); }
 });
