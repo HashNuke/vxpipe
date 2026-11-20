@@ -804,14 +804,20 @@ dispatch/egress populations are verified. The
 enforces egress p95 budgets when present on both sides. This implements measurement
 plumbing; actual native paired runs and the remaining load gates stay open.
 
-- [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
+- [x] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
   error and incomplete rate; model frame size is not an accuracy guarantee.
   The [frozen acoustic reference pilot](../20261120-0224-acoustic-sample-provenance.md)
   supplies two attributed human recordings, visually reviewed uncertainty bands
   and twelve reproducible controlled cases. Labels were frozen before detector
-  execution; no listening or natural-browser accuracy is claimed. Native per-mode
-  replay and measured errors remain outstanding.
+  execution; no listening or natural-browser accuracy is claimed. The
+  [native replay evidence](../20261120-0232-acoustic-native-replay.md) covers all
+  twelve cases through both actual inference paths, with matching mode results,
+  raw traces, signed/absolute error ranges and zero missing outer boundaries.
+  Independent Astra review reran all 24 combinations. Observed errors include
+  56–246 ms early quiet-tail endings and 170–360 ms late overlap endings; this
+  bounded pilot is not a general accuracy guarantee. Production `partial_start`
+  flags remain explicit and are not counted as missing outer sample boundaries.
 - [x] Verify loss/reordering, resampling and source/clock resets for WebRTC/Telnyx;
   uncertain segments remain invalid, not stitched into plausible timing values.
   Offline transport evidence is recorded in the

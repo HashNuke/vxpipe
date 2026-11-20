@@ -1,0 +1,1299 @@
+{
+  "native_artifact_sha256": "f9811f61a010cf348c68697958b88eb3190ed4727bbcc205998e12d038a5d555",
+  "reference_sha256": "a2d9d0137dca2972bc99769f43407aac1a1027e91e36da2db97248c9c31f4bf6",
+  "scope": "offline frame-acknowledged acoustic accuracy; not live provider or performance evidence",
+  "rows": [
+    {
+      "mode": "benchmark_only",
+      "case": "female-clean",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            42.0,
+            232.0
+          ],
+          "absolute_error_ms": [
+            42.0,
+            232.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 49152,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "female-quiet_tail",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            -246.0,
+            -56.0
+          ],
+          "absolute_error_ms": [
+            56.0,
+            246.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 44544,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "female-noise",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            10.0,
+            200.0
+          ],
+          "absolute_error_ms": [
+            10.0,
+            200.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 48640,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "female-echo",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            74.0,
+            264.0
+          ],
+          "absolute_error_ms": [
+            74.0,
+            264.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 49664,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "female-overlap",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            51.0,
+            71.0
+          ],
+          "absolute_error_ms": [
+            51.0,
+            71.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            170.0,
+            360.0
+          ],
+          "absolute_error_ms": [
+            170.0,
+            360.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51200,
+            "onset": 9216
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "female-pause_resume",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            26.0,
+            216.0
+          ],
+          "absolute_error_ms": [
+            26.0,
+            216.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 2,
+        "internal_segment_count": 1,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          1
+        ],
+        "raw_segments": [
+          {
+            "end": 49152,
+            "onset": 8192
+          },
+          {
+            "end": 119296,
+            "onset": 78848
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation",
+        "pause_resume": {
+          "first_end": {
+            "status": "unique",
+            "candidate_window_samples": [
+              8400,
+              78480
+            ],
+            "candidates": [
+              {
+                "segment_index": 0,
+                "sample": 49152,
+                "error": {
+                  "signed_error_ms": [
+                    42.0,
+                    232.0
+                  ],
+                  "absolute_error_ms": [
+                    42.0,
+                    232.0
+                  ]
+                }
+              }
+            ]
+          },
+          "resumed_onset": {
+            "status": "unique",
+            "candidate_window_samples": [
+              48480,
+              115840
+            ],
+            "candidates": [
+              {
+                "segment_index": 1,
+                "sample": 78848,
+                "error": {
+                  "signed_error_ms": [
+                    3.0,
+                    23.0
+                  ],
+                  "absolute_error_ms": [
+                    3.0,
+                    23.0
+                  ]
+                }
+              }
+            ]
+          },
+          "chronological_pairs": [
+            {
+              "first_end_candidate": 0,
+              "resumed_onset_candidate": 0
+            }
+          ],
+          "pair_status": "unique"
+        }
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "male-clean",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            32.0,
+            112.0
+          ],
+          "absolute_error_ms": [
+            32.0,
+            112.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "male-quiet_tail",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            -64.0,
+            16.0
+          ],
+          "absolute_error_ms": [
+            0,
+            64.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 50176,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "male-noise",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            35.0,
+            45.0
+          ],
+          "absolute_error_ms": [
+            35.0,
+            45.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            32.0,
+            112.0
+          ],
+          "absolute_error_ms": [
+            32.0,
+            112.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "male-echo",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            64.0,
+            144.0
+          ],
+          "absolute_error_ms": [
+            64.0,
+            144.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 52224,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "male-overlap",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            32.0,
+            112.0
+          ],
+          "absolute_error_ms": [
+            32.0,
+            112.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "benchmark_only",
+      "case": "male-pause_resume",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            36.0,
+            116.0
+          ],
+          "absolute_error_ms": [
+            36.0,
+            116.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 2,
+        "internal_segment_count": 1,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          1
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8704
+          },
+          {
+            "end": 126976,
+            "onset": 82944
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation",
+        "pause_resume": {
+          "first_end": {
+            "status": "unique",
+            "candidate_window_samples": [
+              7632,
+              82672
+            ],
+            "candidates": [
+              {
+                "segment_index": 0,
+                "sample": 51712,
+                "error": {
+                  "signed_error_ms": [
+                    32.0,
+                    112.0
+                  ],
+                  "absolute_error_ms": [
+                    32.0,
+                    112.0
+                  ]
+                }
+              }
+            ]
+          },
+          "resumed_onset": {
+            "status": "unique",
+            "candidate_window_samples": [
+              51200,
+              125120
+            ],
+            "candidates": [
+              {
+                "segment_index": 1,
+                "sample": 82944,
+                "error": {
+                  "signed_error_ms": [
+                    7.0,
+                    17.0
+                  ],
+                  "absolute_error_ms": [
+                    7.0,
+                    17.0
+                  ]
+                }
+              }
+            ]
+          },
+          "chronological_pairs": [
+            {
+              "first_end_candidate": 0,
+              "resumed_onset_candidate": 0
+            }
+          ],
+          "pair_status": "unique"
+        }
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "female-clean",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            42.0,
+            232.0
+          ],
+          "absolute_error_ms": [
+            42.0,
+            232.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 49152,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "female-quiet_tail",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            -246.0,
+            -56.0
+          ],
+          "absolute_error_ms": [
+            56.0,
+            246.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 44544,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "female-noise",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            10.0,
+            200.0
+          ],
+          "absolute_error_ms": [
+            10.0,
+            200.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 48640,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "female-echo",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            74.0,
+            264.0
+          ],
+          "absolute_error_ms": [
+            74.0,
+            264.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 49664,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "female-overlap",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            51.0,
+            71.0
+          ],
+          "absolute_error_ms": [
+            51.0,
+            71.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            170.0,
+            360.0
+          ],
+          "absolute_error_ms": [
+            170.0,
+            360.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51200,
+            "onset": 9216
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "female-pause_resume",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            -13.0,
+            7.0
+          ],
+          "absolute_error_ms": [
+            0,
+            13.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            26.0,
+            216.0
+          ],
+          "absolute_error_ms": [
+            26.0,
+            216.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 2,
+        "internal_segment_count": 1,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          1
+        ],
+        "raw_segments": [
+          {
+            "end": 49152,
+            "onset": 8192
+          },
+          {
+            "end": 119296,
+            "onset": 78848
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation",
+        "pause_resume": {
+          "first_end": {
+            "status": "unique",
+            "candidate_window_samples": [
+              8400,
+              78480
+            ],
+            "candidates": [
+              {
+                "segment_index": 0,
+                "sample": 49152,
+                "error": {
+                  "signed_error_ms": [
+                    42.0,
+                    232.0
+                  ],
+                  "absolute_error_ms": [
+                    42.0,
+                    232.0
+                  ]
+                }
+              }
+            ]
+          },
+          "resumed_onset": {
+            "status": "unique",
+            "candidate_window_samples": [
+              48480,
+              115840
+            ],
+            "candidates": [
+              {
+                "segment_index": 1,
+                "sample": 78848,
+                "error": {
+                  "signed_error_ms": [
+                    3.0,
+                    23.0
+                  ],
+                  "absolute_error_ms": [
+                    3.0,
+                    23.0
+                  ]
+                }
+              }
+            ]
+          },
+          "chronological_pairs": [
+            {
+              "first_end_candidate": 0,
+              "resumed_onset_candidate": 0
+            }
+          ],
+          "pair_status": "unique"
+        }
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "male-clean",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            32.0,
+            112.0
+          ],
+          "absolute_error_ms": [
+            32.0,
+            112.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "male-quiet_tail",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            -64.0,
+            16.0
+          ],
+          "absolute_error_ms": [
+            0,
+            64.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 50176,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "male-noise",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            35.0,
+            45.0
+          ],
+          "absolute_error_ms": [
+            35.0,
+            45.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            32.0,
+            112.0
+          ],
+          "absolute_error_ms": [
+            32.0,
+            112.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8192
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "male-echo",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            64.0,
+            144.0
+          ],
+          "absolute_error_ms": [
+            64.0,
+            144.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 52224,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "male-overlap",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            32.0,
+            112.0
+          ],
+          "absolute_error_ms": [
+            32.0,
+            112.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 1,
+        "internal_segment_count": 0,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          0
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8704
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation"
+      }
+    },
+    {
+      "mode": "operational_reuse",
+      "case": "male-pause_resume",
+      "score": {
+        "onset": {
+          "signed_error_ms": [
+            67.0,
+            77.0
+          ],
+          "absolute_error_ms": [
+            67.0,
+            77.0
+          ]
+        },
+        "end": {
+          "signed_error_ms": [
+            36.0,
+            116.0
+          ],
+          "absolute_error_ms": [
+            36.0,
+            116.0
+          ]
+        },
+        "incomplete_rate": 0,
+        "detected_segment_count": 2,
+        "internal_segment_count": 1,
+        "before_reference_segment_indices": [],
+        "after_reference_segment_indices": [],
+        "outer_matched_segment_indices": [
+          0,
+          1
+        ],
+        "raw_segments": [
+          {
+            "end": 51712,
+            "onset": 8704
+          },
+          {
+            "end": 126976,
+            "onset": 82944
+          }
+        ],
+        "reference_method": "visually reviewed uncertainty bands; no listening",
+        "matching": "outermost segments intersecting the reference envelope; outside evidence retained",
+        "scope": "outer clip boundaries, not conversational-turn segmentation",
+        "pause_resume": {
+          "first_end": {
+            "status": "unique",
+            "candidate_window_samples": [
+              7632,
+              82672
+            ],
+            "candidates": [
+              {
+                "segment_index": 0,
+                "sample": 51712,
+                "error": {
+                  "signed_error_ms": [
+                    32.0,
+                    112.0
+                  ],
+                  "absolute_error_ms": [
+                    32.0,
+                    112.0
+                  ]
+                }
+              }
+            ]
+          },
+          "resumed_onset": {
+            "status": "unique",
+            "candidate_window_samples": [
+              51200,
+              125120
+            ],
+            "candidates": [
+              {
+                "segment_index": 1,
+                "sample": 82944,
+                "error": {
+                  "signed_error_ms": [
+                    7.0,
+                    17.0
+                  ],
+                  "absolute_error_ms": [
+                    7.0,
+                    17.0
+                  ]
+                }
+              }
+            ]
+          },
+          "chronological_pairs": [
+            {
+              "first_end_candidate": 0,
+              "resumed_onset_candidate": 0
+            }
+          ],
+          "pair_status": "unique"
+        }
+      }
+    }
+  ]
+}
