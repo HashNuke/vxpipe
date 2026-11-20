@@ -132,8 +132,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.BargeInTiming do
 
   defp reset_between?(packets, onset, stopped) do
     Enum.any?(packets, fn
-      {:reset, _, _, at} -> at >= onset and at <= stopped
-      _ -> false
+      {:reset, _, reason, at} ->
+        reason != :provider_turn_settled and at >= onset and at <= stopped
+
+      _ ->
+        false
     end)
   end
 

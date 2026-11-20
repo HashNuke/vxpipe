@@ -398,6 +398,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
     resets =
       for {:reset, _, reason, at} <- packets,
+          reason != :provider_turn_settled,
           at - state.origin_us > previous and at - state.origin_us <= finish,
           do: reason
 
