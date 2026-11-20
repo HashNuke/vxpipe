@@ -61,3 +61,11 @@ acceptance. Old measurements remain evidence for the old configuration. New pair
 comparisons must use the same patched production configuration in both phases,
 retain CPU cgroup enforcement and the existing budgets, and still prove coverage,
 latency, cold startup and the full supported topology matrix before pilot activation.
+
+## Immutable tensor preparation
+
+The [tensor-reuse checkpoint](../../labnotes/20261120-0030-diagnostics-tensor-reuse.md)
+caches the native signed-64 16 kHz scalar in the model while leaving all recurrent
+state per stream. PCM normalization now constructs the same float32 bytes directly.
+This removes a repeated native upload; it does not change scheduler policy or
+establish a CPU-budget pass. The configured run retains the outstanding CPU cost.

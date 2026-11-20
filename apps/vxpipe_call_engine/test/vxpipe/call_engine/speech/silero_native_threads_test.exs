@@ -21,6 +21,32 @@ defmodule Vxpipe.CallEngine.Speech.SileroNativeThreadsTest do
     assert probability < 0.35
   end
 
+  test "warm inference uploads at most one changing input tensor per frame" do
+    assert {:ok, model} = Silero.load()
+    assert {:ok, stream, [_]} = Silero.push(Silero.new(), model, :binary.copy(<<0>>, 1_024))
+    function = {Ortex.Backend, :from_binary, 3}
+    assert :erlang.trace_pattern(function, true, [:call_count]) == 1
+    :erlang.trace(self(), true, [:call])
+
+    try do
+      final =
+        Enum.reduce(1..32, stream, fn sample, state ->
+          audio = :binary.copy(<<sample::signed-little-16>>, 512)
+          assert {:ok, next, [_]} = Silero.push(state, model, audio)
+          next
+        end)
+
+      assert final.samples == 33 * 512
+      assert {:call_count, count} = :erlang.trace_info(function, :call_count)
+
+      assert count <= 32,
+             "32 frames uploaded #{count} tensors, including repeated constant inputs"
+    after
+      :erlang.trace(self(), false, [:call])
+      :erlang.trace_pattern(function, false, [:call_count])
+    end
+  end
+
   test "patched native boundary rejects invalid thread counts before model loading" do
     for threads <- [-1, 1.5, "1", 2_147_483_648] do
       assert_raise ArgumentError, fn ->

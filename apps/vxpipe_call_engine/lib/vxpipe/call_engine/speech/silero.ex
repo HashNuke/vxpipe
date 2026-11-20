@@ -36,11 +36,16 @@ defmodule Vxpipe.CallEngine.Speech.Silero do
     context = state.context || Nx.broadcast(Nx.tensor(0, type: :f32), {1, 64})
 
     # Explicit little-endian decoding keeps the PCM contract independent of host endianness.
-    samples = for <<sample::signed-little-16 <- frame>>, do: sample / 32_768.0
-    input = Nx.concatenate([context, Nx.tensor([samples], type: :f32)], axis: 1)
+    samples =
+      for <<sample::signed-little-16 <- frame>>,
+        into: <<>>,
+        do: <<sample / 32_768.0::float-native-32>>
+
+    frame_input = samples |> Nx.from_binary(:f32) |> Nx.reshape({1, 512})
+    input = Nx.concatenate([context, frame_input], axis: 1)
 
     {probability, recurrent} =
-      Ortex.run(model.resource, {input, recurrent, Nx.tensor(16_000, type: :s64)})
+      Ortex.run(model.resource, {input, recurrent, model.sample_rate})
 
     probability = probability |> Nx.reshape({}) |> Nx.to_number()
 

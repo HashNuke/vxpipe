@@ -713,6 +713,10 @@ The [report-progress checkpoint](../20261120-0020-diagnostics-inference-overhead
 avoids rebuilding unchanged historical reports on every progress frame, preserving
 coverage transitions and durable outputs. Focused and configured checks pass;
 the remaining CPU delta and full measured acceptance stay open.
+The [tensor-reuse checkpoint](../20261120-0030-diagnostics-tensor-reuse.md)
+removes the repeated native sample-rate upload and preserves PCM/model results.
+The warm run remains correct but does not demonstrate further total CPU reduction;
+scheduler waiting and the remaining performance gates still need work.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
