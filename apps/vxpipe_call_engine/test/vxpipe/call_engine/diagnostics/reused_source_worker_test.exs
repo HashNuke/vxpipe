@@ -1,26 +1,18 @@
 defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor, SourceWorker}
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SourceWorker}
   alias Vxpipe.CallEngine.Media.AudioFrame
 
   setup do
-    parent = self()
+    {:ok, output} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :settings)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :settings
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-    {:ok, output} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
     epoch = make_ref()
 
     worker =
@@ -29,7 +21,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
          mode: :operational_reuse,
          owner: self(),
          output: output,
-         projection: __MODULE__.Projection,
+         settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
          source_epoch: epoch,
          clock_id: "clock",
          source_id: "source",

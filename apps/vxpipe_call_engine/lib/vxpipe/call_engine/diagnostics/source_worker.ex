@@ -36,7 +36,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     source_port = Keyword.get(options, :source_port)
 
     capture_options =
-      Keyword.take(options, [:projection, :maximum_count, :maximum_bytes])
+      Keyword.take(options, [:settings, :maximum_count, :maximum_bytes])
       |> Keyword.put(:owner, owner)
       |> Keyword.put(:provenance, output)
 
@@ -45,7 +45,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
          true <- output.owner == owner and CaptureHandoff.current?(output),
          true <- valid_admission?(mode, admission),
          {:ok, input} <- CaptureHandoff.new(self(), capture_options),
-         true <- input.grant == output.grant and input.projection == output.projection do
+         true <- input.grant == output.grant and input.settings == output.settings do
       Enum.each([owner, output.receiver], &Process.monitor/1)
       if coordinator, do: Process.monitor(coordinator)
       if source_port, do: Process.monitor(source_port)

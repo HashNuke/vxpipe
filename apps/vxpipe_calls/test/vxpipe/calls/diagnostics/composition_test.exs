@@ -1,33 +1,22 @@
 defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
   use ExUnit.Case, async: false
 
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
     SourcePort,
     SourceAdmission,
-    SourceSupervisor,
-    SettingsSupervisor
+    SourceSupervisor
   }
 
   alias Vxpipe.Calls.Diagnostics.Supervisor, as: DiagnosticsSupervisor
 
-  setup test_context do
+  setup do
     parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :settings_loaded)
-         {:ok, %{enabled: Map.get(test_context, :enabled, false), revision: 1}}
-       end}
-    )
-
-    assert_receive :settings_loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
 
     options = [
       name: __MODULE__.Root,
@@ -35,7 +24,6 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
       collector_supervisor: __MODULE__.Collectors,
       task_supervisor: __MODULE__.Tasks,
       maximum_collectors: 1,
-      projection: __MODULE__.Projection,
       repository: {Vxpipe.Calls.TestControlledLatencyRepository, self()},
       source_options: [
         name: __MODULE__.Sources,
@@ -123,7 +111,7 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
   end
 
   @tag enabled: true
-  test "injected factory propagates parent projection and pools and bounds collectors" do
+  test "injected factory propagates call snapshot and pools and bounds collectors" do
     coordinator = self()
     {:ok, state} = SourcePort.read(__MODULE__.Port)
     gate = AttachmentLease.gate(1)
@@ -144,6 +132,7 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
       generation: make_ref(),
       provider_generation: make_ref(),
       settings_revision: 1,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       source_epoch: make_ref(),
       source_id: "source",
       clock_id: "clock",
@@ -170,7 +159,7 @@ defmodule Vxpipe.Calls.Diagnostics.CompositionTest do
     assert {:ok, output} = state.collector.(context)
     assert AttachmentLease.adopt(lease)
     AttachmentLease.finish(lease)
-    assert output.projection == __MODULE__.Projection
+    assert output.settings == context.settings
     assert output.owner == self()
     assert [{_, _, _, _}] = DynamicSupervisor.which_children(__MODULE__.Collectors)
     assert [{_, _, _, _}] = DynamicSupervisor.which_children(__MODULE__.Writers)

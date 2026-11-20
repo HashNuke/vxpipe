@@ -2,7 +2,6 @@ defmodule Vxpipe.Persistence.DiagnosticsSettingsStoreTest do
   use Vxpipe.Persistence.DataCase, async: false
   import Ecto.Query
   alias Vxpipe.Identity.{DiagnosticsSettings, Principal}
-  alias Vxpipe.CallEngine.Diagnostics.{SettingsProjection, SettingsSupervisor}
   alias Vxpipe.Persistence.DiagnosticsSettingsStore
   alias Vxpipe.Persistence.Schema.{IdentityRole, IdentitySession, IdentityUser, UserAccessEvent}
 
@@ -15,46 +14,6 @@ defmodule Vxpipe.Persistence.DiagnosticsSettingsStoreTest do
     end
 
     assert {:ok, %{enabled: false, revision: 0}} = DiagnosticsSettingsStore.snapshot()
-  end
-
-  test "runtime projection follows durable operator revisions through the snapshot port" do
-    parent = self()
-    clock = :atomics.new(1, signed: true)
-    projection = __MODULE__.Projection
-    reader = __MODULE__.Reader
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Pool,
-       projection: projection,
-       reader: reader,
-       loader: fn ->
-         result = DiagnosticsSettingsStore.snapshot()
-         send(parent, :snapshot_read)
-         result
-       end,
-       clock: fn -> :atomics.get(clock, 1) end,
-       send_after: fn target, message, delay ->
-         send(parent, {:scheduled, target, message, delay})
-         make_ref()
-       end}
-    )
-
-    settle_projection(reader, projection)
-    assert {:disabled, 0} = SettingsProjection.status(projection)
-    actor = actor(:admin)
-
-    for {enabled, revision} <- [{true, 1}, {false, 2}] do
-      assert {:ok, %{revision: ^revision}} =
-               DiagnosticsSettings.update(deps(), actor, enabled, revision - 1)
-
-      :atomics.put(clock, 1, revision * 1_000)
-      assert_receive {:scheduled, target, {:poll, _} = poll, 1_000}
-      send(target, poll)
-      settle_projection(reader, projection)
-      expected = if enabled, do: :enabled, else: :disabled
-      assert {^expected, ^revision} = SettingsProjection.status(projection)
-    end
   end
 
   test "save persists revision and actor with one audit; no-op retries preserve revision" do
@@ -171,12 +130,6 @@ defmodule Vxpipe.Persistence.DiagnosticsSettingsStoreTest do
   end
 
   defp deps, do: %{diagnostics_settings: DiagnosticsSettingsStore}
-
-  defp settle_projection(reader, projection) do
-    assert_receive :snapshot_read
-    _ = :sys.get_state(reader)
-    _ = :sys.get_state(projection)
-  end
 
   defp actor(kind) do
     slug = "diag-#{kind}"

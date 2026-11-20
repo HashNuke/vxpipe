@@ -1,7 +1,7 @@
 # Passive diagnostics measurement plan
 
 Status: evaluation plan declared 2026-11-19, with preliminary configured warm
-measurements recorded in the milestone. Acoustic accuracy and full paired
+measurements recorded in the milestone. Full paired
 measurement acceptance remain open. Thresholds below are engineering acceptance budgets,
 not measurements or promises of production capacity.
 
@@ -11,6 +11,14 @@ are advisory and do not block milestone completion or release. Further CPU
 optimization is out of scope. Historical target misses remain accurately recorded;
 this is an explicit acceptance change, not a retrospective measurement pass.
 Correctness, latency, bounded resources, coverage and cleanup remain required.
+
+User scope correction, 2026-11-20: dedicated database CPU measurement, inference
+coverage percentages and model-accuracy benchmarking are not acceptance gates.
+Silero loading and running is sufficient for the model. Verify project-owned
+source routing, reuse/fallback wiring, timing correlation, persistence, UI and
+failure isolation. Keep missing/reset evidence honest, but do not require a
+numerical inference-coverage threshold. Existing acoustic results remain optional
+historical evidence; no further model-validation tests are required.
 
 ## Candidate isolation and its limits
 
@@ -179,7 +187,7 @@ source. Neither model readiness nor response acknowledgements change pacing.
 
 The configured workload now records ingress, response dispatch and synthetic
 server-egress acknowledgement latency. It does not yet implement the complete
-paired driver, cold phases, database CPU or the full inference-coverage gate. See the
+paired driver or cold phases. See the
 [warm-workload checkpoint](../../labnotes/20261119-2345-diagnostics-warm-workload.md)
 for verification and limitations.
 
@@ -189,8 +197,8 @@ Measure process CPU time across all threads, wall duration, sampled RSS and OS
 high-water RSS. CPU cores consumed means CPU seconds divided by elapsed seconds.
 BEAM heap size/reductions alone omit native work and are insufficient. Keep raw
 samples and phase summaries. Include cold loading and all diagnostic workers in
-the measured process. Report database CPU separately and isolate its per-phase
-statistics; host-wide CPU is supplementary evidence, not a substitute.
+the measured process. Dedicated database CPU sampling is out of the required
+scope; bounded asynchronous writes and storage-failure isolation remain required.
 
 Resource interval clarification, before measurements: reset the isolated test VM's
 Linux RSS high-water counter at the measurement boundary (`clear_refs` value 5),
@@ -288,7 +296,7 @@ Missing/reset-failed/incomplete or replaced-PID intervals fail. Linux-reported H
 may dip slightly; retain its maximum observed value after reset. A generator start
 offset also applies to the short smoke; 5000 ms there leaves only
 1.144 seconds. The separate warm profile above provides the full 20-second interval.
-Database CPU, cold preparation and the complete paired driver remain outstanding.
+Cold preparation and the complete paired driver remain outstanding.
 
 
 Compare each matched pair separately. All valid repetitions must pass; also
@@ -363,19 +371,18 @@ remain explicit. Additional correctness gates apply regardless of CPU results:
   and timestamps only, retaining per-source/per-command event ordering and causal
   correlation relationships. Independent rooms need not interleave identically.
 - No duplicate model work in reuse mode. Off creates no diagnostic work or rows.
-- After readiness, at least 99% of offered eligible frames must have diagnostic
-  evidence or consumed reuse evidence in warm phases. Report all drops, resets,
-  missing boundaries and coverage reasons; low overhead achieved by discarding
-  diagnostics fails. Cold phases require positive processed coverage for every
-  source and separately disclose the startup gap.
+- Report drops, resets, missing boundaries and startup gaps honestly. Verify the
+  application's observation path works; no inference-coverage percentage or
+  additional model-validation acceptance is required.
 - No missing response samples may disappear from the latency population. Missing
   delivery, unmatched output, unavailable source or unexpected timeout fails.
 
-## Separate stress and accuracy gates
+## Separate application stress checks
 
 Normal paired performance is not saturation proof. Run synchronized input bursts,
 slow inference, full handoffs, writer crashes, blocked persistence and 20 cycles
-of enable/revoke/re-enable/room teardown separately. Assert configured queue/byte/
+of source replacement and room teardown separately, retaining each call’s initial
+settings snapshot. Assert configured queue/byte/
 task bounds, bounded retries and drain, stale-result rejection and unchanged
 normalized call-control traces. After each drain, no diagnostic source/task slot
 may remain charged except a deliberately held native task; release that task and
@@ -384,12 +391,10 @@ After a completed cycle's drain, compare median RSS of the first five and last
 five cycles: growth must be at most 16 MiB. This is a bounded-run leak screen,
 not proof of indefinite stability.
 
-Acoustic accuracy still needs independently labelled caller-only audio covering
-quiet tails, pauses, noise, echo, overlap and resumption. Record signed and absolute
-boundary error and incomplete rate separately by mode and condition. Synthetic
-probabilities, model frame size and the load fixture cannot satisfy that gate.
-Transport loss/reordering/resampling/reset checks and Scribe/browser live acceptance
-also remain separate. No live Telnyx measurement is authorized.
+Acoustic/model-accuracy benchmarking is optional historical evidence, not a
+completion requirement. Existing replay results must retain their uncertainty
+and limited scope. Project-owned transport/reset handling and Scribe/browser
+latency verification remain required. No live Telnyx measurement is authorized.
 
 ## Evidence and decision state
 

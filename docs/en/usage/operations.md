@@ -43,15 +43,12 @@ roles, API keys and call join credentials do not grant permission to change it.
 Existing tenant call-inspection permissions govern reading collected reports.
 Installation URL controls remain Superadmin-only.
 
-A saved setting confirms a database revision, not that every worker has applied
-it. The current production settings response does not certify cross-node
-application; **Collection status unavailable** is an honest outcome, not evidence
-that collection has stopped everywhere. On a failed or conflicting save, reload
-the setting before retrying. Disabling collection does not delete earlier reports,
-and already accepted summaries may finish their bounded persistence drain.
+The persisted value is read when each new call starts. Existing calls keep that
+choice until they end. On a failed or conflicting save, reload the setting before
+retrying. Changing the setting does not delete earlier reports.
 
-The implementation is still undergoing acceptance: distributed effective-status,
-measured overhead, acoustic accuracy and live browser validation remain open in
+The implementation is still undergoing call-start settings, measured overhead
+and live browser acceptance in
 [the milestone](../../../labnotes/milestones/passive-call-latency-diagnostics.md).
 The first live acceptance profile is human ElevenLabs Scribe v2 Realtime input
 over browser WebRTC with local Silero off and on. Offline fixtures do not establish
@@ -131,10 +128,10 @@ not collected; it does not prove a zero-latency call.
 
 | Symptom | Check |
 | --- | --- |
-| No observations | Saved collection setting, human STT eligibility, supported/acknowledged provider profile, source permissions and diagnostic service availability. Enabling later cannot reconstruct earlier audio. |
+| No observations | Saved collection setting, human STT eligibility, supported/acknowledged provider profile, source permissions and diagnostic service availability. The setting is read at call start; enabling later affects subsequent calls. |
 | Partial start or source changed | Collection began late, an STT/source allocation changed, or input continuity could not be proved. Compare separate observations without stitching their clocks. |
 | Observer unavailable or overloaded | Model readiness, bounded source/inference capacity and dropped-frame counts. Keep ordinary call behavior separate from diagnostic health. |
-| Lease expired | Settings reads or their authority expired. Restore settings-store access; do not bypass the collection gate with call/environment options. |
+| Lease expired | The source attachment expired, or a historical record used the retired settings lease. Current calls retain their initial setting; an unavailable initial settings read leaves that call disabled. |
 | Pending or missing stored turns | Allow the bounded writer drain, then refresh. A storage failure can lose diagnostics while the call continues normally. |
 | Stale heartbeat | Refresh the report and inspect diagnostic writer/service health. Do not reinterpret an unclosed running record as a complete observation. |
 

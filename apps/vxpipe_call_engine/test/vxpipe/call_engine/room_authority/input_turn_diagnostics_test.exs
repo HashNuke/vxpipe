@@ -1,7 +1,13 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
   use ExUnit.Case, async: false
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
   alias Vxpipe.CallEngine.Archive.Recorder
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
   alias Vxpipe.CallEngine.Event.{ParticipantTurnStarted, ParticipantTurnCompleted}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Room.Snapshot
@@ -17,23 +23,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
   }
 
   setup do
-    parent = self()
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :settings)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :settings
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-    {:ok, handoff} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
     %{handoff: handoff}
   end
 
@@ -134,7 +126,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
 
   test "saturation cannot prevent normal completion", _ctx do
     {:ok, handoff} =
-      CaptureHandoff.new(self(), projection: __MODULE__.Projection, maximum_count: 1)
+      CaptureHandoff.new(self(),
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
+        maximum_count: 1
+      )
 
     assert :ok = CaptureHandoff.offer(handoff, {:reset, 0, :partial_start, 0})
     signal = %{turn_started(0) | allocation_generation: make_ref(), turn_ref: make_ref()}
@@ -150,7 +145,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
 
   test "unowned capture never receives evidence" do
     {:ok, unowned} =
-      CaptureHandoff.new(self(), projection: __MODULE__.Projection, owner: Process.whereis(:init))
+      CaptureHandoff.new(self(),
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
+        owner: Process.whereis(:init)
+      )
 
     for current <- [state(self()), %{state(self()) | text_capability: nil}] do
       handoff = unowned
@@ -408,7 +406,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
 
   test "full diagnostic queues cannot suppress text or relabel a later sentence as first" do
     {:ok, handoff} =
-      CaptureHandoff.new(self(), projection: __MODULE__.Projection, maximum_count: 1)
+      CaptureHandoff.new(self(),
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
+        maximum_count: 1
+      )
 
     {state, command} = response_turn(handoff)
     assert :ok = CaptureHandoff.offer(handoff, {:reset, 0, :partial_start, 0})

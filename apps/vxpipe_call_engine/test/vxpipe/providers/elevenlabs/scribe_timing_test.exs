@@ -1,30 +1,15 @@
 defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, Event, Session}
   alias Vxpipe.CallEngine.TestElevenLabsScribeTransport, as: Wire
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
-  @projection __MODULE__.Projection
-
-  setup do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: @projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
-    :ok
-  end
 
   test "socket receipt and adapter end emission stay distinct and commits do not end turns" do
     {session, wire, handoff} = start_session()
@@ -180,7 +165,10 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
     socket_frame(session, wire, old, "partial_transcript", "draft")
     _ = event(session, :transcript)
     assert_receive {:scribe_commit_receipt, ^wire, _}, 1_000
-    {:ok, current} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, current} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     CaptureHandoff.close(old)
     assert :ok = Channel.observe(session, current)
     assert :ok = GenServer.call(wire, :release_commit)
@@ -269,7 +257,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
   end
 
   test "socket subscription accepts only its owner and retains the original capture authority" do
-    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
     socket = %Vxpipe.CallEngine.Speech.Socket{
       callback_state: %{owner: self(), diagnostic_handoff: nil}
@@ -299,7 +288,10 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
 
   test "a different consumer and a revoked handle cannot replace the active subscription" do
     {session, wire, handoff} = start_session()
-    {:ok, replacement} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, replacement} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     parent = self()
 
     start_supervised!(
@@ -327,7 +319,10 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
 
   test "replacement revokes old capture and publishes only to the new handle" do
     {session, wire, old} = start_session()
-    {:ok, current} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, current} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     assert :ok = Channel.observe(session, current)
     assert_receive {:scribe_observing, ^wire, _}
     refute CaptureHandoff.current?(old)
@@ -447,7 +442,10 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTimingTest do
     {wrapped?, options} = Keyword.pop(options, :wrapped, false)
 
     assert {:ok, handoff} =
-             CaptureHandoff.new(self(), Keyword.put(options, :projection, @projection))
+             CaptureHandoff.new(
+               self(),
+               Keyword.put(options, :settings, Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+             )
 
     tree = start_supervised!({CapabilityTree, owner: self()})
     assert {:ok, config} = Scribe.new(api_key: "synthetic", commit_strategy: :vad)

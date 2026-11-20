@@ -19,11 +19,11 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
   alias Vxpipe.CallEngine.RoomIncarnationSupervisor.RecordingChildren
 
-  def start_link(options) do
+  def start_link({options, diagnostic_children}) do
     identity = Keyword.get(options, :plan) || Keyword.fetch!(options, :command)
     incarnation = Keyword.fetch!(options, :incarnation_id)
 
-    Supervisor.start_link(__MODULE__, options,
+    Supervisor.start_link(__MODULE__, {options, diagnostic_children},
       name: via(identity.tenant_id, identity.room_id, incarnation)
     )
   end
@@ -43,7 +43,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   def child_spec(options) do
     %{
       id: {__MODULE__, Keyword.fetch!(options, :incarnation_id)},
-      start: {__MODULE__, :start_link, [options]},
+      start: {__MODULE__, :start_link, [{options, diagnostic_child(options)}]},
       restart: :temporary,
       shutdown: :infinity,
       type: :supervisor
@@ -51,7 +51,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   end
 
   @impl true
-  def init(options) do
+  def init({options, diagnostic_children}) do
     {options, recording_children} = RecordingChildren.prepare(options)
     participant_supervisor = {RoomParticipantSupervisor, options}
     capability_supervisor = {RoomCapabilitySupervisor, options}
@@ -73,7 +73,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
         media_policy_child(options) ++
         transcript_router_child(options) ++
         room_mixer_child(options) ++
-        [authority] ++ diagnostic_child(options) ++ recording_children
+        [authority] ++ diagnostic_children ++ recording_children
 
     Supervisor.init(children,
       strategy: :one_for_one,

@@ -1,6 +1,6 @@
 defmodule Vxpipe.Calls.Diagnostics.Attachment do
   @moduledoc "Constructs immutable diagnostic runs from admitted Engine source context."
-  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff, SettingsProjection}
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff}
   alias Vxpipe.CallEngine.Speech.{ActivityBoundary, Silero}
   alias Vxpipe.Calls.Diagnostics.{Collector, Supervisor}
   alias Vxpipe.Calls.LatencyRun
@@ -31,7 +31,7 @@ defmodule Vxpipe.Calls.Diagnostics.Attachment do
                  origin_us: context.origin_us,
                  owner: context.capability,
                  coordinator: context.coordinator,
-                 projection: Keyword.get(options, :projection, SettingsProjection),
+                 settings: context.settings,
                  utc_now: Keyword.get(options, :utc_now, &DateTime.utc_now/0),
                  writer_supervisor:
                    Keyword.get(

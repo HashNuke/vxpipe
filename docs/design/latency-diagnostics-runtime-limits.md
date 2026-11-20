@@ -7,40 +7,31 @@
 
 These are implemented defaults and authority rules, not measured capacity or an
 accuracy claim. The [milestone](../../labnotes/milestones/passive-call-latency-diagnostics.md)
-tracks the remaining load, accuracy, effective-status UI and live acceptance gates.
+tracks the remaining application, performance and live acceptance gates.
 
-## Settings authority across workers
+## Call-start settings snapshot
 
-Each worker reads the durable, versioned installation setting through an isolated
-reader and local projection. A successful enabled read grants authority for at most
-3,000 ms **from the read's local monotonic start**, not from response arrival.
-Workers never compare monotonic timestamps from different VMs.
+User-approved contract, 2026-11-20: the database-persisted installation setting
+is read once when a new call starts. The immutable enabled value and revision
+belong to that call and survive optional room-service restarts. Existing calls
+retain their initial choice; later saves affect subsequent calls only. A missing,
+failed or invalid initial read disables diagnostics for that call without failing
+the call. It does not retry later and unexpectedly enable collection mid-call.
 
-The projection polls every 1,000 ms with one outstanding read. Responses taking
-1,000 ms or more are discarded. A blocked read retains that single slot; it cannot
-create an expanding set of replacement reads. Unknown settings, read failure,
-revision conflict and expiry deny capture. Older revisions cannot restore enabled
-authority. A new enabled revision can start a fresh observation epoch.
+The read has a bounded 250 ms deadline and runs in a per-call task before
+submitting the room to its shared supervisor. This replaces global polling, settings leases, invalidation hints and
+cross-worker acknowledgement/status tracking. There is no distributed effective
+state to confirm. The settings UI reports ordinary persistence success or errors,
+with its existing toggle label and no new explanatory copy.
 
-Invalidation is a coalesced local hint, not a claim that every worker received a
-broadcast. Other workers observe the durable setting through polling. If a worker
-misses a hint or cannot refresh, its previous enable expires at its own deadline.
-A suspended projection does not prevent direct grant readers from observing expiry.
-An API write alone therefore cannot truthfully report an immediate distributed stop.
-The UI must retain applying/unknown until acknowledgements or a valid expiry proof
-establish the requested effective state; that integration remains open.
+Source ownership, attachment admission, bounded handoffs, collector lifetimes and
+room teardown still fence diagnostic work. Those lifecycle constraints are
+independent of the immutable setting. Historical summaries retain bounded drain.
 
-Capture checks authority before admission and again before consuming work/results.
-Source workers check their grant every 250 ms for cleanup. The three-second lease
-bounds valid authority, not hard real-time scheduling or native thread termination.
-A stalled process/projection may delay cleanup but cannot accept expired work on
-resuming while its underlying monotonic clock continues advancing. Host suspension
-is subject to the clock-progress caveat below. Historical
-summaries may finish their separately bounded persistence drain after capture stops.
-
-Rejected alternatives are unbounded retries, wall-clock comparisons across workers,
-and relying solely on a push notification. Each could leave a stale enable active
-or increase resource use during an outage.
+Rejected alternative: immediate changes to active calls require propagation and
+revocation machinery that the user explicitly removed from this benchmark's
+scope. The implementation checkpoint records focused old-call/new-call tests,
+including persisted updates and source replacement in configured calls.
 
 ## Default resource and deadline bounds
 
@@ -66,7 +57,7 @@ require the separate measured load gate. Saturation drops or marks diagnostics
 incomplete rather than changing provider input, commits or call-control decisions.
 Linked input and collector handoffs share a sticky overflow flag, independently
 of their local count/byte counters and first retirement cause. Input saturation
-therefore persists `observer_overloaded` even if settings expire before the
+therefore persists `observer_overloaded` even if the source retires before the
 collector finishes. The flag is published before local overflow can trigger
 worker retirement; it adds no queue or retry. Unrelated/new runs have separate
 flags. Queue release/re-admission semantics remain unchanged.
@@ -75,7 +66,7 @@ room diagnostics subtree owns its source workers and stops with its room.
 Callbacks offer bounded work and do not wait for model initialization or database
 persistence.
 
-Sources: Engine `Diagnostics.SettingsLease`, `SettingsProjection`,
+Sources: Engine `Diagnostics.CallSettings`,
 `SourceSupervisor`, `AttachmentLease`, `CaptureHandoff`, `RoomService`,
 `LiveReport`; Calls `Diagnostics.Supervisor` and `Writer`.
 
@@ -85,44 +76,13 @@ These budgets have not yet been measured and do not establish supported capacity
 
 ## Verification boundaries
 
-`settings_peer_test.exs` runs two isolated BEAM VMs with independent controlled
-clocks and real settings projections. Controlled loader snapshots simulate the
-same durable revision on each worker. One worker gets a hint while stalled; the
-other misses it and expires at exactly 3,000 ms. It also rejects a stale enabled
-revision after reconnect. This proves per-worker authority semantics; it does not
-measure network/database propagation latency or prove the settings UI is complete.
+Focused call-start tests verify that enabled and disabled calls retain their
+snapshots across later database changes, new calls see the new persisted value,
+and unavailable initial reads remain disabled for that call. Obsolete peer-clock,
+lease-expiry and propagation tests are removed with the old implementation.
 
 Focused handoff, inference-admission, source-supervision and writer tests exercise
 retained count/byte budgets, blocked resources, task cancellation, finite retries
-and drain. Configured Scribe fixtures separately prove mode selection, toggles and
-source replacement without changing operational inference or provider delivery.
-
-## Effective-status integration contract under review
-
-The settings API currently returns the saved setting only. The UI may refresh an
-explicit applying status, but must not invent applied status from its own timer.
-A local worker acknowledgement cannot certify an unknown set of remote workers.
-
-A proposed expiry proof would observe an authoritative disabled revision R, wait
-at least the maximum lease grace, then **start a new authoritative read** and
-require exactly R again. A read merely completing after the deadline is not enough:
-it could have captured R before a concurrent enable and returned late. Reads must
-use the primary store and a fresh transaction snapshot. Errors, conflicting values,
-newer revisions and process restart invalidate proof; late replies cannot restore
-it. Every API node would maintain its own proof, so load balancing could delay,
-but never accelerate, confirmation.
-
-This proposal is not implemented or accepted as an unconditional global proof.
-Independent monotonic clock origins are safe, but independent elapsed-time rates
-and host suspension are not interchangeable. A tracker advancing three seconds
-cannot prove a suspended worker's clock advanced three seconds. See Erlang's
-[time correction documentation](https://www.erlang.org/doc/apps/erts/time_correction.html).
-A lease-based global confirmation requires a documented clock-progress/rate bound
-and a conservative grace including drift and timestamp resolution. Without that
-operating guarantee, report applying/unknown or collect acknowledgements from all
-registered capture authorities; connected-node discovery alone is not membership.
-
-An eventual applied-disable claim means capture authority is revoked, not that
-all suspended processes/native tasks have terminated or historical persistence has
-drained. Enabled status must describe saved collection permission, not promise
-that every eligible call has model readiness, capacity or complete coverage.
+and drain. Configured Scribe fixtures verify mode/source wiring without changing
+operational inference or provider delivery. Model-accuracy and numerical inference
+coverage are not additional acceptance requirements.

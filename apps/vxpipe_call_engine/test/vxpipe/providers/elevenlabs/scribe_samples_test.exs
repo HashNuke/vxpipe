@@ -1,30 +1,15 @@
 defmodule Vxpipe.Providers.ElevenLabs.ScribeSamplesTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, Event, Session}
   alias Vxpipe.CallEngine.TestElevenLabsScribeTransport, as: Wire
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
-  @projection __MODULE__.Projection
-
-  setup do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: @projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
-    :ok
-  end
 
   test "wrapped Scribe maps the next accepted source frame after prospective subscription" do
     {session, wire, handoff} = start_session(initial_capture: false, wrapped: true)
@@ -80,7 +65,9 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSamplesTest do
     assert_receive {:scribe_audio, ^wire, _}
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
 
-    {:ok, replacement} = CaptureHandoff.new(self(), projection: @projection)
+    {:ok, replacement} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     assert :ok = Channel.observe(session, replacement)
     assert_receive {:scribe_observing, ^wire, _}
     refute CaptureHandoff.current?(handoff)
@@ -250,7 +237,10 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSamplesTest do
     {fail_audio_at, options} = Keyword.pop(options, :fail_audio_at)
 
     assert {:ok, handoff} =
-             CaptureHandoff.new(self(), Keyword.put(options, :projection, @projection))
+             CaptureHandoff.new(
+               self(),
+               Keyword.put(options, :settings, Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+             )
 
     tree = start_supervised!({CapabilityTree, owner: self()})
     assert {:ok, config} = Scribe.new(api_key: "synthetic", commit_strategy: :vad)

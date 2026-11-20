@@ -1,6 +1,6 @@
 defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
-  @moduledoc "Bounded non-suspending evidence offers fenced by continuous app-settings authority."
-  alias Vxpipe.CallEngine.Diagnostics.{CapturePacket, SettingsProjection}
+  @moduledoc "Bounded non-suspending evidence offers fenced by immutable call settings and source lifetime."
+  alias Vxpipe.CallEngine.Diagnostics.{CapturePacket, CallSettings}
   @stride 4_294_967_296
   @pending 1
   @open 2
@@ -10,11 +10,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
   @enforce_keys [
     :receiver,
     :owner,
-    :projection,
+    :settings,
     :grant,
     :token,
     :counters,
-    :deadline,
     :provenance,
     :maximum_count,
     :maximum_bytes
@@ -26,7 +25,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
     with true <- is_pid(receiver) and node(receiver) == node(),
          {:ok, options} <-
            Keyword.validate(options,
-             projection: SettingsProjection,
+             settings: nil,
              owner: receiver,
              provenance: nil,
              maximum_count: 64,
@@ -34,17 +33,15 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
            ),
          owner when is_pid(owner) <- Keyword.fetch!(options, :owner),
          true <- node(owner) == node() and Process.alive?(owner),
-         projection when is_atom(projection) <- Keyword.fetch!(options, :projection),
+         %CallSettings{} = settings <- Keyword.fetch!(options, :settings),
          count when is_integer(count) and count in 1..128 <-
            Keyword.fetch!(options, :maximum_count),
          bytes when is_integer(bytes) and bytes in 1_024..8_388_608 <-
            Keyword.fetch!(options, :maximum_bytes),
-         {:ok, grant, _now, expires_at} <- SettingsProjection.grant_snapshot(projection),
+         {:ok, grant} <- CallSettings.grant(settings),
          true <- Process.alive?(receiver),
          {:ok, provenance} <-
-           provenance(Keyword.fetch!(options, :provenance), owner, projection, grant) do
-      deadline = :atomics.new(1, signed: true)
-      :atomics.put(deadline, 1, expires_at)
+           provenance(Keyword.fetch!(options, :provenance), owner, settings, grant) do
       counters = :atomics.new(5, signed: false)
       :atomics.put(counters, @open, 1)
 
@@ -52,11 +49,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
        %__MODULE__{
          receiver: receiver,
          owner: owner,
-         projection: projection,
+         settings: settings,
          grant: grant,
          token: make_ref(),
          counters: counters,
-         deadline: deadline,
          provenance: provenance,
          maximum_count: count,
          maximum_bytes: bytes
@@ -98,18 +94,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
   def message(_handoff, _message), do: :error
 
   @doc "Irreversibly closes this epoch; the consumer must discard its queued audio."
-  def close(handoff) do
-    deadline = :atomics.get(handoff.deadline, 1)
-    reason = if renew_before_expiry?(handoff, deadline), do: 1, else: 2
-    retire(handoff, reason)
-  end
+  def close(handoff), do: retire(handoff, 1)
 
   @doc "The first observed terminal cause; later checks cannot overwrite it."
   def closed_reason(handoff) do
     case :atomics.get(handoff.provenance, 1) do
       0 -> nil
       1 -> :source_changed
-      2 -> :lease_expired
     end
   end
 
@@ -141,10 +132,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
     }
   end
 
-  @doc "Also used before inference/results: a lost grant permanently retires this handle."
+  @doc "Also used before inference/results: source or receiver loss permanently retires this handle."
   def current?(handoff) do
-    previous_deadline = :atomics.get(handoff.deadline, 1)
-
     cond do
       :atomics.get(handoff.counters, @open) != 1 ->
         false
@@ -153,44 +142,24 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
         close(handoff)
         false
 
-      renew_before_expiry?(handoff, previous_deadline) ->
-        true
-
       true ->
-        retire(handoff, 2)
-        false
+        true
     end
   end
 
-  defp provenance(nil, _owner, _projection, _grant),
+  defp provenance(nil, _owner, _settings, _grant),
     do: {:ok, :atomics.new(2, signed: false)}
 
   defp provenance(
-         %__MODULE__{owner: owner, projection: projection, grant: grant} = handoff,
+         %__MODULE__{owner: owner, settings: settings, grant: grant} = handoff,
          owner,
-         projection,
+         settings,
          grant
        ) do
     if current?(handoff), do: {:ok, handoff.provenance}, else: {:error, :unavailable}
   end
 
   defp provenance(_, _, _, _), do: {:error, :unavailable}
-
-  defp renew_before_expiry?(handoff, previous_deadline) do
-    case SettingsProjection.grant_snapshot(handoff.projection) do
-      {:ok, grant, now, expires_at} when grant == handoff.grant and now < previous_deadline ->
-        # A concurrent check may already have renewed the deadline. Never regress
-        # it, and never let a newly published lease revive an expired consumer.
-        if expires_at > previous_deadline do
-          :atomics.compare_exchange(handoff.deadline, 1, previous_deadline, expires_at)
-        end
-
-        :atomics.get(handoff.counters, @open) == 1
-
-      _ ->
-        false
-    end
-  end
 
   defp reserve(handoff, charge, attempts) do
     pending = :atomics.get(handoff.counters, @pending)

@@ -1,36 +1,21 @@
 defmodule Vxpipe.Calls.Diagnostics.AttachmentTest do
   use ExUnit.Case, async: false
 
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
     CaptureHandoff,
-    SettingsProjection,
-    SettingsSupervisor
+    CallSettings
   }
 
   alias Vxpipe.Calls.Diagnostics.{Attachment, Collector, Supervisor}
   @now ~U[2026-11-19 12:00:00.000000Z]
 
   setup do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       clock: fn -> 0 end,
-       send_after: fn _, _, _ -> make_ref() end,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-
     start_supervised!(
       {Supervisor,
        name: __MODULE__.Root,
@@ -57,6 +42,7 @@ defmodule Vxpipe.Calls.Diagnostics.AttachmentTest do
       generation: make_ref(),
       provider_generation: make_ref(),
       settings_revision: 1,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       source_epoch: make_ref(),
       source_id: "source",
       clock_id: "clock",
@@ -81,7 +67,7 @@ defmodule Vxpipe.Calls.Diagnostics.AttachmentTest do
     }
 
     options = [
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       collector_supervisor: __MODULE__.Collectors,
       writer_supervisor: __MODULE__.Writers,
       task_supervisor: __MODULE__.Tasks,
@@ -180,12 +166,12 @@ defmodule Vxpipe.Calls.Diagnostics.AttachmentTest do
     refute_received {:diagnostic_write, _, _}
   end
 
-  test "revoked settings and stale revisions cannot start persistence", c do
+  test "disabled call snapshots and stale revisions cannot start persistence", c do
     assert {:error, :unavailable} =
              Attachment.start(%{c.context | settings_revision: 2}, c.options)
 
-    :ok = SettingsProjection.invalidate(__MODULE__.Projection)
-    assert {:error, :unavailable} = Attachment.start(c.context, c.options)
+    disabled = CallSettings.new(%{enabled: false, revision: 1})
+    assert {:error, :unavailable} = Attachment.start(%{c.context | settings: disabled}, c.options)
     assert DynamicSupervisor.which_children(__MODULE__.Collectors) == []
     refute_received {:diagnostic_write, _, _}
   end

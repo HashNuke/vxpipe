@@ -470,26 +470,9 @@ defmodule Vxpipe.Persistence.LatencyStoreTest do
   end
 
   test "live collector revisions survive collector and writer shutdown", %{call: call} do
-    alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+    alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
     alias Vxpipe.Calls.Diagnostics.Collector
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       clock: fn -> 0 end,
-       send_after: fn _, _, _ -> make_ref() end,
-       loader: fn ->
-         send(parent, :settings_loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :settings_loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
 
     start_supervised!(
       {Vxpipe.Calls.Diagnostics.Supervisor,
@@ -510,7 +493,7 @@ defmodule Vxpipe.Persistence.LatencyStoreTest do
          origin_us: 0,
          owner: self(),
          coordinator: self(),
-         projection: __MODULE__.Projection,
+         settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
          writer_supervisor: __MODULE__.Writers,
          utc_now: fn -> @now end,
          writer_options: [

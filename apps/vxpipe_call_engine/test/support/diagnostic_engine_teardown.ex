@@ -16,19 +16,11 @@ defmodule Vxpipe.CallEngine.DiagnosticEngineTeardown do
     {:ok, _} = Application.ensure_all_started(:ex_unit)
     Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)
     {:ok, _} = Application.ensure_all_started(:vxpipe_call_engine)
-    parent = self()
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
 
     {:ok, fixtures} =
       Supervisor.start_link(
         [
-          {CallEngine.Diagnostics.SettingsSupervisor,
-           name: __MODULE__.Settings,
-           projection: __MODULE__.Projection,
-           reader: __MODULE__.Reader,
-           loader: fn ->
-             send(parent, :settings_loaded)
-             {:ok, %{enabled: true, revision: 1}}
-           end},
           {CallEngine.Speech.ActivitySupervisor,
            name: __MODULE__.Activity,
            tasks: __MODULE__.Inference,
@@ -43,9 +35,6 @@ defmodule Vxpipe.CallEngine.DiagnosticEngineTeardown do
       )
 
     try do
-      assert_receive :settings_loaded
-      _ = :sys.get_state(__MODULE__.Reader)
-      _ = :sys.get_state(__MODULE__.Projection)
       run()
     after
       Supervisor.stop(fixtures)
@@ -176,12 +165,13 @@ defmodule Vxpipe.CallEngine.DiagnosticEngineTeardown do
   end
 
   defp worker_options(mode, lease) do
-    {:ok, output} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
+    {:ok, output} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
     [
       owner: self(),
       output: output,
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       coordinator: self(),
       attachment_lease: lease,
       mode: mode,

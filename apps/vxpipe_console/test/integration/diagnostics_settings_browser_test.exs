@@ -97,8 +97,7 @@ defmodule Vxpipe.Console.DiagnosticsSettingsBrowserTest do
       command.(["reload"])
       wait_toggle(command, true)
 
-      assert command.(["eval", "document.querySelector('#benchmark-setting-status').textContent"]) =~
-               "Collection status unavailable"
+      refute command.(["eval", "!!document.querySelector('#benchmark-setting-status')"])
 
       desktop = screenshot(command, c.session <> "-desktop")
       command.(["focus", "input[type=checkbox]"])

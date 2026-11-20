@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourcePort do
   @impl true
   def init(options) do
     options =
-      Keyword.validate!(options, [:name, :projection, :runtime, :maximum_sources, :collector])
+      Keyword.validate!(options, [:name, :runtime, :maximum_sources, :collector])
 
     maximum = Keyword.fetch!(options, :maximum_sources)
     collector = Keyword.fetch!(options, :collector)
@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourcePort do
       do: raise(ArgumentError, "invalid diagnostic source port")
 
     state =
-      options |> Keyword.take([:projection, :runtime, :maximum_sources, :collector]) |> Map.new()
+      options |> Keyword.take([:runtime, :maximum_sources, :collector]) |> Map.new()
 
     {:ok, Map.put(state, :pid, self())}
   end

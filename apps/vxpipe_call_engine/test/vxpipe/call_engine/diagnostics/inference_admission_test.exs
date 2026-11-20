@@ -1,26 +1,19 @@
 defmodule Vxpipe.CallEngine.Diagnostics.InferenceAdmissionTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, InferenceAdmission, SettingsSupervisor}
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, InferenceAdmission}
   alias Vxpipe.CallEngine.Speech.{ActivityRuntime, ActivitySupervisor, Silero}
 
   setup do
     parent = self()
 
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :settings)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :settings
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-    {:ok, grant} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
+    {:ok, grant} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
     start_supervised!(
       {ActivitySupervisor,

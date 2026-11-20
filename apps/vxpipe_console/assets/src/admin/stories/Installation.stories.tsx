@@ -51,7 +51,6 @@ export const BenchmarkSaveFailure: Story = { args: { saveBehavior: "failure" }, 
 } };
 
 
-export const BenchmarkSavedOnly: Story = { args: { actor: "admin", diagnosticsScenario: "saved-only" } };
 export const BenchmarkSaving: Story = { args: { actor: "admin", saveBehavior: "pending" }, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   await userEvent.click(await canvas.findByRole("checkbox", { name: "Benchmark using Silero VAD" }));

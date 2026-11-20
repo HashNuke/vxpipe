@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
     CaptureHandoff,
-    SettingsProjection,
+    CallSettings,
     SourceAttachment,
     SourceAdmission,
     SourcePort
@@ -43,6 +43,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
         :runner,
         :port,
         :source_admission,
+        :settings,
         poll_interval_ms: 250
       ])
       |> Map.new()
@@ -65,7 +66,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
         port_pid: nil,
         port_monitor: nil,
         room_monitor: Process.monitor(state.room),
-        projection: nil,
         runtime: nil,
         collector: nil,
         maximum_sources: 32
@@ -303,7 +303,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
   defp step(state) do
     state = state |> refresh_port() |> prune()
 
-    case SettingsProjection.grant(state.projection) do
+    case CallSettings.grant(state.settings) do
       {:ok, grant} ->
         state = audit_active(state)
 
@@ -391,7 +391,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
         Map.merge(state, %{
           port_pid: port.pid,
           port_monitor: Process.monitor(port.pid),
-          projection: port.projection,
           runtime: port.runtime,
           collector: port.collector,
           maximum_sources: port.maximum_sources,
@@ -400,7 +399,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
 
       _ ->
         if state.port_monitor, do: Process.demonitor(state.port_monitor, [:flush])
-        %{revoke(state) | port_pid: nil, port_monitor: nil, projection: nil}
+        %{revoke(state) | port_pid: nil, port_monitor: nil}
     end
   end
 
@@ -410,7 +409,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
     with {:ok, handoff} <-
            CaptureHandoff.new(self(),
              owner: candidate.source.capability,
-             projection: state.projection,
+             settings: state.settings,
              maximum_count: 2,
              maximum_bytes: 4_096
            ) do

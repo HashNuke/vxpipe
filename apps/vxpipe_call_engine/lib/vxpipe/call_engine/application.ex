@@ -54,24 +54,7 @@ defmodule Vxpipe.CallEngine.Application do
 
     base_children ++
       admission_children ++
-      diagnostic_settings_children(settings) ++
       model_fixture_children(settings) ++ remote_mcp_children(settings) ++ runtime_children
-  end
-
-  defp diagnostic_settings_children(settings) do
-    case Keyword.get(settings, :diagnostics_settings_loader) do
-      loader when is_function(loader, 0) ->
-        [
-          {Vxpipe.CallEngine.Diagnostics.SettingsSupervisor,
-           name: Vxpipe.CallEngine.Diagnostics.SettingsSupervisor,
-           projection: Vxpipe.CallEngine.Diagnostics.SettingsProjection,
-           reader: Vxpipe.CallEngine.Diagnostics.SettingsReader,
-           loader: loader}
-        ]
-
-      _unconfigured ->
-        []
-    end
   end
 
   defp opening_audio_cache(settings) do

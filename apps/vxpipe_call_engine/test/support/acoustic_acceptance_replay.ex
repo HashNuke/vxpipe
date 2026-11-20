@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.AcousticAcceptanceReplay do
   import ExUnit.Assertions
   import ExUnit.Callbacks
 
-  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff}
   alias Vxpipe.CallEngine.Diagnostics.{SourceAdmission, SourceSupervisor, SourceWorker}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, ConversationalSTT}
@@ -12,23 +12,7 @@ defmodule Vxpipe.CallEngine.AcousticAcceptanceReplay do
   alias Vxpipe.CallEngine.SpeechOnsetProbe
 
   def run(pcm, mode) when mode in [:benchmark_only, :operational_reuse] do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :acoustic_settings_loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end},
-      id: :acoustic_settings
-    )
-
-    assert_receive :acoustic_settings_loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
 
     start_supervised!(
       {SourceSupervisor,
@@ -52,7 +36,10 @@ defmodule Vxpipe.CallEngine.AcousticAcceptanceReplay do
       )
 
     {:ok, lease} = SourceAdmission.reserve(admission, self())
-    {:ok, output} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
+
+    {:ok, output} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     epoch = make_ref()
     origin = 0
 
@@ -61,7 +48,7 @@ defmodule Vxpipe.CallEngine.AcousticAcceptanceReplay do
       attachment_lease: lease,
       owner: self(),
       output: output,
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       source_epoch: epoch,
       clock_id: "offline-acoustic-clock",
       source_id: "caller-stem",

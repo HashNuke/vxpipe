@@ -1,9 +1,9 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay, room-service cutover and STT eligibility implemented; effective-settings acceptance pending, 2026-11-19.
+Status: records/replay, room-service cutover and STT eligibility implemented; call-start settings simplification implemented, 2026-11-20.
 A, B and D, including participant/segment presentation, are implemented. C uses participant-owned
 observation managed by a room service; UI and local settings transitions are verified.
-Distributed effective-status acceptance remains.
+The user-approved call-start snapshot replaces distributed effective status.
 Primary end-of-turn detection and barge-in stop timing are implemented, including
 configured cross-human interruption and persisted/API/Storybook presentation.
 Remaining C acceptance, broader barge-in acceptance, E and F remain incomplete.
@@ -18,6 +18,36 @@ original numerical targets and earlier results as historical evidence; do not
 relabel them as having met those targets. Stop further CPU optimization work for
 this milestone. Correctness, latency, bounded resource use, coverage and cleanup
 requirements remain in force. This decision does not enable collection by default.
+
+## User scope correction — acceptance checks, 2026-11-20
+
+Dedicated database CPU benchmarking, numerical inference-coverage thresholds and
+model-accuracy benchmarking are not required for this milestone. Silero is an
+existing model; loading and running it is sufficient model verification. Stop
+adding automated inference/model-validation tests. Retain checks of our source
+wiring, reuse versus fallback, the two timing measurements, persistence, UI,
+bounded asynchronous writes and failure isolation.
+
+This supersedes older references to these gates in historical checkpoint notes.
+Previously collected acoustic results remain optional evidence with their
+limitations intact. Honest missing/reset status remains an application contract;
+it is not a minimum inference-coverage percentage. Repeated performance, live
+browser and final completion checks remain separately open.
+
+## User scope correction — new-call settings, 2026-11-20
+
+Persist the setting in the database and read it once when each call starts.
+Existing calls retain their initial choice until they end; later saves affect
+new calls only. Remove settings propagation, polling, expiring settings leases,
+worker acknowledgements and global effective-status work, including obsolete
+tests and UI status logic. Preserve source/attachment lifecycle fencing and
+bounded resource behavior. Do not add “Applies to new calls” or other new UI copy.
+
+Unavailable or invalid initial reads disable diagnostics for that call while the
+call proceeds. Retain the snapshot across optional service restarts. This replaces
+all earlier active-call enable/revoke and cross-worker settings contracts below;
+historical checkpoint records are evidence of the superseded design, not current
+requirements. The new implementation/cleanup task stays open until verified.
 
 ## Primary measurements clarified by the user — 2026-11-20
 
@@ -185,10 +215,10 @@ reconciliation time. When that port is absent or down, the service reports
 `unavailable` coverage and does nothing else.
 
 Use room-local lifecycle notifications plus a bounded current-source snapshot to
-handle startup, enable on an existing room, join/leave and reconnect races. Reconcile
+handle startup, join/leave and reconnect races for calls whose initial snapshot enables diagnostics. Reconcile
 on service restart against authoritative accepted sources. Retire the node-wide
 room-scanning coordinator after cutover; do not keep two competing owners. A
-settings projection may remain shared infrastructure. Normal call lifecycle events
+call retains its initial settings snapshot across these transitions. Normal call lifecycle events
 must not synchronously wait for diagnostic attachment, inference or persistence.
 
 For local Silero reuse, existing `InferenceTap` already exports probabilities,
@@ -232,10 +262,10 @@ accepted milestone evidence. No existing implementation changes were discarded.
 | C: `SourceCoordinator`, `SourceAttachment`, `SourceDiscovery`, `RoomAuthority.DiagnosticSources`, `SourceSupervisor.eligible_agent?/1` | Replace global room discovery/agent admission with room-owned STT source registration/reconciliation. `DiagnosticSources` currently requires a selected text agent and rejects room-level STS; `SourceAttachment.current?/1` compares agent identity. Remove those as acoustic eligibility/lifetime conditions. Retain useful source proofs and attachment fencing only where the room-local path needs them. |
 | C: `RoomIncarnationSupervisor` and Calls diagnostics composition | Add one temporary, non-significant room diagnostics subtree hosting the service and its source workers; keep node-wide admission gate, bounded inference/settings and asynchronous Calls collector/writer infrastructure, reached by registered name. Compose the room service and stop starting the old coordinator in the same checkpoint. No generic room-service framework is required. |
 | C: `ProviderTiming`, `InputTurns.observe_completion/3`, `ResponseTiming`, `LiveReport` | Keep distinct provider and response landmarks. Remove the diagnostic completion gate requiring a text capability and excluding room-level STS: `LiveReport` currently creates rows only from completion packets. Persist accepted canonical STT input timing even without an LLM response; leave response stages nullable. Preserve actual dispatch/control eligibility. Correlate late responses to participant-owned runs rather than making agent identity own the stream. |
-| C: installation settings/API/projection and bounded polling UI | Keep default-off, roles, saved revisions, fail-closed leases and finite polling. Room service consumes changes. Effective distributed status remains unresolved; do not add a new cluster-membership system solely for this migration or claim applied from a saved value. |
+| C: installation settings/API | Keep default-off, roles and saved revisions. Snapshot the database value once per new call; remove propagation, expiring settings authority and global-status UI. |
 | C: configured matrix and transfer tests | Preserve provider-byte, no-extra-commit, reuse, pending/late, playback-ack and drain assertions. Replace the latest transfer test's expected diagnostic retirement/rediscovery with continuous same-input observation across transfer. Add two-STT-participant and STT-without-selected-agent cases. The uncommitted crash/hang parity tests use `discover_with_audio`/`SourceCoordinator.status`: keep them as old-path evidence until cutover, then port them with their provider-byte and turn/output assertions unchanged. |
 | D: authorized report APIs, core paging, collapsed diagnostics and browser stories | Keep. Extend contracts/stories for acoustic starts/ends, participant-owned run continuity and two distinct STT participants; do not create per-agent STT rows. Existing rendering evidence does not verify these new states. |
-| E: isolation, accuracy and overhead acceptance | Still open. Measure the new room-service path, both reuse and fallback, multiple participants and operational-reset gaps. Prior bounded-worker tests remain component evidence, not measured end-to-end overhead. |
+| E: isolation and overhead acceptance | Still open. Measure the new room-service path, both reuse and fallback, multiple participants and operational-reset gaps. Prior bounded-worker tests remain component evidence, not measured end-to-end overhead. |
 | F: live acceptance, handbook and final gates | Still open. Run Scribe/browser only, local Silero off/on, after migration. Update ownership docs and run full gates only after milestone implementation; no Telnyx changes/live tests or early deployment. |
 
 ### Migration order and acceptance gates
@@ -262,7 +292,7 @@ is exercised directly in tests and is never composed beside the old coordinator.
    registered-name resolution of the node pool. Test reuse and fallback, all local
    Silero/collection combinations, mid-call mode changes, join/leave, reconnect,
    service crash and intensity exhaustion with the call still open,
-   disable/re-enable, stale work, absent Calls pool and two rooms at the cap. No
+   immutable settings across later saves, stale work, absent Calls pool and two rooms at the cap. No
    duplicate inference or operational reset/control changes.
 4. Cutover in one checkpoint. Compose the room service into
    `RoomIncarnationSupervisor`, stop starting `SourceCoordinator`, then delete the
@@ -281,7 +311,7 @@ is exercised directly in tests and is never composed beside the old coordinator.
    acceptance to make diagnostic tests pass.
 6. Persistence/API/UI. Extend authorized reads and both hosts' fixtures for
    participant-owned runs, segments and two STT participants; inspect both hosts.
-7. Complete the existing E/F accuracy, load, browser/live, handbook and final gates
+7. Complete the existing E/F load, browser/live, handbook and final gates
    against the new path. Review each checkpoint; only then consider deployment.
 
 Design review: the selected architecture makes room lifecycle and participant STT
@@ -323,7 +353,7 @@ Read these completed foundations before implementation:
 - [Structured messages](structured-agent-messages.md) and
   [universal replies](universal-agent-replies.md): retain correlation and generated
   text meaning; published text is not necessarily the first model token.
-- [Implemented runtime limits](../../docs/design/latency-diagnostics-runtime-limits.md): authority expiry, resource bounds and verification limits.
+- [Implemented runtime limits](../../docs/design/latency-diagnostics-runtime-limits.md): call-start settings, resource bounds and verification limits.
 - [Passive benchmark design](../../docs/design/shadow-vad-latency-benchmark.md),
   [speech runtime](../../docs/en/development/speech-runtime.md),
   [testing guidance](../../docs/en/development/testing.md), and the
@@ -381,8 +411,8 @@ is covered by protocol fixtures; label unsupported
 profiles explicitly. Native speech-to-speech-only input is outside this scope. Do not claim a new live
 provider/transport is supported from common fixtures alone.
 
-Benchmarking defaults off and runs only while the durable installation-wide
-**Installation → Diagnostics → Benchmark using Silero VAD** setting is enabled.
+Benchmarking defaults off. Each call snapshots the durable installation-wide
+**Installation → Diagnostics → Benchmark using Silero VAD** setting at startup.
 Only authenticated built-in admin and superadmin browser-session principals may
 read/change this setting; enforce this at the server route and domain boundary,
 not only by hiding the toggle. Members, custom roles, call participants, join
@@ -402,24 +432,17 @@ call specs, the operational VAD flag, and opening a diagnostics panel cannot ena
 capture when it is off. Resource limits may restrict eligible capture while on;
 they cannot override the setting. All eligible supported calls are considered while
 on, subject to explicit capacity/coverage reporting, not a hidden pilot allowlist.
-Runtime code consumes a versioned local setting projection without per-frame DB
-reads. Unknown/unavailable authority or an expired projection fails closed for
-benchmarking only; calls continue normally. Define and test bounded propagation,
-lease expiry and cross-node invalidation before live activation; a stale enabled
-cache must not remain authoritative indefinitely.
+Runtime code reads the persisted value once at call startup with a bounded read,
+then carries an immutable enabled value and revision. Unknown/unavailable settings
+fail closed for that call; calls continue normally. No per-frame database reads,
+periodic polling, cross-worker invalidation or settings-expiry mechanism is needed.
 
-Enabling starts fresh observation epochs for active eligible calls and new calls;
-never infer prior audio. A turn already in progress is marked partial/unavailable
-until a fully observed boundary is established. Disabling revokes new audio offers,
-stops observers and discards queued audio on every worker. Show applying/pending
-until revocation acknowledgements or lease expiry establish effective disable;
-do not claim an immediate distributed stop from a DB write alone. Only summaries
-of evidence captured while enabled may finish their bounded persistence drain.
-Retain historical reports; turning off collection does not delete them. Re-enable
-creates a new run/epoch and must not merge across the disabled interval. Record
-settings revision on each run. Do not modify provider settings or call control.
-Checkpoint C must record concrete propagation, lease, capacity and timeout limits
-before enabling any live trial.
+A call started enabled may collect until it ends even if an operator later saves
+off. A call started disabled remains disabled even if the operator later saves on.
+New calls observe the latest persisted value. Retain the same snapshot across
+optional room-service restarts. Retain historical reports and record the starting
+settings revision on each run. Source replacement and teardown still have their
+ordinary ownership/cleanup fences. Do not modify provider settings or call control.
 
 ### Timing semantics
 
@@ -521,9 +544,9 @@ Use separate call-owned `call_latency_runs` and `call_turn_diagnostics` tables
   Reserve capacity before sending. Drop diagnostic work on saturation; mark affected
   intervals invalid and restart acoustic continuity. No synchronous DB fallback,
   unbounded mailbox, or retry loop in an audio/provider callback.
-- Cascade on call deletion; reject late writes after deletion or incarnation retirement. After disable,
-  accept only bounded finalization of evidence captured under the prior valid
-  enabled revision; never accept new capture under that revoked revision. Retention uses existing call ownership/timestamps. No new retention clock.
+- Cascade on call deletion; reject late writes after deletion or incarnation retirement. A later settings save does not revoke an existing call’s initial snapshot;
+  enabled calls may continue capture until their lifecycle ends. Calls started
+  disabled capture no diagnostics. Retention uses existing call ownership/timestamps. No new retention clock.
   If DB outage prevents recording loss counters, report coverage unconfirmed rather
   than claiming those counters are complete or guaranteed durable.
 - Keep v1 immutable details publications and their completion gates unchanged.
@@ -580,7 +603,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 | B — Durable timing report | Deterministic replay produces a stored, tenant-safe per-turn report across restart. | Existing Calls/Persistence; independent of A. |
 | C — Passive configured call | Room-owned, per-STT-participant observation produces stored timing without control effects. | B; timing correlation fixtures. |
 | D — Latency details UI | An authorized live or ended call exposes a truthful collapsed timing report. | A–C; fixtures may start after B. |
-| E — Isolation and accuracy | Failure/load tests and labelled replay establish honest error and overhead bounds. | B–D. |
+| E — Application isolation and performance | Failure/load tests verify application isolation and overhead bounds. | B–D. |
 | F — Live acceptance and handbook | Scribe/browser evidence plus documentation and root gates. | A–E. |
 
 ### A — Readable conversation
@@ -639,7 +662,7 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
   of old room-owned workers (including reuse mode) and resolve outstanding starts.
 - [x] Re-prove reuse/fallback through the room service: one inference execution per
   eligible frame, all local Silero/collection combinations, mid-call mode change,
-  join/leave, reconnect, disable/re-enable and stale/late work.
+  join/leave, reconnect, retained call settings and stale/late work.
 - [x] Cut over in one checkpoint: compose the room service, stop starting
   `SourceCoordinator`, then remove scan and agent-identity checks from
   `SourceAttachment`, `DiagnosticSources` and `SourceSupervisor.eligible_agent?/1`.
@@ -674,13 +697,13 @@ evidence sections):
 - [x] Add durable default-off app setting, dedicated admin/superadmin authorization,
   revision conflict handling and update audit. Test member/custom-role/machine denial
   through direct requests and preserve superadmin-only installation URL controls.
-- [x] Versioned settings projection, fail-closed leases, byte/count limits,
-  inference timeouts and retry/drain deadlines; no resource initialization gates
-  calls. Supervision and capacity move to the migration tasks above.
+- [x] Byte/count limits, inference timeouts and retry/drain deadlines. Source
+  supervision and capacity remain in force; settings projection/leases are retired
+  by the new-call migration below.
 
-Open tasks (unchanged in scope; verify on the room-service path):
+Room-service implementation and revised settings acceptance:
 
-- [x] Build the Installation Diagnostics section and Benchmark using Silero VAD toggle with saved/applying/error states and
+- [x] Build the Installation Diagnostics section and Benchmark using Silero VAD toggle with saved/error states and
   role-appropriate navigation. Verify persistence across reload, failed saves,
   stale concurrent edits and desktop/mobile keyboard operation in rendered Chrome.
   [Settings review states](../20261119-2040-diagnostics-settings-review.md) add
@@ -688,19 +711,22 @@ Open tasks (unchanged in scope; verify on the room-service path):
   focused frontend/endpoint evidence. The [production-page browser checkpoint](../20261119-2045-diagnostics-browser-persistence.md)
   verifies actual Admin/Superadmin session login, persisted on/off reloads, stale
   revision conflict/recovery, storage errors and desktop/mobile keyboard controls
-  against a sandboxed backend. Cross-node effective status remains the separate
-  open task below; production currently reports it unavailable.
-- [ ] Specify bounded cross-node settings propagation and effective-status reporting
-  without a new cluster-membership system; never report applied from a saved value.
-- [x] Prove on/off transitions for active/new calls, unknown settings, DB outage,
-  stale enabled cache, restart, worker disconnect and re-enable. Environment/call
-  options cannot bypass off; stop observation and queued audio on revocation;
-  preserve only pre-disable summaries and distinguish partially observed turns.
-  The [settings-transition audit](../20261119-2052-diagnostics-settings-transitions.md)
-  maps these contracts to focused Engine/Calls and configured evidence, including
-  real settings-store unavailability and same-revision recovery. Controlled peer
-  clocks model lost refresh/hints; this is not physical DB partition or global
-  effective-status proof, which remains open above.
+  against a sandboxed backend. Obsolete collection-status and polling UI is
+  removed by the new-call migration below.
+- [x] Snapshot the persisted setting once per new call; retain its choice across
+  later saves and optional service restarts. Verify unavailable initial reads
+  leave that call disabled, while subsequent calls can use a recovered setting.
+  Remove obsolete settings propagation/lease/peer tests and global-status UI;
+  preserve source lifetime, capacity, bounded writes and failure isolation.
+  Historical [settings-transition evidence](../20261119-2052-diagnostics-settings-transitions.md)
+  describes the retired active-call revocation design and does not satisfy this
+  new snapshot contract.
+  [Call-start implementation](../20261120-0250-call-start-settings.md),
+  [test migration](../20261120-0250-settings-test-migration.md) and
+  [configured/browser evidence](../20261120-0255-configured-call-settings.md)
+  verify the replacement, including real DB changes, source replacement and
+  both admin roles. Removed the global supervisor, reader, projection, settings
+  leases and status polling. Focused tests and root static/Lean checks pass.
 - [x] Red-test saturation, observer crash/hang, absent model, DB failure and teardown;
   compare identical provider bytes, commits and production control traces on/off.
   The [control-trace checkpoint](../20261119-2059-diagnostics-control-traces.md)
@@ -730,11 +756,11 @@ Open tasks (unchanged in scope; verify on the room-service path):
 - [x] Inspect desktop/mobile Chrome, keyboard/focus, loading/error and large report
   states in both hosts; keep technical detail opt-in and ordinary messages readable.
 
-### E — Isolation and accuracy
+### E — Application isolation and performance
 
 The [predeclared measurement plan](../../docs/design/latency-diagnostics-measurement-plan.md)
 records the reference hardware, paired warm/cold workloads and numerical budgets.
-The plan alone does not satisfy measured load or acoustic accuracy acceptance.
+The plan alone does not satisfy measured load acceptance.
 The [resource measurement foundation](../20261119-2118-diagnostics-measurement-harness.md)
 adds tested external process CPU/RSS accounting; the configured workload driver
 and complete paired measurements remain outstanding. The
@@ -754,7 +780,7 @@ adds two STT humans per room, ordered peer projections, canonical row identity a
 fixed, declared participant speech windows. Two-room/two-human and single-input
 primed functional smoke each pass all four modes with committed canonical rows;
 earlier cold/overlapping fixture failures remain recorded separately. This does
-not establish cold coverage, full inference coverage or paired-load acceptance.
+not establish cold or paired-load acceptance.
 The [phase-resource checkpoint](../20261119-2322-diagnostics-phase-resources.md)
 adds opt-in audio-clock CPU/RSS intervals with raw samples, identity-fenced RSS
 reset and separate resource-boundary timing gates. Four-mode native verification
@@ -763,8 +789,8 @@ warm/cold or paired-load acceptance.
 The [warm-workload checkpoint](../20261119-2345-diagnostics-warm-workload.md)
 adds fixed five-second warm-up and twenty-second measurement, per-source completed
 turn checks, native readiness deadlines and separate measured-frame pacing checks.
-Single-case selection permits fresh-VM phases; full paired/cold, database CPU,
-response/egress latency and inference-coverage acceptance remain outstanding.
+Single-case selection permits fresh-VM phases; full paired/cold and
+response/egress latency acceptance remain outstanding.
 The [native CPU checkpoint](../20261120-0008-diagnostics-native-cpu.md)
 configures production Silero sessions to use one intra-op thread, preserving
 model outputs while removing the measured extra native worker pool. This is a
@@ -804,9 +830,10 @@ dispatch/egress populations are verified. The
 enforces egress p95 budgets when present on both sides. This implements measurement
 plumbing; actual native paired runs and the remaining load gates stay open.
 
-- [x] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
+- [x] Optional historical replay: labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
   error and incomplete rate; model frame size is not an accuracy guarantee.
+  This completed investigation is no longer a required acceptance gate.
   The [frozen acoustic reference pilot](../20261120-0224-acoustic-sample-provenance.md)
   supplies two attributed human recordings, visually reviewed uncertainty bands
   and twelve reproducible controlled cases. Labels were frozen before detector
@@ -824,7 +851,7 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   [transport timing checkpoint](../20261119-1944-diagnostics-transport-timing.md).
   This uses local fixtures only and does not claim live Telnyx support.
 - [x] Stress deterministic on/off calls with slow inference, full queues, writer
-  crashes, blocked storage and repeated settings revocation/re-enable/teardown. Check bounded retained
+  crashes, blocked storage and repeated source replacement/room teardown. Check bounded retained
   bytes, tasks, mailboxes, retries and absence of call-control differences.
   The [repeated configured lifecycle subcase](../20261119-1953-diagnostics-repeat-lifecycle.md)
   passes 20 complete room lifecycles in each local VAD mode, with exact final
@@ -853,7 +880,7 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   The [paired warm comparison](../20261120-0216-diagnostics-paired-results.md)
   validates matching single-phase artifacts and reports CPU, RSS, ingress and
   dispatch deltas. Its historical one-input pair meets the measured non-CPU
-  budgets; repeated warm/cold, egress, database CPU and coverage evidence remain
+  budgets; repeated warm/cold and egress evidence remain
   required before this task can close.
 - [x] Record the isolation choice (dedicated BEAM worker versus external inference
   process), native failure limits and evidence. Do not promise protection from
@@ -865,18 +892,20 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   Scribe/browser with ordinary local VAD off/on; do not run live Telnyx tests. Keep
   credentials in the established runner and never read or modify its prohibited env file.
 - [ ] Include several normal turns, a pause/resume, interruption, tool-only end
-  and final hangup. Compare permitted recording/listening evidence with stored
-  endpoints, provider evidence and UI; report coverage and error, not universal accuracy.
-- [ ] Demonstrate admin and superadmin app-settings enable/disable on active/new
-  calls, persisted state after reload, denied member requests, and no collection
-  while off. A supported disabled call has unchanged behavior;
+  and final hangup. Verify both primary measurements through stored endpoints,
+  source/turn identities, provider evidence and UI. Verify timestamp/duration
+  relationships and explicit unavailable reasons; no model-accuracy benchmark is required.
+- [ ] Demonstrate admin and superadmin setting saves, persisted state after reload
+  and denied member requests. Existing calls retain their starting choice; new
+  calls use the saved value. Calls started disabled collect no diagnostics and
+  retain unchanged behavior;
   confirm technical events remain hidden by default but inspectable in production UI.
 - [x] Update relevant usage/development handbook pages with configuration, supported
   profiles, timing meanings, privacy, failure/loss semantics and troubleshooting.
   The [handbook checkpoint](../20261119-2033-diagnostics-operator-handbook.md)
   records source verification and the current automatic Scribe profile restriction.
-  Handbook text explicitly retains the unresolved effective-status, load, accuracy
-  and live-acceptance limitations; this does not complete those gates.
+  Handbook text retains unresolved call-start migration, load and live-acceptance
+  limitations; this does not complete those gates.
 - [ ] Pass root format, compile warnings-as-errors, strict Credo, default tests and
   unused-lock checks; run Lean if speech/source state machines change. Run relevant
   frontend/core checks and finish rendered verification. Required unavailable live

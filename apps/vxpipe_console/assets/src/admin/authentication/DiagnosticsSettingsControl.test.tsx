@@ -8,7 +8,7 @@ afterEach(cleanup);
 const off = { enabled: false, revision: 0 };
 const label = "Benchmark using Silero VAD";
 
-test("keeps the saved value until persistence succeeds and distinguishes unknown collection status", async () => {
+test("keeps the saved value until persistence succeeds", async () => {
   let finish!: (value: { enabled: boolean; revision: number }) => void;
   const api = { diagnosticsSettings: vi.fn().mockResolvedValue(off), updateDiagnosticsSettings: vi.fn(() => new Promise<{ enabled: boolean; revision: number }>(resolve => { finish = resolve; })) };
   render(<DiagnosticsSettingsControl api={api} />);
@@ -20,7 +20,7 @@ test("keeps the saved value until persistence succeeds and distinguishes unknown
   expect(api.updateDiagnosticsSettings).toHaveBeenCalledWith(true, 0);
   finish({ enabled: true, revision: 1 });
   await waitFor(() => expect(toggle).toBeChecked());
-  expect(screen.getByText(/Collection status unavailable/)).toBeVisible();
+  expect(screen.queryByText(/Collection status unavailable/)).not.toBeInTheDocument();
 });
 
 test("failed saves preserve the last confirmed value and allow retry after reload", async () => {
@@ -76,103 +76,6 @@ test("load failures offer retry without inventing an off value", async () => {
 });
 
 
-test("applying status refreshes until the server confirms it is applied", async () => {
-  vi.useFakeTimers();
-  const api = { diagnosticsSettings: vi.fn().mockResolvedValueOnce({ ...off, collection_status: "applying" }).mockResolvedValue({ ...off, collection_status: "applied" }), updateDiagnosticsSettings: vi.fn() };
-  const view = render(<DiagnosticsSettingsControl api={api} />);
-  try {
-    await act(async () => {});
-    expect(screen.getByText(/Applying setting/)).toBeVisible();
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(screen.getByText(/Setting applied/)).toBeVisible();
-    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
-    expect(api.diagnosticsSettings).toHaveBeenCalledTimes(2);
-  } finally { view.unmount(); vi.useRealTimers(); }
-});
-
-test("an older status reply cannot replace a newer save", async () => {
-  vi.useFakeTimers();
-  let finish!: (value: typeof off) => void;
-  const api = { diagnosticsSettings: vi.fn().mockResolvedValueOnce({ ...off, collection_status: "applying" }).mockImplementation(() => new Promise(resolve => { finish = resolve; })), updateDiagnosticsSettings: vi.fn().mockResolvedValue({ enabled: true, revision: 1 }) };
-  const view = render(<DiagnosticsSettingsControl api={api} />);
-  try {
-    await act(async () => {});
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    fireEvent.click(screen.getByRole("checkbox"));
-    await act(async () => {});
-    await act(async () => { finish(off); });
-    expect(screen.getByRole("checkbox")).toBeChecked();
-    expect(screen.getByText(/Last confirmed setting: On/)).toBeVisible();
-  } finally { view.unmount(); vi.useRealTimers(); }
-});
-
-test("status checks stop after a bounded number of pending responses and offer reload", async () => {
-  vi.useFakeTimers();
-  const api = { diagnosticsSettings: vi.fn().mockResolvedValue({ ...off, collection_status: "applying" }), updateDiagnosticsSettings: vi.fn() };
-  const view = render(<DiagnosticsSettingsControl api={api} />);
-  try {
-    await act(async () => {});
-    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
-    expect(api.diagnosticsSettings).toHaveBeenCalledTimes(11);
-    expect(screen.getByRole("button", { name: "Reload diagnostics settings" })).toBeVisible();
-    expect(screen.getByRole("alert")).toHaveTextContent("Could not confirm collection status");
-    expect(screen.getByRole("checkbox")).not.toBeChecked();
-  } finally { view.unmount(); vi.useRealTimers(); }
-});
-
-test("a stalled status check times out once and ignores its late result", async () => {
-  vi.useFakeTimers();
-  let finish!: (value: typeof off) => void;
-  const api = { diagnosticsSettings: vi.fn().mockResolvedValueOnce({ ...off, collection_status: "applying" }).mockImplementation(() => new Promise(resolve => { finish = resolve; })), updateDiagnosticsSettings: vi.fn() };
-  const view = render(<DiagnosticsSettingsControl api={api} />);
-  try {
-    await act(async () => {});
-    await act(async () => { await vi.advanceTimersByTimeAsync(11000); });
-    expect(screen.getByRole("alert")).toHaveTextContent("Could not confirm collection status");
-    await act(async () => { finish({ enabled: true, revision: 1 }); });
-    expect(screen.getByRole("checkbox")).not.toBeChecked();
-    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
-    expect(api.diagnosticsSettings).toHaveBeenCalledTimes(2);
-  } finally { view.unmount(); vi.useRealTimers(); }
-});
-
-test("newer pending revisions do not reset the automatic check budget", async () => {
-  vi.useFakeTimers();
-  let revision = 0;
-  const api = { diagnosticsSettings: vi.fn(async () => ({ enabled: false, revision: revision++, collection_status: "applying" as const })), updateDiagnosticsSettings: vi.fn() };
-  const view = render(<DiagnosticsSettingsControl api={api} />);
-  try {
-    await act(async () => {});
-    for (let tick = 0; tick < 15; tick++) await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(api.diagnosticsSettings).toHaveBeenCalledTimes(11);
-    expect(screen.getByRole("alert")).toHaveTextContent("Could not confirm collection status");
-  } finally { view.unmount(); vi.useRealTimers(); }
-});
-
-test("an uncertain save invalidates the previously applied collection status", async () => {
-  const api = { diagnosticsSettings: vi.fn().mockResolvedValue({ enabled: true, revision: 1, collection_status: "applied" }), updateDiagnosticsSettings: vi.fn().mockRejectedValue(new Error("Lost response")) };
-  render(<DiagnosticsSettingsControl api={api} />);
-  fireEvent.click(await screen.findByRole("checkbox"));
-  await screen.findByRole("alert");
-  expect(screen.getByRole("checkbox")).toBeChecked();
-  expect(screen.getByText(/Collection status unavailable/)).toBeVisible();
-  expect(screen.queryByText(/Setting applied/)).not.toBeInTheDocument();
-});
-
-
-test("the Storybook fixture confirms only on a subsequent status read", async () => {
-  vi.useFakeTimers();
-  const view = render(<DiagnosticsSettingsFixture />);
-  try {
-    await act(async () => {});
-    fireEvent.click(screen.getByRole("checkbox"));
-    await act(async () => {});
-    expect(screen.getByText(/Applying setting/)).toBeVisible();
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(screen.getByText(/Setting applied/)).toBeVisible();
-  } finally { view.unmount(); vi.useRealTimers(); }
-});
-
 test("the conflict story reloads the other operator's saved revision before retrying", async () => {
   render(<DiagnosticsSettingsFixture scenario="conflict" />);
   fireEvent.click(await screen.findByRole("checkbox"));
@@ -186,12 +89,19 @@ test("the conflict story reloads the other operator's saved revision before retr
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
-test("the saved-only story matches production without inventing effective status", async () => {
-  render(<DiagnosticsSettingsFixture scenario="saved-only" />);
-  await screen.findByRole("checkbox");
-  expect(screen.getByText(/Collection status unavailable/)).toBeVisible();
-  fireEvent.click(screen.getByRole("checkbox"));
-  await waitFor(() => expect(screen.getByRole("checkbox")).toBeChecked());
-  expect(screen.getByText(/Collection status unavailable/)).toBeVisible();
-  expect(screen.queryByText(/Setting applied|Applying setting/)).not.toBeInTheDocument();
+test("saved settings need no propagation status or background polling", async () => {
+  vi.useFakeTimers();
+  const api = { diagnosticsSettings: vi.fn().mockResolvedValue(off), updateDiagnosticsSettings: vi.fn().mockResolvedValue({ enabled: true, revision: 1 }) };
+  const view = render(<DiagnosticsSettingsControl api={api} />);
+  try {
+    await act(async () => {});
+    expect(screen.queryByText(/Applying setting|Setting applied|Collection status/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: label }));
+    await act(async () => {});
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(screen.getByRole("checkbox")).toBeChecked();
+    expect(screen.getByText("Diagnostics setting saved.")).toBeVisible();
+    expect(api.diagnosticsSettings).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/Applies to new calls/)).not.toBeInTheDocument();
+  } finally { view.unmount(); vi.useRealTimers(); }
 });

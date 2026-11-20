@@ -1,10 +1,14 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
   use ExUnit.Case, async: false
 
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
     CaptureHandoff,
-    SettingsSupervisor,
     SourceWorker
   }
 
@@ -13,21 +17,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
 
   setup context do
     parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :settings)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :settings
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
 
     start_supervised!(
       {ActivitySupervisor,
@@ -50,7 +39,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
 
     {:ok, output} =
       CaptureHandoff.new(self(),
-        projection: __MODULE__.Projection,
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
         maximum_count: Map.get(context, :output_capacity, 8)
       )
 
@@ -73,7 +62,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
          owner: self(),
          attachment_lease: lease,
          output: output,
-         projection: __MODULE__.Projection,
+         settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
          admission: ActivityRuntime.diagnostic_admission(__MODULE__.Runtime),
          source_epoch: epoch,
          clock_id: "clock",
@@ -304,7 +293,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
        maximum_sources: 1}
     )
 
-    {:ok, output} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
+    {:ok, output} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
     alias Vxpipe.CallEngine.Diagnostics.SourceAdmission
     start_supervised!({DynamicSupervisor, name: __MODULE__.RealWorkers, strategy: :one_for_one})
@@ -320,7 +310,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
       attachment_lease: lease,
       owner: self(),
       output: output,
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       source_epoch: ctx.epoch,
       clock_id: "clock",
       source_id: "source",

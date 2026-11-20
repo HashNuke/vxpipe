@@ -1,69 +1,18 @@
 defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.CaptureHandoff
   alias Vxpipe.CallEngine.Media.AudioFrame
-  @projection __MODULE__.Projection
 
   setup do
-    parent = self()
-    clock = :atomics.new(1, signed: true)
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Pool,
-       projection: @projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :read_settings)
-         {:ok, %{enabled: true, revision: 1}}
-       end,
-       clock: fn -> :atomics.get(clock, 1) end,
-       send_after: fn target, message, _delay ->
-         send(parent, {:scheduled, target, message})
-         make_ref()
-       end}
-    )
-
-    assert_receive :read_settings
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
-    %{clock: clock}
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
   end
 
-  test "admission requires live app authority and cannot reopen an expired handoff", ctx do
-    assert {:error, :unavailable} = CaptureHandoff.new(self(), projection: __MODULE__.Absent)
-    assert {:ok, handoff} = new_handoff()
-    assert :ok = CaptureHandoff.offer(handoff, {:audio, frame()})
-    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
-    :atomics.put(ctx.clock, 1, 3_000)
-    assert {:error, :revoked} = CaptureHandoff.message(handoff, message)
-    assert {:error, :unavailable} = CaptureHandoff.offer(handoff, {:audio, frame()})
-
-    assert %{pending_count: 0, pending_bytes: 0, open?: false, discarded: 1} =
-             CaptureHandoff.stats(handoff)
-  end
-
-  test "explicit retirement retains its source boundary after settings expire", ctx do
+  test "explicit retirement retains its source boundary" do
     assert {:ok, handoff} = new_handoff()
     assert :ok = CaptureHandoff.close(handoff)
-    :atomics.put(ctx.clock, 1, 3_000)
     refute CaptureHandoff.current?(handoff)
     assert CaptureHandoff.closed_reason(handoff) == :source_changed
-  end
-
-  test "retirement after authority expiry does not report a source change", ctx do
-    assert {:ok, handoff} = new_handoff()
-    :atomics.put(ctx.clock, 1, 3_000)
-    assert :ok = CaptureHandoff.close(handoff)
-    assert CaptureHandoff.closed_reason(handoff) == :lease_expired
-  end
-
-  test "settings expiry retains its reason after explicit retirement", ctx do
-    assert {:ok, handoff} = new_handoff()
-    :atomics.put(ctx.clock, 1, 3_000)
-    refute CaptureHandoff.current?(handoff)
-    assert :ok = CaptureHandoff.close(handoff)
-    assert CaptureHandoff.closed_reason(handoff) == :lease_expired
   end
 
   test "count and bytes remain reserved until queued or in-flight evidence is released" do
@@ -90,8 +39,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
 
   for limit <- [:count, :bytes] do
     @limit limit
-    test "#{limit} overflow is shared with its collector without changing local queue accounting",
-         c do
+    test "#{limit} overflow is shared with its collector without changing local queue accounting" do
       assert {:ok, collector} = new_handoff()
       options = if @limit == :count, do: [maximum_count: 1], else: [maximum_bytes: 1_024]
       assert {:ok, input} = new_handoff(Keyword.put(options, :provenance, collector))
@@ -106,9 +54,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
       assert CaptureHandoff.stats(collector).overflow == 0
       assert CaptureHandoff.closed_reason(collector) == nil
 
-      :atomics.put(c.clock, 1, 3_000)
       assert :ok = CaptureHandoff.close(input)
-      assert CaptureHandoff.closed_reason(collector) == :lease_expired
+      assert CaptureHandoff.closed_reason(collector) == :source_changed
       assert CaptureHandoff.overflowed?(collector)
       assert :ok = CaptureHandoff.close(collector)
       assert CaptureHandoff.overflowed?(collector)
@@ -130,47 +77,26 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
 
   test "concurrent producers cannot grow the receiver queue beyond reserved capacity" do
     assert {:ok, handoff} = new_handoff(maximum_count: 4)
-    :sys.suspend(@projection)
 
-    try do
-      results =
-        1..64
-        |> Task.async_stream(fn _ -> CaptureHandoff.offer(handoff, {:audio, frame()}) end,
-          max_concurrency: 8,
-          timeout: :infinity
-        )
-        |> Enum.to_list()
+    results =
+      1..64
+      |> Task.async_stream(fn _ -> CaptureHandoff.offer(handoff, {:audio, frame()}) end,
+        max_concurrency: 8,
+        timeout: :infinity
+      )
+      |> Enum.to_list()
 
-      assert Enum.count(results, &(&1 == {:ok, :ok})) == 4
-      assert Enum.count(results, &(&1 == {:ok, {:error, :full}})) == 60
-      assert %{pending_count: 4, overflow: 60} = CaptureHandoff.stats(handoff)
+    assert Enum.count(results, &(&1 == {:ok, :ok})) == 4
+    assert Enum.count(results, &(&1 == {:ok, {:error, :full}})) == 60
+    assert %{pending_count: 4, overflow: 60} = CaptureHandoff.stats(handoff)
 
-      for _ <- 1..4 do
-        assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
-        assert {:ok, _packet, charge} = CaptureHandoff.message(handoff, message)
-        CaptureHandoff.release(handoff, charge, :processed)
-      end
-
-      refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
-    after
-      :sys.resume(@projection)
+    for _ <- 1..4 do
+      assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
+      assert {:ok, _packet, charge} = CaptureHandoff.message(handoff, message)
+      CaptureHandoff.release(handoff, charge, :processed)
     end
-  end
 
-  test "queued evidence cannot cross an expiry and refresh at the same saved revision", ctx do
-    assert {:ok, handoff} = new_handoff()
-    assert :ok = CaptureHandoff.offer(handoff, {:audio, frame()})
-    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
-    :atomics.put(ctx.clock, 1, 3_000)
-    assert_receive {:scheduled, target, {:poll, _} = poll}
-    send(target, poll)
-    assert_receive :read_settings
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
-    assert {:error, :revoked} = CaptureHandoff.message(handoff, message)
-    assert {:ok, fresh} = new_handoff()
-    assert CaptureHandoff.current?(fresh)
-    refute CaptureHandoff.current?(handoff)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
 
   test "probability evidence is bounded and carries reset epoch without PCM or transcripts" do
@@ -225,7 +151,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
   end
 
   defp new_handoff(options \\ []),
-    do: CaptureHandoff.new(self(), Keyword.put(options, :projection, @projection))
+    do:
+      CaptureHandoff.new(
+        self(),
+        Keyword.put(options, :settings, Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+      )
 
   defp frame do
     %AudioFrame{

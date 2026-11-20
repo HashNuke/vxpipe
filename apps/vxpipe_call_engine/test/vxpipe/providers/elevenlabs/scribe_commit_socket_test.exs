@@ -1,29 +1,21 @@
 defmodule Vxpipe.Providers.ElevenLabs.ScribeCommitSocketTest do
   use ExUnit.Case, async: false
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
   @moduletag :integration
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
   alias Vxpipe.CallEngine.Speech.Socket
   alias Vxpipe.CallEngine.TestSpeechWireServer
   alias Vxpipe.Providers.ElevenLabs.{Scribe, ScribeSocket}
 
   test "timed commits send exactly the existing frame and revoked observation cannot block sending" do
-    parent = self()
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-    {:ok, handoff} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
     server = start_supervised!({TestSpeechWireServer, owner: self()})
 
     socket =

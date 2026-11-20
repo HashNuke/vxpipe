@@ -1,29 +1,15 @@
 defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff, SettingsSupervisor}
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff}
   alias Vxpipe.Calls.Diagnostics.{Collector, Supervisor}
 
   setup do
-    parent = self()
-    clock = :atomics.new(1, signed: true)
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       clock: fn -> :atomics.get(clock, 1) end,
-       send_after: fn _, _, _ -> make_ref() end,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-
     start_supervised!(
       {Supervisor,
        name: __MODULE__.WritersRoot,
@@ -41,7 +27,7 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
       origin_us: -100_000,
       owner: self(),
       coordinator: self(),
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       writer_supervisor: __MODULE__.Writers,
       writer_options: [
         repository: {Vxpipe.Calls.TestControlledLatencyRepository, self()},
@@ -50,7 +36,7 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
       ]
     ]
 
-    %{options: options, generation: generation, clock: clock}
+    %{options: options, generation: generation}
   end
 
   test "blocked writer admission cannot outlive the collector startup budget", c do
@@ -80,7 +66,7 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
     end
   end
 
-  test "upstream overflow remains explicit when the run later loses settings authority", c do
+  test "upstream overflow remains explicit when its source retires", c do
     collector = start_supervised!({Collector, c.options})
     capture = Collector.handoff(collector)
     assert_receive {:diagnostic_write, task, run}
@@ -91,7 +77,7 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
       assert {:ok, upstream} =
                CaptureHandoff.new(self(),
                  owner: self(),
-                 projection: __MODULE__.Projection,
+                 settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
                  provenance: capture,
                  maximum_count: 1
                )
@@ -99,14 +85,12 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
       assert :ok = CaptureHandoff.offer(upstream, {:reset, 0, :partial_start, 0})
       assert {:error, :full} = CaptureHandoff.offer(upstream, {:reset, 0, :partial_start, 0})
       assert CaptureHandoff.stats(capture).overflow == 0
-      :atomics.put(c.clock, 1, 3_000)
       assert :ok = CaptureHandoff.close(upstream)
       monitor = Process.monitor(collector)
       :ok = :sys.resume(collector)
       send(collector, :check)
       assert_receive {:diagnostic_write, task, closed}
       assert closed.state == :incomplete
-      assert :lease_expired in closed.reasons
       assert :observer_overloaded in closed.reasons
       send(task, {:finish, {:ok, closed}})
       assert_receive {:DOWN, ^monitor, :process, ^collector, :normal}
@@ -167,69 +151,6 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
     assert %{pending_count: 0, pending_bytes: 0, discarded: 1} = CaptureHandoff.stats(handoff)
     send(task, {:finish, {:ok, closed}})
     refute_received {:diagnostic_turn_write, _, _, _}
-  end
-
-  test "settings expiry remains distinct from source retirement", c do
-    collector = start_supervised!({Collector, c.options})
-    handoff = Collector.handoff(collector)
-    assert_receive {:diagnostic_write, task, run}
-    send(task, {:finish, {:ok, run}})
-    :atomics.put(c.clock, 1, 3_000)
-    refute CaptureHandoff.current?(handoff)
-    CaptureHandoff.close(handoff)
-    monitor = Process.monitor(collector)
-    send(collector, :check)
-    assert_receive {:DOWN, ^monitor, :process, ^collector, :normal}
-    assert_receive {:diagnostic_write, task, closed}
-    assert :lease_expired in closed.reasons
-    refute :source_changed in closed.reasons
-    send(task, {:finish, {:ok, closed}})
-  end
-
-  for observed <- [false, true] do
-    @tag observed: observed
-    test "an owner DOWN preserves settings expiry, already observed #{observed}", c do
-      owner =
-        start_supervised!(
-          Elixir.Supervisor.child_spec({Agent, fn -> :source end}, restart: :temporary)
-        )
-
-      collector = start_supervised!({Collector, Keyword.put(c.options, :owner, owner)})
-      handoff = Collector.handoff(collector)
-      assert_receive {:diagnostic_write, task, run}
-      send(task, {:finish, {:ok, run}})
-      :ok = :sys.suspend(collector)
-
-      :sys.replace_state(collector, fn state ->
-        Process.cancel_timer(state.timer)
-
-        receive do
-          :check -> :ok
-        after
-          0 -> :ok
-        end
-
-        state
-      end)
-
-      :atomics.put(c.clock, 1, 3_000)
-
-      if c.observed do
-        refute CaptureHandoff.current?(handoff)
-        assert CaptureHandoff.closed_reason(handoff) == :lease_expired
-      end
-
-      owner_down = Process.monitor(owner)
-      Agent.stop(owner, :normal)
-      assert_receive {:DOWN, ^owner_down, :process, ^owner, :normal}
-      collector_down = Process.monitor(collector)
-      :ok = :sys.resume(collector)
-      assert_receive {:DOWN, ^collector_down, :process, ^collector, :normal}, 1_000
-      assert_receive {:diagnostic_write, task, closed}
-      send(task, {:finish, {:ok, closed}})
-      assert :lease_expired in closed.reasons
-      refute :source_changed in closed.reasons
-    end
   end
 
   test "collectors start through a bounded owner and release their slot after drain", c do

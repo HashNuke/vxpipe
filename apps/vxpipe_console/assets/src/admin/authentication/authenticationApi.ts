@@ -8,7 +8,7 @@ export type ConnectedClient = {
   expires_at: string;
 };
 
-export type DiagnosticsSettings = { enabled: boolean; revision: number; collection_status?: "applying" | "applied" | "unavailable" };
+export type DiagnosticsSettings = { enabled: boolean; revision: number };
 
 export type InstallationSettings = { public_url: string | null; revision: number };
 

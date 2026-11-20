@@ -1,52 +1,30 @@
 defmodule Vxpipe.Providers.ElevenLabs.ScribeProfileSessionTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsProjection, SettingsSupervisor}
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, DiagnosticSubscription, Event, Session}
   alias Vxpipe.CallEngine.TestElevenLabsScribeTransport, as: Wire
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
-  @projection __MODULE__.Projection
-
-  setup do
-    parent = self()
-
-    store =
-      start_supervised!(
-        {Agent,
-         fn -> %{enabled: false, revision: 1, now: System.monotonic_time(:millisecond)} end}
-      )
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: @projection,
-       reader: __MODULE__.Reader,
-       send_after: fn _, _, _ -> make_ref() end,
-       clock: fn -> Agent.get(store, & &1.now) end,
-       loader: fn ->
-         value = Agent.get(store, & &1)
-         send(parent, {:settings_loaded, value.revision})
-         {:ok, Map.take(value, [:enabled, :revision])}
-       end}
-    )
-
-    loaded(1)
-    %{store: store}
-  end
 
   for wrapped <- [false, true] do
-    test "profile query after enabling capture preserves existing #{if wrapped, do: "wrapped", else: "direct"} speech",
-         %{store: store} do
+    test "profile query with capture preserves existing #{if wrapped, do: "wrapped", else: "direct"} speech" do
       {session, wire} =
         start_session(unquote(wrapped), %{
           "model_id" => "scribe_v2_realtime",
           "commit_strategy" => "vad"
         })
 
-      assert {:error, :unavailable} = SettingsProjection.grant(@projection)
       assert :ok = Session.push_audio(session, <<1, 0>>)
       assert_receive {:scribe_audio, ^wire, <<1, 0>>}
-      enable(store)
-      {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+      {:ok, handoff} =
+        CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
       assert :ok = DiagnosticSubscription.request_profile(session, handoff)
       canonical = session.generation
 
@@ -78,12 +56,12 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeProfileSessionTest do
   end
 
   for wrapped <- [false, true] do
-    test "manual #{if wrapped, do: "wrapped", else: "direct"} query is explicitly unsupported", %{
-      store: store
-    } do
+    test "manual #{if wrapped, do: "wrapped", else: "direct"} query is explicitly unsupported" do
       {session, wire} = start_session(unquote(wrapped), %{"commit_strategy" => "manual"}, :manual)
-      enable(store)
-      {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+      {:ok, handoff} =
+        CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
       assert :ok = DiagnosticSubscription.request_profile(session, handoff)
       canonical = session.generation
       assert {:provider_profile, ^canonical, _provider, :unsupported} = packet(handoff)
@@ -91,20 +69,23 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeProfileSessionTest do
       assert_receive {:scribe_audio, ^wire, _}, 1_000
     end
 
-    test "profile query preserves an existing #{if wrapped, do: "wrapped", else: "direct"} observation",
-         %{store: store} do
+    test "profile query preserves an existing #{if wrapped, do: "wrapped", else: "direct"} observation" do
       {session, wire} =
         start_session(unquote(wrapped), %{
           "model_id" => "scribe_v2_realtime",
           "commit_strategy" => "vad"
         })
 
-      enable(store)
-      {:ok, capture} = CaptureHandoff.new(self(), projection: @projection)
+      {:ok, capture} =
+        CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
       assert :ok = Channel.observe(session, capture)
       assert_receive {:scribe_observing, ^wire, token}
       assert token == capture.token
-      {:ok, query} = CaptureHandoff.new(self(), projection: @projection)
+
+      {:ok, query} =
+        CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
       assert :ok = DiagnosticSubscription.request_profile(session, query)
       assert {:provider_profile, _, _, _} = packet(query)
       assert CaptureHandoff.current?(capture)
@@ -119,21 +100,6 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeProfileSessionTest do
       assert_receive {:scribe_audio, ^wire, <<7, 0>>}
       refute_received {:scribe_observing, _, _}
     end
-  end
-
-  defp enable(store) do
-    Agent.update(store, &%{&1 | enabled: true, revision: 2, now: &1.now + 1_000})
-    :ok = SettingsProjection.invalidate(@projection)
-    _ = :sys.get_state(@projection)
-    poll = :sys.get_state(@projection).poll
-    send(@projection, {:poll, poll})
-    loaded(2)
-  end
-
-  defp loaded(revision) do
-    assert_receive {:settings_loaded, ^revision}, 1_000
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
   end
 
   defp start_session(wrapped, echoes, strategy \\ :vad) do

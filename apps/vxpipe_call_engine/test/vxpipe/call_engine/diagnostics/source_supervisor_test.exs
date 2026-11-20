@@ -15,7 +15,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisorTest do
          tasks: __MODULE__.Tasks,
          runtime: __MODULE__.Runtime,
          port: __MODULE__.Port,
-         projection: __MODULE__.Projection,
          maximum_sources: 2,
          collector: collector,
          load: fn ->
@@ -27,7 +26,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisorTest do
     assert {:ok, port} = SourcePort.read(__MODULE__.Port)
     assert port.collector == collector
     assert port.runtime == __MODULE__.Runtime
-    assert port.projection == __MODULE__.Projection
     assert port.maximum_sources == 2
 
     assert Enum.sort(Enum.map(Supervisor.which_children(pool), &elem(&1, 0))) ==

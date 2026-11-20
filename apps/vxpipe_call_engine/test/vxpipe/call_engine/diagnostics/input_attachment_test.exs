@@ -1,11 +1,15 @@
 defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
   use ExUnit.Case, async: false
 
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
     CaptureHandoff,
-    SettingsProjection,
-    SettingsSupervisor,
+    CallSettings,
     SourceAdmission,
     SourceAttachment,
     SourceWorker,
@@ -24,38 +28,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
   alias Vxpipe.CallEngine.Media.AudioFrame
 
   setup context do
-    parent = self()
-
-    settings =
-      start_supervised!(
-        {Agent,
-         fn ->
-           %{
-             enabled: true,
-             revision: 1,
-             now: System.monotonic_time(:millisecond)
-           }
-         end}
-      )
-
     start_supervised!({Registry, keys: :unique, name: __MODULE__.Rooms})
 
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       clock: fn -> Agent.get(settings, & &1.now) end,
-       send_after: fn _, _, _ -> make_ref() end,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, Agent.get(settings, &Map.take(&1, [:enabled, :revision]))}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
     tree = start_supervised!({Vxpipe.CallEngine.Speech.CapabilityTree, owner: self()})
 
     policy = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
@@ -114,7 +88,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
          inference: __MODULE__.Inference,
          tasks: __MODULE__.Tasks,
          runtime: __MODULE__.Runtime,
-         projection: __MODULE__.Projection,
          maximum_sources: 1}
       )
 
@@ -143,7 +116,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
       payload: <<0, 0, 1, 0>>
     }
 
-    %{settings: settings, capability: capability, room: room, pool: pool, frame: frame}
+    %{capability: capability, room: room, pool: pool, frame: frame}
   end
 
   test "participant attachment needs no selected agent and keeps its slot until worker exits",
@@ -196,13 +169,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
     {:ok, lease} = SourceAdmission.reserve(__MODULE__.Admission, self())
 
     {:ok, output} =
-      CaptureHandoff.new(self(), owner: ctx.capability, projection: __MODULE__.Projection)
+      CaptureHandoff.new(self(),
+        owner: ctx.capability,
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+      )
 
     options = [
       owner: ctx.capability,
       coordinator: self(),
       output: output,
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       attachment_lease: lease,
       mode: :operational_reuse,
       source_epoch: ctx.frame.source_epoch,
@@ -232,13 +208,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
     {:ok, lease} = SourceAdmission.reserve(__MODULE__.Admission, self())
 
     {:ok, output} =
-      CaptureHandoff.new(self(), owner: ctx.capability, projection: __MODULE__.Projection)
+      CaptureHandoff.new(self(),
+        owner: ctx.capability,
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+      )
 
     options = [
       owner: ctx.capability,
       coordinator: self(),
       output: output,
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       attachment_lease: lease,
       mode: :operational_reuse,
       source_epoch: ctx.frame.source_epoch,
@@ -299,9 +278,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
     SourceAdmission.cancel(__MODULE__.Admission, options.attachment_lease)
   end
 
-  test "invalidated collection authority cannot allocate an input observer", ctx do
+  test "a mismatched call snapshot cannot allocate an input observer", ctx do
     {candidate, packet, options} = prepare(ctx)
-    SettingsProjection.invalidate(__MODULE__.Projection)
+    options = %{options | settings: CallSettings.new(%{enabled: true, revision: 1})}
     assert {:error, :stale_source} = SourceAttachment.start_input(candidate, packet, options)
     refute_received {:collector_started, _}
     assert DynamicSupervisor.which_children(__MODULE__.RoomWorkers) == []
@@ -366,7 +345,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
     {:ok, handoff} =
       CaptureHandoff.new(self(),
         owner: ctx.capability,
-        projection: __MODULE__.Projection,
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
         maximum_count: 2,
         maximum_bytes: 4_096
       )
@@ -402,7 +381,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
     parent = self()
 
     options = %{
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       coordinator: self(),
       attachment_lease: lease,
       source_admission: __MODULE__.Admission,
@@ -410,7 +389,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.InputAttachmentTest do
       runtime: __MODULE__.Runtime,
       collector: fn context ->
         send(parent, {:collector_started, context})
-        CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
+
+        CaptureHandoff.new(parent,
+          owner: context.capability,
+          settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+        )
       end
     }
 

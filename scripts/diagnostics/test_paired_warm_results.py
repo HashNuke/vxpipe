@@ -160,6 +160,9 @@ class PairedWarmResultsTest(unittest.TestCase):
         self.assertTrue(result['measured_gates_pass'])
         self.assertFalse(result['cpu']['within_original_target'])
         self.assertTrue(result['cpu']['advisory'])
+        self.assertNotIn('database_cpu', result['missing_acceptance_evidence'])
+        self.assertNotIn('inference_coverage', result['missing_acceptance_evidence'])
+        self.assertNotIn('acoustic_accuracy', result['missing_acceptance_evidence'])
         self.assertFalse(result['milestone_acceptance_complete'])
         self.assertIn('egress_latency', result['missing_acceptance_evidence'])
 

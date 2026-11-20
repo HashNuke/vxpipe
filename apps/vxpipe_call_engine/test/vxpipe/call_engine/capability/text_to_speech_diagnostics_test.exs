@@ -1,31 +1,16 @@
 defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Capability.TextToSpeech
-  alias Vxpipe.CallEngine.Capability.TextToSpeech.Tree
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
-  alias Vxpipe.CallEngine.Speech.PrivateInit
-  alias Vxpipe.CallEngine.{SpeechTTSUsageProbe, TestAudioOutputSink, TextToSpeechRequest}
-  @projection __MODULE__.Projection
 
   setup do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: @projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
     :ok
   end
+
+  alias Vxpipe.CallEngine.Capability.TextToSpeech
+  alias Vxpipe.CallEngine.Capability.TextToSpeech.Tree
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
+  alias Vxpipe.CallEngine.Speech.PrivateInit
+  alias Vxpipe.CallEngine.{SpeechTTSUsageProbe, TestAudioOutputSink, TextToSpeechRequest}
 
   test "stop evidence belongs to the new human and precedes provider cancellation" do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -38,7 +23,12 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
     assert_receive {:usage_probe_audio_credited, ^reference, _}
     assert :ok = TestAudioOutputSink.playback_started(sink)
     assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
-    assert {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+    assert {:ok, handoff} =
+             CaptureHandoff.new(self(),
+               settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+             )
+
     generation = make_ref()
     turn_ref = make_ref()
     context = {handoff, generation, turn_ref, "new-human-turn", "new-command"}
@@ -82,7 +72,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
     assert :ok = TestAudioOutputSink.playback_started(sink)
     assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
     :ok = TestAudioOutputSink.defer_interrupt(sink, true)
-    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     generation = make_ref()
     context = {handoff, generation, make_ref(), "new-turn", "new-command"}
     monitor = Process.monitor(capability)
@@ -127,7 +120,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
     first_after = System.monotonic_time(:microsecond)
     :ok = TestAudioOutputSink.playback_started(sink)
     assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
-    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
     assert {:ok, [{^old, 0}]} =
              TextToSpeech.interrupt_observed(
@@ -146,7 +141,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
   test "an idle capability has no playback to measure" do
     capability = start_capability([])
     assert {:ok, _, :ready} = await_ready(capability)
-    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
 
     assert {:ok, []} =
              TextToSpeech.interrupt_observed(
@@ -170,7 +167,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
     :ok = TestAudioOutputSink.playback_started(sink)
     assert_receive {:vxpipe_tts_playback, ^capability, ^old, :started}
     :ok = TestAudioOutputSink.defer_interrupt(sink, true)
-    {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, handoff} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     parent = self()
 
     start_supervised!(
@@ -189,7 +189,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
 
     assert_receive {:test_audio_output_interrupt, ^sink, "old-turn", 0}
     :ok = CaptureHandoff.close(handoff)
-    {:ok, replacement} = CaptureHandoff.new(self(), projection: @projection)
+
+    {:ok, replacement} =
+      CaptureHandoff.new(self(), settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+
     assert CaptureHandoff.closed_reason(handoff) == :source_changed
     :ok = TestAudioOutputSink.complete_interrupt(sink)
     assert_receive {:interrupted, {:ok, [{^old, 0}]}}
@@ -218,7 +221,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechDiagnosticsTest do
       if scenario == :wrong_turn, do: TestAudioOutputSink.playback_completed(sink)
 
       assert {:ok, handoff} =
-               CaptureHandoff.new(self(), projection: @projection, maximum_count: 1)
+               CaptureHandoff.new(self(),
+                 settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
+                 maximum_count: 1
+               )
 
       if scenario == :full,
         do: assert(:ok = CaptureHandoff.offer(handoff, {:reset, 0, :partial_start, 0}))

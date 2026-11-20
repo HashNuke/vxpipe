@@ -1,33 +1,18 @@
 defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
   use ExUnit.Case, async: false
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
   alias Vxpipe.CallEngine.Capability.SpeechToText
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Speech.CapabilityTree
   alias Vxpipe.CallEngine.SpeechSessionProbe
-  @projection __MODULE__.Projection
-
-  setup do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: @projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
-    :ok
-  end
 
   test "only a current observation handle accompanies onset and completion to the owning room" do
     {capability, generation, frame} = capability(:ok)
@@ -619,7 +604,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     assert {:ok, handoff} =
              CaptureHandoff.new(
                self(),
-               options |> Keyword.put(:projection, @projection) |> Keyword.put(:owner, owner)
+               options
+               |> Keyword.put(:settings, Vxpipe.CallEngine.TestCallSettings.get(__MODULE__))
+               |> Keyword.put(:owner, owner)
              )
 
     handoff

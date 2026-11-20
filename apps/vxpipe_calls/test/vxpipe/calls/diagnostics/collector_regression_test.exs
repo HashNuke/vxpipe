@@ -1,28 +1,15 @@
 defmodule Vxpipe.Calls.Diagnostics.CollectorRegressionTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+
+  setup do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
+    :ok
+  end
+
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
   alias Vxpipe.Calls.Diagnostics.{Collector, Coverage, Supervisor}
 
   setup do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       clock: fn -> 0 end,
-       send_after: fn _, _, _ -> make_ref() end,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-
     start_supervised!(
       {Supervisor,
        name: __MODULE__.WritersRoot,
@@ -38,7 +25,7 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorRegressionTest do
       origin_us: -100_000,
       owner: self(),
       coordinator: self(),
-      projection: __MODULE__.Projection,
+      settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
       writer_supervisor: __MODULE__.Writers,
       writer_options: [
         repository: {Vxpipe.Calls.TestControlledLatencyRepository, self()},

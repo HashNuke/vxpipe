@@ -34,7 +34,7 @@ defmodule Vxpipe.Persistence.DiagnosticsSettingsStore do
     end)
   end
 
-  @doc "Internal projection read; never exposed as an unauthenticated browser operation."
+  @doc "Internal call-start snapshot read; never exposed as an unauthenticated browser operation."
   def snapshot do
     with {:ok, row} <- current(false), do: {:ok, %{enabled: row.enabled, revision: row.revision}}
   rescue

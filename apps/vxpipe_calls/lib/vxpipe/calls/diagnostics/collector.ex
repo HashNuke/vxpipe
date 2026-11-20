@@ -28,7 +28,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
          {:ok, capture} <-
            CaptureHandoff.new(self(),
              owner: Keyword.fetch!(options, :owner),
-             projection: Keyword.fetch!(options, :projection)
+             settings: Keyword.fetch!(options, :settings)
            ),
          true <- elem(capture.grant, 0) == run.settings_revision,
          {:ok, writer} <-

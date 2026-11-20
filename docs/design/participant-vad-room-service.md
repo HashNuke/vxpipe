@@ -32,8 +32,10 @@ Room ownership does not put inference in RoomAuthority. Keep shared bounded
 inference/model infrastructure and asynchronous Calls persistence. The optional
 service must not gate room readiness, block call callbacks, or cause room shutdown
 through restart intensity exhaustion. No generic service framework is required.
-The existing installation setting remains the collection gate; operational Silero
-continues normally when diagnostic collection is disabled.
+Each call snapshots the persisted installation setting once at startup. Later
+saves affect new calls only; operational Silero remains independent of collection.
+The snapshot survives optional service restarts. Settings polling, leases and
+cross-worker propagation are removed under the user's 2026-11-20 scope correction.
 
 ## Current evidence and migration implications
 
@@ -75,13 +77,14 @@ room process. Keep shared model weights with independent participant stream stat
 Acceptance must cover two STT participants, an STT participant without a selected
 LLM agent, mixed STT/STS rooms, transfer continuity while audio continues, all local
 Silero/collection combinations, source/mode changes, crash isolation and teardown.
-Then repeat configured failure parity, measured accuracy/load and Scribe/browser
+Then repeat configured failure parity, measured load and Scribe/browser
 live acceptance. No live Telnyx tests or Telnyx implementation changes are required.
 
 This revision is based on source review, not a new runtime validation. The existing
 node-level limits remain implementation evidence until migrated and reverified.
-Global effective-settings status remains an explicit open acceptance item; room
-ownership alone does not resolve it.
+There is no global effective-settings status requirement. Current call-start
+settings acceptance is tracked in the milestone; historical propagation notes
+below describe the superseded implementation.
 
 ## Segment record contract
 
@@ -260,16 +263,16 @@ counter; capacity loss is explicit, and a waiting room can attach after a source
 retires. Agent selection does not own these attachments.
 
 SourcePort is a named Engine-defined injection boundary for the Calls-owned source
-pool's collector factory, shared inference runtime, settings projection and limit.
+pool's collector factory, shared inference runtime and limit. The room supplies
+its immutable call-start settings to attachment construction.
 Cutover must compose that port under the existing Calls-owned SourceSupervisor.
 Missing ports are unavailable. Each candidate captures the resolved port PID;
 attachment checks it and workers independently monitor/check it, so a stalled room
 service cannot keep observing through dependency loss.
 
-AttachmentRunner is a single fixed supervised IO slot, following SettingsReader's
-existing pattern. RoomService sends an asynchronous request and installs its
+AttachmentRunner is a single fixed supervised IO slot. RoomService sends an asynchronous request and installs its
 500 ms lease deadline without waiting for task-supervisor startup. Timeout,
-disable and dependency loss revoke the lease but retain the busy reference until
+source retirement and dependency loss revoke the attachment lease but retain the busy reference until
 the runner replies. This prevents an unresponsive callback from accumulating
 queued replacements. A late queued request checks the revoked lease before doing
 collector work. The runner uses explicit brutal-kill shutdown because startup
@@ -323,9 +326,9 @@ A routing change that replaces the human STT allocation retires its acoustic run
 even when participant, connection and capability PID survive. The two capture
 handoffs share a first-closure provenance atomic while retaining independent
 bounded queues, tokens and open gates. A source retirement records
-`source_changed`; expired or revoked settings authority records `lease_expired`.
-Later cleanup cannot overwrite that first observed cause. Explicit retirement
-checks the existing settings deadline before classifying the closure.
+`source_changed`. Later cleanup cannot overwrite that first observed cause.
+Older records may contain `lease_expired` from the retired settings-authority
+design; new immutable call settings have no expiry deadline.
 
 SourceAttachment closes capture before cancelling its attachment lease. SourceWorker
 shares the collector handoff's provenance with its input, so a producer-side source

@@ -1,29 +1,14 @@
 defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
-  alias Vxpipe.CallEngine.Speech.{CapabilityTree, ConversationalSTT, Event, Session}
-  alias Vxpipe.CallEngine.SpeechOnsetProbe
-  @projection __MODULE__.Projection
 
   setup do
-    parent = self()
-
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: @projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, %{enabled: true, revision: 1}}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(@projection)
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__)
     :ok
   end
+
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff}
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, ConversationalSTT, Event, Session}
+  alias Vxpipe.CallEngine.SpeechOnsetProbe
 
   for observing? <- [false, true] do
     @observing observing?
@@ -38,7 +23,8 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
 
       pcm = :binary.copy(<<8, 0>>, 2_048)
       assert :ok = Session.push_audio(session, pcm)
-      assert_receive {:classified, _, 0, ^pcm}
+      assert_receive {:classified, classifier, 0, ^pcm}
+      send(classifier, :finish)
       assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
 
       if observer do
@@ -290,7 +276,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
          mode: :operational_reuse,
          owner: self(),
          output: output,
-         projection: @projection,
+         settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
          source_epoch: epoch,
          clock_id: "clock",
          source_id: "source",
@@ -375,7 +361,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
       if audio != :binary.copy(<<0>>, 1_024) do
         send(parent, {:classified, self(), stream.samples, audio})
 
-        if hold? == true,
+        if hold? in [true, :fail],
           do:
             (receive do
                :finish -> :ok
@@ -418,7 +404,11 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
   end
 
   defp handoff do
-    assert {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+    assert {:ok, handoff} =
+             CaptureHandoff.new(self(),
+               settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+             )
+
     handoff
   end
 

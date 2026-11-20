@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
     CaptureHandoff,
-    SettingsProjection,
+    CallSettings,
     SourceSupervisor,
     SourceWorker,
     SourcePort
@@ -26,7 +26,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
          options
        ) do
     with true <- AttachmentLease.current?(options.attachment_lease),
-         {:ok, grant} <- SettingsProjection.grant(options.projection),
+         {:ok, grant} <- CallSettings.grant(options.settings),
          true <- grant == candidate.grant,
          true <- current_candidate?(candidate) do
       context = %{
@@ -41,6 +41,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         provider_profile: candidate.provider_profile,
         policy_intervals: intervals,
         settings_revision: elem(grant, 0),
+        settings: options.settings,
         source_epoch: epoch,
         run_id: id("run"),
         source_id: id("source"),
@@ -87,7 +88,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     case collector(options.collector, context) do
       {:ok, %CaptureHandoff{} = output}
       when output.owner == context.capability and
-             output.projection == options.projection and output.grant == candidate.grant ->
+             output.settings == options.settings and output.grant == candidate.grant ->
         result =
           if current_candidate?(candidate),
             do: start_worker(candidate, context, track, output, options),
@@ -108,7 +109,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
       coordinator: context.coordinator,
       attachment_lease: context.attachment_lease,
       output: output,
-      projection: options.projection,
+      settings: options.settings,
       mode: context.mode,
       source_epoch: context.source_epoch,
       source_id: context.source_id,

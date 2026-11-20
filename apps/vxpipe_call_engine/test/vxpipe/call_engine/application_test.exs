@@ -32,38 +32,26 @@ defmodule Vxpipe.CallEngine.ApplicationTest do
              Enum.find_index(children, &(&1 == Vxpipe.CallEngine.RoomSupervisor))
   end
 
-  test "diagnostic settings reader is optional, named and cannot restart the engine on exhaustion" do
+  test "persisted diagnostic settings are read per call, not by a global supervisor" do
     settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
     parent = self()
 
     loader = fn ->
       send(parent, :unexpected_settings_read)
-      {:error, :unavailable}
+      {:ok, %{enabled: true, revision: 1}}
     end
 
     configured = Keyword.put(settings, :diagnostics_settings_loader, loader)
-    alias Vxpipe.CallEngine.Diagnostics.{SettingsProjection, SettingsReader, SettingsSupervisor}
 
-    {SettingsSupervisor, options} =
-      Enum.find(Application.child_specs(configured), fn
-        {SettingsSupervisor, _} -> true
-        _ -> false
-      end)
+    assert Application.child_specs(configured) |> Enum.map(&child_id/1) ==
+             Application.child_specs(settings) |> Enum.map(&child_id/1)
 
-    assert Keyword.fetch!(options, :projection) == SettingsProjection
-    assert Keyword.fetch!(options, :reader) == SettingsReader
-    assert Keyword.fetch!(options, :loader) == loader
-    assert SettingsSupervisor.child_spec(options).restart == :temporary
     refute_received :unexpected_settings_read
-
-    refute Enum.any?(
-             Application.child_specs(Keyword.delete(settings, :diagnostics_settings_loader)),
-             fn
-               {SettingsSupervisor, _} -> true
-               _ -> false
-             end
-           )
   end
+
+  defp child_id(%{id: id}), do: id
+  defp child_id({module, _options}), do: module
+  defp child_id(module), do: module
 
   test "agent cleanup supervisor outlives room teardown and has an explicit name" do
     settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)

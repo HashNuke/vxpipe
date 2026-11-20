@@ -117,9 +117,8 @@ def compare_validated(off, on):
                 measured_gates_pass=rss_delta <= rss_limit and all(x['passed'] for x in latencies.values()),
                 milestone_acceptance_complete=False,
                 missing_acceptance_evidence=([] if 'egress' in off else ['egress_latency']) +
-                                            ['database_cpu', 'inference_coverage',
-                                             'cold_phases', 'repeated_topology_matrix',
-                                             'acoustic_accuracy', 'live_acceptance'])
+                                            ['cold_phases', 'repeated_topology_matrix',
+                                             'live_acceptance'])
 
 
 def main():

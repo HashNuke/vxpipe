@@ -10,7 +10,6 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     ModelFixture,
     CaptureHandoff,
     SourceWorker,
-    SettingsSupervisor,
     RoomService,
     RoomSupervisor
   }
@@ -73,6 +72,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         &Keyword.put(&1, :fixture, {AgentRuntimeModelProvider, [fixture: model]})
       )
       |> Keyword.put(:diagnostics, port: __MODULE__.Port)
+      |> Keyword.put(:diagnostics_settings_loader, &DiagnosticsSettingsStore.snapshot/0)
       |> Keyword.put(:speech_to_text,
         providers: %{
           STTSession => [
@@ -170,25 +170,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
              DiagnosticsSettingsStore.update(operator(), enabled, 0)
 
     start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       loader: fn ->
-         result = DiagnosticsSettingsStore.snapshot()
-         send(parent, :settings_read)
-         result
-       end}
-    )
-
-    assert_receive :settings_read
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-
-    start_supervised!(
       {Vxpipe.Calls.Diagnostics.Supervisor,
        name: __MODULE__.Diagnostics,
-       projection: __MODULE__.Projection,
        repository:
          cond do
            Map.has_key?(tags, :storage_failure) ->
@@ -1193,8 +1176,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @vad vad
     @diagnostics diagnostics
     @expected if(vad, do: :operational, else: if(diagnostics, do: :benchmark, else: nil))
-    test "configured source uses the correct inference path with VAD #{@vad} and diagnostics #{@diagnostics}",
+    test "configured call retains initial diagnostics #{@diagnostics} across database changes and source replacement with VAD #{@vad}",
          c do
+      enabled = c.diagnostics_enabled
       {call, _connection, attachment, wire, identity} = call(c.options, @vad)
       epoch = make_ref()
 
@@ -1239,225 +1223,88 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                  0
       end
 
-      assert {:ok, %{entries: before_toggle}} =
-               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+      change_diagnostics(not enabled, c.settings_revision)
+      # Updating the real database never changes this room's initial decision.
+      context = Map.put(c, :vad, @vad)
+      phase = if @diagnostics, do: :enabled, else: :disabled
 
-      off_pcm = :binary.copy(<<8, 0>>, 512)
+      observed =
+        lifecycle_turn(context, call, attachment, wire, identity, epoch, sequence + 1, 70, phase)
 
-      next_sequence =
-        if @diagnostics do
-          change_diagnostics(false, c.settings_revision)
-          _ = RoomService.scan(RoomService.address(identity))
-          await_diagnostic_drain(identity)
-          send_audio(attachment, identity, epoch, sequence + 1, (sequence + 1) * 512, off_pcm)
-          assert_receive {:scribe_audio, ^wire, ^off_pcm}, 2_000
-
-          if @vad do
-            assert_receive {:matrix_inference, :operational, samples, ^off_pcm}, 2_000
-            assert samples == (sequence + 1) * 512
-          end
-
-          sequence + 2
-        else
-          sequence + 1
-        end
-
-      change_diagnostics(
-        true,
-        if(@diagnostics, do: c.settings_revision + 1, else: c.settings_revision)
-      )
-
-      next_sequence = discover_with_audio(attachment, identity, epoch, wire, next_sequence)
-      on_pcm = :binary.copy(<<9, 0>>, 512)
-      send_audio(attachment, identity, epoch, next_sequence, next_sequence * 512, on_pcm)
-      assert_receive {:scribe_audio, ^wire, ^on_pcm}, 2_000
-      enabled_mode = if @vad, do: :operational, else: :benchmark
-      assert_receive {:matrix_inference, ^enabled_mode, samples, ^on_pcm}, 2_000
-      if @vad, do: assert(samples == next_sequence * 512)
-
-      entries =
-        await(fn ->
-          case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
-            {:ok, %{entries: entries}} when length(entries) == length(before_toggle) + 1 ->
-              entries
-
-            _ ->
-              nil
-          end
-        end)
-
-      assert length(Enum.uniq_by(entries, & &1.run.source_epoch)) == length(entries)
-
-      assert Enum.all?(before_toggle, fn old -> Enum.any?(entries, &(&1.run.id == old.run.id)) end)
+      if @diagnostics, do: assert(observed.run.settings_revision == c.settings_revision)
 
       replacement_epoch = make_ref()
       replacement_probe = :binary.copy(<<10, 0>>, 512)
       send_audio(attachment, identity, replacement_epoch, 0, 0, replacement_probe)
       assert_receive {:scribe_audio, ^wire, ^replacement_probe}, 2_000
-
-      if @vad do
-        assert_receive {:matrix_inference, :operational, samples, ^replacement_probe}, 2_000
-        assert samples == (next_sequence + 1) * 512
-      end
-
+      if @vad, do: assert_receive({:matrix_inference, :operational, _, ^replacement_probe}, 2_000)
       _ = RoomService.scan(RoomService.address(identity))
-      await_diagnostic_drain(identity)
 
-      replacement_sequence = discover_with_audio(attachment, identity, replacement_epoch, wire, 1)
-      replacement_pcm = :binary.copy(<<11, 0>>, 512)
+      if @diagnostics do
+        replacement_sequence =
+          discover_with_audio(attachment, identity, replacement_epoch, wire, 1)
 
-      send_audio(
-        attachment,
-        identity,
-        replacement_epoch,
-        replacement_sequence,
-        replacement_sequence * 512,
-        replacement_pcm
-      )
+        replacement =
+          lifecycle_turn(
+            context,
+            call,
+            attachment,
+            wire,
+            identity,
+            replacement_epoch,
+            replacement_sequence,
+            71,
+            :enabled
+          )
 
-      assert_receive {:scribe_audio, ^wire, ^replacement_pcm}, 2_000
-      assert_receive {:matrix_inference, ^enabled_mode, samples, ^replacement_pcm}, 2_000
-      if @vad, do: assert(samples == (next_sequence + 1 + replacement_sequence) * 512)
+        refute replacement.run.id == observed.run.id
+        refute replacement.run.source_epoch == observed.run.source_epoch
+        assert replacement.run.settings_revision == c.settings_revision
 
-      replacement_entries =
-        await(fn ->
-          case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
-            {:ok, %{entries: rows}} when length(rows) == length(entries) + 1 -> rows
-            _ -> nil
-          end
-        end)
+        assert {:ok, %{entries: entries}} =
+                 LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
 
-      assert length(Enum.uniq_by(replacement_entries, & &1.run.source_epoch)) ==
-               length(replacement_entries)
+        assert Enum.any?(entries, &(&1.run.id == observed.run.id and &1.run.closed_at != nil))
+      else
+        assert RoomService.status(RoomService.address(identity)).active_sources == 0
 
-      assert Enum.all?(entries, fn old ->
-               Enum.any?(
-                 replacement_entries,
-                 &(&1.run.id == old.run.id and not is_nil(&1.run.closed_at))
-               )
-             end)
-
-      GenServer.stop(attachment.room_authority, :shutdown)
-      await_diagnostic_drain(identity)
-
-      refute_received {:matrix_inference, _, _, ^replacement_probe}
-      refute_received {:matrix_inference, _, _, ^replacement_pcm}
-      refute_received {:scribe_audio, ^wire, ^replacement_probe}
-      refute_received {:scribe_audio, ^wire, ^replacement_pcm}
-      refute_received {:matrix_inference, _, _, ^pcm}
-      refute_received {:matrix_inference, _, _, ^off_pcm}
-      refute_received {:matrix_inference, _, _, ^on_pcm}
-      refute_received {:scribe_audio, ^wire, ^pcm}
-      refute_received {:scribe_audio, ^wire, ^off_pcm}
-      refute_received {:scribe_audio, ^wire, ^on_pcm}
-      refute_received {:scribe_commit, ^wire}
-    end
-  end
-
-  for vad <- [false, true] do
-    @tag matrix: true, vad: vad, settings_unavailable: true
-    test "settings store unavailability revokes and recovers configured observation, Silero #{vad}",
-         c do
-      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
-      epoch = make_ref()
-      sequence = discover_with_audio(attachment, identity, epoch, wire)
-      before = lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, 81, :enabled)
-
-      [{_, worker, _, _}] =
-        DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
-
-      handoff = SourceWorker.handoff(worker)
-      worker_down = Process.monitor(worker)
-      settings = Repo.get!(Vxpipe.Persistence.Schema.DiagnosticsSettings, "default")
-
-      # A real store error, isolated to this sandbox. Do not send an invalidation:
-      # the normal projection reader must discover the unavailable setting.
-      Repo.delete!(settings)
-      assert {:error, :unavailable} = DiagnosticsSettingsStore.snapshot()
-
-      await(fn ->
-        match?(
-          {:unavailable, _},
-          Vxpipe.CallEngine.Diagnostics.SettingsProjection.status(__MODULE__.Projection)
-        )
-      end)
-
-      assert_receive {:DOWN, ^worker_down, :process, ^worker, _}, 2_000
-      await_diagnostic_drain(identity)
-      assert_diagnostic_slots_released()
-      refute CaptureHandoff.current?(handoff)
-
-      during =
-        lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence + 1, 81, :disabled)
-
-      # Recovery at the same durable revision must still mint a fresh capture
-      # epoch; the previously revoked handoff cannot become usable again.
-      Repo.insert!(Ecto.put_meta(settings, state: :built))
-
-      await(fn ->
-        Vxpipe.CallEngine.Diagnostics.SettingsProjection.status(__MODULE__.Projection) ==
-          {:enabled, settings.revision}
-      end)
-
-      sequence = discover_with_audio(attachment, identity, epoch, wire, sequence + 2)
-
-      recovered =
-        lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, 81, :reenabled)
-
-      assert recovered.run.settings_revision == before.run.settings_revision
-      refute recovered.run.id == before.run.id
-      refute recovered.run.source_epoch == before.run.source_epoch
-      refute CaptureHandoff.current?(handoff)
-
-      assert {:ok, completion} =
-               CallEngine.monitor_room_completion(
-                 identity.tenant_id,
-                 identity.room_id,
-                 identity.incarnation_id
-               )
-
-      GenServer.stop(attachment.room_authority, :shutdown)
-      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
-      await_diagnostic_drain(identity)
-      assert_diagnostic_slots_released()
-
-      assert {:ok, %{entries: entries}} =
-               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
-
-      assert length(entries) == 2
-      %{run: interrupted} = Enum.find(entries, &(&1.run.id == before.run.id))
-      assert interrupted.state == :incomplete
-      assert :lease_expired in interrupted.reasons
-
-      stored =
-        Enum.flat_map(entries, fn %{run: run} ->
-          assert run.closed_at != nil
-
-          assert {:ok, turns} =
-                   LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
-
-          Enum.map(turns, &{run.id, &1.turn_id})
-        end)
-
-      assert Enum.sort(stored) ==
-               Enum.sort([{before.run.id, before.turn_id}, {recovered.run.id, recovered.turn_id}])
-
-      refute Enum.any?(stored, fn {_, turn_id} -> turn_id == during.turn_id end)
-
-      for observed <- [before, during, recovered] do
-        pcm = observed.pcm
-        turn_id = observed.turn_id
-        refute_received {:scribe_audio, ^wire, ^pcm}
-        refute_received {:matrix_inference, _, _, ^pcm}
-
-        refute_received {:vxpipe_event,
-                         %ParticipantTranscription{final: true, correlation_id: ^turn_id}}
-
-        refute_received {:vxpipe_event, %CallEngine.Event.TextOutput{correlation_id: ^turn_id}}
+        assert {:ok, %{entries: []}} =
+                 LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
       end
 
-      refute_received {:scribe_commit, ^wire}
-      refute_received {:vxpipe_connection_unavailable, _}
+      GenServer.stop(attachment.room_authority, :shutdown)
+      await_diagnostic_drain(identity)
+      assert :ok = stop_supervised(SpeechConnection)
+
+      # The next real configured call reads the new database choice, in both
+      # directions, while its provider bytes and text response stay unchanged.
+      {next_call, _connection, next_attachment, next_wire, next_identity} = call(c.options, @vad)
+      next_epoch = make_ref()
+
+      next_sequence =
+        if not enabled,
+          do: discover_with_audio(next_attachment, next_identity, next_epoch, next_wire),
+          else: 0
+
+      next_phase = if @diagnostics, do: :disabled, else: :enabled
+
+      next =
+        lifecycle_turn(
+          context,
+          next_call,
+          next_attachment,
+          next_wire,
+          next_identity,
+          next_epoch,
+          next_sequence,
+          72,
+          next_phase
+        )
+
+      if not enabled, do: assert(next.run.settings_revision == c.settings_revision + 1)
+      GenServer.stop(next_attachment.room_authority, :shutdown)
+      await_diagnostic_drain(next_identity)
+      refute_received {:scribe_commit, _}
     end
   end
 
@@ -1712,11 +1559,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           )
         end
 
-        change_diagnostics(false, c.settings_revision)
-        refute CaptureHandoff.current?(handoff)
+        assert CaptureHandoff.current?(handoff)
         assert :ok = :sys.resume(worker)
         assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 2_000
         await_diagnostic_drain(identity)
+        refute CaptureHandoff.current?(handoff)
 
         assert %{pending_count: 0, pending_bytes: 0, discarded: discarded} =
                  CaptureHandoff.stats(handoff)
@@ -1766,7 +1613,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
   for vad <- [false, true] do
     @tag matrix: true, vad: vad, repeated_lifecycle: true, timeout: 120_000
-    test "twenty configured enable/revoke/re-enable/teardown cycles release diagnostics, Silero #{vad}",
+    test "twenty configured call-start/continue/teardown cycles release diagnostics, Silero #{vad}",
          c do
       measure_memory? = System.get_env("VXPIPE_DIAGNOSTIC_STRESS_RSS") == "1"
 
@@ -1781,25 +1628,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
           assert first.run.settings_revision == revision
 
-          change_diagnostics(false, revision)
-          await_diagnostic_drain(identity)
-          assert_diagnostic_slots_released()
-
-          disabled =
-            lifecycle_turn(
-              c,
-              call,
-              attachment,
-              wire,
-              identity,
-              epoch,
-              sequence + 1,
-              cycle,
-              :disabled
-            )
-
-          change_diagnostics(true, revision + 1)
-          sequence = discover_with_audio(attachment, identity, epoch, wire, sequence + 2)
+          # Collection remains tied to this call until teardown.
+          sequence = sequence + 1
 
           second =
             lifecycle_turn(
@@ -1811,12 +1641,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
               epoch,
               sequence,
               cycle,
-              :reenabled
+              :continued
             )
 
-          assert second.run.settings_revision == revision + 2
-          refute second.run.id == first.run.id
-          refute second.run.source_epoch == first.run.source_epoch
+          assert second.run.settings_revision == revision
+          assert second.run.id == first.run.id
+          assert second.run.source_epoch == first.run.source_epoch
 
           assert {:ok, completion} =
                    CallEngine.monitor_room_completion(
@@ -1836,8 +1666,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
           assert_complete_text_trace(connection, identity, [
             "Lifecycle #{cycle} enabled.",
-            "Lifecycle #{cycle} disabled.",
-            "Lifecycle #{cycle} reenabled."
+            "Lifecycle #{cycle} continued."
           ])
 
           assert :ok = stop_supervised(SpeechConnection)
@@ -1845,7 +1674,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           assert {:ok, %{entries: entries}} =
                    LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
 
-          assert length(entries) == 2
+          assert length(entries) == 1
           assert Enum.all?(entries, &(not is_nil(&1.run.closed_at)))
 
           stored =
@@ -1862,9 +1691,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
                      {second.run.id, second.turn_id}
                    ])
 
-          refute Enum.any?(stored, fn {_, turn_id} -> turn_id == disabled.turn_id end)
-
-          for observed <- [first, disabled, second] do
+          for observed <- [first, second] do
             pcm = observed.pcm
             turn_id = observed.turn_id
             refute_received {:scribe_audio, ^wire, ^pcm}
@@ -1880,7 +1707,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           refute_received {:scribe_commit, ^wire}
           refute_received {:vxpipe_connection_unavailable, _}
           rss = if measure_memory?, do: diagnostic_rss_kib()
-          {rss, revision + 2}
+          {rss, revision}
         end)
 
       if measure_memory? do
@@ -1967,7 +1794,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert_receive {:diagnostic_still_blocked, ^task, ^reference}, 1_000
       end
 
-      change_diagnostics(false, c.settings_revision)
+      GenServer.stop(attachment.room_authority, :shutdown)
       await_diagnostic_drain(identity)
 
       if inference do
@@ -1984,7 +1811,6 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       refute_received {:scribe_commit, ^wire}
       refute_received {:vxpipe_connection_unavailable, _}
-      GenServer.stop(attachment.room_authority, :shutdown)
 
       assert_complete_text_trace(
         connection,
@@ -3279,7 +3105,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   end
 
   defp lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, phase) do
-    phase_number = %{enabled: 0, disabled: 1, reenabled: 2} |> Map.fetch!(phase)
+    phase_number = %{enabled: 0, disabled: 1, continued: 2} |> Map.fetch!(phase)
     pcm = :binary.copy(<<cycle * 3 + phase_number, 0>>, 512)
     pace(32)
     send_audio(attachment, identity, epoch, sequence, sequence * 512, pcm)
@@ -3372,11 +3198,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     assert {:ok, %{enabled: ^enabled, revision: next}} =
              DiagnosticsSettingsStore.update(operator(), enabled, revision)
 
-    expected = {if(enabled, do: :enabled, else: :disabled), next}
-
-    await(fn ->
-      Vxpipe.CallEngine.Diagnostics.SettingsProjection.status(__MODULE__.Projection) == expected
-    end)
+    next
   end
 
   defp await_diagnostic_drain(identity, timeout \\ 2_000) do

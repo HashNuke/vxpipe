@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Diagnostics.RoomSupervisor do
   @moduledoc "Optional room-owned observers and attachment work with an isolated restart budget."
   use Supervisor
-  alias Vxpipe.CallEngine.Diagnostics.{AttachmentRunner, RoomService}
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentRunner, CallSettings, RoomService}
 
   def address(identity, role) when role in [:supervisor, :service, :workers, :runner],
     do:
@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomSupervisor do
       service: address(identity, :service),
       workers: address(identity, :workers),
       runner: address(identity, :runner),
+      settings: CallSettings.capture(),
       room: room
     )
   end

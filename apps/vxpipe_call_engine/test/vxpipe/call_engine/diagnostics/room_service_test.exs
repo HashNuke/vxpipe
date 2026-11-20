@@ -1,11 +1,17 @@
 defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
   use ExUnit.Case, async: false
 
+  setup context do
+    Vxpipe.CallEngine.TestCallSettings.start!(__MODULE__,
+      enabled: Map.get(context, :collection, true)
+    )
+
+    :ok
+  end
+
   alias Vxpipe.CallEngine.Diagnostics.{
     AttachmentLease,
     CaptureHandoff,
-    SettingsProjection,
-    SettingsSupervisor,
     SourceAdmission,
     RoomService,
     RoomSupervisor,
@@ -27,36 +33,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
   setup context do
     parent = self()
 
-    settings =
-      start_supervised!(
-        {Agent,
-         fn ->
-           %{
-             enabled: Map.get(context, :collection, true),
-             revision: 1,
-             now: System.monotonic_time(:millisecond)
-           }
-         end}
-      )
-
     start_supervised!({Registry, keys: :unique, name: __MODULE__.Rooms})
 
-    start_supervised!(
-      {SettingsSupervisor,
-       name: __MODULE__.Settings,
-       projection: __MODULE__.Projection,
-       reader: __MODULE__.Reader,
-       clock: fn -> Agent.get(settings, & &1.now) end,
-       send_after: fn _, _, _ -> make_ref() end,
-       loader: fn ->
-         send(parent, :loaded)
-         {:ok, Agent.get(settings, &Map.take(&1, [:enabled, :revision]))}
-       end}
-    )
-
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
     tree = start_supervised!({Vxpipe.CallEngine.Speech.CapabilityTree, owner: self()})
 
     policy = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
@@ -117,7 +95,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
          inference: __MODULE__.Inference,
          tasks: __MODULE__.Tasks,
          runtime: __MODULE__.Runtime,
-         projection: __MODULE__.Projection,
          maximum_sources: 1,
          load: fn -> {:ok, :fixture_model} end,
          classify: classifier(parent, :benchmark)}
@@ -145,7 +122,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     }
 
     %{
-      settings: settings,
       capability: capability,
       room: room,
       pool: pool,
@@ -164,7 +140,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
         :release -> :ok
       end
 
-      CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
+      CaptureHandoff.new(parent,
+        owner: context.capability,
+        settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+      )
     end)
 
     start_room(ctx)
@@ -248,28 +227,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     assert_receive {:scribe_audio, _, _}
   end
 
-  test "grant invalidation during collection rejects and closes the returned output", ctx do
-    parent = self()
-
-    start_port(fn context ->
-      {:ok, output} =
-        CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
-
-      SettingsProjection.invalidate(__MODULE__.Projection)
-      _ = :sys.get_state(__MODULE__.Projection)
-      send(parent, {:collector_output, output})
-      {:ok, output}
-    end)
-
-    start_room(ctx)
-    assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
-    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
-    assert_receive {:collector_output, output}, 1_000
-    assert %{active_sources: 0, pending?: false} = settled()
-    refute CaptureHandoff.current?(output)
-    assert :sys.get_state(ctx.capability).diagnostic_tap == nil
-  end
-
   test "missing source port stays unavailable and later reconciliation can attach", ctx do
     start_room(ctx)
 
@@ -318,7 +275,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
 
       start_port(fn context ->
         {:ok, output} =
-          CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
+          CaptureHandoff.new(parent,
+            owner: context.capability,
+            settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+          )
 
         if :atomics.add_get(attempts, 1, 1) == 1 do
           send(parent, {:held_collector, self(), context, output})
@@ -451,25 +411,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
   end
 
-  test "disable revokes capture and re-enable starts a fresh partial run", ctx do
-    start_port()
-    start_room(ctx)
-    attach(ctx)
-    input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
-    monitor = Process.monitor(input.receiver)
-    enable(ctx.settings, false, 2)
-
-    assert %{pending?: false, last_reason: :settings_unavailable} =
-             RoomService.scan(__MODULE__.Service)
-
-    send(input.receiver, :check_grant)
-    assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
-    refute CaptureHandoff.current?(input)
-    enable(ctx.settings, true, 3)
-    attach(%{ctx | frame: %{ctx.frame | sequence_number: 2}})
-    assert :sys.get_state(ctx.capability).diagnostic_tap.handoff.token != input.token
-  end
-
   test "restart reconciles the same input and exhausted diagnostics leave the call open", ctx do
     start_port()
     supervisor = start_room(ctx)
@@ -521,6 +462,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
 
     start_supervised!(
       {RoomSupervisor,
+       settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
        name: __MODULE__.SecondDiagnostics,
        service: __MODULE__.SecondService,
        workers: __MODULE__.SecondWorkers,
@@ -639,72 +581,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
         refute_received {:collector_started, _}
         refute_received {:matrix_inference, :benchmark, _, ^pcm}
       end
-
-      old = :sys.get_state(ctx.capability).diagnostic_tap
-      monitor = if old, do: Process.monitor(old.handoff.receiver)
-      enable(ctx.settings, false, 2)
-
-      assert %{pending?: false, last_reason: :settings_unavailable} =
-               RoomService.scan(__MODULE__.Service)
-
-      if old do
-        send(old.handoff.receiver, :check_grant)
-        assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
-        refute CaptureHandoff.current?(old.handoff)
-      end
-
-      off_pcm = :binary.copy(<<8, 0>>, 512)
-
-      assert :ok =
-               SpeechToText.push_audio(ctx.capability, %{
-                 frame
-                 | payload: off_pcm,
-                   sequence_number: 3,
-                   timestamp: 1_024,
-                   received_at: System.monotonic_time(:millisecond) + 32
-               })
-
-      assert_receive {:scribe_audio, ^wire, ^off_pcm}, 1_000
-
-      if ctx.local_vad,
-        do: assert_receive({:matrix_inference, :operational, 1_024, ^off_pcm}, 1_000)
-
-      refute_receive {:matrix_inference, _, _, ^off_pcm}, 100
-      assert DynamicSupervisor.which_children(__MODULE__.RoomWorkers) == []
-      enable(ctx.settings, true, 3)
-
-      restarted =
-        attach(%{
-          ctx
-          | frame: %{
-              frame
-              | sequence_number: 4,
-                timestamp: 1_536,
-                received_at: System.monotonic_time(:millisecond) + 32
-            }
-        })
-
-      assert_receive {:scribe_audio, ^wire, ^initial_pcm}, 1_000
-      assert restarted.mode == if(ctx.local_vad, do: :operational_reuse, else: :benchmark_only)
-      on_pcm = :binary.copy(<<9, 0>>, 512)
-
-      assert :ok =
-               SpeechToText.push_audio(ctx.capability, %{
-                 frame
-                 | payload: on_pcm,
-                   sequence_number: 5,
-                   timestamp: 2_048,
-                   received_at: System.monotonic_time(:millisecond) + 32
-               })
-
-      assert_receive {:scribe_audio, ^wire, ^on_pcm}, 1_000
-      expected = if ctx.local_vad, do: :operational, else: :benchmark
-      assert_receive {:matrix_inference, ^expected, samples, ^on_pcm}, 1_000
-      if ctx.local_vad, do: assert(samples == 2_048)
-      refute_receive {:matrix_inference, _, _, ^on_pcm}, 100
-      refute_received {:scribe_audio, ^wire, ^off_pcm}
-      refute_received {:scribe_audio, ^wire, _}
-      refute_received {:scribe_commit, ^wire}
     end
   end
 
@@ -944,7 +820,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
           :release ->
             CaptureHandoff.new(parent,
               owner: context.capability,
-              projection: __MODULE__.Projection
+              settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
             )
         end
       end)
@@ -1087,17 +963,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     assert_receive {:scribe_audio, _, _}
   end
 
-  defp enable(settings, enabled, revision) do
-    Agent.update(settings, &%{&1 | enabled: enabled, revision: revision, now: &1.now + 1_000})
-    SettingsProjection.invalidate(__MODULE__.Projection)
-    _ = :sys.get_state(__MODULE__.Projection)
-    token = :sys.get_state(__MODULE__.Projection).poll
-    send(__MODULE__.Projection, {:poll, token})
-    assert_receive :loaded
-    _ = :sys.get_state(__MODULE__.Reader)
-    _ = :sys.get_state(__MODULE__.Projection)
-  end
-
   defp attach(ctx) do
     assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
@@ -1114,22 +979,23 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
       collector ||
         fn context ->
           send(parent, {:collector_started, context})
-          CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
+
+          CaptureHandoff.new(parent,
+            owner: context.capability,
+            settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__)
+          )
         end
 
     start_supervised!(
       {SourcePort,
-       name: __MODULE__.Port,
-       projection: __MODULE__.Projection,
-       runtime: __MODULE__.Runtime,
-       maximum_sources: 1,
-       collector: factory}
+       name: __MODULE__.Port, runtime: __MODULE__.Runtime, maximum_sources: 1, collector: factory}
     )
   end
 
   defp start_room(ctx) do
     start_supervised!(
       {RoomSupervisor,
+       settings: Vxpipe.CallEngine.TestCallSettings.get(__MODULE__),
        name: __MODULE__.RoomDiagnostics,
        service: __MODULE__.Service,
        workers: __MODULE__.RoomWorkers,

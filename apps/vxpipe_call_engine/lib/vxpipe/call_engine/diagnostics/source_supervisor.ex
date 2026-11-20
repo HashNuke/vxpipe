@@ -59,7 +59,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
         :classify,
         :collector,
         port: SourcePort,
-        projection: Vxpipe.CallEngine.Diagnostics.SettingsProjection,
         maximum_sources: 16,
         max_jobs: 1,
         load_timeout_ms: 15_000,
@@ -105,7 +104,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
              name: Keyword.fetch!(options, :port),
              collector: collector,
              runtime: Keyword.fetch!(options, :runtime),
-             projection: Keyword.fetch!(options, :projection),
              maximum_sources: maximum}
           ]
 
