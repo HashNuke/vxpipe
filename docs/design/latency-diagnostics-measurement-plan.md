@@ -134,6 +134,27 @@ Record generator lateness; missing frames or p95 scheduling lateness above 2 ms
 invalidate the pair. Preserve and report invalid attempts; rerun only after
 identifying the environmental/harness cause, with the same budgets.
 
+### Fixed warm workload implementation
+
+The configured runner supports `--workload warm` and an optional single `--case`
+(`fallback-off`, `fallback-on`, `reuse-off`, `reuse-on`). Warm mode forces fresh
+committed databases and scoped resource sampling. It emits audio over [0, 25 s),
+measures [5 s, 25 s), and retains 201 resource samples. Each source has exactly
+625 measured frames; its full-run count is 781 or 782 according to its stagger.
+The 24-frame speech clips use a 60-frame cadence with separate same-room human
+windows. Both full-run and measured-only PCM p95 must meet the 2 ms limit.
+
+The fixture checks ten completed canonical turns per input using conservative
+VM receipt bounds: first measured-resource packet receipt through the timestamp
+before generator launch plus 25 seconds. Successful speech-bearing native inference
+must complete by the pre-launch timestamp plus five seconds for each required
+source. Neither model readiness nor response acknowledgements change pacing.
+
+This foundation does not implement the complete paired driver, cold phases,
+database CPU, response/egress latency or the full inference-coverage gate. See the
+[warm-workload checkpoint](../../labnotes/20261119-2345-diagnostics-warm-workload.md)
+for verification and limitations.
+
 ## Measurements and predeclared pass criteria
 
 Measure process CPU time across all threads, wall duration, sampled RSS and OS
@@ -236,8 +257,8 @@ The earlier probes remain invalid under their original contract; they are not
 relabelled as passes. CPU/RSS regression budgets and PCM timing limits are unchanged.
 Missing/reset-failed/incomplete or replaced-PID intervals fail. Linux-reported HWM
 may dip slightly; retain its maximum observed value after reset. A generator start
-offset is available for future warm phases; 5000 ms in this short smoke leaves
-1.144 seconds, not the full paired interval.
+offset also applies to the short smoke; 5000 ms there leaves only
+1.144 seconds. The separate warm profile above provides the full 20-second interval.
 Database CPU, cold preparation and the complete paired driver remain outstanding.
 
 

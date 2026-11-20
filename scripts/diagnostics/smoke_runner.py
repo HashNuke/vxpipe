@@ -18,11 +18,14 @@ import time
 import uuid
 
 from measurement import ProcessSample, read_process, summarize
+from workload_profile import profile
 
 ROOT = Path(__file__).resolve().parents[2]
 MARKER = 'DIAGNOSTIC_GENERATOR_UNIT '
 SMOKE_MARKER = 'DIAGNOSTIC_EXTERNAL_SMOKE '
 RESOURCE_MARKER = 'DIAGNOSTIC_RESOURCE_SAMPLE '
+CASES = {'fallback-off': (False, False), 'fallback-on': (False, True),
+         'reuse-off': (True, False), 'reuse-on': (True, True)}
 
 
 class OwnedUnits:
@@ -141,15 +144,21 @@ def stop_unit(unit, *, system=False):
             raise RuntimeError('could not stop owned transient unit')
 
 
-def resource_complete(report, samples):
+def resource_complete(report, samples, workload='smoke'):
+    plan = profile(workload)
+    duration_ns = plan.duration_ns - plan.measurement_start_ns
+    expected_count = (duration_ns + 99_999_999) // 100_000_000 + 1
     try:
         interval = report['generator']['resource_interval']
         events = report['resource_samples']
-        if (not isinstance(interval, dict) or len(events) != 63
+        if (not isinstance(interval, dict) or len(events) != expected_count
                 or interval.get('timing_contract') != 'boundary-2ms-no-skipped-slot-v1'):
             return False
         start, end = interval['scheduled_start_ns'], interval['scheduled_end_ns']
-        if type(start) is not int or type(end) is not int or end - start != 6_144_000_000:
+        if type(start) is not int or type(end) is not int or end - start != duration_ns:
+            return False
+        if (start != report['generator']['audio_start_ns'] + plan.measurement_start_ns
+                or end != report['generator']['audio_start_ns'] + plan.duration_ns):
             return False
         if [e['deadline_ns'] for e in events] != list(range(start, end, 100_000_000)) + [end]:
             return False
@@ -171,7 +180,7 @@ def resource_complete(report, samples):
                 and max(lateness[0], lateness[-1]) <= 2_000_000
                 and all(e['read_finished_ns'] < following['deadline_ns']
                         for e, following in zip(events[1:-1], events[2:]))
-                and 6.140 <= summary['duration_seconds'] <= 6.148
+                and duration_ns / 1e9 - .004 <= summary['duration_seconds'] <= duration_ns / 1e9 + .004
                 and interval['start_lateness_ns'] == lateness[0]
                 and interval['end_lateness_ns'] == lateness[-1]
                 and interval['maximum_lateness_ns'] == max(lateness)
@@ -181,14 +190,17 @@ def resource_complete(report, samples):
 
 
 def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_per_room=1,
-                   sample_resources=False):
-    expected = {(False, False), (False, True), (True, False), (True, True)}
-    if len(reports) != 4 or {(r['operational_vad'], r['collection']) for r in reports} != expected:
+                   sample_resources=False, workload='smoke', selected_case=None):
+    plan = profile(workload)
+    sample_resources = sample_resources or workload == 'warm'
+    committed_writes = committed_writes or workload == 'warm'
+    expected = set(CASES.values()) if selected_case is None else {selected_case}
+    if not expected <= set(CASES.values()) or len(reports) != len(expected) or {(r['operational_vad'], r['collection']) for r in reports} != expected:
         return False
     if not any(sample['beams'] for sample in samples):
         return False
     if sample_resources:
-        if not all(resource_complete(r, samples) for r in reports):
+        if not all(resource_complete(r, samples, workload) for r in reports):
             return False
         for previous, current in zip(reports, reports[1:]):
             if (current['generator']['resource_interval']['scheduled_start_ns'] <=
@@ -199,18 +211,32 @@ def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_
     if committed_writes and any(r.get('persistence') != 'committed' or
                                 r.get('database_pool_size') != 10 for r in reports):
         return False
-    if any(r.get('rooms', 1) != rooms or r.get('inputs_per_room', 1) != inputs_per_room
+    if any(r.get('workload', 'smoke') != workload or r.get('rooms', 1) != rooms or r.get('inputs_per_room', 1) != inputs_per_room
            for r in reports):
         return False
+    inputs = rooms * inputs_per_room
+    if workload == 'warm':
+        for report in reports:
+            turns = report.get('measured_turn_counts', {})
+            if (set(turns) != {str(i) for i in range(inputs)}
+                    or any(type(count) is not int or count < 10 for count in turns.values())
+                    or report['generator'].get('measured_frames_sent') != 625 * inputs
+                    or type(report['generator'].get('measured_p95_lateness_ns')) is not int
+                    or not 0 <= report['generator']['measured_p95_lateness_ns'] <= 2_000_000):
+                return False
     return all(type(r['operational_vad']) is bool and type(r['collection']) is bool and
-               r['generator']['frames_sent'] == 192 * rooms * inputs_per_room and
+               r['generator']['frames_sent'] == sum(plan.frame_count(i, inputs) for i in range(inputs)) and
                type(r['generator']['p95_lateness_ns']) is int and
                0 <= r['generator']['p95_lateness_ns'] <= 2_000_000 and
-               r['generator']['elapsed_ns'] >= 6_144_000_000 for r in reports)
+               r['generator']['elapsed_ns'] >= plan.duration_ns for r in reports)
 
 
 def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sleep=time.sleep,
-          committed_writes=False, rooms=1, inputs_per_room=1, sample_resources=False):
+          committed_writes=False, rooms=1, inputs_per_room=1, sample_resources=False,
+          workload='smoke', selected_case=None):
+    plan = profile(workload)
+    resource_count = (plan.duration_ns - plan.measurement_start_ns + 99_999_999) // 100_000_000 + 1
+    maximum_resource_samples = resource_count * (4 if selected_case is None else 1)
     samples, reports, cleanup_errors = [], [], []
     resource_samples, current_resources = [], []
     abort, pending = None, ''
@@ -229,7 +255,7 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
                     current_resources = []
                 if RESOURCE_MARKER in line:
                     event = json.loads(line.split(RESOURCE_MARKER, 1)[1])
-                    if not isinstance(event, dict) or len(resource_samples) >= 252:
+                    if not isinstance(event, dict) or len(resource_samples) >= maximum_resource_samples:
                         raise ValueError('invalid or excessive resource samples')
                     resource_samples.append(event)
                     current_resources.append(event)
@@ -294,7 +320,8 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
                 cleanup_errors.append(type(error).__name__ + ': generator cleanup failed')
     try:
         complete = smoke_complete(reports, samples, committed_writes=committed_writes, rooms=rooms,
-                                  inputs_per_room=inputs_per_room, sample_resources=sample_resources)
+                                  inputs_per_room=inputs_per_room, sample_resources=sample_resources,
+                                  workload=workload, selected_case=selected_case)
     except (KeyError, TypeError, ValueError):
         complete = False
     return dict(run_id=owned.run_id, exit_code=process.returncode, abort=abort,
@@ -305,7 +332,7 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
 
 
 def provenance():
-    paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py', 'scripts/diagnostics/resource_schedule.py',
+    paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py', 'scripts/diagnostics/resource_schedule.py', 'scripts/diagnostics/workload_profile.py',
              'scripts/diagnostics/pcm_generator.py', 'mix.lock',
              'apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs',
              'apps/vxpipe_console/test/support/diagnostics_database.ex',
@@ -330,7 +357,13 @@ def main():
                         help='concurrent rooms (total human inputs must be at most 16)')
     parser.add_argument('--inputs-per-room', type=int, choices=(1, 2), default=1)
     parser.add_argument('--sample-resources', action='store_true', help='sample the audio-only VM interval on the generator clock')
+    parser.add_argument('--workload', choices=('smoke', 'warm'), default='smoke')
+    parser.add_argument('--case', choices=tuple(CASES), help='one isolated phase instead of all four cases')
     args = parser.parse_args()
+    selected_case = None if args.case is None else CASES[args.case]
+    if args.workload == 'warm':
+        args.sample_resources = True
+        args.committed_writes = True
     if args.rooms * args.inputs_per_room > 16:
         parser.error('at most 16 total human STT inputs')
     if os.getuid() == 0:
@@ -350,13 +383,16 @@ def main():
                'runuser', '-u', username, '--', 'env', *environment,
                'ERL_FLAGS=+S 2:2 +SDcpu 1 +SDio 1 +A 2',
                'VXPIPE_DIAGNOSTIC_GENERATOR_CPUS=2,3', 'VXPIPE_DIAGNOSTIC_GENERATOR_SYSTEMD=1',
+               'VXPIPE_DIAGNOSTIC_WORKLOAD=' + args.workload,
                'VXPIPE_DIAGNOSTIC_RUN_ID=' + owned.run_id,
                'VXPIPE_DIAGNOSTIC_ROOMS=' + str(args.rooms),
                'VXPIPE_DIAGNOSTIC_INPUTS_PER_ROOM=' + str(args.inputs_per_room),
                'VXPIPE_DIAGNOSTIC_RESOURCE_SAMPLES=' + ('1' if args.sample_resources else '0'),
                'VXPIPE_DIAGNOSTIC_COMMITTED_WRITES=' + ('1' if args.committed_writes else '0'),
                'mix', 'test', 'test/integration/configured_latency_diagnostics_test.exs',
-               '--only', 'external_pcm', '--seed', '0', '--max-cases', '1']
+               '--only', ('external_pcm' if selected_case is None else
+                          'external_case:' + '/'.join(str(value).lower() for value in selected_case)),
+               '--seed', '0', '--max-cases', '1']
     def interrupted(_signal, _frame):
         raise KeyboardInterrupt('runner interrupted')
     signal.signal(signal.SIGTERM, interrupted)
@@ -366,9 +402,9 @@ def main():
                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         report = watch(process, owned, log_path, committed_writes=args.committed_writes,
                        rooms=args.rooms, inputs_per_room=args.inputs_per_room,
-                       sample_resources=args.sample_resources)
+                       sample_resources=args.sample_resources, workload=args.workload, selected_case=selected_case)
     report['provenance'] = source
-    report['scope'] = 'functional smoke watchdog; not paired performance acceptance'
+    report['scope'] = args.workload + ' configured text workload; not paired performance acceptance'
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps({key: report[key] for key in ('run_id', 'completed', 'exit_code', 'abort', 'cleanup_errors', 'retained_databases')}))
     raise SystemExit(0 if report['completed'] else 1)

@@ -22,6 +22,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, ProviderCredentials, ProviderCredentialSource}
   alias Vxpipe.Console.Test.SpeechConnection
+  alias Vxpipe.Console.Test.DiagnosticsSchedule
 
   alias Vxpipe.Persistence.{
     CallSpecStore,
@@ -302,10 +303,18 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     @tag matrix: true,
          actual_inference: true,
          external_pcm: true,
+         timeout: 90_000,
          external_case: "#{vad}/#{enabled}",
          vad: vad,
          diagnostics_enabled: enabled
     test "externally paced actual Silero smoke, operational #{vad}, collection #{enabled}", c do
+      workload =
+        case System.get_env("VXPIPE_DIAGNOSTIC_WORKLOAD", "smoke") do
+          "smoke" -> :smoke
+          "warm" -> :warm
+        end
+
+      plan = DiagnosticsSchedule.profile(workload)
       room_count = String.to_integer(System.get_env("VXPIPE_DIAGNOSTIC_ROOMS", "1"))
 
       inputs_per_room =
@@ -349,6 +358,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         end
 
       sample_resources? = System.get_env("VXPIPE_DIAGNOSTIC_RESOURCE_SAMPLES") == "1"
+      if workload == :warm, do: assert(sample_resources?)
       resource_args = if sample_resources?, do: ["--measure-pid", System.pid()], else: []
 
       generator_args =
@@ -359,7 +369,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           "--inputs",
           to_string(total_inputs),
           "--frames",
-          "192",
+          to_string(plan.frames),
+          "--workload",
+          Atom.to_string(workload),
           "--settlement-inputs-per-room",
           to_string(inputs_per_room)
         ] ++
@@ -404,6 +416,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           {python, generator_args}
         end
 
+      pre_launch_us = System.monotonic_time(:microsecond)
+
       port =
         Port.open({:spawn_executable, executable}, [
           :binary,
@@ -428,7 +442,15 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
              offered: [],
              received: [],
              completed: 0,
-             settlements: []
+             expected_frames:
+               DiagnosticsSchedule.frame_count(index, room_count, inputs_per_room, workload),
+             expected_turns:
+               length(
+                 DiagnosticsSchedule.settlements(index, room_count, inputs_per_room, workload)
+               ),
+             settlements: [],
+             settlement_times: %{},
+             completion_times: %{}
            }}
         end)
 
@@ -442,6 +464,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           manifest: nil,
           report: nil,
           resources: [],
+          workload: workload,
+          measurement_started_us: nil,
           wire_indices: Map.new(inputs, fn {index, input} -> {input.wire, index} end),
           source_indices:
             Map.new(inputs, fn {index, input} ->
@@ -451,19 +475,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       for {index, input} <- result.inputs do
         assert input.received == input.offered
-        assert input.frames == 192
+        assert input.frames == input.expected_frames
 
-        expected =
-          for frame <- 1..192,
-              turn =
-                Vxpipe.Console.Test.DiagnosticsSchedule.turn_at(
-                  index,
-                  frame,
-                  room_count,
-                  inputs_per_room
-                ),
-              not is_nil(turn),
-              do: {frame, turn}
+        expected = DiagnosticsSchedule.settlements(index, room_count, inputs_per_room, workload)
 
         assert Enum.reverse(input.settlements) == expected
 
@@ -473,8 +487,22 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       assert result.manifest["tail_encoding"] == "silence-outside-speech-windows"
       assert result.manifest["inputs"] == total_inputs
-      assert result.manifest["frames_per_input"] == 192
-      assert result.report["frames_sent"] == 192 * total_inputs
+      assert result.manifest["frames_per_input"] == plan.frames
+      assert result.manifest["workload_profile"] == Atom.to_string(workload)
+      assert result.manifest["duration_ns"] == plan.duration_ns
+      assert result.manifest["measurement_start_ns"] == plan.measurement_start_ns
+
+      assert result.manifest["input_frame_counts"] ==
+               Enum.map(
+                 0..(total_inputs - 1),
+                 &DiagnosticsSchedule.frame_count(&1, room_count, inputs_per_room, workload)
+               )
+
+      assert result.report["frames_sent"] ==
+               Enum.sum(Enum.map(result.inputs, fn {_, input} -> input.expected_frames end))
+
+      if workload == :warm,
+        do: assert(result.report["measured_frames_sent"] == 625 * total_inputs)
 
       IO.puts(
         "DIAGNOSTIC_EXTERNAL_GENERATOR " <>
@@ -489,11 +517,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       assert result.manifest["fixture_sha256"] ==
                Base.encode16(:crypto.hash(:sha256, File.read!(pcm_path)), case: :lower)
 
-      clip = binary_part(File.read!(pcm_path), 0, 32 * 1024)
+      clip = binary_part(File.read!(pcm_path), 0, plan.speech_frames * 1024)
 
       assert result.manifest["speech_clip"] == %{
                "offset_samples" => 0,
-               "samples" => 16_384,
+               "samples" => plan.speech_frames * 512,
                "sha256" => Base.encode16(:crypto.hash(:sha256, clip), case: :lower)
              }
 
@@ -501,8 +529,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         interval = result.report["resource_interval"]
         assert interval["timing_valid"] == true
         assert interval["pid"] == String.to_integer(System.pid())
-        assert interval["summary"]["sample_count"] == 63
-        assert length(result.resources) == 63
+        samples = div(plan.duration_ns - plan.measurement_start_ns + 99_999_999, 100_000_000) + 1
+        assert interval["summary"]["sample_count"] == samples
+        assert length(result.resources) == samples
         resources = Enum.reverse(result.resources)
         assert hd(resources)["sample"]["interval_start"] == true
 
@@ -529,78 +558,119 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
       end
 
-      for {index, input} <- result.inputs do
-        %{call: call, connection: connection, wire: wire, identity: identity} = input
-        await_diagnostic_drain(identity)
+      measured_turn_counts =
+        for {index, input} <- result.inputs, into: %{} do
+          %{call: call, connection: connection, wire: wire, identity: identity} = input
+          await_diagnostic_drain(identity)
 
-        events =
-          assert_complete_text_trace(
-            connection,
-            identity,
-            [external_turn_text(index, 1), external_turn_text(index, 2)],
-            {:source, connection, identity.connection_id}
-          )
-
-        peers =
-          result.inputs
-          |> Map.values()
-          |> Enum.filter(
-            &(&1.identity.room_id == identity.room_id and &1.connection != connection)
-          )
-
-        projected =
-          Enum.filter(
-            events,
-            &(&1.__struct__ in [ParticipantTranscription, CallEngine.Event.TextOutput])
-          )
-
-        for peer <- peers,
-            do: assert_peer_projection(peer.connection, identity.connection_id, projected)
-
-        assert {:ok, %{entries: runs}} =
-                 LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
-
-        if c.diagnostics_enabled do
-          assert length(runs) == inputs_per_room
-
-          assert %{run: run} =
-                   Enum.find(runs, &(&1.run.participant_id == identity.participant_id))
-
-          assert {:ok, turns} =
-                   LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
-
-          assert_stored_input_turns(turns, events)
-        else
-          assert runs == []
-        end
-
-        if System.get_env("VXPIPE_DIAGNOSTIC_COMMITTED_WRITES") == "1" do
-          options = c.measurement_database || Repo.config()
-          reader_options = Keyword.drop(options, [:name, :pool, :pool_size])
-
-          reader =
-            start_supervised!(
-              Supervisor.child_spec({Postgrex, reader_options}, id: {:reader, index})
+          events =
+            assert_complete_text_trace(
+              connection,
+              identity,
+              Enum.map(1..input.expected_turns, &external_turn_text(index, &1)),
+              {:source, connection, identity.connection_id}
             )
 
-          assert %{rows: [[1]]} =
-                   Postgrex.query!(reader, "SELECT count(*) FROM calls WHERE public_id = $1", [
-                     Ecto.UUID.dump!(call.id)
-                   ])
+          peers =
+            result.inputs
+            |> Map.values()
+            |> Enum.filter(
+              &(&1.identity.room_id == identity.room_id and &1.connection != connection)
+            )
 
-          expected_rows = if c.diagnostics_enabled, do: 2 * inputs_per_room, else: 0
+          projected =
+            Enum.filter(
+              events,
+              &(&1.__struct__ in [ParticipantTranscription, CallEngine.Event.TextOutput])
+            )
 
-          assert %{rows: [[^expected_rows]]} =
-                   Postgrex.query!(
-                     reader,
-                     "SELECT count(*) FROM call_turn_diagnostics d JOIN call_latency_runs r ON r.id = d.run_id JOIN calls c ON c.id = r.call_id WHERE c.public_id = $1",
-                     [Ecto.UUID.dump!(call.id)]
-                   )
+          for peer <- peers,
+              do: assert_peer_projection(peer.connection, identity.connection_id, projected)
+
+          assert {:ok, %{entries: runs}} =
+                   LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+          if c.diagnostics_enabled do
+            assert length(runs) == inputs_per_room
+
+            assert %{run: run} =
+                     Enum.find(runs, &(&1.run.participant_id == identity.participant_id))
+
+            assert {:ok, turns} =
+                     LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
+
+            assert_stored_input_turns(turns, events, input.expected_turns)
+          else
+            assert runs == []
+          end
+
+          if System.get_env("VXPIPE_DIAGNOSTIC_COMMITTED_WRITES") == "1" do
+            options = c.measurement_database || Repo.config()
+            reader_options = Keyword.drop(options, [:name, :pool, :pool_size])
+
+            reader =
+              start_supervised!(
+                Supervisor.child_spec({Postgrex, reader_options}, id: {:reader, index})
+              )
+
+            assert %{rows: [[1]]} =
+                     Postgrex.query!(reader, "SELECT count(*) FROM calls WHERE public_id = $1", [
+                       Ecto.UUID.dump!(call.id)
+                     ])
+
+            expected_rows =
+              if c.diagnostics_enabled do
+                result.inputs
+                |> Map.values()
+                |> Enum.filter(&(&1.identity.room_id == identity.room_id))
+                |> Enum.map(& &1.expected_turns)
+                |> Enum.sum()
+              else
+                0
+              end
+
+            assert %{rows: [[^expected_rows]]} =
+                     Postgrex.query!(
+                       reader,
+                       "SELECT count(*) FROM call_turn_diagnostics d JOIN call_latency_runs r ON r.id = d.run_id JOIN calls c ON c.id = r.call_id WHERE c.public_id = $1",
+                       [Ecto.UUID.dump!(call.id)]
+                     )
+          end
+
+          refute_received {:scribe_audio, ^wire, _}
+          refute_received {:scribe_commit, ^wire}
+
+          measured =
+            if workload == :warm do
+              window =
+                DiagnosticsSchedule.measurement_window(
+                  pre_launch_us,
+                  result.measurement_started_us,
+                  workload
+                )
+
+              completed =
+                events
+                |> Enum.filter(&match?(%CallEngine.Event.ParticipantTurnCompleted{}, &1))
+                |> Enum.with_index(1)
+
+              count =
+                Enum.count(completed, fn {event, turn} ->
+                  DiagnosticsSchedule.completed_within?(
+                    window,
+                    Map.fetch!(input.settlement_times, turn),
+                    Map.fetch!(input.completion_times, event.correlation_id)
+                  )
+                end)
+
+              assert count >= 10,
+                     "fewer than ten completions proven inside the resource interval for input #{index}"
+
+              count
+            end
+
+          {to_string(index), measured}
         end
-
-        refute_received {:scribe_audio, ^wire, _}
-        refute_received {:scribe_commit, ^wire}
-      end
 
       assert_diagnostic_slots_released()
       refute_received {:configured_public_event, _}
@@ -608,33 +678,55 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       evidence = actual_inference_evidence()
 
-      if c.vad or c.diagnostics_enabled do
-        expected = if c.vad, do: :operational, else: :benchmark
+      readiness =
+        if c.vad or c.diagnostics_enabled do
+          expected = if c.vad, do: :operational, else: :benchmark
 
-        for {index, input} <- result.inputs do
-          fingerprints =
-            input.offered
-            |> Enum.reject(fn pcm ->
-              # The source marker alone is not evidence of speech-bearing PCM.
-              if total_inputs > 1,
-                do: binary_part(pcm, 2, 1022) == :binary.copy(<<0>>, 1022),
-                else: pcm == :binary.copy(<<0>>, 1024)
-            end)
-            |> MapSet.new(&:crypto.hash(:sha256, &1))
+          ready =
+            for {index, input} <- result.inputs, into: %{} do
+              fingerprints =
+                input.offered
+                |> Enum.reject(fn pcm ->
+                  # The source marker alone is not evidence of speech-bearing PCM.
+                  if total_inputs > 1,
+                    do: binary_part(pcm, 2, 1022) == :binary.copy(<<0>>, 1022),
+                    else: pcm == :binary.copy(<<0>>, 1024)
+                end)
+                |> MapSet.new(&:crypto.hash(:sha256, &1))
 
-          assert MapSet.size(fingerprints) > 0
+              assert MapSet.size(fingerprints) > 0
 
-          assert Enum.any?(evidence, fn {mode, count, fingerprint} ->
-                   mode == expected and count > 0 and MapSet.member?(fingerprints, fingerprint)
-                 end),
-                 "no actual inference of generated PCM for input #{index}"
+              assert Enum.any?(evidence, fn {mode, count, fingerprint, _at} ->
+                       mode == expected and count > 0 and
+                         MapSet.member?(fingerprints, fingerprint)
+                     end),
+                     "no actual inference of generated PCM for input #{index}"
+
+              ready_at =
+                evidence
+                |> Enum.filter(fn {mode, count, fingerprint, _} ->
+                  mode == expected and count > 0 and MapSet.member?(fingerprints, fingerprint)
+                end)
+                |> Enum.map(&elem(&1, 3))
+                |> Enum.min()
+
+              if workload == :warm,
+                do:
+                  assert(
+                    ready_at <= pre_launch_us + 5_000_000,
+                    "source model missed fixed warm-up readiness"
+                  )
+
+              {to_string(index), ready_at}
+            end
+
+          assert Enum.all?(evidence, fn {mode, _, _, _} -> mode == expected end)
+          ready
+        else
+          assert evidence == []
+          refute_received {:actual_model_load_started, _}
+          %{}
         end
-
-        assert Enum.all?(evidence, fn {mode, _, _} -> mode == expected end)
-      else
-        assert evidence == []
-        refute_received {:actual_model_load_started, _}
-      end
 
       refute_received {:actual_inference_failed, _}
       if c.vad, do: refute_received({:actual_model_load_started, :benchmark})
@@ -648,7 +740,22 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             collection: c.diagnostics_enabled,
             rooms: room_count,
             inputs_per_room: inputs_per_room,
-            settlement_schedule: "64-frame-cadence-32-frame-speech-windows",
+            workload: Atom.to_string(workload),
+            measured_turn_counts: measured_turn_counts,
+            model_ready_at_us: readiness,
+            model_ready_by_us:
+              if(workload == :warm, do: pre_launch_us + div(plan.measurement_start_ns, 1_000)),
+            measurement_window:
+              if(workload == :warm,
+                do:
+                  DiagnosticsSchedule.measurement_window(
+                    pre_launch_us,
+                    result.measurement_started_us,
+                    workload
+                  )
+              ),
+            settlement_schedule:
+              "#{plan.cadence}-frame-cadence-#{plan.speech_frames}-frame-speech-windows",
             settlement_frames:
               Map.new(result.inputs, fn {index, input} ->
                 {Integer.to_string(index),
@@ -660,7 +767,10 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             generator:
               Map.take(result.report, [
                 "frames_sent",
+                "audio_start_ns",
+                "measured_frames_sent",
                 "p95_lateness_ns",
+                "measured_p95_lateness_ns",
                 "elapsed_ns",
                 "generator_cpu_seconds",
                 "resource_interval"
@@ -2646,8 +2756,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
-  defp assert_stored_input_turns(turns, events) do
-    assert length(turns) == 2
+  defp assert_stored_input_turns(turns, events, expected_count \\ 2) do
+    assert length(turns) == expected_count
 
     canonical =
       for %CallEngine.Event.ParticipantTurnCompleted{} = event <- events,
@@ -2878,8 +2988,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
   defp actual_inference_evidence do
     receive do
-      {:actual_inference, mode, count, fingerprint} ->
-        [{mode, count, fingerprint} | actual_inference_evidence()]
+      {:actual_inference, mode, count, fingerprint, at} ->
+        [{mode, count, fingerprint, at} | actual_inference_evidence()]
     after
       0 -> []
     end
@@ -2895,12 +3005,14 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   defp actual_classifier(parent, mode) do
     fn model, stream, pcm ->
       result = Silero.push(stream, model, pcm)
+      finished_at = System.monotonic_time(:microsecond)
 
       case result do
         {:ok, _, probabilities} ->
           send(
             parent,
-            {:actual_inference, mode, length(probabilities), :crypto.hash(:sha256, pcm)}
+            {:actual_inference, mode, length(probabilities), :crypto.hash(:sha256, pcm),
+             finished_at}
           )
 
         _ ->
@@ -3313,7 +3425,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     complete? =
       state.exited? and state.report != nil and
         Enum.all?(state.inputs, fn {_index, input} ->
-          input.completed == 2 and length(input.received) == 192
+          input.completed == input.expected_turns and
+            length(input.received) == input.expected_frames
         end)
 
     if complete?, do: state, else: external_pcm_receive(state)
@@ -3342,7 +3455,17 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       {^port, {:data, <<3, json::binary>>}} ->
         resource = Jason.decode!(json)
         IO.puts("DIAGNOSTIC_RESOURCE_SAMPLE " <> json)
-        external_pcm_loop(%{state | resources: [resource | state.resources]})
+
+        started =
+          if resource["sample"]["interval_start"],
+            do: System.monotonic_time(:microsecond),
+            else: state.measurement_started_us
+
+        external_pcm_loop(%{
+          state
+          | resources: [resource | state.resources],
+            measurement_started_us: started
+        })
 
       {^port, {:data, <<2, json::binary>>}} ->
         external_pcm_loop(%{state | report: Jason.decode!(json)})
@@ -3356,15 +3479,18 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         input = Map.fetch!(state.inputs, index)
         received = [pcm | input.received]
         count = length(received)
-        assert count <= 192
+        assert count <= input.expected_frames
 
         turn =
           Vxpipe.Console.Test.DiagnosticsSchedule.turn_at(
             index,
             count,
             state.rooms,
-            state.inputs_per_room
+            state.inputs_per_room,
+            state.workload
           )
+
+        settlement_at = System.monotonic_time(:microsecond)
 
         settlements =
           if turn do
@@ -3374,7 +3500,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             input.settlements
           end
 
-        updated = %{input | received: received, settlements: settlements}
+        times =
+          if turn,
+            do: Map.put(input.settlement_times, turn, settlement_at),
+            else: input.settlement_times
+
+        updated = %{input | received: received, settlements: settlements, settlement_times: times}
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
 
       {:vxpipe_event, %CallEngine.Event.AgentTurnInterrupted{} = event} ->
@@ -3391,8 +3522,20 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         index = Map.fetch!(state.source_indices, {event.room_id, event.source_participant_id})
         input = Map.fetch!(state.inputs, index)
         assert event.source_participant_id == input.identity.participant_id
-        assert input.completed < 2
-        updated = %{input | completed: input.completed + 1}
+        assert input.completed < input.expected_turns
+        refute Map.has_key?(input.completion_times, event.correlation_id)
+
+        updated = %{
+          input
+          | completed: input.completed + 1,
+            completion_times:
+              Map.put(
+                input.completion_times,
+                event.correlation_id,
+                System.monotonic_time(:microsecond)
+              )
+        }
+
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
     after
       5_000 ->

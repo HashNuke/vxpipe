@@ -700,6 +700,11 @@ adds opt-in audio-clock CPU/RSS intervals with raw samples, identity-fenced RSS
 reset and separate resource-boundary timing gates. Four-mode native verification
 passes with independently recomputed raw summaries; this does not complete
 warm/cold or paired-load acceptance.
+The [warm-workload checkpoint](../20261119-2345-diagnostics-warm-workload.md)
+adds fixed five-second warm-up and twenty-second measurement, per-source completed
+turn checks, native readiness deadlines and separate measured-frame pacing checks.
+Single-case selection permits fresh-VM phases; full paired/cold, database CPU,
+response/egress latency and inference-coverage acceptance remain outstanding.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

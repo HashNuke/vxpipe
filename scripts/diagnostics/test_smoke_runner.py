@@ -41,6 +41,7 @@ class SmokeRunnerTest(unittest.TestCase):
                                                    100, 100, 2, ms == 0)))
                    for ms in list(range(0, 6144, 100)) + [6144]]
             report['resource_samples'] = raw
+            report['generator']['audio_start_ns'] = base
             report['generator']['resource_interval'] = dict(pid=123, start_ticks=77,
                 scheduled_start_ns=base, scheduled_end_ns=base + 6_144_000_000,
                 timing_valid=True, timing_contract='boundary-2ms-no-skipped-slot-v1',
@@ -107,6 +108,46 @@ class SmokeRunnerTest(unittest.TestCase):
         interval = evidence[0]['generator']['resource_interval']
         interval['summary']['sample_count'] = 62
         self.assertFalse(smoke_complete(evidence, samples, sample_resources=True))
+
+    def test_single_warm_phase_requires_exact_window_and_requested_case(self):
+        raw = [dict(deadline_ns=6_000_000_000 + ms * 1_000_000,
+                    read_started_ns=6_000_000_000 + ms * 1_000_000,
+                    read_finished_ns=6_000_000_000 + ms * 1_000_000,
+                    sample=asdict(ProcessSample(123, 77, 6 + ms / 1000, 3 + ms / 2000,
+                                               100, 100, 2, ms == 0)))
+               for ms in range(0, 20001, 100)]
+        report = reports()[0]
+        report.update(workload='warm', persistence='committed', database_pool_size=10, measured_turn_counts={'0': 10}, resource_samples=raw)
+        report['generator'].update(frames_sent=782, measured_frames_sent=625, measured_p95_lateness_ns=1000,
+            audio_start_ns=1_000_000_000, elapsed_ns=25_000_000_000,
+            resource_interval=dict(pid=123, start_ticks=77, scheduled_start_ns=6_000_000_000,
+                scheduled_end_ns=26_000_000_000, timing_valid=True,
+                timing_contract='boundary-2ms-no-skipped-slot-v1', start_lateness_ns=0,
+                end_lateness_ns=0, maximum_lateness_ns=0, maximum_sample_gap_ns=100_000_000,
+                summary=summarize([ProcessSample(**e['sample']) for e in raw])))
+        samples = [sample(123, 77)]
+        options = dict(workload='warm', selected_case=(False, False))
+        self.assertTrue(smoke_complete([report], samples, **options))
+        self.assertFalse(smoke_complete([report], samples, workload='warm', selected_case=(False, True)))
+        self.assertFalse(smoke_complete([report], samples, workload='warm'))
+        for key, bad in [('measured_p95_lateness_ns', 2_000_001), ('measured_p95_lateness_ns', None), ('frames_sent', 781), ('measured_frames_sent', 624), ('audio_start_ns', 0), ('elapsed_ns', 24_999_999_999)]:
+            wrong = deepcopy(report)
+            wrong['generator'][key] = bad
+            self.assertFalse(smoke_complete([wrong], samples, **options))
+        wrong = deepcopy(report)
+        wrong['measured_turn_counts']['0'] = 9
+        self.assertFalse(smoke_complete([wrong], samples, **options))
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'workload.log'
+            log.write_text(''.join('DIAGNOSTIC_RESOURCE_SAMPLE ' + json.dumps(e) + '\n' for e in raw)
+                           + 'DIAGNOSTIC_EXTERNAL_SMOKE ' + json.dumps(report) + '\n')
+            process = Mock(pid=456, returncode=0)
+            process.poll.side_effect = [None, 0]
+            with patch('smoke_runner.stop_unit'):
+                result = watch(process, OwnedUnits(RUN), log, sample=lambda _: sample(123, 77),
+                               sleep=lambda _: None, **options)
+            self.assertTrue(result['completed'])
+            self.assertEqual(len(result['resource_samples']), 201)
 
     def test_only_this_run_can_register_cleanup_units(self):
         owned = OwnedUnits(RUN)
