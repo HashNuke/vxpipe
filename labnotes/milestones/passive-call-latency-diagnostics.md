@@ -709,6 +709,10 @@ The [native CPU checkpoint](../20261120-0008-diagnostics-native-cpu.md)
 configures production Silero sessions to use one intra-op thread, preserving
 model outputs while removing the measured extra native worker pool. This is a
 runtime revision for subsequent measurements, not completion of performance gates.
+The [report-progress checkpoint](../20261120-0020-diagnostics-inference-overhead.md)
+avoids rebuilding unchanged historical reports on every progress frame, preserving
+coverage transitions and durable outputs. Focused and configured checks pass;
+the remaining CPU delta and full measured acceptance stay open.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

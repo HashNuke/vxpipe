@@ -342,6 +342,7 @@ def provenance():
              'apps/vxpipe_console/test/support/diagnostics_schedule.ex',
              'apps/vxpipe_console/test/support/speech_connection.ex',
              'apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero/model.ex',
+             'apps/vxpipe_call_engine/lib/vxpipe/call_engine/diagnostics/live_report.ex',
              'apps/vxpipe_call_engine/priv/speech/silero_v6.2.3.onnx']
     return dict(
         source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT,

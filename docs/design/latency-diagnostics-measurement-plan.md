@@ -39,6 +39,13 @@ The existing native fault boundary remains. Old default-pool measurements remain
 historical evidence, and new paired phases must both use the revised implementation.
 CPU cgroup enforcement remains mandatory even when no extra pool threads appear.
 
+The [report-progress checkpoint](../../labnotes/20261120-0020-diagnostics-inference-overhead.md)
+retains unchanged reports between mapped provider-end coverage thresholds while
+still recording every progress cursor. First progress, all other evidence kinds,
+validation and memory bounds retain the full existing behavior. This reduces
+repeated historical projection work; its single warm run still does not meet the
+one-source CPU regression budget or complete paired acceptance.
+
 ## Reference environment and safe execution
 
 Observed evaluation host: KVM x86_64, AMD EPYC-Genoa, four logical CPUs, 7,745 MiB

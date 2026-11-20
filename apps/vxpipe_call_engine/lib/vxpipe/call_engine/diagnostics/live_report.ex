@@ -37,7 +37,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
          :ok <- segment_order(packets),
          next = %{state | packets: packets},
          next = if(Map.has_key?(state.packets, key), do: next, else: close_epochs(next, packet)),
-         {reports, unattached} = build(next),
+         {reports, unattached} = build_after(state, next, packet),
          next = %{next | reports: reports, unattached_segments: unattached},
          true <-
            4 *
@@ -162,6 +162,41 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
     do: {:ok, {:acoustic_progress, epoch, origin, max(old, new)}}
 
   defp merge(_, _), do: {:error, :conflicting_evidence}
+
+  defp build_after(state, next, {:acoustic_progress, epoch, origin, finalized}) do
+    case Map.get(state.packets, {:progress, epoch}) do
+      {:acoustic_progress, ^epoch, ^origin, previous} ->
+        # With an unchanged epoch/origin, existing reports only change when
+        # progress reaches a mapped provider end. Always retain the new cursor:
+        # later events and caller-supplied segment intervals still need it.
+        if crosses_provider_end?(state, previous, finalized),
+          do: build(next),
+          else: {state.reports, state.unattached_segments}
+
+      _ ->
+        build(next)
+    end
+  end
+
+  defp build_after(_state, next, _packet), do: build(next)
+
+  defp crosses_provider_end?(state, previous, finalized) do
+    Enum.any?(state.packets, fn
+      {_, {:provider_landmark, generation, _, :provider_end_evidence, _, samples}} ->
+        case Map.get(state.packets, {:mapping, generation}) do
+          {:provider_sample_mapping, ^generation, provider_origin, source_origin}
+          when samples >= provider_origin ->
+            source_end = source_origin + samples - provider_origin
+            previous < source_end and source_end <= finalized
+
+          _ ->
+            false
+        end
+
+      _ ->
+        false
+    end)
+  end
 
   defp build(state) do
     packets = Map.values(state.packets)
