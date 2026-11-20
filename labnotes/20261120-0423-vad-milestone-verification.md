@@ -37,3 +37,9 @@ places the midpoint at 62.5 ms and the endpoint at 65 ms, carrying at least
 16 ms uncertainty. The fixture checks those positions and that the earlier lost
 packet remains unobserved. All 13 local mapping tests passed after this test
 correction. The change only updates the offline contract expectation.
+
+Final umbrella verification exited successfully across all ten applications.
+ExUnit reported 6503 tests, zero failures and 431 exclusions. Root formatting,
+warnings-as-errors compilation, strict Credo and unused-lock checks passed.
+Lean built all nine jobs and its oracle replay passed. Both tagged browser calls
+used real Scribe and the default suite excluded live providers.

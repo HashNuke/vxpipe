@@ -1,13 +1,10 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay, room-service cutover and STT eligibility implemented; call-start settings simplification implemented, 2026-11-20.
-A, B and D, including participant/segment presentation, are implemented. C uses participant-owned
-observation managed by a room service; UI and local settings transitions are verified.
-The user-approved call-start snapshot replaces distributed effective status.
-Primary end-of-turn detection and barge-in stop timing are implemented, including
-configured cross-human interruption and persisted/API/Storybook presentation.
-Live functional readback of both timings and final completion checks remain incomplete.
-The index owns implementation order. Earlier checkpoint notes describe the old path.
+Completed on 2026-11-20. Live Scribe/browser calls verified both primary measurements
+with participant-local and room-service Silero. The final suite, frontend checks,
+rendered UI and Lean verification passed. The [verification record](../20261120-0423-vad-milestone-verification.md)
+contains the measured values and test outcomes. Earlier entries retain the
+implementation and design history.
 
 ## User clarification — timing measurements, not performance gates, 2026-11-20
 
@@ -886,13 +883,12 @@ unavailable. See the [final verification record](../20261120-0423-vad-milestone-
   profiles, timing meanings, privacy, failure/loss semantics and troubleshooting.
   The [handbook checkpoint](../20261119-2033-diagnostics-operator-handbook.md)
   records source verification and the current automatic Scribe profile restriction.
-  Handbook text reflects the completed call-start settings contract and retains
-  unresolved live-acceptance limitations; costs are informational.
-- [ ] Pass root format, compile warnings-as-errors, strict Credo, default tests and
+  The handbook describes the call-start settings contract and verified live profile.
+- [x] Pass root format, compile warnings-as-errors, strict Credo, default tests and
   unused-lock checks; run Lean if speech/source state machines change. Run relevant
   frontend/core checks and finish rendered verification. Required unavailable live
   or browser evidence leaves the checkpoint open with a recorded blocker.
-- [ ] Synchronize milestone tasks, acceptance evidence, labnotes and index. Commit
+- [x] Synchronize milestone tasks, acceptance evidence, labnotes and index. Commit
   only when requested; deployment is a separate operation, not this milestone's exit.
 
 ## Verification discipline
