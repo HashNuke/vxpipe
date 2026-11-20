@@ -47,10 +47,9 @@ The persisted value is read when each new call starts. Existing calls keep that
 choice until they end. On a failed or conflicting save, reload the setting before
 retrying. Changing the setting does not delete earlier reports.
 
-Call-start settings are verified. Live browser verification remains open in
-[the milestone](../../../labnotes/milestones/passive-call-latency-diagnostics.md).
-VAD supplies timing measurements, not pass/fail judgments. CPU, memory and latency
-overhead observations are informational.
+The browser acceptance calls verified both room-service and operational Silero
+with Scribe. The reported durations and resource costs are informational.
+[Verification evidence](../../../labnotes/20261120-0423-vad-milestone-verification.md).
 
 The first live acceptance profile is human ElevenLabs Scribe v2 Realtime input
 over browser WebRTC with local Silero off and on. Offline fixtures do not establish

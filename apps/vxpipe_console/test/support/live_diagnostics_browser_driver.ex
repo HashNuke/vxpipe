@@ -81,7 +81,7 @@ defmodule Vxpipe.Console.Test.LiveDiagnosticsBrowserDriver do
 
         wait(
           command,
-          "vadProbe.events.some(e=>e.type==='bot-started-speaking' && e.at>vadProbe.bargeMarker)"
+          "vadProbe.events.some(e=>e.type==='bot-started-speaking' && e.at>vadProbe.bargeMarker && performance.now()-e.at>=1000 && !vadProbe.events.some(stop=>stop.type==='bot-stopped-speaking' && stop.at>e.at))"
         )
 
         phase(command, "barge")

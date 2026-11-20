@@ -112,7 +112,7 @@ completed implementation separately from the remaining acceptance work.
   barge-in example. The [presentation evidence audit](../20261120-0225-primary-metrics-presentation.md)
   maps durable revision, authorized API, parser and rendered UI checks; this is
   offline presentation verification, not live acoustic acceptance.
-- [ ] Confirm live acceptance exercises both measurements.
+- [x] Confirm live acceptance exercises both measurements.
 
 ## Runnable outcome
 
@@ -853,10 +853,10 @@ fix retains all metric identity assertions and passes all four affected cases.
 
 ### F — Live acceptance and handbook
 
-- [ ] Run tagged existing-runner live acceptance through `bin/livetests run` for
+- [x] Run tagged existing-runner live acceptance through `bin/livetests run` for
   Scribe/browser with ordinary local VAD off/on; do not run live Telnyx tests. Keep
   credentials in the established runner and never read or modify its prohibited env file.
-- [ ] Include several normal turns, a pause/resume, interruption, tool-only end
+- [x] Include several normal turns, a pause/resume, interruption, tool-only end
   and final hangup. Verify both primary measurements through stored endpoints,
   source/turn identities, provider evidence and UI. Verify timestamp/duration
   relationships and explicit unavailable reasons; no model-accuracy benchmark is required.
@@ -875,19 +875,12 @@ fix retains all metric identity assertions and passes all four affected cases.
   the actual admin page starts with Technical events off, exposes additional
   archived events when enabled, and restores the hidden count when disabled.
 
-Fallback live mode is verified: the existing runner passed one real Scribe/browser
-scenario with native room-source Silero, five canonical human turns, pause/resume,
-interruption, a real tool completion, production whole-call hangup, durable ended
-state, and exact storage/API/production-UI readback. Four endpoint measurements and
-one exact interrupted-output barge measurement were available; one endpoint stayed
-explicitly unavailable. Values are informational, not pass/fail thresholds. See
-[the live browser evidence](../20261120-0239-live-browser-diagnostics.md).
-A traced operational-reuse call also passed all live assertions after the reset
-fixes. The measured speech-end-to-STT interval was 2061.980 ms and the matched
-barge-in-to-stop acknowledgement was 143.183 ms. Three other confirmed endpoints
-ended with 256, 256 and 448 accepted samples beyond the last complete Silero
-window and remained unavailable. Final verification of both modes follows the
-receipt cursor and endpoint coverage corrections.
+Both final browser runs passed with real Scribe, five canonical human turns,
+durable hangup, persisted timestamps and authenticated API and admin UI readback.
+Room-service Silero recorded four endpoint delays and a 1135.930 ms acknowledged
+barge-in delay. Operational Silero reuse recorded four endpoint delays and a
+148.966 ms acknowledged barge-in delay. Each preserved one partial endpoint as
+unavailable. See the [final verification record](../20261120-0423-vad-milestone-verification.md).
 
 - [x] Update relevant usage/development handbook pages with configuration, supported
   profiles, timing meanings, privacy, failure/loss semantics and troubleshooting.
