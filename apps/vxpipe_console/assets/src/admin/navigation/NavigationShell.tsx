@@ -43,8 +43,8 @@ export function NavigationShell({ children, role, user, tenants, selected, path,
         <a href={href("/account")} aria-current={path === "/account" ? "page" : undefined} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate("/account"); }}><UserRound size={17} aria-hidden />Your account</a>
         <a href={href("/account/connections")} aria-current={path === "/account/connections" ? "page" : undefined} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate("/account/connections"); }}><Plug size={17} aria-hidden />Your connections</a>
       </nav> : null}
-      {!settings ? <nav aria-label="Workspace settings"><a href={href(items.platform[0]?.href ?? "/account")} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate(items.platform[0]?.href ?? "/account"); }}><Settings size={17} aria-hidden />Settings</a></nav> : null}
     </div>
+    {!settings ? <nav aria-label="Workspace settings" className="navigation-workspace-settings"><a href={href(items.platform[0]?.href ?? "/account")} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate(items.platform[0]?.href ?? "/account"); }}><Settings size={17} aria-hidden />Settings</a></nav> : null}
     <div className="navigation-account"><span title={email ?? user?.email}>{email ?? user?.email}</span>
       <button onClick={onLogout}><LogOut size={17} aria-hidden />Logout</button>
     </div>

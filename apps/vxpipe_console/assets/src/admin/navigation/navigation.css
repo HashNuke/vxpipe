@@ -1,5 +1,5 @@
 .navigation-layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100dvh; }
-.navigation-rail { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; padding: 24px 12px 14px; background: var(--admin-panel); border-right: 1px solid var(--admin-line); overflow-y: auto; }
+.navigation-rail { position: sticky; top: 0; z-index: 40; height: 100dvh; display: flex; flex-direction: column; padding: 24px 12px 14px; background: var(--admin-panel); border-right: 1px solid var(--admin-line); overflow-y: auto; }
 .navigation-brand { display: block; width: fit-content; margin: 0 12px 24px; color: var(--admin-ink); font-size: 21px; font-weight: 700; letter-spacing: -.03em; text-decoration: none; }
 .navigation-picker { display: flex; width: 100%; min-height: 42px; align-items: center; gap: 8px; justify-content: space-between; padding: 9px 12px; border: 1px solid var(--admin-line); border-radius: 6px; background: var(--admin-bg); color: var(--admin-ink); font-size: 13px; text-align: left; }
 .navigation-picker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -7,9 +7,11 @@
 .navigation-groups { margin-top: 28px; flex: 1; }
 .navigation-groups nav + nav { margin-top: 28px; }
 .navigation-groups h2 { padding: 0 12px; margin: 0 0 8px; color: var(--admin-muted); font-size: 12px; font-weight: 600; }
-.navigation-groups a, .navigation-account a, .navigation-account button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 12px; margin: 2px 0; border: 0; border-radius: 4px; background: transparent; color: var(--admin-muted); text-decoration: none; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-.navigation-groups a:hover, .navigation-account a:hover, .navigation-account button:hover, .navigation-picker:hover { background: var(--admin-soft); color: var(--admin-ink); }
+.navigation-groups a, .navigation-workspace-settings a, .navigation-account a, .navigation-account button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 12px; margin: 2px 0; border: 0; border-radius: 4px; background: transparent; color: var(--admin-muted); text-decoration: none; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.navigation-groups a:hover, .navigation-workspace-settings a:hover, .navigation-account a:hover, .navigation-account button:hover, .navigation-picker:hover { background: var(--admin-soft); color: var(--admin-ink); }
 .navigation-groups a[aria-current], .navigation-account a[aria-current] { background: var(--admin-soft); color: var(--admin-ink); font-weight: 600; }
+.navigation-workspace-settings { margin-top: 28px; }
+.navigation-workspace-settings + .navigation-account { margin-top: 8px; }
 .navigation-account { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--admin-line); }
 .navigation-account > span { display: block; padding: 0 12px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--admin-muted); }
 .navigation-workspace { min-width: 0; }
@@ -29,8 +31,7 @@
 .navigation-picker-menu [cmdk-list] { max-height: 290px; overflow-y: auto; }
 .navigation-picker-menu [cmdk-item] { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-radius: 4px; cursor: pointer; }
 .navigation-picker-menu [cmdk-item][data-selected=true] { background: var(--admin-soft); }
-.navigation-picker-menu strong, .navigation-picker-menu small { display: block; font-size: 13px; }
-.navigation-picker-menu small { color: var(--admin-muted); font-size: 11px; padding-top: 3px; }
+.navigation-picker-menu strong { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
 .navigation-picker-menu [cmdk-empty], .navigation-picker-menu [role=status], .navigation-picker-menu [role=alert] { padding: 20px 10px; font-size: 13px; }
 .navigation-picker-footer { display: block; padding: 12px 10px; border-top: 1px solid var(--admin-line); font-size: 12px; color: var(--admin-ink); text-underline-offset: 3px; }
 .navigation-filter { display: flex; align-items: center; gap: 8px; max-width: 380px; margin-bottom: 20px; padding: 0 12px; border: 1px solid var(--admin-line); border-radius: 6px; }

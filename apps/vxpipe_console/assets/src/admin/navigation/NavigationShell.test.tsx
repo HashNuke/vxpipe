@@ -71,3 +71,11 @@ test("personal settings remain available without any platform permissions", () =
   expect(screen.getByRole("link", { name: "Your account" })).toHaveAttribute("href", "#/account");
   expect(screen.getByRole("link", { name: "Your connections" })).toHaveAttribute("href", "#/account/connections");
 });
+test("workspace Settings sits directly above the account area, separate from it", () => {
+  render(<Shell />);
+  const rail = screen.getByRole("complementary", { name: "Console navigation" });
+  const settings = within(rail).getByRole("navigation", { name: "Workspace settings" });
+  const logout = within(rail).getByRole("button", { name: "Logout" });
+  expect(settings.nextElementSibling).toContainElement(logout);
+  expect(settings).not.toContainElement(logout);
+});

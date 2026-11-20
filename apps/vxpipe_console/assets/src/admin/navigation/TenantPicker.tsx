@@ -22,7 +22,7 @@ export function TenantPicker({ tenants, selected, directoryPath, onNavigate, sta
           {state === "loading" ? <p role="status">Loading tenants…</p> : state === "unavailable" ? <div role="alert"><p>Tenants could not be loaded.</p><button onClick={onRetry}>Try again</button></div> : <>
             <Command.Empty>No matching tenants.</Command.Empty>
             {tenants.map(tenant => <Command.Item key={tenant.key} value={tenant.key} keywords={[tenant.name]} onSelect={() => { changeOpen(false); onNavigate(`/t/${encodeURIComponent(tenant.key)}/dashboard`); }}>
-              <span><strong>{tenant.name}</strong><small>{tenant.key}</small></span>{selected?.key === tenant.key ? <Check size={15} aria-hidden /> : null}
+              <strong>{tenant.name}</strong>{selected?.key === tenant.key ? <Check size={15} aria-hidden /> : null}
             </Command.Item>)}
           </>}
         {onMore && state === "ready" ? <button type="button" className="navigation-picker-footer" onClick={onMore}>Load more tenants</button> : null}

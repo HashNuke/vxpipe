@@ -10,3 +10,9 @@ test.each(["tenant", "directory"])("%s selection notifies the search owner that 
   fireEvent.click(target === "tenant" ? screen.getByRole("option", { name: /Acme/ }) : screen.getByRole("link", { name: "View tenants" }));
   expect(onOpenChange).toHaveBeenLastCalledWith(false);
 });
+test("tenant options show the tenant name without its key", () => {
+  render(<TenantPicker tenants={[{ id: "AAAAAAAAAAAAAAAA", key: "AAAAAAAAAAAAAAAA", name: "Acme" }]} directoryPath="/tenants" onNavigate={vi.fn()} onRetry={vi.fn()} />);
+  fireEvent.click(screen.getByRole("combobox", { name: "Switch tenant" }));
+  const option = screen.getByRole("option", { name: "Acme" });
+  expect(option.textContent).not.toContain("AAAAAAAAAAAAAAAA");
+});
