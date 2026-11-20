@@ -1,24 +1,24 @@
 # Passive diagnostics measurement plan
 
-Status: evaluation plan declared 2026-11-19, with preliminary configured warm
-measurements recorded in the milestone. Full paired
-measurement acceptance remain open. Thresholds below are engineering acceptance budgets,
-not measurements or promises of production capacity.
+Status: optional historical measurement protocol, 2026-11-20. The user clarified
+that VAD supplies timing measurements, not pass/fail evaluation. CPU, memory and
+latency costs are advisory; their numerical comparisons cannot fail the feature,
+milestone or release. The repeated warm/cold matrix below is optional and is not
+required acceptance work. No further performance run is needed for this milestone.
 
-User decision, 2026-11-20: the measured CPU overhead is acceptable for optional
-benchmarking. Report CPU use and the original targets, but CPU target overruns
-are advisory and do not block milestone completion or release. Further CPU
-optimization is out of scope. Historical target misses remain accurately recorded;
-this is an explicit acceptance change, not a retrospective measurement pass.
-Correctness, latency, bounded resources, coverage and cleanup remain required.
+Preserve original target comparisons and existing results honestly. The cold pair
+exceeded its original RSS/dispatch targets; this is recorded evidence, not a
+blocker. The optional tools still reject malformed/incomplete measurement data,
+which is distinct from judging a correctly measured delay or resource cost.
 
-User scope correction, 2026-11-20: dedicated database CPU measurement, inference
-coverage percentages and model-accuracy benchmarking are not acceptance gates.
-Silero loading and running is sufficient for the model. Verify project-owned
-source routing, reuse/fallback wiring, timing correlation, persistence, UI and
-failure isolation. Keep missing/reset evidence honest, but do not require a
-numerical inference-coverage threshold. Existing acoustic results remain optional
-historical evidence; no further model-validation tests are required.
+Model accuracy, inference-coverage percentages and dedicated database CPU checks
+are also outside the milestone. Remaining verification concerns project-owned
+source routing, reuse/fallback wiring, both timing calculations, persistence/UI,
+honest missing evidence and failure isolation. Silero is an existing model.
+
+The methodology below documents how existing evidence was gathered and how an
+operator could repeat it voluntarily. Its original target values are retained
+for context, not as current pass/fail gates.
 
 ## Candidate isolation and its limits
 
@@ -39,11 +39,9 @@ There is no promise of protection from a VM-wide native fault or zero overhead.
 
 An external inference process would provide an operating-system fault boundary,
 at the cost of PCM transfer, protocol/backpressure and process lifecycle work.
-It is deferred while the existing bounded implementation is evaluated. A missed
-non-CPU acceptance budget blocks pilot activation: reduce and document supported capacity or revise
-isolation, then predeclare and repeat the affected measurements. Do not raise a
-budget retrospectively to pass. Native fault containment, if required, needs the
-external process regardless of these performance results.
+It is deferred; measured costs do not mandate capacity changes or new isolation.
+Native fault containment, if separately required, would need an external process
+regardless of these informational performance results.
 
 ### Production session-thread revision, 2026-11-20
 
@@ -104,7 +102,7 @@ checksum in each result. Current model is `silero_v6.2.3.onnx`, SHA256
 `1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3`.
 Measure the actual pinned Silero model, not a fake probability classifier.
 
-## Paired workload
+## Optional paired workload
 
 Use the configured room/STT/diagnostic collector/writer path with deterministic
 local provider and response fixtures. Persistence uses a fresh migrated disposable
@@ -116,7 +114,7 @@ the resource interval; room preparation and diagnostic writes stay within their
 specified warm/cold intervals. Verify call and diagnostic rows from an independent
 connection after drain. The ordinary sandbox smoke remains functional evidence
 only. The committed-write smoke mode exercises the same database contract used
-by the warm/cold repeated-pair runner; native matrix acceptance remains pending.
+by the optional warm/cold repeated-pair runner; the full matrix is not required.
 No benchmark bypass of room service, settings authority, capture admission or
 durable writes is allowed. The generator runs outside the measured VM; report its
 CPU separately. Operational VAD configuration stays fixed within each pair.
@@ -150,8 +148,8 @@ audio. No model preload or initialization cost is discarded. Require STT readine
 within 15 seconds of preparation; timeouts fail rather than removing samples.
 Record preparation-to-ready duration and cumulative CPU seconds separately, as
 well as the combined interval's CPU rate and peak RSS used by the budgets below.
-The enabled-minus-disabled p95 readiness regression across the three cold pairs
-must be at most max(100 ms, 10% of disabled p95). Report diagnostic attachment/model
+The original advisory target for enabled-minus-disabled p95 readiness regression
+across three cold pairs is max(100 ms, 10% of disabled p95). Report diagnostic attachment/model
 readiness and coverage separately; diagnostic readiness must never gate STT.
 
 Deliver 512-sample 16 kHz frames every 32 ms per input using an absolute schedule,
@@ -212,14 +210,15 @@ one clock; VM and external generator timestamps are never subtracted.
 `scripts/diagnostics/repeated_pairs.py` runs one declared topology/mode cell as
 three serial pairs in off/on, on/off, off/on order, each through the existing
 watchdog. It retains commands, all artifacts, per-pair comparisons and worst
-deltas. Invalid phases or measured-budget failures stop without automatic retry.
+deltas. Invalid measurement data stop without automatic retry; cost overruns
+remain visible and do not stop valid optional runs.
 Cold readiness uses nearest-rank p95 across three phases of each collection state.
 Source hashes and the actual emitted PCM digest must agree across all six phases.
-A completed cell is not the entire topology matrix or milestone. Native execution
-and acceptance evidence remain pending in the
+A completed cell records collected data, not a performance certificate or
+milestone gate. Historical implementation evidence is recorded in the
 [cold-pairs checkpoint](../../labnotes/20261120-0309-diagnostics-cold-pairs.md).
 
-## Measurements and predeclared pass criteria
+## Optional measurements and original comparison targets
 
 Measure process CPU time across all threads, wall duration, sampled RSS and OS
 high-water RSS. CPU cores consumed means CPU seconds divided by elapsed seconds.
@@ -241,9 +240,9 @@ in [procfs](https://www.kernel.org/doc/html/latest/filesystems/proc.html).
 The external Python helper in `scripts/diagnostics/measurement.py` reads aggregate
 process CPU ticks, resident memory and thread counts; it fences PID reuse using
 process start ticks and rejects missing, nonfinite or nonmonotonic samples. Its
-resource comparison alone cannot establish a passing workload: correctness,
-coverage, generator timing, readiness and all latency budgets below remain
-mandatory. The four-case smoke watchdog is available with:
+resource comparison does not classify the feature as passing or failing. An
+optional workload must still provide internally valid source, timing, readiness
+and cleanup evidence to support its measurements. The four-case smoke watchdog is available with:
 
 ```shell
 python3 scripts/diagnostics/smoke_runner.py --committed-writes --output /tmp/diagnostics-smoke-unique
@@ -319,19 +318,19 @@ This corrects an overly strict every-read 2 ms/102 ms rule introduced during the
 sampler checkpoint, beyond the original plan's periodic sampling requirement.
 The earlier probes remain invalid under their original contract; they are not
 relabelled as passes. The numerical CPU targets, RSS budgets and PCM timing limits are unchanged;
-CPU targets are advisory under the user decision above.
+All overhead targets are advisory under the user decision above.
 Missing/reset-failed/incomplete or replaced-PID intervals fail. Linux-reported HWM
 may dip slightly; retain its maximum observed value after reset. A generator start
 offset also applies to the short smoke; 5000 ms there leaves only
 1.144 seconds. The separate warm profile above provides the full 20-second interval.
 Cold preparation accounting and the serial repeated-pair runner are implemented;
-actual native warm/cold matrix acceptance remains outstanding.
+further native warm/cold matrix runs are optional.
 
 
-Compare each matched pair separately. All valid repetitions must pass; also
-publish the worst result. Let N be the number of accepted human STT inputs:
+Compare each matched pair separately and report every valid result, including
+exceeded targets. Publish the worst result without turning cost comparisons into gates. Let N be the number of accepted human STT inputs:
 
-| Quantity | Maximum enabled-minus-disabled regression |
+| Quantity | Original advisory enabled-minus-disabled target |
 | --- | --- |
 | Fallback CPU (advisory reporting target) | 0.05 + 0.03 × N CPU cores |
 | Reuse CPU (advisory reporting target) | 0.02 + 0.005 × N CPU cores |
@@ -359,7 +358,7 @@ population is selected by the fixed sequence/phase schedule in [5 s, 25 s), exac
 The external validator independently reconstructs that population and nearest-rank
 p95 from raw pairs and rejects missing or conflicting summaries. Both collection
 off/on phases use the same instrumentation. These timestamps do not establish
-response-dispatch or egress acknowledgement latency, which remain separate gates.
+response-dispatch or egress acknowledgement latency, which are separate measurements.
 
 The response-dispatch stage uses a test-only isolated
 [OTP trace session](https://www.erlang.org/doc/apps/kernel/trace.html) on the exact
@@ -388,11 +387,11 @@ of `AgentSpeechStarted` after the sink's playback-start acknowledgement, matched
 to the independently retained `TextOutput.id` and exact input/source/command.
 This synthetic server boundary does not prove remote audibility. All three trace
 stages must preserve per-room chronology, and the dispatch and egress reports must
-describe the same canonical population. The paired comparator enforces the same
-p95 budget when both phases supply egress; historical dispatch-only artifacts
-remain explicitly partial. Native repeated measurements remain outstanding.
+describe the same canonical population. The paired comparator reports the same
+original p95 target when both phases supply egress; historical dispatch-only artifacts
+remain explicitly partial. Further native repeated measurements are optional.
 
-The same budgets apply to warm and cold phases; cold incomplete diagnostics must
+The same informational targets apply to warm and cold phases; cold incomplete diagnostics must
 remain explicit. Additional correctness gates apply regardless of CPU results:
 
 - Exact admitted PCM delivery, canonical turns and normalized provider/control/
@@ -432,5 +431,6 @@ the pinned Ortex native bindings and the runtime limits document. Focused runtim
 tests cover cancellation, owner loss, deadlines and admission retained until DOWN;
 they do not simulate native VM faults. The
 [checkpoint labnotes](../../labnotes/20261119-1931-diagnostics-load-plan.md) record
-the focused checks and independent design review. The measurement harness/results
-remain outstanding. The pilot remains blocked until all milestone gates pass.
+the focused checks and independent design review. The implemented optional
+harness and recorded results do not create additional milestone gates. The
+milestone tracks the remaining functional and final verification.

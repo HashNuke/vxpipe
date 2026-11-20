@@ -12,7 +12,7 @@ from test_response_latency import egress_evidence
 
 
 class RepeatedPairsTest(unittest.TestCase):
-    def runner(self, *, fail=None, changed_source=False, slow_ready=False):
+    def runner(self, *, fail=None, changed_source=False, slow_ready=False, memory_cost=False):
         self.calls = []
         def run(command, **_options):
             self.calls.append(command)
@@ -44,6 +44,12 @@ class RepeatedPairsTest(unittest.TestCase):
                 interval['summary'] = summarize([ProcessSample(**event['sample']) for event in raw])
                 phase['generator']['audio_start_ns'] = 3_300_000_000
                 value['resource_samples'] = deepcopy(raw)
+            if memory_cost and phase['collection']:
+                for event in phase['resource_samples']:
+                    event['sample'].update(rss_kib=400000, high_water_kib=400000)
+                phase['generator']['resource_interval']['summary'] = summarize(
+                    [ProcessSample(**event['sample']) for event in phase['resource_samples']])
+                value['resource_samples'] = deepcopy(phase['resource_samples'])
             if fail == len(self.calls):
                 value['completed'] = False
                 value['abort'] = 'test invalid attempt'
@@ -64,14 +70,27 @@ class RepeatedPairsTest(unittest.TestCase):
             self.assertTrue(result['readiness']['passed'])
             self.assertTrue((target / 'pair-3.json').exists())
 
-    def test_cold_readiness_regression_fails_despite_valid_resource_budgets(self):
+    def test_cold_readiness_regression_is_advisory_for_complete_data(self):
         with tempfile.TemporaryDirectory() as temporary:
             result = run_cell('cold', 'fallback', 1, 1, Path(temporary) / 'cell',
                               run=self.runner(slow_ready=True))
             self.assertEqual(len(self.calls), 6)
             self.assertTrue(all(pair['measured_gates_pass'] for pair in result['pairs']))
             self.assertFalse(result['readiness']['passed'])
-            self.assertFalse(result['performance_cell_complete'])
+            self.assertTrue(result['readiness']['advisory'])
+            self.assertFalse(result['cost_targets_within_original_limits'])
+            self.assertTrue(result['performance_cell_complete'])
+
+    def test_memory_cost_does_not_stop_optional_repetitions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result = run_cell('warm', 'fallback', 1, 1, Path(temporary) / 'cell',
+                              run=self.runner(memory_cost=True))
+            self.assertEqual(len(self.calls), 6)
+            self.assertEqual(len(result['pairs']), 3)
+            self.assertTrue(result['performance_cell_complete'])
+            self.assertFalse(result['cost_targets_within_original_limits'])
+            self.assertTrue(all(not pair['rss']['passed'] for pair in result['pairs']))
+            self.assertTrue(all(pair['rss']['advisory'] for pair in result['pairs']))
 
     def test_source_change_aborts_before_publishing_a_pair(self):
         with tempfile.TemporaryDirectory() as temporary:

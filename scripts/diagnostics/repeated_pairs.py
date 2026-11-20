@@ -1,7 +1,8 @@
 """Run one declared topology cell as three serial, alternating off/on pairs.
 
-Requires an otherwise quiet measurement host. Stops on the first invalid phase or
-failed measured budget and retains every attempt. Does not deploy or run providers.
+Optional informational measurement: requires an otherwise quiet host. Stops on
+invalid evidence and retains every attempt; measured costs never stop a run.
+Does not deploy or run providers. Complete means data collected, not costs approved.
 """
 import argparse
 import json
@@ -64,18 +65,18 @@ def run_cell(workload, mode, rooms, humans, output, *, run=subprocess.run):
         write(output / f'pair-{pair}.json', comparison)
         result['pairs'].append(comparison)
         write(manifest, result)
-        if not comparison['measured_gates_pass']:
-            result['failed_pair'] = pair
-            write(manifest, result)
-            return result
     if workload == 'cold':
         # Nearest-rank p95 across three repetitions is their maximum.
         off = max(p['preparation_duration_ns']['off'] for p in result['pairs'])
         on = max(p['preparation_duration_ns']['on'] for p in result['pairs'])
         limit = max(100_000_000, off * .1)
         result['readiness'] = dict(off_p95_ns=off, on_p95_ns=on, delta_ns=on-off,
-                                   limit_ns=limit, passed=on-off <= limit)
-    result['performance_cell_complete'] = result.get('readiness', {}).get('passed', True)
+                                   limit_ns=limit, passed=on-off <= limit,
+                                   within_original_target=on-off <= limit, advisory=True)
+    result['performance_cell_complete'] = True
+    result['cost_targets_within_original_limits'] = (
+        all(pair['cost_targets_within_original_limits'] for pair in result['pairs'])
+        and result.get('readiness', {}).get('within_original_target', True))
     result['worst'] = dict(
         cpu_delta_cores=max(p['cpu']['delta_cores'] for p in result['pairs']),
         rss_delta_kib=max(p['rss']['delta_kib'] for p in result['pairs']),

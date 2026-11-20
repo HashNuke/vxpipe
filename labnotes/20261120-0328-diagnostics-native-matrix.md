@@ -31,9 +31,11 @@ retained databases. No repeat was started. Source/model/fixture hashes agree.
 
 Each phase has 625 ingress and ten dispatch/egress observations. STT preparation
 was 642.7 ms off and 678.4 ms on; this is not the required three-pair readiness p95.
-The matrix and milestone acceptance remain incomplete. The user has been asked
-whether RSS/latency costs should also become advisory for opt-in benchmarking;
-no scope change is assumed while that answer is pending.
+The original matrix was incomplete when this attempt stopped. The user then
+explicitly accepted these costs as advisory and clarified that VAD is for
+measurement, not pass/fail evaluation. The milestone no longer requires the
+repeated performance matrix; no further run is needed. These original target
+comparisons remain unchanged as historical measurements.
 
 [Compressed raw reports and pair comparison](20261120-0328-cold-fallback-evidence.json.gz)
 preserve all measurement values and raw-file SHA256 digests. Compression was

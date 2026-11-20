@@ -6,8 +6,24 @@ observation managed by a room service; UI and local settings transitions are ver
 The user-approved call-start snapshot replaces distributed effective status.
 Primary end-of-turn detection and barge-in stop timing are implemented, including
 configured cross-human interruption and persisted/API/Storybook presentation.
-Remaining C acceptance, broader barge-in acceptance, E and F remain incomplete.
+Live functional readback of both timings and final completion checks remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
+
+## User clarification — timing measurements, not performance gates, 2026-11-20
+
+VAD is a timing reference for the two measurements below. Measured delays are
+reported as values, not classified as passing or failing. The user explicitly
+accepted measured memory/latency costs as advisory and clarified that this feature
+is for measurement, not pass/fail evaluation. CPU, RSS and latency overhead
+budgets do not block this milestone. The repeated warm/cold load matrix is no
+longer a required acceptance task; stop further mandatory performance runs.
+
+Keep existing measurements and original target comparisons as informational
+historical evidence. Do not relabel an exceeded target as met. Remaining checks
+verify our source wiring, timing arithmetic, persistence/readback, UI, and failure
+isolation. Missing or invalid evidence must remain explicitly unavailable rather
+than turning into a fabricated timing value. This supersedes older performance
+acceptance language in this document and its linked measurement plan.
 
 ## User-approved CPU acceptance change — 2026-11-20
 
@@ -16,8 +32,8 @@ not a feature intended to remain enabled continuously. CPU overhead is reported
 as an engineering measurement, not a milestone or release blocker. Retain the
 original numerical targets and earlier results as historical evidence; do not
 relabel them as having met those targets. Stop further CPU optimization work for
-this milestone. Correctness, latency, bounded resource use, coverage and cleanup
-requirements remain in force. This decision does not enable collection by default.
+this milestone. Correctness, bounded resource use, honest missing evidence and
+cleanup requirements remain in force; latency values themselves are informational. This decision does not enable collection by default.
 
 ## User scope correction — acceptance checks, 2026-11-20
 
@@ -31,8 +47,8 @@ bounded asynchronous writes and failure isolation.
 This supersedes older references to these gates in historical checkpoint notes.
 Previously collected acoustic results remain optional evidence with their
 limitations intact. Honest missing/reset status remains an application contract;
-it is not a minimum inference-coverage percentage. Repeated performance, live
-browser and final completion checks remain separately open.
+it is not a minimum inference-coverage percentage. Live functional verification
+and final completion checks remain open; repeated performance is optional.
 
 ## User scope correction — new-call settings, 2026-11-20
 
@@ -756,79 +772,15 @@ Room-service implementation and revised settings acceptance:
 - [x] Inspect desktop/mobile Chrome, keyboard/focus, loading/error and large report
   states in both hosts; keep technical detail opt-in and ordinary messages readable.
 
-### E — Application isolation and performance
+### E — Application isolation and informational costs
 
-The [predeclared measurement plan](../../docs/design/latency-diagnostics-measurement-plan.md)
-records the reference hardware, paired warm/cold workloads and numerical budgets.
-The plan alone does not satisfy measured load acceptance.
-The [resource measurement foundation](../20261119-2118-diagnostics-measurement-harness.md)
-adds tested external process CPU/RSS accounting; the configured workload driver
-and complete paired measurements remain outstanding. The
-[external workload smoke](../20261119-2128-diagnostics-external-workload.md) verifies
-real Silero and durable configured calls in all four modes with enforced native
-CPU isolation; it is not the full topology/duration/latency matrix.
-The [smoke watchdog](../20261119-2204-diagnostics-smoke-runner.md) makes that
-four-case run reproducible with bounded lifetime, owned-unit cleanup, resource
-samples and source provenance. The
-[committed-write workload mode](../20261119-2219-diagnostics-committed-workload.md)
-uses disposable databases with independent committed-row checks, avoiding the
-sandbox's omitted commit costs. The
-[concurrent workload checkpoint](../20261119-2232-diagnostics-concurrent-workload.md)
-extends this smoke to independently checked room inputs with source-distinct PCM.
-The [participant workload checkpoint](../20261119-2245-diagnostics-participant-workload.md)
-adds two STT humans per room, ordered peer projections, canonical row identity and
-fixed, declared participant speech windows. Two-room/two-human and single-input
-primed functional smoke each pass all four modes with committed canonical rows;
-earlier cold/overlapping fixture failures remain recorded separately. This does
-not establish cold or paired-load acceptance.
-The [phase-resource checkpoint](../20261119-2322-diagnostics-phase-resources.md)
-adds opt-in audio-clock CPU/RSS intervals with raw samples, identity-fenced RSS
-reset and separate resource-boundary timing gates. Four-mode native verification
-passes with independently recomputed raw summaries; this does not complete
-warm/cold or paired-load acceptance.
-The [warm-workload checkpoint](../20261119-2345-diagnostics-warm-workload.md)
-adds fixed five-second warm-up and twenty-second measurement, per-source completed
-turn checks, native readiness deadlines and separate measured-frame pacing checks.
-Single-case selection permits fresh-VM phases; full paired/cold and
-response/egress latency acceptance remain outstanding.
-The [native CPU checkpoint](../20261120-0008-diagnostics-native-cpu.md)
-configures production Silero sessions to use one intra-op thread, preserving
-model outputs while removing the measured extra native worker pool. This is a
-runtime revision for subsequent measurements, not completion of performance gates.
-The [report-progress checkpoint](../20261120-0020-diagnostics-inference-overhead.md)
-avoids rebuilding unchanged historical reports on every progress frame, preserving
-coverage transitions and durable outputs. Focused and configured checks pass;
-the remaining CPU delta and full measured acceptance stay open.
-The [tensor-reuse checkpoint](../20261120-0030-diagnostics-tensor-reuse.md)
-removes the repeated native sample-rate upload and preserves PCM/model results.
-The warm run remains correct but does not demonstrate further total CPU reduction;
-scheduler waiting and the remaining performance gates still need work.
-The [CPU-scheduling checkpoint](../20261120-0037-diagnostics-cpu-scheduling.md)
-uses an explicit dirty CPU inference entry for production Silero, preserving the
-legacy Ortex entry and model outputs. Preliminary same-revision enabled/disabled
-warm phases pass functional and pacing checks, but the measured 0.100005-core
-CPU delta exceeds the unchanged 0.08-core one-input budget. Performance acceptance
-remains open; this checkpoint does not enable the pilot.
-The [ingress-latency checkpoint](../20261120-0053-diagnostics-ingress-latency.md)
-adds successful push invocation to synthetic provider receipt measurements with
-complete raw frame populations and independent nearest-rank p95 validation.
-Warm cohorts use fixed scheduled frame identities and retain delayed receipts;
-per-input clocks must be nondecreasing. Response-dispatch/egress timing, paired
-repetitions and the other performance/accuracy gates remain open.
-The [response-dispatch checkpoint](../20261120-0109-diagnostics-response-latency.md)
-adds collection-independent canonical completion publication to capability dispatch
-measurements. A bounded test-only trace session captures identity-only events on
-known room processes; complete per-source canonical order and command matches
-prevent missing, duplicate or misclassified warm-up samples. Egress acknowledgement
-and full repeated performance acceptance remain open.
-
-The [completion-egress checkpoint](../20261120-0226-completion-egress-benchmark.md)
-extends the configured workload to acknowledged synthetic audio output for each
-human source. Three-stage trace ordering, exact output identities and matching
-dispatch/egress populations are verified. The
-[paired comparison extension](../20261120-0233-diagnostics-egress-comparison.md)
-enforces egress p95 budgets when present on both sides. This implements measurement
-plumbing; actual native paired runs and the remaining load gates stay open.
+The [measurement plan](../../docs/design/latency-diagnostics-measurement-plan.md)
+and its linked engineering checkpoints retain optional historical methodology,
+source provenance, original target comparisons and measured results. They are not
+remaining acceptance requirements. The [warm egress pair](../20261120-0226-completion-egress-benchmark.md)
+and [first cold pair](../20261120-0328-diagnostics-native-matrix.md) are informational;
+no additional load matrix or overhead optimization is required. The application
+contracts below concern correct evidence and isolation from ordinary calls.
 
 - [x] Optional historical replay: labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
@@ -872,26 +824,15 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   finite retries, concurrent admission, stale-result rejection and resource drain
   to focused component evidence. Its configured sampled mailbox maxima are
   25–64 messages (bound 72); deterministic stress acceptance is complete.
-- [ ] Establish before running load: hardware, concurrency, duration, warm/cold
-  runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
-  paired on/off measurements; publish measured results and limits. CPU targets are
-  advisory under the user's 2026-11-20 decision and do not block completion.
-  Other missed acceptance budgets require correction or documented supported-capacity limits.
-  The [paired warm comparison](../20261120-0216-diagnostics-paired-results.md)
-  validates matching single-phase artifacts and reports CPU, RSS, ingress and
-  dispatch deltas. Its historical one-input pair meets the measured non-CPU
-  budgets; repeated warm/cold and egress evidence remain
-  required before this task can close.
-  The [cold and repeated-pair harness](../20261120-0309-diagnostics-cold-pairs.md)
-  now measures preparation plus twenty seconds of audio and runs three alternating
-  pairs per declared cell. Focused tests and independent review verify its accounting;
-  native matrix execution remains pending. The configured fixture also now waits
-  for its [asynchronously persisted completion landmark](../20261120-0320-diagnostics-persistence-wait.md)
-  before asserting it; all four affected mixed-STT cases pass.
-  The [first cold native pair](../20261120-0328-diagnostics-native-matrix.md)
-  completed both phases but exceeded current RSS and dispatch-latency budgets;
-  the driver stopped without retry. Its raw evidence is retained. A user decision
-  on whether these costs are advisory is pending; no gate is marked complete.
+The former repeated-load acceptance task is removed by the user clarification
+above. The [warm pair](../20261120-0226-completion-egress-benchmark.md),
+[cold/repeated harness](../20261120-0309-diagnostics-cold-pairs.md) and
+[first cold pair](../20261120-0328-diagnostics-native-matrix.md) remain informational.
+The cold pair exceeded the original RSS/dispatch targets; the user accepted these
+costs as advisory. No further matrix run is required to complete this milestone.
+The [configured persistence wait](../20261120-0320-diagnostics-persistence-wait.md)
+fix retains all metric identity assertions and passes all four affected cases.
+
 - [x] Record the isolation choice (dedicated BEAM worker versus external inference
   process), native failure limits and evidence. Do not promise protection from
   VM-wide native faults or zero overhead from an in-process task.
@@ -915,7 +856,7 @@ plumbing; actual native paired runs and the remaining load gates stay open.
   The [handbook checkpoint](../20261119-2033-diagnostics-operator-handbook.md)
   records source verification and the current automatic Scribe profile restriction.
   Handbook text reflects the completed call-start settings contract and retains
-  unresolved load/live-acceptance limitations; this does not complete those gates.
+  unresolved live-acceptance limitations; costs are informational.
 - [ ] Pass root format, compile warnings-as-errors, strict Credo, default tests and
   unused-lock checks; run Lean if speech/source state machines change. Run relevant
   frontend/core checks and finish rendered verification. Required unavailable live
