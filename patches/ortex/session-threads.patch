@@ -1,0 +1,93 @@
+--- a/lib/ortex.ex
++++ b/lib/ortex.ex
+@@ -7,6 +7,10 @@
+   """
+ 
+   @doc """
++  `intra_threads` optionally bounds CPU intra-operator parallelism: 0 retains
++  runtime defaults; 1 executes on the calling thread without an intra-op worker pool.
++  Values must be integers in 0..2_147_483_647. This is not a process-wide thread cap.
++
+   Load an `Ortex.Model` from disk. Optionally pass the execution providers as a list
+   of descending priority and graph optimization level 1-3. Any graph optimization level
+   beyond the range of 1-3 will disable graph optimization.
+@@ -25,7 +29,7 @@
+       iex> Ortex.load("./models/tinymodel.onnx", [:cpu], 0)
+ 
+   """
+-  defdelegate load(path, eps \\ [:cpu], opt \\ 3), to: Ortex.Model
++  defdelegate load(path, eps \\ [:cpu], opt \\ 3, intra_threads \\ 0), to: Ortex.Model
+ 
+   @doc """
+   Run a forward pass through a model.
+--- a/lib/ortex/model.ex
++++ b/lib/ortex/model.ex
+@@ -22,8 +22,8 @@
+   defstruct [:reference]
+ 
+   @doc false
+-  def load(path, eps \\ [:cpu], opt \\ 3) do
+-    case Ortex.Native.init(path, eps, opt) do
++  def load(path, eps \\ [:cpu], opt \\ 3, intra_threads \\ 0) do
++    case Ortex.Native.init(path, eps, opt, intra_threads) do
+       {:error, msg} ->
+         raise msg
+ 
+--- a/lib/ortex/native.ex
++++ b/lib/ortex/native.ex
+@@ -25,7 +25,10 @@
+ 
+   # When loading a NIF module, dummy clauses for all NIF function are required.
+   # NIF dummies usually just error out when called when the NIF is not loaded, as that should never normally happen.
+-  def init(_model_path, _execution_providers, _optimization_level),
++  def init(model_path, execution_providers, optimization_level),
++    do: init(model_path, execution_providers, optimization_level, 0)
++
++  def init(_model_path, _execution_providers, _optimization_level, _intra_threads),
+     do: :erlang.nif_error(:nif_not_loaded)
+ 
+   def run(_model, _inputs), do: :erlang.nif_error(:nif_not_loaded)
+--- a/native/ortex/src/lib.rs
++++ b/native/ortex/src/lib.rs
+@@ -22,9 +22,13 @@
+     model_path: String,
+     eps: Vec<Atom>,
+     opt: i32,
++    intra_threads: i32,
+ ) -> NifResult<ResourceArc<model::OrtexModel>> {
++    if intra_threads < 0 {
++        return Err(rustler::Error::BadArg);
++    }
+     let eps = utils::map_eps(env, eps);
+-    let model = model::init(model_path, eps, opt)
++    let model = model::init(model_path, eps, opt, intra_threads as usize)
+         .map_err(|e| rustler::Error::Term(Box::new(e.to_string())))?;
+     Ok(ResourceArc::new(model))
+ }
+--- a/native/ortex/src/model.rs
++++ b/native/ortex/src/model.rs
+@@ -35,14 +35,21 @@
+     model_path: String,
+     eps: Vec<ExecutionProviderDispatch>,
+     opt: i32,
++    intra_threads: usize,
+ ) -> Result<OrtexModel, Error> {
+     // TODO: send tracing logs to erlang/elixir _somehow_
+     // tracing_subscriber::fmt::init();
+ 
+-    let session = Session::builder()?
++    let builder = Session::builder()?
+         .with_optimization_level(map_opt_level(opt))?
+-        .with_execution_providers(eps)?
+-        .commit_from_file(model_path)?;
++        .with_execution_providers(eps)?;
++    // Preserve the upstream default when the caller does not select a limit.
++    let builder = if intra_threads == 0 {
++        builder
++    } else {
++        builder.with_intra_threads(intra_threads)?
++    };
++    let session = builder.commit_from_file(model_path)?;
+ 
+     let state = OrtexModel { session };
+     Ok(state)

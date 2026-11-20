@@ -1,0 +1,63 @@
+# Silero native CPU threading
+
+Decision, 2026-11-20: production Silero sessions explicitly use one intra-operator
+thread. Retain the existing room/source ownership, independent recurrent state,
+shared diagnostic inference admission and supervised in-process execution.
+
+## Evidence and cause
+
+The first fixed warm configured workload used 34.17 process CPU-seconds with
+fallback collection enabled versus 0.67 with it disabled over approximately 20
+seconds, for one human input. This is preliminary evidence, not the full repeated
+paired acceptance matrix. In a separate instrumented run, three threads created
+at model load accounted for 31.91 of 33.69 sampled thread CPU-seconds (94.7%).
+The calling dirty-I/O thread accounted for 0.56 seconds. Perf stack sampling was
+unavailable under the host's existing policy; no global profiling policy changed.
+Thus thread attribution is measured; spinning as the mechanism is an inference
+from the runtime's configuration and documented behavior, not a sampled-stack proof.
+
+The pinned Ortex binding creates a default ONNX session. ONNX documents that its
+[intra-op pool may spin while waiting](https://onnxruntime.ai/docs/performance/tune-performance/threading.html).
+The [Silero wrapper](https://github.com/snakers4/silero-vad/blob/v6.2/src/silero_vad/utils_vad.py)
+uses one intra-op thread; its maintainer explains that this small model does not
+benefit from a larger pool. The pinned Rust `ort` binding uses sequential graph
+execution, so an inter-op setting is unnecessary here.
+
+## Implementation and boundaries
+
+The checksum-pinned [Ortex patch](../../patches/ortex/README.md) adds an optional
+fourth thread argument while retaining existing load arities and defaults. Silero
+passes one in its production model loader. The native boundary rejects invalid,
+negative or overflowing thread counts before conversion. Setup, CI and release
+preparation apply and compile the verified patch; unknown dependency edits fail
+closed rather than being overwritten. The model file and checksum are unchanged.
+
+One intra-op thread means the calling inference thread performs the computation
+without additional pool workers. It does not cap total VM threads, serialize all
+operational VAD calls or establish native fault isolation. Existing operational
+concurrency and diagnostic admission remain unchanged. Model calls remain native
+code in the BEAM process with the previously documented VM-wide failure risk.
+
+## Alternatives and acceptance
+
+- Leaving defaults retains the demonstrated worker CPU cost.
+- Benchmark-only environment overrides would fail to measure production behavior
+  and are rejected. This setting applies to every production Silero session.
+- Embedding session configuration into model metadata would change the pinned
+  artifact and introduce an environment-dependent loading contract; it is unnecessary.
+- Replacing Ortex or introducing a separate inference service would add deployment
+  and protocol scope before testing the existing runtime's supported thread control.
+  External isolation remains an option if measured budgets or fault requirements
+  require it; this change makes no fault-containment claim.
+
+The fresh-VM Linux regression first failed with three newly created native workers
+and now passes with none. Existing model probability references, PCM chunking and
+reset behavior pass unchanged. Invalid argument and legacy loading checks pass.
+Detailed artifacts and configured warm measurements are recorded in the
+[checkpoint labnotes](../../labnotes/20261120-0008-diagnostics-native-cpu.md).
+
+This is a declared production implementation revision before further paired
+acceptance. Old measurements remain evidence for the old configuration. New paired
+comparisons must use the same patched production configuration in both phases,
+retain CPU cgroup enforcement and the existing budgets, and still prove coverage,
+latency, cold startup and the full supported topology matrix before pilot activation.

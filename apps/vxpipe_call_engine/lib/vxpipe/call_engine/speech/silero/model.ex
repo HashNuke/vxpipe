@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Model do
 
     with {:ok, bytes} <- File.read(path),
          true <- Base.encode16(:crypto.hash(:sha256, bytes), case: :lower) == @checksum do
-      {:ok, %__MODULE__{resource: Ortex.load(path, [:cpu])}}
+      {:ok, %__MODULE__{resource: Ortex.load(path, [:cpu], 3, 1)}}
     else
       _failure -> {:error, :model_unavailable}
     end

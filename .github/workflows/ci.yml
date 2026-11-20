@@ -64,7 +64,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: deps
-          key: mix-ubuntu-26.04-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock', 'mix.exs', 'apps/*/mix.exs', 'patches/ex_mcp/*') }}
+          key: mix-ubuntu-26.04-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock', 'mix.exs', 'apps/*/mix.exs', 'patches/ex_mcp/*', 'patches/ortex/*') }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -80,6 +80,8 @@ jobs:
 
       - name: Apply and compile reviewed dependency patches
         run: |
+          bin/patch-ortex
+          mix deps.compile ortex --include-children
           bin/patch-ex-mcp
           mix deps.compile ex_mcp --include-children
           bin/patch-req-llm
@@ -87,6 +89,7 @@ jobs:
 
       - name: Test dependency preparation
         run: |
+          python3 test/shell/ortex_patch_test.py
           python3 test/shell/ex_mcp_patch_test.py
           python3 test/shell/req_llm_patch_test.py
           python3 test/shell/setup_test.py
@@ -111,6 +114,10 @@ jobs:
 
       - name: Test Console assets
         run: mix assets.test
+
+      - name: Verify Silero native thread contract in a fresh VM
+        working-directory: apps/vxpipe_call_engine
+        run: mix test test/vxpipe/call_engine/speech/silero_native_threads_test.exs --only native_thread_contract
 
       - name: Test umbrella
         run: mix test

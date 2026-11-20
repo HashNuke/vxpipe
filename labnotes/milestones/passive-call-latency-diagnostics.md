@@ -705,6 +705,10 @@ adds fixed five-second warm-up and twenty-second measurement, per-source complet
 turn checks, native readiness deadlines and separate measured-frame pacing checks.
 Single-case selection permits fresh-VM phases; full paired/cold, database CPU,
 response/egress latency and inference-coverage acceptance remain outstanding.
+The [native CPU checkpoint](../20261120-0008-diagnostics-native-cpu.md)
+configures production Silero sessions to use one intra-op thread, preserving
+model outputs while removing the measured extra native worker pool. This is a
+runtime revision for subsequent measurements, not completion of performance gates.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

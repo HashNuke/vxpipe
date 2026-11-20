@@ -39,7 +39,9 @@ def main():
         run_step(root, "dev", ["mix", "deps.get"], "Mix dependencies")
         run_step(root, "dev", ["bin/patch-ex-mcp"], "reviewed ExMCP transport patch")
         run_step(root, "dev", ["bin/patch-req-llm"], "reviewed ReqLLM native signature patch")
+        run_step(root, "dev", ["bin/patch-ortex"], "reviewed Ortex session-thread patch")
         for environment in ("dev", "test"):
+            run_step(root, environment, ["mix", "deps.compile", "ortex", "--include-children"], f"{environment} patched Ortex dependency")
             run_step(root, environment, ["mix", "deps.compile", "ex_mcp", "--include-children"], f"{environment} patched MCP dependency")
             run_step(root, environment, ["mix", "deps.compile", "req_llm"], f"{environment} patched ReqLLM dependency")
         run_step(root, "dev", ["mix", "assets.setup"], "frontend dependencies")

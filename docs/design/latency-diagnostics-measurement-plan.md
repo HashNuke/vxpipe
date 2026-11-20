@@ -28,6 +28,17 @@ isolation, then predeclare and repeat the affected measurements. Do not raise a
 budget retrospectively to pass. Native fault containment, if required, needs the
 external process regardless of these performance results.
 
+### Production session-thread revision, 2026-11-20
+
+Following the first warm CPU evidence, the
+[Silero threading decision](silero-native-threading.md) explicitly selects one
+intra-op thread through a verified Ortex binding patch. This is production loader
+behavior, shared by operational and fallback VAD. It preserves model weights,
+source ownership, admission and budgets; it does not impose a whole-VM thread cap.
+The existing native fault boundary remains. Old default-pool measurements remain
+historical evidence, and new paired phases must both use the revised implementation.
+CPU cgroup enforcement remains mandatory even when no extra pool threads appear.
+
 ## Reference environment and safe execution
 
 Observed evaluation host: KVM x86_64, AMD EPYC-Genoa, four logical CPUs, 7,745 MiB

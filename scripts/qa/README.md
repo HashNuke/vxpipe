@@ -5,6 +5,8 @@ release with compiled assets first, then run as the checkout owner with Docker
 access and sudo privileges:
 
 ```sh
+bin/patch-ortex
+MIX_ENV=prod mix deps.compile ortex --include-children
 bin/patch-req-llm
 MIX_ENV=prod mix deps.compile req_llm
 MIX_ENV=prod mix assets.deploy
