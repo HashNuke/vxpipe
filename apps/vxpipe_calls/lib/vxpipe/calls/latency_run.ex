@@ -146,10 +146,11 @@ defmodule Vxpipe.Calls.LatencyRun do
   defp acknowledgement?(nil, _profile), do: true
 
   defp acknowledgement?(ack, profile)
-       when is_map(ack) and not is_struct(ack) and map_size(ack) == 9 do
+       when is_map(ack) and not is_struct(ack) and map_size(ack) in [8, 9] do
     Map.keys(ack) -- @acknowledgement_fields == [] and
+      (@acknowledgement_fields -- Map.keys(ack)) in [[], [:commit_strategy]] and
       profile.provider == "elevenlabs" and ack[:model_id] == profile.model and
-      ack[:commit_strategy] == :vad and profile.commit_strategy == :vad and
+      Map.get(ack, :commit_strategy, :vad) == :vad and profile.commit_strategy == :vad and
       ack[:sample_rate] === 16_000 and ack[:audio_format] == "pcm_16000" and
       threshold?(ack[:vad_threshold]) and seconds?(ack[:vad_silence_threshold_secs]) and
       ack[:min_speech_duration_ms] in 0..60_000 and ack[:min_silence_duration_ms] in 0..60_000 and

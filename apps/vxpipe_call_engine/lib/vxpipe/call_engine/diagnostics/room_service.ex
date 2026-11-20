@@ -167,15 +167,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomService do
 
   defp accept_discovery(state, {:provider_profile, canonical, provider, profile} = packet) do
     supported? =
-      match?(%{acknowledged: %{"model_id" => "scribe_v2_realtime"}, missing: []}, profile) and
-        match?(
-          {:ok, _},
-          Vxpipe.Providers.ElevenLabs.Scribe.validate_acknowledgement(
-            profile,
-            :vad,
-            "scribe_v2_realtime"
-          )
-        )
+      match?({:ok, _}, Vxpipe.Providers.ElevenLabs.Scribe.diagnostic_acknowledgement(profile))
 
     if supported? and state.pending.profile in [nil, packet] do
       pending = %{state.pending | profile: {:provider_profile, canonical, provider, profile}}

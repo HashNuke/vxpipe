@@ -74,7 +74,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
       JSON.encode!(%{
         "message_type" => "session_started",
         "session_id" => "synthetic",
-        "config" => Map.get(context, :echoes, echoed_settings())
+        "config" =>
+          Map.drop(
+            Map.get(context, :echoes, echoed_settings()),
+            Map.get(context, :omit_echoes, [])
+          )
       })
     )
 
@@ -180,6 +184,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     assert [{_, worker, _, _}] = DynamicSupervisor.which_children(__MODULE__.RoomWorkers)
     assert worker == :sys.get_state(ctx.capability).diagnostic_tap.handoff.receiver
     refute Process.whereis(__MODULE__.Workers)
+  end
+
+  @tag omit_echoes: ["commit_strategy"]
+  test "actual Scribe acknowledgement without strategy attaches without inventing an echo", ctx do
+    start_port()
+    start_room(ctx)
+    context = attach(ctx)
+    assert context.provider_profile.missing == ["commit_strategy"]
+    assert map_size(context.provider_profile.acknowledged) == 8
+    refute Map.has_key?(context.provider_profile.acknowledged, "commit_strategy")
   end
 
   test "agent-only changes preserve the attachment and run", ctx do

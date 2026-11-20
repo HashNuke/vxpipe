@@ -68,12 +68,19 @@ defmodule Vxpipe.Calls.Diagnostics.Attachment do
   end
 
   defp run(context) do
-    with {:ok, %{missing: [], acknowledged: acknowledged}} <-
-           Scribe.validate_acknowledgement(context.provider_profile, :vad, "scribe_v2_realtime") do
+    with {:ok, %{acknowledged: acknowledged}} <-
+           Scribe.diagnostic_acknowledgement(context.provider_profile) do
       acknowledgement =
         @acknowledgement_fields
-        |> Map.new(fn field -> {field, Map.fetch!(acknowledged, Atom.to_string(field))} end)
-        |> Map.put(:commit_strategy, :vad)
+        |> Enum.filter(&Map.has_key?(acknowledged, Atom.to_string(&1)))
+        |> Map.new(fn field ->
+          value =
+            if field == :commit_strategy,
+              do: :vad,
+              else: Map.fetch!(acknowledged, Atom.to_string(field))
+
+          {field, value}
+        end)
 
       profile =
         Map.merge(ActivityBoundary.profile(), %{

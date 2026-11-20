@@ -427,6 +427,16 @@ is covered by protocol fixtures; label unsupported
 profiles explicitly. Native speech-to-speech-only input is outside this scope. Do not claim a new live
 provider/transport is supported from common fixtures alone.
 
+Live Scribe acknowledgement compatibility: the configured automatic mode comes
+from the authorized ContinuousSTT session. Accept a fully validated provider echo
+or the real eight-field echo missing only `commit_strategy`; reject conflicting
+values and other omissions. Keep outer `profile.commit_strategy` as configured
+mode and store only actually echoed keys in `provider_acknowledgement`. Never
+fill the omitted acknowledgement from the request. Legacy complete echoes remain
+valid and distinct in profile grouping. The live response and the
+[official request/session-start documentation](https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime)
+support this narrow correction; it does not change turn policy or timing endpoints.
+
 Benchmarking defaults off. Each call snapshots the durable installation-wide
 **Installation → Diagnostics → Benchmark using Silero VAD** setting at startup.
 Only authenticated built-in admin and superadmin browser-session principals may

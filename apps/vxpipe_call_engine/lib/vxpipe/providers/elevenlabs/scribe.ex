@@ -134,6 +134,17 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
 
   def validate_acknowledgement(_profile, _strategy, _model), do: :error
 
+  @doc "Accepts diagnostic evidence with all VAD fields; the configured strategy need not be echoed."
+  def diagnostic_acknowledgement(profile) do
+    with {:ok, %{missing: missing} = acknowledged} <-
+           validate_acknowledgement(profile, :vad, "scribe_v2_realtime"),
+         true <- missing in [[], ["commit_strategy"]] do
+      {:ok, acknowledged}
+    else
+      _ -> :error
+    end
+  end
+
   defp unique_options?(options),
     do: length(options) == length(Enum.uniq(Keyword.keys(options)))
 

@@ -98,6 +98,41 @@ defmodule Vxpipe.Calls.Diagnostics.AttachmentTest do
     send(task, {:finish, {:ok, closed}})
   end
 
+  test "omitted strategy is preserved while configured VAD mode admits capture", c do
+    fields = Map.delete(c.context.provider_profile.acknowledged, "commit_strategy")
+
+    context = %{
+      c.context
+      | provider_profile: %{acknowledged: fields, missing: ["commit_strategy"]}
+    }
+
+    assert {:ok, output} = Attachment.start(context, c.options)
+    assert CaptureHandoff.current?(output)
+    assert_receive {:diagnostic_write, task, run}
+    assert run.profile.commit_strategy == :vad
+    assert map_size(run.profile.provider_acknowledgement) == 8
+    refute Map.has_key?(run.profile.provider_acknowledgement, :commit_strategy)
+    send(task, {:finish, {:ok, run}})
+  end
+
+  test "conflicting strategy and any other absent acknowledgement field reject capture", c do
+    fields = c.context.provider_profile.acknowledged
+
+    invalid =
+      [%{acknowledged: Map.put(fields, "commit_strategy", "manual"), missing: []}] ++
+        for key <- Map.keys(fields), key != "commit_strategy" do
+          %{acknowledged: Map.delete(fields, key), missing: [key]}
+        end
+
+    for profile <- invalid do
+      assert {:error, :unavailable} =
+               Attachment.start(%{c.context | provider_profile: profile}, c.options)
+    end
+
+    assert DynamicSupervisor.which_children(__MODULE__.Collectors) == []
+    refute_received {:diagnostic_write, _, _}
+  end
+
   test "cancellation while obtaining the writer handoff prevents initial persistence", c do
     parent = self()
     tasks = start_supervised!({Task.Supervisor, []})

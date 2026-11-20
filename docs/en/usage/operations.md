@@ -55,11 +55,13 @@ overhead observations are informational.
 The first live acceptance profile is human ElevenLabs Scribe v2 Realtime input
 over browser WebRTC with local Silero off and on. Offline fixtures do not establish
 live support for other providers, models or transports. Automatic attachment
-currently requires an acknowledged Scribe v2 Realtime profile with provider
-`vad` commit strategy and all required echoed settings present and valid. Other
-models/providers, manual commit mode and missing or mismatched acknowledgements
-do not attach an observer. Provider `vad` commit strategy is independent of the
-local operational Silero switch, which can be off or on.
+currently requires configured automatic Scribe v2 Realtime mode and validated
+provider settings. Scribe may omit `commit_strategy` from its acknowledgement;
+that omission is retained, while the configured mode is recorded separately. A
+complete acknowledgement also remains supported. Other omissions, conflicting
+values, unsupported models/providers and manual mode do not attach an observer.
+Provider `vad` commit strategy is independent of local operational Silero, which
+can be off or on.
 
 ### Which audio is observed
 
