@@ -1,4 +1,5 @@
 """Watchdog authority and invalid-run contracts, without privileged processes."""
+from test_ingress_latency import evidence as latency_evidence
 from dataclasses import asdict
 from copy import deepcopy
 from measurement import ProcessSample, summarize
@@ -15,7 +16,7 @@ LEAF = '12345678-1234-1234-1234-123456789abc'
 
 
 def reports():
-    return [dict(operational_vad=vad, collection=enabled,
+    return [dict(operational_vad=vad, collection=enabled, ingress_latency=latency_evidence(),
                  generator=dict(frames_sent=192, p95_lateness_ns=1000,
                                 elapsed_ns=6_144_000_000))
             for vad in (False, True) for enabled in (False, True)]
@@ -117,6 +118,7 @@ class SmokeRunnerTest(unittest.TestCase):
                                                100, 100, 2, ms == 0)))
                for ms in range(0, 20001, 100)]
         report = reports()[0]
+        report['ingress_latency'] = latency_evidence('warm')
         report.update(workload='warm', persistence='committed', database_pool_size=10, measured_turn_counts={'0': 10}, resource_samples=raw)
         report['generator'].update(frames_sent=782, measured_frames_sent=625, measured_p95_lateness_ns=1000,
             audio_start_ns=1_000_000_000, elapsed_ns=25_000_000_000,
@@ -222,7 +224,7 @@ class SmokeRunnerTest(unittest.TestCase):
                                        available_kib=900_000, elapsed=20))
 
     def test_zero_exit_without_complete_matrix_or_resource_samples_is_not_success(self):
-        reports = [dict(operational_vad=vad, collection=enabled,
+        reports = [dict(operational_vad=vad, collection=enabled, ingress_latency=latency_evidence(),
                         generator=dict(frames_sent=192, p95_lateness_ns=1000, elapsed_ns=6_144_000_000))
                    for vad in (False, True) for enabled in (False, True)]
         samples = [dict(beams=[dict(rss_kib=100)])]
@@ -254,6 +256,7 @@ class SmokeRunnerTest(unittest.TestCase):
         samples = [dict(beams=[dict(rss_kib=100)])]
         self.assertFalse(smoke_complete(evidence, samples, rooms=2))
         for report in evidence:
+            report['ingress_latency'] = latency_evidence(inputs=2)
             report['rooms'] = 2
             report['generator']['frames_sent'] = 384
         self.assertTrue(smoke_complete(evidence, samples, rooms=2))
@@ -266,6 +269,7 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertFalse(smoke_complete(evidence, samples, rooms=2, inputs_per_room=2))
         for report in evidence:
             report['rooms'] = 2
+            report['ingress_latency'] = latency_evidence(inputs=4)
             report['inputs_per_room'] = 2
             report['generator']['frames_sent'] = 768
         self.assertTrue(smoke_complete(evidence, samples, rooms=2, inputs_per_room=2))

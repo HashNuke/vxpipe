@@ -4,6 +4,7 @@ This is a watchdog/functional smoke runner, not paired performance acceptance.
 It creates only uniquely named transient units and requires noninteractive sudo
 for its own system scope. The workload itself runs as the invoking normal user.
 """
+from ingress_latency import complete as ingress_latency_complete
 import argparse
 import hashlib
 from dataclasses import asdict
@@ -199,6 +200,9 @@ def smoke_complete(reports, samples, *, committed_writes=False, rooms=1, inputs_
         return False
     if not any(sample['beams'] for sample in samples):
         return False
+    if not all(ingress_latency_complete(r.get('ingress_latency'), rooms * inputs_per_room, workload)
+               for r in reports):
+        return False
     if sample_resources:
         if not all(resource_complete(r, samples, workload) for r in reports):
             return False
@@ -333,7 +337,7 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
 
 def provenance():
     paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py', 'scripts/diagnostics/resource_schedule.py', 'scripts/diagnostics/workload_profile.py',
-             'scripts/diagnostics/pcm_generator.py', 'mix.lock',
+             'scripts/diagnostics/pcm_generator.py', 'scripts/diagnostics/ingress_latency.py', 'mix.lock',
              'patches/ortex/session-threads.patch', 'patches/ortex/session-threads.json',
              'patches/ortex/cpu-scheduling-upgrade.patch',
              'deps/ortex/lib/ortex.ex', 'deps/ortex/lib/ortex/model.ex', 'deps/ortex/lib/ortex/native.ex',
@@ -342,6 +346,8 @@ def provenance():
              'apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs',
              'apps/vxpipe_console/test/support/diagnostics_database.ex',
              'apps/vxpipe_console/test/support/diagnostics_schedule.ex',
+             'apps/vxpipe_console/test/support/diagnostics_ingress_latency.ex',
+             'apps/vxpipe_call_engine/test/support/elevenlabs_scribe_transport.ex',
              'apps/vxpipe_console/test/support/speech_connection.ex',
              'apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero/model.ex',
              'apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero.ex',

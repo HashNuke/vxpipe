@@ -296,6 +296,25 @@ publish the worst result. Let N be the number of accepted human STT inputs:
 
 Calculate latency within the measured VM's monotonic clock, never by subtracting
 generator and target clocks. Publish sample counts and nearest-rank p95 per phase.
+The ingress stage is measured from immediately before a successful
+`CallEngine.push_audio` invocation, after constructing the frame, to receipt inside
+the synthetic wire's audio callback. Thus it includes synchronous admission and
+queueing; it is not microphone/network latency or observer-mailbox receipt time.
+The exact PCM/count checks prove the invoked frames were delivered. Both endpoints
+use signed microsecond monotonic timestamps in the measured VM. An opt-in fixture
+notification carries wire identity, ordinal, PCM and receipt time together.
+
+Retain all frame timestamp pairs. Validate complete ordered per-input ordinals,
+nonnegative elapsed times, independently nondecreasing ingress/provider clocks
+and exact frame counts before summarizing. Equal timestamps and overlapping
+in-flight frames remain valid. The warm
+population is selected by the fixed sequence/phase schedule in [5 s, 25 s), exactly
+625 frames per input; delayed receipts remain included even beyond that interval.
+The external validator independently reconstructs that population and nearest-rank
+p95 from raw pairs and rejects missing or conflicting summaries. Both collection
+off/on phases use the same instrumentation. These timestamps do not establish
+response-dispatch or egress acknowledgement latency, which remain separate gates.
+
 The same budgets apply to warm and cold phases; cold incomplete diagnostics must
 remain explicit. Additional correctness gates apply regardless of CPU results:
 

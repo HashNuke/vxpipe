@@ -723,6 +723,12 @@ legacy Ortex entry and model outputs. Preliminary same-revision enabled/disabled
 warm phases pass functional and pacing checks, but the measured 0.100005-core
 CPU delta exceeds the unchanged 0.08-core one-input budget. Performance acceptance
 remains open; this checkpoint does not enable the pilot.
+The [ingress-latency checkpoint](../20261120-0053-diagnostics-ingress-latency.md)
+adds successful push invocation to synthetic provider receipt measurements with
+complete raw frame populations and independent nearest-rank p95 validation.
+Warm cohorts use fixed scheduled frame identities and retain delayed receipts;
+per-input clocks must be nondecreasing. Response-dispatch/egress timing, paired
+repetitions and the other performance/accuracy gates remain open.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

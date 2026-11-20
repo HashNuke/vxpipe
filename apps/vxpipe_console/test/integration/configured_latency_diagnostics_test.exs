@@ -23,6 +23,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   alias Vxpipe.Calls.{Administration, ProviderCredentials, ProviderCredentialSource}
   alias Vxpipe.Console.Test.SpeechConnection
   alias Vxpipe.Console.Test.DiagnosticsSchedule
+  alias Vxpipe.Console.Test.DiagnosticsIngressLatency
 
   alias Vxpipe.Persistence.{
     CallSpecStore,
@@ -76,7 +77,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           STTSession => [
             enabled: true,
             wire_module: Wire,
-            wire_options: [observer: parent],
+            wire_options: [observer: parent, timed_audio: Map.get(tags, :external_pcm, false)],
             activity_options:
               cond do
                 actual? ->
@@ -440,6 +441,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
              epoch: make_ref(),
              frames: 0,
              offered: [],
+             ingress_times: %{},
+             ingress_latency: [],
              received: [],
              completed: 0,
              expected_frames:
@@ -638,6 +641,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           end
 
           refute_received {:scribe_audio, ^wire, _}
+          refute_received {:scribe_audio, ^wire, _, _, _}
           refute_received {:scribe_commit, ^wire}
 
           measured =
@@ -733,6 +737,23 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute_received {:vxpipe_connection_unavailable, _}
       assert result.report["timing_valid"]
 
+      ingress_samples =
+        Map.new(result.inputs, fn {index, input} ->
+          {index, Enum.reverse(input.ingress_latency)}
+        end)
+
+      ingress_latency = %{
+        boundary: "accepted-push-invocation-to-provider-receipt-v1",
+        samples: ingress_samples,
+        summary:
+          DiagnosticsIngressLatency.summarize(
+            ingress_samples,
+            room_count,
+            inputs_per_room,
+            workload
+          )
+      }
+
       IO.puts(
         "DIAGNOSTIC_EXTERNAL_SMOKE " <>
           Jason.encode!(%{
@@ -742,6 +763,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             inputs_per_room: inputs_per_room,
             workload: Atom.to_string(workload),
             measured_turn_counts: measured_turn_counts,
+            ingress_latency: ingress_latency,
             model_ready_at_us: readiness,
             model_ready_by_us:
               if(workload == :warm, do: pre_launch_us + div(plan.measurement_start_ns, 1_000)),
@@ -3448,8 +3470,17 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           assert source_marker == index + 1
         end
 
-        send_audio(input.attachment, input.identity, input.epoch, sequence, sequence * 512, pcm)
-        updated = %{input | frames: sequence + 1, offered: [pcm | input.offered]}
+        frame = audio_frame(input.identity, input.epoch, sequence, sequence * 512, pcm)
+        ingress_us = System.monotonic_time(:microsecond)
+        assert :ok = CallEngine.push_audio(input.attachment, frame)
+
+        updated = %{
+          input
+          | frames: sequence + 1,
+            offered: [pcm | input.offered],
+            ingress_times: Map.put(input.ingress_times, sequence, ingress_us)
+        }
+
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
 
       {^port, {:data, <<3, json::binary>>}} ->
@@ -3474,12 +3505,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert status == 0
         external_pcm_loop(%{state | exited?: true})
 
-      {:scribe_audio, wire, pcm} ->
+      {:scribe_audio, wire, sequence, pcm, provider_us} ->
         index = Map.fetch!(state.wire_indices, wire)
         input = Map.fetch!(state.inputs, index)
         received = [pcm | input.received]
         count = length(received)
         assert count <= input.expected_frames
+        assert sequence == count - 1
+        ingress_us = Map.fetch!(input.ingress_times, sequence)
+        assert provider_us >= ingress_us
+        receipt = %{sequence: sequence, ingress_us: ingress_us, provider_us: provider_us}
 
         turn =
           Vxpipe.Console.Test.DiagnosticsSchedule.turn_at(
@@ -3505,7 +3540,14 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             do: Map.put(input.settlement_times, turn, settlement_at),
             else: input.settlement_times
 
-        updated = %{input | received: received, settlements: settlements, settlement_times: times}
+        updated = %{
+          input
+          | received: received,
+            settlements: settlements,
+            settlement_times: times,
+            ingress_latency: [receipt | input.ingress_latency]
+        }
+
         external_pcm_loop(%{state | inputs: Map.put(state.inputs, index, updated)})
 
       {:vxpipe_event, %CallEngine.Event.AgentTurnInterrupted{} = event} ->
@@ -3553,22 +3595,29 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
   defp send_audio(attachment, identity, epoch, sequence, timestamp, pcm) do
     assert :ok =
-             CallEngine.push_audio(attachment, %AudioFrame{
-               tenant_id: identity.tenant_id,
-               room_id: identity.room_id,
-               incarnation_id: identity.incarnation_id,
-               participant_id: identity.participant_id,
-               connection_id: identity.connection_id,
-               source_epoch: epoch,
-               track_id: "configured-speech",
-               codec: :linear16,
-               sample_rate: 16_000,
-               channels: 1,
-               sequence_number: sequence,
-               timestamp: timestamp,
-               payload: pcm,
-               received_at: System.monotonic_time(:millisecond)
-             })
+             CallEngine.push_audio(
+               attachment,
+               audio_frame(identity, epoch, sequence, timestamp, pcm)
+             )
+  end
+
+  defp audio_frame(identity, epoch, sequence, timestamp, pcm) do
+    %AudioFrame{
+      tenant_id: identity.tenant_id,
+      room_id: identity.room_id,
+      incarnation_id: identity.incarnation_id,
+      participant_id: identity.participant_id,
+      connection_id: identity.connection_id,
+      source_epoch: epoch,
+      track_id: "configured-speech",
+      codec: :linear16,
+      sample_rate: 16_000,
+      channels: 1,
+      sequence_number: sequence,
+      timestamp: timestamp,
+      payload: pcm,
+      received_at: System.monotonic_time(:millisecond)
+    }
   end
 
   # Real input continues while discovery scans rooms; one early frame is not a
