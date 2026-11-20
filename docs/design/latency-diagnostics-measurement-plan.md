@@ -5,6 +5,13 @@ measurements recorded in the milestone. Acoustic accuracy and full paired
 measurement acceptance remain open. Thresholds below are engineering acceptance budgets,
 not measurements or promises of production capacity.
 
+User decision, 2026-11-20: the measured CPU overhead is acceptable for optional
+benchmarking. Report CPU use and the original targets, but CPU target overruns
+are advisory and do not block milestone completion or release. Further CPU
+optimization is out of scope. Historical target misses remain accurately recorded;
+this is an explicit acceptance change, not a retrospective measurement pass.
+Correctness, latency, bounded resources, coverage and cleanup remain required.
+
 ## Candidate isolation and its limits
 
 Use the implemented room-owned source workers with shared, bounded inference in
@@ -25,7 +32,7 @@ There is no promise of protection from a VM-wide native fault or zero overhead.
 An external inference process would provide an operating-system fault boundary,
 at the cost of PCM transfer, protocol/backpressure and process lifecycle work.
 It is deferred while the existing bounded implementation is evaluated. A missed
-budget blocks pilot activation: reduce and document supported capacity or revise
+non-CPU acceptance budget blocks pilot activation: reduce and document supported capacity or revise
 isolation, then predeclare and repeat the affected measurements. Do not raise a
 budget retrospectively to pass. Native fault containment, if required, needs the
 external process regardless of these performance results.
@@ -274,7 +281,8 @@ raw interval must reproduce every summary field and match the observed VM identi
 This corrects an overly strict every-read 2 ms/102 ms rule introduced during the
 sampler checkpoint, beyond the original plan's periodic sampling requirement.
 The earlier probes remain invalid under their original contract; they are not
-relabelled as passes. CPU/RSS regression budgets and PCM timing limits are unchanged.
+relabelled as passes. The numerical CPU targets, RSS budgets and PCM timing limits are unchanged;
+CPU targets are advisory under the user decision above.
 Missing/reset-failed/incomplete or replaced-PID intervals fail. Linux-reported HWM
 may dip slightly; retain its maximum observed value after reset. A generator start
 offset also applies to the short smoke; 5000 ms there leaves only
@@ -287,8 +295,8 @@ publish the worst result. Let N be the number of accepted human STT inputs:
 
 | Quantity | Maximum enabled-minus-disabled regression |
 | --- | --- |
-| Fallback CPU | 0.05 + 0.03 × N CPU cores |
-| Reuse CPU | 0.02 + 0.005 × N CPU cores |
+| Fallback CPU (advisory reporting target) | 0.05 + 0.03 × N CPU cores |
+| Reuse CPU (advisory reporting target) | 0.02 + 0.005 × N CPU cores |
 | Peak RSS, fallback or reuse | 128 + 8 × N MiB |
 | p95 accepted ingress → synthetic provider receipt | max(2 ms, 10% of disabled p95) |
 | p95 canonical input completion → matching response dispatch | max(2 ms, 10% of disabled p95) |

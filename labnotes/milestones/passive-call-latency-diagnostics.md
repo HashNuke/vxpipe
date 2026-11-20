@@ -7,6 +7,54 @@ Distributed effective-status acceptance remains.
 Remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
+## User-approved CPU acceptance change — 2026-11-20
+
+The user accepts the measured CPU cost because this is optional benchmarking,
+not a feature intended to remain enabled continuously. CPU overhead is reported
+as an engineering measurement, not a milestone or release blocker. Retain the
+original numerical targets and earlier results as historical evidence; do not
+relabel them as having met those targets. Stop further CPU optimization work for
+this milestone. Correctness, latency, bounded resource use, coverage and cleanup
+requirements remain in force. This decision does not enable collection by default.
+
+## Primary measurements clarified by the user — 2026-11-20
+
+The two primary measurements are:
+
+1. **End-of-turn detection delay:** local Silero acoustic speech end to receipt of
+   the STT transcript/signal that actually completes that human turn. An interim
+   transcript or a text commit that does not end the turn is not this endpoint.
+2. **Barge-in stop delay:** local Silero acoustic speech onset while the voice
+   agent is playing audio to acknowledgement that the interrupted agent playback
+   stopped. Detection, cancellation dispatch and model cancellation are intermediate
+   landmarks, not playback-stop evidence.
+   Label the acknowledgement boundary honestly: the current WebRTC sink confirms
+   that server egress stopped and its queue was cleared; this does not prove the
+   browser has played its last already-buffered packet. Do not label server-only
+   evidence as remote audible stop. Record this uncertainty in the report.
+
+Agent response text, dispatch and first audio remain supplementary breakdowns.
+Neither completion-to-dispatch nor speech-end-to-first-audio substitutes for the
+first measurement. CPU measurements are advisory as specified above.
+
+The existing interruption acceptance proves exact-request cancellation and rejects
+late output; it does **not** prove the second measurement. Existing completed
+checkboxes retain their original narrow meaning. Barge-in implementation and
+acceptance remain open below; this clarification does not claim completion.
+
+- [ ] Persist and expose barge-in onset, interrupted playback identity and stop
+  acknowledgement with source/connection/incarnation and clock provenance. Match
+  the onset segment to the output already playing, including an output belonging
+  to the previous human turn; do not attach it to the next agent response.
+- [ ] Prove delayed stop acknowledgement changes the barge-in duration while
+  early cancellation does not. Cover missing acknowledgement, no agent playback,
+  stale/wrong output, multiple human sources, duplicate callbacks, late Silero
+  confirmation, source replacement and incompatible clocks without fabricated
+  durations. Observation must remain passive and bounded.
+- [ ] Verify persisted/API/UI presentation of both primary measurements with
+  explicit unavailable reasons and millisecond units, including a rendered
+  barge-in example. Confirm live acceptance exercises both measurements.
+
 ## Runnable outcome
 
 An authorized operator opens a live or ended call and sees a readable conversation.
@@ -381,7 +429,10 @@ Keep these nullable landmarks, each with provenance and clock/session identity:
 | First audio start | First matching acknowledged server egress; not proof of remote hearing. |
 | Manual commit sent | Optional, where that provider path explicitly commits. |
 
-Primary duration is provider-end-evidence receipt minus acoustic-end estimate.
+Primary end-of-turn detection duration is provider-end-evidence receipt minus
+acoustic-end estimate. Primary barge-in stop duration is acknowledged interrupted
+playback stop minus acoustic speech onset while that playback was active. Keep
+its interrupted output identity separate from the response to the new human turn.
 Show commit-to-end, provider-to-room, room-to-first-text, text-to-first-audio and
 speech-end-to-first-audio separately when valid. Observer confirmation is never
 the subtraction baseline. Network and silence detection are included; no metric
@@ -768,8 +819,9 @@ and full repeated performance acceptance remain open.
   25–64 messages (bound 72); deterministic stress acceptance is complete.
 - [ ] Establish before running load: hardware, concurrency, duration, warm/cold
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
-  paired on/off measurements; publish measured results and limits. Any missed
-  budget blocks enabling the pilot; revise architecture or reduce supported capacity.
+  paired on/off measurements; publish measured results and limits. CPU targets are
+  advisory under the user's 2026-11-20 decision and do not block completion.
+  Other missed acceptance budgets require correction or documented supported-capacity limits.
 - [x] Record the isolation choice (dedicated BEAM worker versus external inference
   process), native failure limits and evidence. Do not promise protection from
   VM-wide native faults or zero overhead from an in-process task.
