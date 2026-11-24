@@ -91,4 +91,9 @@ matrix are still open.
 - [ ] On a real QA handset run healthy, recovered, announced-disconnect, successful transfer and unanswered-transfer cases. Record perceived silence, exact prompt heard, whether the repeat was captured, number of agent answers and confirmed final disposition. Measure fault-to-first-audible-cue and total time to recovery/exit against the checkpoint budgets. Verify no competing voices or silent active leg after a recoverable carrier outcome. Redact sensitive data from evidence.
 - [ ] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Gate broader rollout on handset evidence and an exercised rollback to the prior call spec/compatible release.
 
+The remaining handset repeat and answered-transfer checks can use one
+coordinated call to the pool receiver. The test waits for spoken consent and
+uses an authenticated carrier bridge event and destination-side transcription.
+The operator records audibility and perceived delays. [Handset procedure](../../docs/en/development/testing.md)
+
 QA deployed release `615f6975` and returned HTTP 200 on its public health check. In a disposable database, the previous QA release published the original inbound spec, the deployed release published a revision with a recovery destination, and the previous release (`9e320582`) republished the original source. Inbound route resolution selected the expected revision at each step. Shared QA continued serving the new release.

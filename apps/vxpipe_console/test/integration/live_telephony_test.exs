@@ -232,11 +232,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
           connection.role == :human
         end)
 
-      capability = connection.speech_to_text.capability
-      original = :sys.get_state(capability).session
-      input = :sys.get_state(CallEngine.Speech.Session.provider(original))
-      recognizer = CallEngine.Speech.Session.provider(input.inner)
-      assert :ok = GenServer.stop(:sys.get_state(recognizer).wire, :normal)
+      disconnect_live_scribe(connection)
 
       await("fresh live Scribe is ready on the same Telnyx connection", 8_000, fn ->
         assert {:ok, facts} =
@@ -280,7 +276,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   # Run only in a coordinated handset window. The ordinary provider suite
   # must never wait for a person to place a call.
   @tag :integration
-  unless System.get_env("VXPIPE_LIVE_HANDSET_WINDOW") == "1" do
+  @handset_window System.get_env("VXPIPE_LIVE_HANDSET_WINDOW")
+  unless @handset_window in ["1", "repeat_and_transfer"] do
     @tag skip: "requires a coordinated handset window"
   end
 
@@ -300,7 +297,12 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     suffix = String.slice(Map.fetch!(fixture.settings.numbers, "telnyx"), -4, 4)
 
     try do
-      for outcome <- [:unanswered, :answered] do
+      outcomes =
+        if @handset_window == "repeat_and_transfer",
+          do: [:answered],
+          else: [:unanswered, :answered]
+
+      for outcome <- outcomes do
         destination =
           if outcome == :answered,
             do: ConfiguredTelephonyFixture.publish_handset_destination(fixture)
@@ -320,6 +322,10 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
           end)
 
         binding = await_peer_binding(fixture, incoming, "human")
+
+        if @handset_window == "repeat_and_transfer" do
+          verify_handset_repeat(fixture, incoming, binding)
+        end
 
         [{media, _}] =
           Registry.lookup(
@@ -357,6 +363,67 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     after
       cleanup(fixture.tenant.key)
     end
+  end
+
+  defp disconnect_live_scribe(connection) do
+    capability = connection.speech_to_text.capability
+    original = :sys.get_state(capability).session
+    input = :sys.get_state(CallEngine.Speech.Session.provider(original))
+    recognizer = CallEngine.Speech.Session.provider(input.inner)
+    assert :ok = GenServer.stop(:sys.get_state(recognizer).wire, :normal)
+  end
+
+  defp verify_handset_repeat(fixture, call, binding) do
+    [{room, _}] = Registry.lookup(CallEngine.RoomRegistry, {fixture.tenant.key, call.room_id})
+    id = binding.client_state_leg_id
+    assert {:ok, facts} = Calls.fetch_call_facts(fixture.principal, call.id, fixture.options)
+    caller = call.plan.participants["human"].participant_id
+    agent = call.plan.participants["assistant"].participant_id
+
+    known =
+      for fact <- facts,
+          fact.kind == :participant_transcription_final and fact.participant_id == caller,
+          into: MapSet.new(),
+          do: fact.correlation_id
+
+    connection =
+      await("caller starts the next question", 20_000, fn ->
+        connection = Map.fetch!(:sys.get_state(room).connections, id)
+        turn = connection.speech_to_text.turn
+        if turn && not MapSet.member?(known, turn.id), do: connection
+      end)
+
+    lost_turn = connection.speech_to_text.turn.id
+    disconnect_live_scribe(connection)
+
+    await("caller confirms hearing the answer before transfer", 35_000, fn ->
+      remote_phrase?(fixture, call, "transfer now")
+    end)
+
+    assert {:ok, facts} = Calls.fetch_call_facts(fixture.principal, call.id, fixture.options)
+
+    assert Enum.any?(
+             facts,
+             &(&1.kind == :caller_speech_recovery and &1.connection_id == id and
+                 &1.correlation_id == lost_turn and &1.payload["phase"] == "repeat_completed")
+           )
+
+    assert repeat_answer_count(facts, caller, agent) == 1
+  end
+
+  defp repeat_answer_count(facts, caller, agent) do
+    questions =
+      for fact <- facts,
+          fact.kind == :participant_transcription_final and fact.participant_id == caller,
+          is_binary(fact.correlation_id),
+          String.contains?(String.downcase(fact.payload["text"]), "commercial properties"),
+          into: MapSet.new(),
+          do: fact.correlation_id
+
+    Enum.count(facts, fn fact ->
+      fact.kind == :agent_turn_completed and fact.participant_id == agent and
+        fact.payload["outcome"] == "completed" and MapSet.member?(questions, fact.correlation_id)
+    end)
   end
 
   defp handset_leg_evidence(call, phase) do
@@ -810,6 +877,27 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
                  &1.payload["name"] == "transfer" and
                  &1.payload["result"]["status"] == "completed")
            )
+  end
+
+  test "the handset repeat check counts only answers to the repeated question" do
+    final = %{
+      kind: :participant_transcription_final,
+      participant_id: "caller",
+      correlation_id: "question",
+      payload: %{"text" => "Do you service commercial properties?"}
+    }
+
+    reply = %{
+      kind: :agent_turn_completed,
+      participant_id: "agent",
+      correlation_id: "question",
+      payload: %{"outcome" => "completed"}
+    }
+
+    earlier = %{reply | correlation_id: "opt-in"}
+    assert repeat_answer_count([final, earlier], "caller", "agent") == 0
+    assert repeat_answer_count([final, earlier, reply], "caller", "agent") == 1
+    assert repeat_answer_count([final, reply, reply], "caller", "agent") == 2
   end
 
   test "handset transfer fixture keeps its caller, outbound identity and peer within the test pool",

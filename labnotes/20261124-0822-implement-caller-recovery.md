@@ -299,3 +299,12 @@ at each of the 19 carrier phases. Each retry preserved the claim, phase,
 command ID and original deadline. Stale timers and duplicate observations
 produced no extra write. The gateway harness separately covers storage loss
 before announce or dial, and the persistence tests check incarnation fencing.
+
+Added a single-call handset mode for the two outstanding listening checks.
+The original two-outcome mode remains available. After explicit spoken opt-in,
+the new mode disconnects the live Scribe session on the next open caller turn,
+checks the recovery completion against that turn, and counts completed answers
+correlated with the commercial-property question. Saying “transfer now”
+allows the same caller to continue to the answered bridge. A local regression
+checks that an unrelated acknowledgement cannot count as the answer and that
+duplicate completed answers are detected. Human audibility remains unverified.

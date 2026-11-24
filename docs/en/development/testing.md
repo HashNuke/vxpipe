@@ -148,6 +148,17 @@ again and repeats the phrase. After the destination greeting, the operator
 says “bridge test” to verify audio crossed the human bridge. Both destination
 scenarios use the other machine-owned number.
 
+After ring-out has passed, set `VXPIPE_LIVE_HANDSET_WINDOW=repeat_and_transfer`
+with the same test selector to exercise recognition recovery and the answered
+transfer on a single call. Say “transfer test” after the greeting, then ask
+“Do you service commercial properties?” during the agent's acknowledgement.
+The runner closes the recognizer on that next open turn. Repeat the question
+when prompted. Say “transfer now” after hearing one answer, then say “bridge
+test” after the destination greeting. The runner checks the recovered turn,
+one completed agent answer correlated to the question, and speech crossing the
+carrier bridge. Record which prompts the caller actually heard, any overlap,
+and the perceived silence separately.
+
 A private journal records the original application IDs and number IDs before the
 first assignment changes. After an interrupted run, use `restore` from the same
 machine and branch. Each switch verifies the live application names, number tags
