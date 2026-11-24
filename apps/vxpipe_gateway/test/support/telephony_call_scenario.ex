@@ -81,6 +81,19 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           speech_selection(provider)
       end
 
+    {tools, host_tools} =
+      if Keyword.get(options, :background_tool, false) do
+        {%{
+           "wait_for_test" => %{
+             type: "host",
+             tool: "wait_for_test",
+             conversation_mode: "non_blocking"
+           }
+         }, %{"wait_for_test" => Vxpipe.CallEngine.TestBlockingTool}}
+      else
+        {%{}, %{}}
+      end
+
     {:ok, call_spec} =
       CallSpec.new(
         %{
@@ -115,7 +128,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
                   options: %{encoding: "linear16", sample_rate: 48_000}
                 }
               },
-              tools: %{},
+              tools: tools,
               transfers: ["human-support"]
             },
             "human-support" => %{
@@ -156,7 +169,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
 
     {:ok, plan} =
       CallSpecCompiler.compile(call_spec, invocation, %{
-        host_tools: %{}
+        host_tools: host_tools
       })
 
     plan

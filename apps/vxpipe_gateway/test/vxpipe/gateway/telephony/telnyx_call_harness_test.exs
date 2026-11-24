@@ -103,6 +103,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
         [
           caller_vad: context[:caller_vad] == true,
+          background_tool: context[:background_tool] == true,
           caller_stt: if(context[:caller_recovery], do: :scribe, else: :default),
           language: context[:language],
           command_mode: context[:command_mode] || "observer",
@@ -492,7 +493,84 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     refute_received {:test_telephony_end_leg, _}
   end
 
-  for failure <- [:readiness_timeout, :no_repeat, :replacement_failure] do
+  @tag initial_outcome: :ready,
+       caller_recovery: true,
+       caller_vad: true,
+       commercial: true,
+       background_tool: true
+  test "a non-blocking tool continues through a recognition failure and repeated question",
+       context do
+    previous = Application.fetch_env(:vxpipe_call_engine, :blocking_tool_observer)
+    Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
+
+    on_exit(fn ->
+      case previous do
+        {:ok, observer} ->
+          Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, observer)
+
+        :error ->
+          Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer)
+      end
+    end)
+
+    {speech, socket} = start_recovery_call(context)
+    wire = Vxpipe.CallEngine.TestElevenLabsScribeTransport
+    wire.deliver(speech, {:segment, "Start the lookup."})
+    wire.deliver(speech, {:partial, ""})
+    assert_receive {:test_agent_runtime_stream, provider, _}, 3_000
+
+    assert {:ok, tool} =
+             ToolCall.new(id: "background-lookup", name: "wait_for_test", arguments: %{})
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [tool])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_blocking_tool_started, worker}, 2_000
+    assert_receive {:test_agent_runtime_stream, acknowledge, _}, 2_000
+    assert {:ok, ack} = ModelResponse.new(text: "Checking.")
+    send(acknowledge, {:test_agent_runtime_response, {:ok, ack}})
+
+    {room, replacement, ^socket} = start_stalled_recovery(context, {speech, socket})
+    wire.deliver(replacement, {:ready, "new-recognizer"})
+    await_recovery_phase(room, :repeat, System.monotonic_time(:millisecond) + 9_000)
+    wire.deliver(replacement, {:segment, "Do you serve offices?"})
+    wire.deliver(replacement, {:partial, ""})
+    assert_receive {:test_agent_runtime_stream, answer, request}, 3_000
+
+    assert [
+             %{
+               invocation_id: "background-lookup",
+               conversation_mode: :non_blocking,
+               status: :running
+             }
+           ] = request.pending_invocations
+
+    assert {:ok, reply} = ModelResponse.new(text: "Yes.")
+    send(answer, {:test_agent_runtime_response, {:ok, reply}})
+    observer = self()
+    media = :sys.get_state(room).connections[@incoming_leg_id].pid
+
+    :ok =
+      :sys.install(
+        media,
+        {make_ref(),
+         fn
+           state,
+           {:in, {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCompleted{} = event}},
+           _ ->
+             send(observer, {:tool_completed, event.tool_call_id, event.result})
+             state
+
+           state, _, _ ->
+             state
+         end, nil}
+      )
+
+    send(worker, :release_test_tool)
+    assert_receive {:tool_completed, "background-lookup", %{"released" => true}}, 3_000
+    refute_received {:test_blocking_tool_started, _}
+  end
+
+  for failure <- [:readiness_timeout, :playout_failure, :no_repeat, :replacement_failure] do
     @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
     @tag recovery_scenario: true
     test "recovery enters carrier fallback once on #{failure}", context do
@@ -501,6 +579,17 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       case unquote(failure) do
         :readiness_timeout ->
           expire_recovery(room, :hearing)
+
+        :playout_failure ->
+          await_recovery_phase(room, :hearing, System.monotonic_time(:millisecond) + 2_000)
+          connection = :sys.get_state(room).connections[@incoming_leg_id]
+
+          failed =
+            {:caller_recovery_playout, connection.pid, @incoming_leg_id,
+             connection.speech_recovery.token, :failed}
+
+          send(room, failed)
+          send(room, failed)
 
         :no_repeat ->
           Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(
@@ -531,6 +620,8 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
       assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
                200
+
+      refute_received {:test_recovery_playback, _, _}
     end
   end
 
@@ -540,9 +631,10 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     send(room, {:caller_recovery_expired, @incoming_leg_id, token})
   end
 
-  defp start_stalled_recovery(context) do
-    {speech, socket} = start_recovery_call(context)
+  defp start_stalled_recovery(context),
+    do: start_stalled_recovery(context, start_recovery_call(context))
 
+  defp start_stalled_recovery(context, {speech, socket}) do
     [{room, _}] =
       Registry.lookup(
         Vxpipe.CallEngine.RoomRegistry,
