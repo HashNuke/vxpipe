@@ -168,6 +168,14 @@ one completed agent answer correlated to the question, and speech crossing the
 carrier bridge. Record which prompts the caller actually heard, any overlap,
 and the perceived silence separately.
 
+For the caller-abandonment check, use `VXPIPE_LIVE_HANDSET_WINDOW=hangup_during_ring`
+with the same selector. Call only when the runner announces readiness, say
+“transfer test,” and stay connected through the transfer announcement. Hang up
+when the operator signals that Telnyx has identified the linked destination leg.
+The destination remains unanswered. The runner checks the abandonment journal
+entry, final usage for both legs and completed cleanup. A bridge or callback
+announcement fails this case.
+
 A private journal records the original application IDs and number IDs before the
 first assignment changes. After an interrupted run, use `restore` from the same
 machine and branch. Each switch verifies the live application names, number tags

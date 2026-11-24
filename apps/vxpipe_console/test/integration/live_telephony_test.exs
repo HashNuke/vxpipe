@@ -388,7 +388,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   # must never wait for a person to place a call.
   @tag :integration
   @handset_window System.get_env("VXPIPE_LIVE_HANDSET_WINDOW")
-  unless @handset_window in ["1", "repeat_and_transfer"] do
+  unless @handset_window in ["1", "repeat_and_transfer", "hangup_during_ring"] do
     @tag skip: "requires a coordinated handset window"
   end
 
@@ -409,9 +409,11 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
     try do
       outcomes =
-        if @handset_window == "repeat_and_transfer",
-          do: [:answered],
-          else: [:unanswered, :answered]
+        case @handset_window do
+          "repeat_and_transfer" -> [:answered]
+          "hangup_during_ring" -> [:abandoned]
+          _ -> [:unanswered, :answered]
+        end
 
       for outcome <- outcomes do
         destination =
@@ -446,26 +448,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
         Process.exit(media, :kill)
 
-        if destination do
-          await("carrier confirms the linked bridge", 26_000, fn ->
-            handset_leg_evidence(incoming, "transfer_bridged")
-          end)
-
-          destination_call = await_incoming_call(fixture, destination)
-
-          await("destination hears caller through the bridge", 30_000, fn ->
-            remote_phrase?(fixture, destination_call, "bridge test")
-          end)
-
-          {:ok, peer} = LiveTelephonyPeer.new(fixture, incoming, binding)
-          assert :ok = LiveTelephonyPeer.hangup(peer)
-        else
-          await("callback announcement completes after unanswered dial", 40_000, fn ->
-            handset_leg_evidence(incoming, "announcement_completed")
-          end)
-
-          assert handset_leg_evidence(incoming, "transfer_unanswered")
-        end
+        verify_handset_transfer(outcome, fixture, incoming, binding, destination)
 
         await("original caller leg is terminal", 10_000, fn ->
           handset_leg_evidence(incoming, "carrier_ended")
@@ -474,10 +457,69 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         await("managed cleanup and terminal usage for both transfer legs", 15_000, fn ->
           transfer_settled?(incoming, binding, outcome)
         end)
+
+        if outcome == :abandoned do
+          refute handset_leg_evidence(incoming, "transfer_bridged")
+          refute handset_leg_evidence(incoming, "announcement_requested")
+        end
       end
     after
       cleanup(fixture.tenant.key)
     end
+  end
+
+  defp verify_handset_transfer(:answered, fixture, incoming, binding, destination) do
+    await("carrier confirms the linked bridge", 26_000, fn ->
+      handset_leg_evidence(incoming, "transfer_bridged")
+    end)
+
+    destination_call = await_incoming_call(fixture, destination)
+
+    await("destination hears caller through the bridge", 30_000, fn ->
+      remote_phrase?(fixture, destination_call, "bridge test")
+    end)
+
+    {:ok, peer} = LiveTelephonyPeer.new(fixture, incoming, binding)
+    assert :ok = LiveTelephonyPeer.hangup(peer)
+  end
+
+  defp verify_handset_transfer(:unanswered, _fixture, incoming, _binding, _destination) do
+    await("callback announcement completes after unanswered dial", 40_000, fn ->
+      handset_leg_evidence(incoming, "announcement_completed")
+    end)
+
+    assert handset_leg_evidence(incoming, "transfer_unanswered")
+  end
+
+  defp verify_handset_transfer(:abandoned, _fixture, incoming, binding, _destination) do
+    call = Repo.get_by!(Vxpipe.Persistence.Schema.Call, public_id: incoming.id)
+
+    await("Telnyx identifies the linked destination leg", 15_000, fn ->
+      leg =
+        Repo.get_by!(Vxpipe.Persistence.Schema.TelephonyLeg,
+          call_id: call.id,
+          provider_call_leg_id: binding.provider_call_leg_id
+        )
+
+      with peer when is_binary(peer) <- get_in(leg.recovery, ["transfer_requested", "command_id"]),
+           {:ok, owner} <- Vxpipe.Gateway.Telephony.LegSupervisor.lookup_outgoing(peer) do
+        Enum.any?(Registry.keys(Vxpipe.Gateway.Telephony.LegRegistry, owner), fn
+          {:scoped_telnyx, app, leg_id} ->
+            app == binding.provider_connection_id and leg_id != binding.provider_call_leg_id
+
+          _ ->
+            false
+        end)
+      else
+        _pending -> false
+      end
+    end)
+
+    IO.puts("The linked destination is dialing. Hang up the caller handset now.")
+
+    await("carrier confirms caller abandonment during the linked dial", 20_000, fn ->
+      handset_leg_evidence(incoming, "transfer_abandoned")
+    end)
   end
 
   defp disconnect_live_scribe(connection) do

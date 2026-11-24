@@ -74,7 +74,9 @@ callback completion and caller hangup after that failure. The handset runner now
 requires durable managed cleanup and separately identified terminal usage for
 both attempts. A linked-leg test also verifies that carrier hangup persists
 final usage after loss of its end-command observer while cleanup stays pending.
-The stronger handset check still needs a coordinated call.
+The handset runner also supports caller hangup during a pending linked dial.
+It waits for a distinct carrier leg registration before asking the caller to
+hang up. The answered and abandonment checks still need coordinated calls.
 
 ## C. Restore recognition while room audio remains usable
 
