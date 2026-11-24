@@ -303,16 +303,25 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
   end
 
   defp finish(%{terminal: nil} = state), do: {:noreply, state}
-  defp finish(%{workers: workers} = state) when map_size(workers) > 0, do: {:noreply, state}
-  defp finish(%{drained?: false} = state), do: {:noreply, state}
-  defp finish(%{cleanup: nil} = state), do: {:stop, :normal, state}
+
+  defp finish(%{cleanup: nil} = state) do
+    if commands_drained?(state), do: {:stop, :normal, state}, else: {:noreply, state}
+  end
 
   defp finish(state) do
     with {:ok, cleanup} <- CarrierCleanup.begin_final(state.cleanup, state.usage),
-         {:ok, cleanup} <- CarrierCleanup.acknowledge(cleanup, state.usage, state.terminal, true) do
+         {:ok, cleanup} <-
+           CarrierCleanup.acknowledge(
+             cleanup,
+             state.usage,
+             state.terminal,
+             commands_drained?(state)
+           ) do
       {:stop, :normal, %{state | cleanup: cleanup}}
     else
       {:error, _, cleanup} -> {:noreply, %{state | cleanup: cleanup}}
     end
   end
+
+  defp commands_drained?(state), do: state.drained? and map_size(state.workers) == 0
 end

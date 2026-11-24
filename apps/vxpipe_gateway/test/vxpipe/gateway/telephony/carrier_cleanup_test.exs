@@ -3,9 +3,16 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
 
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.CreateRoom
-  alias Vxpipe.CallEngine.Telephony.OutboundLegRequest
+  alias Vxpipe.CallEngine.Telephony.{Event, OutboundLegRequest, ServiceReference}
   alias Vxpipe.Gateway.{CallCleanup, CallCleanupSupervisor, TestFinalUsageRepository}
-  alias Vxpipe.Gateway.Telephony.{CarrierCleanup, ConfiguredService, LegUsage}
+
+  alias Vxpipe.Gateway.Telephony.{
+    CallerRecoveryPeer,
+    CarrierCleanup,
+    ConfiguredService,
+    Leg,
+    LegUsage
+  }
 
   setup do
     {:ok, command} =
@@ -34,6 +41,66 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
     end)
 
     %{binding: binding, usage: usage(binding)}
+  end
+
+  test "linked-leg hangup persists final usage while its end command remains unconfirmed", c do
+    {source, tracker} = attached(c)
+    {request, service} = carrier_fixture(c.binding, "blocked-end:#{:erlang.pid_to_list(self())}")
+
+    caller = %{
+      provider_connection_id: "application",
+      provider_call_control_id: "caller-control",
+      provider_call_leg_id: "caller-leg",
+      provider_call_session_id: "inbound-call-session",
+      cleanup_binding: c.binding
+    }
+
+    args = %{
+      id: "linked-usage",
+      request: request,
+      service: service,
+      parent: self(),
+      caller: caller,
+      cleanup: source
+    }
+
+    peer = start_supervised!({CallerRecoveryPeer, args})
+    CallerRecoveryPeer.dial(peer)
+    assert_receive {:test_linked_dial, _}
+
+    bridge = %Event{
+      kind: :bridged,
+      provider: :telnyx,
+      provider_call_control_id: "peer-control",
+      provider_call_leg_id: "peer-leg",
+      provider_connection_id: "application",
+      provider_call_session_id: "inbound-call-session",
+      provider_event_id: "bridge"
+    }
+
+    assert :ok = Leg.dispatch(peer, bridge, 1_000)
+    CallerRecoveryPeer.abandon(peer)
+    assert_receive {:test_telephony_end_pending, operation}
+    on_exit(fn -> send(operation, :accept_test_telephony_end) end)
+
+    {worker, _} = :sys.get_state(peer).workers.end
+    monitor = Process.monitor(worker)
+    Process.exit(worker, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}
+
+    hangup = %{bridge | kind: :ended, end_reason: :hangup, provider_event_id: "linked-hangup"}
+    assert :ok = Leg.dispatch(peer, hangup, 1_000)
+
+    assert_receive {:stored_carrier_usage,
+                    %{
+                      delivery_id: "linked-hangup",
+                      outcome: :succeeded,
+                      attempt_id: "linked-usage"
+                    }},
+                   1_000
+
+    await_peer_storage(peer, System.monotonic_time(:millisecond) + 1_000)
+    assert CallCleanup.snapshot(tracker).resources[peer].acknowledgement == :pending
   end
 
   test "attachment requires existing exact membership and never recreates a missing tracker", c do
@@ -332,6 +399,13 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
     refute_received {:stored_carrier_usage, _}
   end
 
+  defp await_peer_storage(peer, deadline) do
+    unless :sys.get_state(peer).cleanup.persisted? do
+      assert System.monotonic_time(:millisecond) < deadline, "peer did not confirm usage storage"
+      await_peer_storage(peer, deadline)
+    end
+  end
+
   defp attached(c, result \\ fn observation -> {:ok, observation} end, options \\ []) do
     {:ok, tracker} = CallCleanupSupervisor.start_new(c.binding)
 
@@ -363,6 +437,15 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
   end
 
   defp usage(binding) do
+    {request, service} = carrier_fixture(binding, "synthetic")
+
+    LegUsage.start_outgoing(request, service, "leg-usage",
+      usage_clock: fn -> ~U[2026-10-15 12:00:00.000Z] end,
+      usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
+    )
+  end
+
+  defp carrier_fixture(binding, api_key) do
     {:ok, service} =
       ConfiguredService.new(
         id: "telnyx-primary",
@@ -371,7 +454,7 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
         provider: :telnyx,
         provider_connection_id: "application",
         public_key: Base.encode64(:binary.copy(<<1>>, 32)),
-        api_key: "synthetic",
+        api_key: api_key,
         public_base_url: "https://voice.example.test",
         adapter: Vxpipe.Gateway.TestTelephonyAdapter
       )
@@ -387,9 +470,18 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
       to: "+15550001001"
     }
 
-    LegUsage.start_outgoing(request, service, "leg-usage",
-      usage_clock: fn -> ~U[2026-10-15 12:00:00.000Z] end,
-      usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
-    )
+    reference = %ServiceReference{
+      name: service.identity.service_id,
+      service_id: "service-id",
+      tenant_id: binding.tenant_key,
+      provider: "telnyx",
+      provider_connection_id: "application",
+      credential_id: "credential-id",
+      application_owner: :platform,
+      credential_owner: :platform,
+      credential_name: "telnyx"
+    }
+
+    {request, %{service | identity: %{service.identity | service_reference: reference}}}
   end
 end

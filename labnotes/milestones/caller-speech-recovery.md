@@ -72,7 +72,9 @@ not establish an answered transfer. A configured regression now covers the
 carrier handoff on agent voice failure. A live two-number test verified
 callback completion and caller hangup after that failure. The handset runner now
 requires durable managed cleanup and separately identified terminal usage for
-both attempts. This stronger check still needs a coordinated handset run.
+both attempts. A linked-leg test also verifies that carrier hangup persists
+final usage after loss of its end-command observer while cleanup stays pending.
+The stronger handset check still needs a coordinated call.
 
 ## C. Restore recognition while room audio remains usable
 
