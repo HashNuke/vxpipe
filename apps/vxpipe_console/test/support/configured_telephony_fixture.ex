@@ -21,6 +21,12 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   @derive {Inspect, only: [:tenant]}
   defstruct [:tenant, :principal, :key, :settings, :options]
 
+  def new_handset(options, settings) do
+    %{"telnyx" => caller, "telnyx-b" => receiver} = settings.numbers
+    numbers = %{settings.numbers | "telnyx" => receiver, "telnyx-b" => caller}
+    new(options, %{settings | numbers: numbers})
+  end
+
   def new(options, settings) do
     assert {:ok, tenant, key} =
              Administration.bootstrap_tenant("Live telephony", [:calls], options)

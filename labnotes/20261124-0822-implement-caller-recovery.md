@@ -238,3 +238,15 @@ been journaled as generic failure. The final targeted gateway run passed all
 the room before its expected phase and one media-harness startup failure.
 Neither failed in the fresh focused run. The original intermittent causes
 were not established.
+
+For handset acceptance the operator requested the usual Rocksalt receiver.
+The initial window listened on the pool caller and timed out waiting for the
+spoken trigger. Updated the handset fixture to use the designated receiver for
+both incoming routing and outbound identity, leaving the other pool member as
+its recovery destination. A publication test on synthetic numbers passed.
+The live runner initially overwrote the selected roles while adding the public
+endpoint. Preserving fixture settings fixed the discrepancy; the live
+readiness message then confirmed the intended receiver.
+The receiver window expired without a confirmed spoken trigger. No transfer
+outcome was established. The runner restored both loaned numbers and the
+post-restore plan found both on the QA app.

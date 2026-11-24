@@ -794,19 +794,20 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
   test "handset transfer fixture keeps its caller, outbound identity and peer within the test pool",
        context do
-    fixture = ConfiguredTelephonyFixture.new(context.options, synthetic_settings())
+    settings = synthetic_settings()
+    fixture = ConfiguredTelephonyFixture.new_handset(context.options, settings)
     reception = ConfiguredTelephonyFixture.publish_handset_recovery(fixture, "synthetic-scribe")
     destination = ConfiguredTelephonyFixture.publish_handset_destination(fixture)
     assert reception.source["transfer_policy"]["recovery_destination"] == "support"
 
     assert reception.source["participants"]["human"]["connection"]["number"] ==
-             fixture.settings.numbers["telnyx"]
+             settings.numbers["telnyx-b"]
 
     assert reception.source["participants"]["support"]["connection"]["number"] ==
-             fixture.settings.numbers["telnyx-b"]
+             settings.numbers["telnyx"]
 
     assert destination.source["participants"]["human"]["connection"]["number"] ==
-             fixture.settings.numbers["telnyx-b"]
+             settings.numbers["telnyx"]
   end
 
   test "encrypted carrier bindings publish opposing routes without dialing", context do
@@ -1161,7 +1162,12 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     configured = ConfiguredTelephonyFixture.engine_settings(original)
 
     Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, configured)
-    fixture = ConfiguredTelephonyFixture.new(context.options, settings)
+
+    fixture =
+      if context[:live_telephony_handset_recovery_transfer],
+        do: ConfiguredTelephonyFixture.new_handset(context.options, settings),
+        else: ConfiguredTelephonyFixture.new(context.options, settings)
+
     on_exit(fn -> cleanup(fixture.tenant.key) end)
     port = System.fetch_env!("TELEPHONY_TEST_PORT") |> String.to_integer()
 
@@ -1191,7 +1197,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     # Probe public relay addresses rather than split DNS's private tailnet route.
     # Readiness retries never submit a carrier call; the dial POST never retries.
     endpoint = settings.public_url |> PublicTelephonyEndpoint.resolve() |> await_public_endpoint()
-    %{fixture | settings: Map.put(settings, :endpoint, endpoint)}
+    %{fixture | settings: Map.put(fixture.settings, :endpoint, endpoint)}
   end
 
   defp submit(fixture, publication, to \\ nil) do

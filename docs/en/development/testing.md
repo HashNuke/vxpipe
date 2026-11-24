@@ -141,7 +141,7 @@ The `live_telephony_recovery_elevenlabs` selection exercises a real Scribe
 socket failure and listens for the repeat prompt on the other Telnyx leg.
 For a coordinated handset transfer window, set `VXPIPE_LIVE_HANDSET_WINDOW=1`
 and select `--only live_telephony_handset_recovery_transfer` on the same file.
-The test prints the inbound number's last four digits. An operator calls from
+The handset lane receives calls on the test pool's designated receiver and uses the other number as its transfer destination. The test prints the inbound number's last four digits. An operator calls from
 a separate handset and says “transfer test” after the greeting. The first dial
 rings out. When the test reports ready for the second call, the operator calls
 again and repeats the phrase. After the destination greeting, the operator
