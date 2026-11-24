@@ -13,7 +13,7 @@ First acceptance profile is an established inbound, main-media, English-language
 ## A. Carrier announcement and bounded disconnect
 
 - [x] Reproduce the incident with a configured gateway integration test. Start an answered leg and interrupt output, fail STT, observe room media detach and demonstrate that the active carrier currently receives no exit command. Keep this test independent of the specific Scribe failure cause.
-- [ ] Carry the reason, leg, room incarnation and connection generation to the surviving leg owner. Handle an unexpected loss of established main media once. Distinguish normal caller hangup, intentional stream stop, hold, transfer preparation, replacement of a connection and shutdown. Monitor loss as well as explicit failure so a crashing media worker cannot lose the notification.
+- [x] Carry the reason, leg, room incarnation and connection generation to the surviving leg owner. Handle an unexpected loss of established main media once. Distinguish normal caller hangup, intentional stream stop, hold, transfer preparation, replacement of a connection and shutdown. Monitor loss as well as explicit failure so a crashing media worker cannot lose the notification.
 - [ ] Provision a short English callback recording accessible to the carrier independently of the deployment's media WebSocket and live TTS. Extend the Telnyx voice client and signed webhook dispatch for playback. Validate carrier asset format, playback targeting on the caller leg after stream loss, completion correlation and duplicate command semantics against a real test number. Reuse the service's existing credential resolution.
 - [x] Implement bounded phases for playback request, completion and hangup. Initial QA budgets: allow 5 s for a carrier command acknowledgement and the known clip duration plus 2 s for completion. Bound the entire exit using one absolute deadline. An ambiguous command result reuses the same command identity. Playback failure/expiry still initiates hangup. Caller hangup wins in every phase.
 - [x] Have the original leg owner accept carrier-recovery ownership for the current binding before initiating AI room teardown. Serialize media loss, room DOWN and carrier commands in that owner. Once accepted, room DOWN retires AI resources while carrier playback, ringing or a human bridge continues. If room DOWN wins before handoff, run ordinary leg termination; stale recovery cannot reopen a closing leg. An explicit whole-call hangup overrides either owner state and ends every owned leg. Test both message orders and simultaneous hangup.
@@ -21,6 +21,13 @@ First acceptance profile is an established inbound, main-media, English-language
 - [x] On HTTP-worker death the surviving owner reads its journal (or retained degraded-state intent), checks for a matching callback, and reconciles only that effect. Model a bounded, same-ID termination retry explicitly even when the old worker left command drainage unknown. Preserve the outstanding drainage evidence independently of this retry. Deduplicate late replies and never assert successful drainage from a new worker alone.
 - [x] Treat original temporary leg-owner death and node restart as separate failure scopes. A reconciler may reload durable attempt metadata and match signed terminal events to an exact binding. It cannot recreate a leg owner or claim cleanup membership from a stored row. Without a living fenced owner or conclusive carrier evidence, record unresolved disposition for operator follow-up. Test worker death after send, owner death before/after send and node restart with delayed callbacks; assert who can issue effects and who can acknowledge cleanup.
 - [x] Gate: fake carrier covers accepted, rejected, timeout, duplicate/reordered/missing callbacks, worker death after command send and concurrent remote hangup. Real handset hears the complete callback recording before disconnect. Confirm terminal carrier evidence and matching stored leg/call state.
+
+The leg watches the established media process and its socket and stream ID.
+A matching Telnyx stop retires that watch before the socket closes. The
+gateway harness covers a crash after stream stop, a voice failure while held
+for transfer, and a valid failure following stale socket, stream, media PID,
+room incarnation and leg signals. Replacing a registered session requires the
+new process to establish eligibility.
 
 A cold-restart drill wrote the opening intent to disposable PostgreSQL, stopped
 the VM, and submitted a delayed callback to the mounted route on a fresh VM.

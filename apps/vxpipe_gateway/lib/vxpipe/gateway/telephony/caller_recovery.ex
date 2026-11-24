@@ -24,6 +24,14 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
   end
 
   def handle_info(
+        {:caller_stream_stopped, socket, stream},
+        %{caller_stream: {socket, stream}, caller_media: {_media, monitor, _}} = state
+      ) do
+    Process.demonitor(monitor, [:flush])
+    {:continue, %{state | caller_media: nil, caller_stream: nil}}
+  end
+
+  def handle_info(
         {:caller_media_failed, media, binding, reason},
         %{
           status: :running,
@@ -50,7 +58,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
         {:DOWN, ref, :process, media, reason},
         %{caller_media: {media, ref, eligible?}} = state
       ) do
-    state = %{state | caller_media: nil}
+    state = %{state | caller_media: nil, caller_stream: nil}
 
     unexpected? =
       reason not in [:normal, :shutdown, :media_unavailable] and
@@ -184,7 +192,8 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
 
   def watch_media(
         %{incoming_identity: %{binding: %{caller_recovery?: true} = binding}} = state,
-        %Event{kind: :media_started}
+        %Event{kind: :media_started, stream_id: stream},
+        socket
       ) do
     case Registry.lookup(
            Vxpipe.Gateway.Media.Registry,
@@ -197,7 +206,12 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
 
           prior ->
             if prior, do: Process.demonitor(elem(prior, 1), [:flush])
-            %{state | caller_media: {pid, Process.monitor(pid), false}}
+
+            %{
+              state
+              | caller_media: {pid, Process.monitor(pid), false},
+                caller_stream: {socket, stream}
+            }
         end
 
       [] ->
@@ -205,7 +219,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
     end
   end
 
-  def watch_media(state, _event), do: state
+  def watch_media(state, _event, _socket), do: state
 
   defp start(state, binding, reason) do
     deadline = System.monotonic_time(:millisecond) + @exit_budget_ms

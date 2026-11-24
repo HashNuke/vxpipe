@@ -140,6 +140,7 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
   def decode_media_message(options, message) do
     case MediaDecoder.decode(options, message) do
       {:ok, {:playback_mark, _, _}} -> :ignore
+      {:ok, {:stream_stopped, _}} -> :ignore
       result -> result
     end
   end

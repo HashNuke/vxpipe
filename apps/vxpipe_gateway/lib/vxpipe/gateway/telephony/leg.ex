@@ -80,6 +80,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       playback_worker: nil,
       playback_monitors: %{},
       caller_media: nil,
+      caller_stream: nil,
       incoming_identity: nil,
       prepared: nil,
       answer_worker: nil,
@@ -170,7 +171,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       case project_started(state, event) do
         {:ok, state} ->
           case dispatch_start_event(state, source, event) do
-            :ok -> {:reply, :ok, CallerRecovery.watch_media(state, event)}
+            :ok -> {:reply, :ok, CallerRecovery.watch_media(state, event, source)}
             {:error, reason} -> {:reply, {:error, reason}, state}
           end
 
@@ -258,7 +259,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
                source,
                event
              ]) do
-          :ok -> {:reply, :ok, CallerRecovery.watch_media(state, event)}
+          :ok -> {:reply, :ok, CallerRecovery.watch_media(state, event, source)}
           {:error, reason} -> {:reply, {:error, reason}, state}
         end
 

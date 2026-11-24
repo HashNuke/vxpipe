@@ -47,6 +47,13 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
       {:ok, {:playback_mark, stream, name}} when stream == state.stream_id ->
         {:ok, %{state | playback_marks: PlaybackMarks.acknowledge(state.playback_marks, name)}}
 
+      {:ok, {:stream_stopped, stream}} ->
+        if state.binding.caller_recovery? and stream == state.stream_id do
+          send(state.binding.leg, {:caller_stream_stopped, self(), stream})
+        end
+
+        {:ok, state}
+
       {:ok, %Event{kind: :media_started, stream_id: stream_id} = event} ->
         dispatch(event, %{state | stream_id: stream_id})
 

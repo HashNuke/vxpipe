@@ -7,7 +7,8 @@ defmodule Vxpipe.Providers.Telnyx.MediaDecoder do
   @maximum_message_bytes 131_072
 
   @spec decode(keyword(), binary()) ::
-          {:ok, Event.t() | {:playback_mark, String.t(), String.t()}}
+          {:ok,
+           Event.t() | {:playback_mark, String.t(), String.t()} | {:stream_stopped, String.t()}}
           | :ignore
           | {:error, :invalid_telnyx_media_message}
   def decode(options, message)
@@ -144,7 +145,7 @@ defmodule Vxpipe.Providers.Telnyx.MediaDecoder do
          :ok <- required_expected(options, :stream_id, stream_id),
          {:ok, call_control_id} <- present_string(stop, "call_control_id"),
          :ok <- required_expected(options, :provider_call_control_id, call_control_id) do
-      :ignore
+      {:ok, {:stream_stopped, stream_id}}
     else
       _invalid -> invalid()
     end

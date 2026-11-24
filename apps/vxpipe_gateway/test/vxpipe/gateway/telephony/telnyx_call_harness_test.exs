@@ -1094,6 +1094,96 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     refute_received {:test_telephony_end_leg, _}
   end
 
+  @tag initial_outcome: :ready, caller_recovery: true
+  test "only failure from the current media process and room binding starts carrier recovery",
+       context do
+    {_speech, socket, voice} = start_recovery_media(context)
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+
+    %{caller_media: {media, monitor, true}, incoming_identity: %{binding: binding}} =
+      :sys.get_state(leg)
+
+    retired = start_supervised!({Agent, fn -> :retired end}, restart: :temporary)
+    retired_monitor = Process.monitor(retired)
+    Agent.stop(retired)
+    assert_receive {:DOWN, ^retired_monitor, :process, ^retired, :normal}
+
+    send(leg, {:caller_stream_stopped, retired, "inbound-stream"})
+    send(leg, {:caller_stream_stopped, socket, "retired-stream"})
+    send(leg, {:caller_media_eligible, retired, false})
+    send(leg, {:caller_media_failed, retired, binding, :agent_unavailable})
+    send(leg, {:DOWN, retired_monitor, :process, retired, :killed})
+
+    for stale <- [
+          %{binding | incarnation_id: "retired-room"},
+          %{binding | client_state_leg_id: "retired-leg"}
+        ] do
+      send(leg, {:caller_media_failed, media, stale, :agent_unavailable})
+    end
+
+    state = :sys.get_state(leg)
+    assert state.caller_media == {media, monitor, true}
+    assert is_nil(state.recovery_journal)
+    refute_received {:test_recovery_playback, _, _}
+
+    TestTextToSpeechTransport.disconnect(voice, :session_failed)
+    assert_receive {:test_recovery_playback, "inbound-call-control", id}, 2_000
+
+    assert {:caller_recovery_reason, :agent_unavailable, id} in TelephonyHarnessBackend.operations(
+             context.backend
+           )
+  end
+
+  for departure <- [:stream_stop, :transfer_preparation] do
+    @tag initial_outcome: :ready, caller_recovery: true
+    test "an established carrier leg skips fallback on #{departure}", context do
+      {_speech, socket} = start_recovery_call(context)
+      assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+      %{caller_media: {media, _, true}} = :sys.get_state(leg)
+      monitor = Process.monitor(media)
+
+      case unquote(departure) do
+        :stream_stop ->
+          stop = %{
+            "event" => "stop",
+            "stream_id" => "inbound-stream",
+            "stop" => %{"call_control_id" => "inbound-call-control"}
+          }
+
+          assert {:ok, _} = TestTelephonySocket.input(socket, {JSON.encode!(stop), opcode: :text})
+          # Dispatch from the socket and take its leg barrier before simulating a
+          # media crash in the interval between the stop frame and socket closure.
+          assert is_nil(
+                   TestTelephonySocket.run(socket, fn -> :sys.get_state(leg).caller_media end)
+                 )
+
+          Process.exit(media, :kill)
+          assert_receive {:DOWN, ^monitor, :process, ^media, :killed}, 2_000
+
+        :transfer_preparation ->
+          attachment = :sys.get_state(media).attachment
+
+          send(
+            media,
+            {:vxpipe_transfer_pending, attachment.room_monitor, attachment.room_authority,
+             "preparing-human-transfer"}
+          )
+
+          assert :sys.get_state(media).handoff_gate.held?
+          assert {^media, _, false} = :sys.get_state(leg).caller_media
+          send(media, {:vxpipe_connection_unavailable, :agent_unavailable})
+          assert_receive {:DOWN, ^monitor, :process, ^media, :media_unavailable}, 2_000
+      end
+
+      assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
+               200
+
+      refute_received {:test_recovery_playback, _, _}
+      refute_received {:test_transfer_announcement, _, _}
+      refute_received {:test_linked_dial, _}
+    end
+  end
+
   @tag initial_outcome: :ready, caller_recovery: true, command_mode: "blocked-end"
   test "a media failure arriving after room shutdown cannot reopen the closing leg", context do
     start_recovery_call(context)

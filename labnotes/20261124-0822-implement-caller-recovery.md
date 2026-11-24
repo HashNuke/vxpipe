@@ -358,3 +358,15 @@ run also saw HTTP 404 at inbound admission before media startup. The harness
 now waits for its scoped webhook registry key to clear before reusing the leg.
 The 404 alone does not prove which lookup returned it. The final five-case
 group passed 401 consecutive runs at the original seed (2,005 case executions).
+
+The recovery owner previously ignored a validated Telnyx stop frame. A focused
+test observed the eligible media monitor still attached after the socket sent
+the stop. The incoming leg now remembers the admitted socket and stream ID and
+retires only their media watch when the stop arrives. The socket can close
+later. The provider-neutral adapter continues to treat stop as a transport
+notification. The configured harness kills the stopped media process and checks
+for absence of carrier recovery, then submits the signed caller hangup.
+It separately exercises a held transfer path and proves a genuine voice failure
+still triggers playback after stale failure notifications. A registry test
+verifies monitor replacement and fresh eligibility. The focused gateway, decoder,
+and socket checks passed 22 tests.
