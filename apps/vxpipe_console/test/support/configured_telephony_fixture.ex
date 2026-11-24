@@ -170,6 +170,59 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
     }
   end
 
+  def publish_handset_recovery(fixture, scribe_key) do
+    provision(
+      :platform,
+      "elevenlabs",
+      "handset-recovery",
+      "api_key",
+      %{"api_key" => scribe_key},
+      fixture.options
+    )
+
+    receiving = source(fixture, :incoming, "telnyx", "telnyx")
+
+    support = %{
+      type: "human",
+      description: "Controlled handset transfer destination",
+      connection: %{
+        mode: "dial",
+        service: "live-telnyx",
+        number: Map.fetch!(fixture.settings.numbers, "telnyx-b")
+      }
+    }
+
+    receiving
+    |> put_in([:participants, "human", :capabilities, :speech_to_text], %{
+      provider: "elevenlabs",
+      credential_name: "handset-recovery",
+      model: "scribe_v2_realtime",
+      vad: true
+    })
+    |> put_in([:participants, "assistant", :transfers], ["support"])
+    |> put_in(
+      [:participants, "assistant", :prompt],
+      "Say only that you heard the caller. Do not invoke tools."
+    )
+    |> put_in([:participants, "assistant", :first_message], %{
+      mode: "fixed",
+      text: "Ready for the test."
+    })
+    |> put_in([:participants, "support"], support)
+    |> Map.put(:transfer_policy, %{recovery_destination: "support"})
+    |> put_in([:limits, :max_duration_ms], 90_000)
+    |> then(&publish_source(fixture, &1))
+  end
+
+  def publish_handset_destination(fixture) do
+    source(fixture, :incoming, "telnyx-b", "telnyx-b")
+    |> put_in([:participants, "assistant", :first_message], %{
+      mode: "fixed",
+      text: "You have reached the test destination."
+    })
+    |> then(&publish_source(fixture, &1))
+  end
+
   @doc """
   An outgoing call handled by the selected speech-to-speech provider and a carrier-answered incoming
   call. The handler opens with "Alpha." and must answer the callee's "Bravo." with

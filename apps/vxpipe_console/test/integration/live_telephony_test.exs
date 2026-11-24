@@ -257,6 +257,96 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     end
   end
 
+  # Run only in a coordinated handset window. The ordinary provider suite
+  # must never wait for a person to place a call.
+  @tag :integration
+  unless System.get_env("VXPIPE_LIVE_HANDSET_WINDOW") == "1" do
+    @tag skip: "requires a coordinated handset window"
+  end
+
+  @tag :live_telephony_handset_recovery_transfer
+  @tag timeout: 300_000
+  test "a handset caller reaches the controlled destination or receives the callback recording",
+       context do
+    start_supervised!({Registry, keys: :unique, name: LiveTelephonyPeerSocket.Registry})
+    fixture = live_fixture(context, LiveTelephonyPeerSocket)
+
+    reception =
+      ConfiguredTelephonyFixture.publish_handset_recovery(
+        fixture,
+        System.fetch_env!("ELEVENLABS_API_KEY")
+      )
+
+    suffix = String.slice(Map.fetch!(fixture.settings.numbers, "telnyx"), -4, 4)
+
+    try do
+      for outcome <- [:unanswered, :answered] do
+        destination =
+          if outcome == :answered,
+            do: ConfiguredTelephonyFixture.publish_handset_destination(fixture)
+
+        IO.puts("Handset ready for #{outcome} on #{suffix}. Say transfer test.")
+
+        incoming =
+          await("handset caller confirms transfer test", 100_000, fn ->
+            assert {:ok, page} = Calls.list_calls(fixture.principal, fixture.options)
+
+            Enum.find_value(page.calls, fn candidate ->
+              if candidate.call_spec_id == reception.call_spec_id and candidate.state == :running do
+                {:ok, call} = Calls.fetch_call(fixture.tenant.key, candidate.id, fixture.options)
+                if remote_phrase?(fixture, call, "transfer test"), do: call
+              end
+            end)
+          end)
+
+        binding = await_peer_binding(fixture, incoming, "human")
+
+        [{media, _}] =
+          Registry.lookup(
+            Vxpipe.Gateway.Media.Registry,
+            {:telephony_media_session, binding.client_state_leg_id}
+          )
+
+        Process.exit(media, :kill)
+
+        if destination do
+          await("carrier confirms the linked bridge", 26_000, fn ->
+            handset_leg_evidence(incoming, "transfer_bridged")
+          end)
+
+          destination_call = await_incoming_call(fixture, destination)
+
+          await("destination hears caller through the bridge", 30_000, fn ->
+            remote_phrase?(fixture, destination_call, "bridge test")
+          end)
+
+          {:ok, peer} = LiveTelephonyPeer.new(fixture, incoming, binding)
+          assert :ok = LiveTelephonyPeer.hangup(peer)
+        else
+          await("callback announcement completes after unanswered dial", 40_000, fn ->
+            handset_leg_evidence(incoming, "announcement_completed")
+          end)
+
+          assert handset_leg_evidence(incoming, "transfer_unanswered")
+        end
+
+        await("original caller leg is terminal", 10_000, fn ->
+          handset_leg_evidence(incoming, "carrier_ended")
+        end)
+      end
+    after
+      cleanup(fixture.tenant.key)
+    end
+  end
+
+  defp handset_leg_evidence(call, phase) do
+    row = Repo.get_by!(Vxpipe.Persistence.Schema.Call, public_id: call.id)
+
+    Vxpipe.Persistence.Schema.TelephonyLeg
+    |> Repo.all_by(call_id: row.id)
+    |> Enum.any?(fn leg -> Map.has_key?(leg.recovery || %{}, phase) end)
+  end
+
   # Shared carrier acceptance. GPT-Live remains the talk-over receiver because its
   # provider-owned overlap lets it interject while the counter is still speaking.
   @long_session_minutes String.to_integer(
@@ -700,6 +790,23 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
                  &1.payload["name"] == "transfer" and
                  &1.payload["result"]["status"] == "completed")
            )
+  end
+
+  test "handset transfer fixture keeps its caller, outbound identity and peer within the test pool",
+       context do
+    fixture = ConfiguredTelephonyFixture.new(context.options, synthetic_settings())
+    reception = ConfiguredTelephonyFixture.publish_handset_recovery(fixture, "synthetic-scribe")
+    destination = ConfiguredTelephonyFixture.publish_handset_destination(fixture)
+    assert reception.source["transfer_policy"]["recovery_destination"] == "support"
+
+    assert reception.source["participants"]["human"]["connection"]["number"] ==
+             fixture.settings.numbers["telnyx"]
+
+    assert reception.source["participants"]["support"]["connection"]["number"] ==
+             fixture.settings.numbers["telnyx-b"]
+
+    assert destination.source["participants"]["human"]["connection"]["number"] ==
+             fixture.settings.numbers["telnyx-b"]
   end
 
   test "encrypted carrier bindings publish opposing routes without dialing", context do

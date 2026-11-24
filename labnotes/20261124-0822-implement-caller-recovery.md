@@ -195,3 +195,10 @@ verified test stops only its own real Scribe socket after the far end
 transcribes the initial greeting. Call details then recorded a different
 ready recognizer on the same connection, and the remote leg transcribed the
 repeat prompt. The trial passed, and both numbers were restored to QA.
+
+Added an opt-in handset transfer lane for the two-number Rocksalt pool. An
+operator's inbound handset supplies the third leg. Only a confirmed “transfer
+test” utterance triggers media loss. The second pool number has no receiving
+route for the first attempt and a controlled answering route for the second.
+The fixture publication test passed for both roles. Actual transfer outcomes
+still require the coordinated handset window.
