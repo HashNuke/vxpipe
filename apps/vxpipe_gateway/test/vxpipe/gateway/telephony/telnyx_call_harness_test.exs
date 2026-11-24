@@ -1069,6 +1069,30 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     refute_received {:test_telephony_end_leg, _}
   end
 
+  @tag initial_outcome: :ready, caller_recovery: true, command_mode: "blocked-end"
+  test "a media failure arriving after room shutdown cannot reopen the closing leg", context do
+    start_recovery_call(context)
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+
+    %{caller_media: {media, _, true}, incoming_identity: %{binding: binding}} =
+      :sys.get_state(leg)
+
+    stop_transfer_room!(context.plan)
+    assert_receive {:test_telephony_end_pending, worker}, 2_000
+
+    try do
+      send(leg, {:caller_media_failed, media, binding})
+      state = :sys.get_state(leg)
+      assert state.room_closed?
+      assert state.status == :closing
+      assert is_nil(state.recovery_journal)
+      refute_received {:test_recovery_playback, _, _}
+      refute_received {:test_linked_dial, _}
+    after
+      send(worker, :accept_test_telephony_end)
+    end
+  end
+
   for loss <- [:room_shutdown, :platform_hangup] do
     @tag initial_outcome: :ready, caller_recovery: true
     test "carrier playback observes #{loss} after taking ownership", context do

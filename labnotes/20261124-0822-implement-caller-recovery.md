@@ -314,3 +314,10 @@ Reconciled the QA release gate against the running container revision
 and a fresh successful Lean verification. Release verification and the
 isolated rollback rehearsal are complete. The broader rollout gate remains
 open pending handset acceptance.
+
+Verified the reverse shutdown order on an established inbound call. After the
+room exited and a carrier hangup was in flight, the harness delivered a failure
+from the originally bound media process to the leg. The leg stayed closing
+with no recovery journal, playback, or dial. The focused run included recovery
+before room shutdown, explicit platform hangup, a busy leg with queued media
+loss, and six transfer outcomes (10 tests, zero failures).
