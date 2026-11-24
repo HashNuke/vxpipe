@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
   alias Vxpipe.CallEngine.Command.{CreateRoom, JoinParticipant}
   alias Vxpipe.CallEngine.{Error, RoomAuthority, RoomIncarnationSupervisor, RoomSupervisor}
   alias Vxpipe.CallEngine.Participant.Snapshot
+  alias Vxpipe.CallEngine.ParticipantAuthority
 
   test "admits one participant beneath an existing room incarnation" do
     room_id = unique_id("room")
@@ -67,7 +68,7 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _participant} = CallEngine.join_participant(command)
+    assert {:ok, participant} = CallEngine.join_participant(command)
 
     assert [{participant_authority, _value}] =
              Registry.lookup(
@@ -79,6 +80,8 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {"tenant-demo", room_id})
 
     participant_monitor = Process.monitor(participant_authority)
+    # A reply from the monitored process orders monitor installation before room teardown.
+    assert ^participant = ParticipantAuthority.snapshot(participant_authority)
     Process.exit(room_authority, :kill)
 
     assert_receive {:DOWN, ^participant_monitor, :process, ^participant_authority, :shutdown}
