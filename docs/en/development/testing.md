@@ -137,6 +137,11 @@ place and apply both tags to the intended numbers before using the runner.
 )
 ```
 
+The `live_telephony_playback_retry` selection uses the same two-number window.
+It submits a completed callback command again and checks for a second distinct
+signed completion. A fresh command on the same leg confirms that playback
+and webhook delivery still work.
+
 The `live_telephony_recovery_elevenlabs` selection exercises a real Scribe
 socket failure and listens for the repeat prompt on the other Telnyx leg.
 For a coordinated handset transfer window, set `VXPIPE_LIVE_HANDSET_WINDOW=1`

@@ -370,3 +370,15 @@ It separately exercises a held transfer path and proves a genuine voice failure
 still triggers playback after stale failure notifications. A registry test
 verifies monitor replacement and fresh eligibility. The focused gateway, decoder,
 and socket checks passed 22 tests.
+
+Verified carrier playback retry behavior with the production Telnyx adapter
+and two controlled numbers. The first run received signed playback completion
+but timed out waiting for a far-leg callback transcript; its logs also recorded
+agent failure. The second used the existing recovery fixture with a controlled
+incoming recognizer and live far-leg transcription. The far leg heard the
+greeting and callback. The carrier accepted an identical playback command ID
+after the first signed completion. No second distinct event for that command
+arrived in six seconds or before a fresh command on the same leg completed.
+Both rooms ended. The pool restore and subsequent plan verified two numbers
+back on the Rocksalt QA application after each window. This is automated
+carrier evidence; handset repeat and answered-bridge checks remain open.

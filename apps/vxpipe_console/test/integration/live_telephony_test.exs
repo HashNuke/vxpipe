@@ -140,10 +140,78 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   end
 
   @tag :live_providers
-  @tag :live_telephony_caller_recovery
+  @tag :live_telephony_playback_retry
   @tag timeout: 90_000
-  test "a live Telnyx caller receives carrier callback playback after recognition fails",
+  test "a repeat of a completed carrier playback command does not play a second callback",
        context do
+    {fixture, pair, wire} = caller_recovery_fixture(context)
+
+    try do
+      outgoing = submit(fixture, pair.outgoing, pair.to)
+      incoming = await_incoming_call(fixture, pair.incoming)
+      assert_receive {:scribe_started, speech}, 10_000
+      wire.deliver(speech, {:ready, "carrier-playback-probe"})
+
+      await("far leg hears the greeting", 15_000, fn ->
+        remote_phrase?(fixture, outgoing, "bravo")
+      end)
+
+      {:ok, snapshot} =
+        TelephonyServices.resolve(fixture.tenant.key, "live-telnyx", fixture.options)
+
+      {:ok, service} =
+        Vxpipe.Gateway.Telephony.ConfiguredService.from_snapshot(
+          snapshot,
+          fixture.settings.public_url
+        )
+
+      call = Repo.get_by!(Vxpipe.Persistence.Schema.Call, public_id: incoming.id)
+      leg = Repo.get_by!(Vxpipe.Persistence.Schema.TelephonyLeg, call_id: call.id)
+
+      {:ok, owner} =
+        Vxpipe.Gateway.Telephony.LegSupervisor.lookup(service.identity, leg.provider_call_leg_id)
+
+      observe_carrier_playback(owner)
+
+      original = "recovery-" <> Ecto.UUID.generate()
+      control = "recovery-" <> Ecto.UUID.generate()
+
+      play = fn id ->
+        assert {:ok, %{status: :accepted}} =
+                 service.adapter.play_recovery_prompt(
+                   service.adapter_options,
+                   leg.provider_call_control_id,
+                   id
+                 )
+      end
+
+      play.(original)
+      assert_receive {:carrier_playback, ^original, first_event, :completed}, 10_000
+
+      await("far leg hears the callback", 6_000, fn ->
+        remote_phrase?(fixture, outgoing, "audio connection") or
+          remote_phrase?(fixture, outgoing, "call back") or
+          remote_phrase?(fixture, outgoing, "callback")
+      end)
+
+      play.(original)
+      # Allow the full clip and callback delivery. A redelivered webhook keeps its event ID.
+      refute_another_playback(original, first_event, 6_000)
+      play.(control)
+      assert_receive {:carrier_playback, ^control, _, :completed}, 10_000
+      refute_another_playback(original, first_event, 0)
+
+      stop_room(fixture.tenant.key, outgoing.room_id)
+
+      await("both carrier test calls end", 10_000, fn ->
+        ended?(fixture, outgoing.id) and ended?(fixture, incoming.id)
+      end)
+    after
+      cleanup(fixture.tenant.key)
+    end
+  end
+
+  defp caller_recovery_fixture(context) do
     wire = Vxpipe.CallEngine.TestElevenLabsScribeTransport
 
     speech_runtime = [
@@ -164,6 +232,49 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       })
 
     pair = ConfiguredTelephonyFixture.publish_caller_recovery(fixture)
+    {fixture, pair, wire}
+  end
+
+  defp refute_another_playback(command, first_event, timeout) do
+    receive do
+      {:carrier_playback, ^command, event, _} when event != first_event ->
+        flunk("the retried command produced another carrier playback event")
+    after
+      timeout -> :ok
+    end
+  end
+
+  defp observe_carrier_playback(owner) do
+    listener = self()
+
+    :ok =
+      :sys.install(
+        owner,
+        {make_ref(),
+         fn
+           state,
+           {:in, {:"$gen_call", _, {:event, %{kind: :recovery_playback_ended} = event}}},
+           _ ->
+             send(
+               listener,
+               {:carrier_playback, event.playback_id, event.provider_event_id,
+                event.playback_outcome}
+             )
+
+             state
+
+           state, _, _ ->
+             state
+         end, nil}
+      )
+  end
+
+  @tag :live_providers
+  @tag :live_telephony_caller_recovery
+  @tag timeout: 90_000
+  test "a live Telnyx caller receives carrier callback playback after recognition fails",
+       context do
+    {fixture, pair, wire} = caller_recovery_fixture(context)
 
     try do
       outgoing = submit(fixture, pair.outgoing, pair.to)
