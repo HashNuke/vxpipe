@@ -215,3 +215,26 @@ the actual QA images. Release `9e320582` published an original spec, release
 `615f6975` enabled the transfer destination in a new revision, and the prior
 release republished the original source. Each step verified the effective
 inbound route. This rehearsal did not switch shared QA traffic.
+
+Exercised the room authority with two participant connections and a pending
+repeat prompt as the caller enters hold or private briefing. In both cases the
+timeout stopped the caller's cue, the second connection received no command, and
+a delayed failure could not close the call. The focused room-authority and
+call-spec compiler suites passed together (17 tests). The recovery destination
+contract is covered by same-service and allowlist validation, fixed E.164
+connection validation, self-loop rejection, compiler pinning, and the two-release
+publication rehearsal.
+
+A signed destination decline previously produced the generic transfer failure.
+A focused carrier-harness test reproduced it. The decoder now retains the
+decline alongside the existing remote-hangup reason, and the original caller
+leg journals `transfer_rejected` under the linked dial command. The same
+test exercises busy and unanswered calls and checks that the callback plays
+before caller hangup. The harness also monitors actual AI room termination
+during the transfer announcement, while ringing, and after bridge confirmation.
+The six signed transfer cases initially failed only for a decline, which had
+been journaled as generic failure. The final targeted gateway run passed all
+51 cases. Under concurrent suite load, earlier runs saw one no-repeat test leave
+the room before its expected phase and one media-harness startup failure.
+Neither failed in the fresh focused run. The original intermittent causes
+were not established.

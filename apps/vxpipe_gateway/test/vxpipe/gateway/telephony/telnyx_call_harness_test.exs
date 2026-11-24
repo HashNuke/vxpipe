@@ -596,13 +596,15 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     refute_received {:test_telephony_end_leg, _}
   end
 
-  for outcome <- [:bridged, :no_answer, :abandoned, :platform_after_bridge] do
+  for outcome <- [:bridged, :no_answer, :busy, :rejected, :abandoned, :platform_after_bridge] do
     @tag initial_outcome: :ready, caller_recovery: true, recovery_transfer: true
-    test "human fallback handles #{outcome} after AI room shutdown", context do
+    test "human fallback handles #{outcome} across AI room shutdown", context do
       {speech, _} = start_recovery_call(context)
       exhaust_recognition(speech)
       assert_receive {:test_transfer_announcement, _, id}, 2_000
-      stop_room(context.plan.tenant_id, context.plan.room_id)
+
+      if unquote(outcome) in [:bridged, :abandoned],
+        do: stop_transfer_room!(context.plan)
 
       assert post_fixture(context, "call-playback-ended", %{
                "status" => "completed",
@@ -626,6 +628,9 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
         :platform_after_bridge ->
           assert peer_event(context, request.id, "call.bridged").status == 200
           assert :sys.get_state(leg).recovery.phase == :bridged
+          stop_transfer_room!(context.plan)
+          assert :sys.get_state(leg).recovery.phase == :bridged
+          refute_received {:test_telephony_end_leg, _}
           call = TelephonyHarnessBackend.claim(context.backend).call
 
           row = %{
@@ -650,9 +655,27 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
           assert peer_event(context, request.id, "call.hangup").status == 200
 
-        :no_answer ->
-          assert peer_event(context, request.id, "call.hangup", "no_answer").status == 200
+        outcome when outcome in [:no_answer, :busy, :rejected] ->
+          {cause, expected} =
+            Keyword.fetch!(
+              [
+                no_answer: {"no_answer", :transfer_unanswered},
+                busy: {"user_busy", :transfer_busy},
+                rejected: {"call_rejected", :transfer_rejected}
+              ],
+              outcome
+            )
+
+          stop_transfer_room!(context.plan)
+          refute_received {:test_telephony_end_leg, _}
+          assert peer_event(context, request.id, "call.hangup", cause).status == 200
           assert_receive {:test_recovery_playback, "inbound-call-control", callback}, 2_000
+
+          assert Enum.any?(
+                   TelephonyHarnessBackend.operations(context.backend),
+                   &match?({:caller_recovery, ^expected, _}, &1)
+                 )
+
           refute_received {:test_telephony_end_leg, _}
 
           assert post_fixture(context, "call-playback-ended", %{
@@ -1590,6 +1613,13 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       briefing_tts,
       ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"private-briefing"})
     )
+  end
+
+  defp stop_transfer_room!(plan) do
+    [{room, _}] = Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    monitor = Process.monitor(room)
+    Process.exit(room, :shutdown)
+    assert_receive {:DOWN, ^monitor, :process, ^room, _}, 2_000
   end
 
   defp stop_room(tenant_id, room_id) do

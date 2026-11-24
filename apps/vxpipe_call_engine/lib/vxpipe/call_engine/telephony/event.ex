@@ -57,6 +57,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
                 digit: nil,
                 answering_machine: nil,
                 end_reason: nil,
+                callee_declined?: false,
                 media: nil
               ]
 
@@ -96,6 +97,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           digit: nil | String.t(),
           answering_machine: nil | :human | :machine | :unknown,
           end_reason: nil | end_reason(),
+          callee_declined?: boolean(),
           media: nil | MediaPacket.t()
         }
 

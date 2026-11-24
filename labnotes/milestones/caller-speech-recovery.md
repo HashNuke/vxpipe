@@ -29,11 +29,15 @@ On a separate QA handset call, the caller heard the complete callback recording.
 
 ## B. Configured human fallback
 
-- [ ] Add an optional, revision-pinned inbound recovery destination to the call spec. Select one validated tenant-authorized PSTN destination through the existing service/routing policy, reject self-routing loops and invalid numbers before publication, and preserve old pinned revisions. Omission selects checkpoint A. Inspect current transfer contracts before deciding whether an existing destination reference can be reused.
+- [x] Add an optional, revision-pinned inbound recovery destination to the call spec. Select one validated tenant-authorized PSTN destination through the existing service/routing policy, reject self-routing loops and invalid numbers before publication, and preserve old pinned revisions. Omission selects checkpoint A. Inspect current transfer contracts before deciding whether an existing destination reference can be reused.
 - [ ] Add a separate transfer announcement and a carrier-native transfer command using the original caller leg. Correlate the resulting leg and terminal events to this single attempt. Track answered/bridged, busy, rejected, unanswered, ambiguous and caller-abandoned outcomes. The gateway owns carrier effects even after room teardown.
 - [ ] Bound ringing (initial QA budget 20 s). On confirmed failure, if the caller leg remains controllable, play the callback recording then hang up. On ambiguous status reconcile before issuing conflicting commands. Establish through provider testing whether the original leg survives an unanswered transfer; if it does not, select a carrier-supported dial/bridge flow preserving the caller before enabling the option.
 - [ ] Register both carrier legs with their owning cleanup lifecycle before declaring a successful handoff. Keep the carrier owner through human conversation. Track terminal webhook and usage evidence separately for each leg. A bridge event ends recovery timers, while caller abandonment or explicit platform hangup tears down outstanding dialing/bridged legs. Exercise room death during the announcement, ringing and an established bridge, including a concurrent platform hangup.
 - [ ] Gate: one transfer for duplicate callbacks and retries. A successful human conversation survives AI room cleanup. Exercise no answer and caller hangup during ringing on test numbers. Check announcement ordering, call finalization, carrier cleanup and usage for both legs.
+
+The signed-webhook harness distinguishes a declined transfer, busy line, and
+unanswered call, and exercises room shutdown before dialing, while ringing
+and after bridge confirmation. Handset transfer acceptance remains open.
 
 ## C. Restore recognition while room audio remains usable
 
@@ -65,7 +69,11 @@ fresh Scribe allocation after an injected offset deadline. The test waits for
 both caller-specific recordings to finish before submitting the repeat and
 observes one agent request. Separate tests exercise resumed speech, a final
 before cutover, readiness timeout, missing repeat and replacement failure.
-Handset evidence and the full checkpoint acceptance matrix are still open.
+A two-participant room-authority test also covers an expiring repeat prompt
+during hold and during private briefing. Only the affected caller receives a
+stop command, and a delayed playout failure cannot interrupt the other participant
+or trigger carrier exit. Handset evidence and the full checkpoint acceptance
+matrix are still open.
 
 ## D. Prove the caller experience and operability
 

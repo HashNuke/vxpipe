@@ -97,6 +97,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
       when phase in [:ringing, :reconciling] do
     classification =
       case outcome do
+        {:ended, :rejected} -> :transfer_rejected
         {:ended, :busy} -> :transfer_busy
         {:ended, reason} when reason in [:no_answer, :timeout] -> :transfer_unanswered
         _ -> :transfer_failed

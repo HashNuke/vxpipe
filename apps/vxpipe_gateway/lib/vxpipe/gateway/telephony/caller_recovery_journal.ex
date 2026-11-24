@@ -90,6 +90,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
           :transfer_bridged,
           :transfer_failed,
           :transfer_busy,
+          :transfer_rejected,
           :transfer_unanswered,
           :transfer_unknown,
           :transfer_abandoned

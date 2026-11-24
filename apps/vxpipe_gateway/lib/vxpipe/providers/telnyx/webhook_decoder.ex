@@ -107,7 +107,10 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoder do
   defp decode_event("call.hangup", data) do
     with {:ok, payload} <- payload(data),
          {:ok, cause} <- bounded_field(payload, "hangup_cause", @maximum_hangup_cause_bytes) do
-      build_event(:ended, data, end_reason: end_reason(cause))
+      build_event(:ended, data,
+        end_reason: end_reason(cause),
+        callee_declined?: cause == "call_rejected"
+      )
     else
       _invalid -> invalid()
     end

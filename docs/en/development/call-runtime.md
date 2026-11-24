@@ -173,7 +173,11 @@ an English or unspecified recognition language.
 
 Inspect the leg's `caller_recovery` field in call details. An announcement request
 records the intent to play. Completion requires a matching carrier event.
-The gateway requests hangup on completion, rejection or expiry. A
+After a transfer announcement, a signed callee decline produces
+`transfer_rejected`, a busy line produces `transfer_busy`, and a ring-out
+produces `transfer_unanswered`. When the caller leg remains available, each
+outcome leads to the callback recording. The gateway requests hangup on
+completion, rejection or expiry of the callback recording. A
 `carrier_unknown` entry means the exit deadline elapsed without terminal
 evidence. Look for a later `carrier_ended` entry and final usage before closing
 an investigation. The recording travels through Telnyx independently of the

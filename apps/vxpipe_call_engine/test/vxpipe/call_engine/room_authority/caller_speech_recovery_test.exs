@@ -4,6 +4,49 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecoveryTest do
   alias Vxpipe.CallEngine.Archive.{Handoff, Port, Recorder}
   alias Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery
 
+  for scope <- [:held, :private_briefing] do
+    test "a pending repeat timeout during #{scope} stops only the caller cue" do
+      token = "pending-repeat"
+      expiry = make_ref()
+      owner = self()
+
+      bystander =
+        start_supervised!(
+          {Task,
+           fn ->
+             receive do
+               message -> send(owner, {:bystander_received, message})
+             end
+           end}
+        )
+
+      episode = %{token: token, timer: {make_ref(), expiry}, phase: :repeat}
+      caller = %{participant_id: "caller", pid: owner, speech_recovery: episode}
+      other = %{participant_id: "other", pid: bystander, speech_recovery: :eligible}
+
+      state =
+        struct(Vxpipe.CallEngine.RoomAuthority.State,
+          connections: %{"phone" => caller, "second-phone" => other}
+        )
+
+      state =
+        case unquote(scope) do
+          :held -> %{state | held_participant_ids: MapSet.new(["caller"])}
+          :private_briefing -> %{state | source_cutover: %{connection_id: "phone"}}
+        end
+
+      updated = CallerSpeechRecovery.expired(state, "phone", expiry)
+      assert_receive {:stop_caller_recovery_cue, ^owner, ^token}
+      assert updated.connections["phone"].speech_recovery == :eligible
+      assert updated.connections["second-phone"] == other
+      assert CallerSpeechRecovery.playout(updated, "phone", owner, token, :failed) == updated
+      refute_received {:vxpipe_connection_unavailable, _}
+
+      send(bystander, :barrier)
+      assert_receive {:bystander_received, :barrier}
+    end
+  end
+
   test "call details distinguish a failed cue from expiry during the same hearing phase" do
     identity = %{tenant_id: "tenant", call_id: "call", room_id: "room", incarnation_id: "rinc"}
     port = Port.new(Handoff.new(self(), 4), identity, %{"revision" => 0})

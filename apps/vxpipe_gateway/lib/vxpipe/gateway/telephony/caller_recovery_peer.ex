@@ -252,7 +252,8 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
   defp apply_event(%{terminal: terminal} = state, _) when not is_nil(terminal), do: state
 
   defp apply_event(state, %Event{kind: :ended} = event) do
-    send(state.parent, {:recovery_peer, self(), {:ended, event.end_reason}})
+    outcome = if event.callee_declined?, do: :rejected, else: event.end_reason
+    send(state.parent, {:recovery_peer, self(), {:ended, outcome}})
 
     %{
       state
