@@ -18,6 +18,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @call_timeout 5_000
 
+  defguardp recovery_enabled?(state)
+            when state.caller_recovery_enabled? and is_nil(state.pending_policy) and
+                   is_nil(state.private_allocation)
+
   def start_link(options) do
     case Keyword.get(options, :name) do
       nil -> GenServer.start_link(__MODULE__, options)
@@ -417,7 +421,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
         {:noreply, state}
 
       {:error, :unavailable} ->
-        acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unavailable})
+        reason = if recovery_enabled?(state), do: :recovery, else: :unavailable
+        acknowledge_audio(ingress, reference, frame.sequence_number, {:error, reason})
         observed_failure(state)
 
       :ok ->
@@ -505,9 +510,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   defp observed_failure(%{reported_stall: %{turn: :provider_failed}} = state),
     do: {:noreply, state}
 
-  defp observed_failure(
-         %{caller_recovery_enabled?: true, pending_policy: nil, private_allocation: nil} = state
-       ) do
+  defp observed_failure(state) when recovery_enabled?(state) do
     offset = System.monotonic_time(:millisecond)
 
     send(

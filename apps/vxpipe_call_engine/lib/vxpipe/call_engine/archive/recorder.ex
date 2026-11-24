@@ -149,7 +149,7 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     )
   end
 
-  def caller_recovery(recorder, connection, episode, phase) do
+  def caller_recovery(recorder, connection, episode, phase, details) do
     emit(recorder, :caller_speech_recovery,
       id: Id.generate(:event),
       participant_id: connection.participant_id,
@@ -158,18 +158,19 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
       command_id: episode.token,
       correlation_id: episode.room_turn_id,
       occurred_at: DateTime.utc_now(:millisecond),
-      payload: %{
-        "phase" => Atom.to_string(phase),
-        "trigger" =>
-          if(episode.turn == :provider_failed,
-            do: "provider_failure",
-            else: "missing_final_after_offset"
-          ),
-        "source_generation" => generation_id(episode.session.generation),
-        "replacement_generation" => generation_id(episode.replacement),
-        "elapsed_ms" => max(0, System.monotonic_time(:millisecond) - episode.started_ms),
-        "trigger_age_ms" => max(0, episode.started_ms - episode.offset)
-      }
+      payload:
+        Map.merge(details, %{
+          "phase" => Atom.to_string(phase),
+          "trigger" =>
+            if(episode.turn == :provider_failed,
+              do: "provider_failure",
+              else: "missing_final_after_offset"
+            ),
+          "source_generation" => generation_id(episode.session.generation),
+          "replacement_generation" => generation_id(episode.replacement),
+          "elapsed_ms" => max(0, System.monotonic_time(:millisecond) - episode.started_ms),
+          "trigger_age_ms" => max(0, episode.started_ms - episode.offset)
+        })
     )
   end
 

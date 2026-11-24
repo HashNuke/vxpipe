@@ -1,6 +1,7 @@
 defmodule Vxpipe.Persistence.ResolvedPlanCodec do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.CallSpec.TransferPolicy
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
   @legacy_struct_modules %{
@@ -70,6 +71,18 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
   }
 
   @spec encode(ResolvedCallPlan.t()) :: binary()
+  # Older releases decode with binary_to_term(:safe) and do not know the new atom.
+  def encode(%ResolvedCallPlan{transfer_policy: %TransferPolicy{} = policy} = plan) do
+    {destination, stored} = Map.pop(policy, :recovery_destination)
+
+    stored =
+      if is_nil(destination),
+        do: stored,
+        else: Map.put(stored, "recovery_destination", destination)
+
+    :erlang.term_to_binary(%{plan | transfer_policy: stored}, [:deterministic])
+  end
+
   def encode(%ResolvedCallPlan{} = plan), do: :erlang.term_to_binary(plan, [:deterministic])
 
   @spec decode(binary()) :: {:ok, ResolvedCallPlan.t()} | {:error, :invalid_stored_call_plan}
@@ -106,6 +119,11 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
   defp normalize(value) when is_list(value), do: Enum.map(value, &normalize/1)
 
   defp normalize(value), do: value
+
+  defp normalize_reference_defaults(value, TransferPolicy) do
+    {destination, fields} = Map.pop(value, "recovery_destination")
+    Map.put_new(fields, :recovery_destination, destination)
+  end
 
   defp normalize_reference_defaults(value, Vxpipe.CallEngine.Telephony.ServiceReference),
     do: value |> Map.put_new(:credential_owner, nil) |> Map.put_new(:credential_name, nil)

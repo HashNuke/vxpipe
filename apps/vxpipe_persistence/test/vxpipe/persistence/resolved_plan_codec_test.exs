@@ -198,6 +198,26 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
     assert historical.agent_protocol == nil
   end
 
+  test "stored transfer policies survive rollback to a release without the recovery field atom" do
+    alias Vxpipe.CallEngine.CallSpec.TransferPolicy
+    alias Vxpipe.Persistence.ResolvedPlanCodec
+
+    policy = %{__struct__: TransferPolicy, attempt_timeout_ms: 20_000}
+
+    for destination <- [nil, "support"] do
+      for source <- [policy, Map.put(policy, :recovery_destination, destination)] do
+        original = Map.put(legacy_plan(%{}), :transfer_policy, source)
+        {:ok, plan} = ResolvedPlanCodec.decode(:erlang.term_to_binary(original))
+        assert plan.transfer_policy.recovery_destination == Map.get(source, :recovery_destination)
+        encoded = ResolvedPlanCodec.encode(plan)
+        stored = :erlang.binary_to_term(encoded, [:safe])
+        refute Map.has_key?(stored.transfer_policy, :recovery_destination)
+        assert stored.transfer_policy.attempt_timeout_ms == 20_000
+        assert {:ok, ^plan} = ResolvedPlanCodec.decode(encoded)
+      end
+    end
+  end
+
   defp legacy_plan(capabilities) do
     %{
       __struct__: Vxpipe.CallEngine.ResolvedCallPlan,

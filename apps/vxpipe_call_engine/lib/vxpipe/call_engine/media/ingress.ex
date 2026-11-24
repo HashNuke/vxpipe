@@ -450,14 +450,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   def handle_info(
-        {:vxpipe_stt_audio_result, capability, reference, sequence_number,
-         {:error, :policy_denied}},
+        {:vxpipe_stt_audio_result, capability, reference, sequence_number, {:error, reason}},
         %{
           capability: capability,
           in_flight: %{reference: reference, sequence_number: sequence_number} = in_flight
         } = state
-      ) do
-    notify_owner(state.owner, {:dropped, :policy, sequence_number})
+      )
+      when reason in [:policy_denied, :recovery] do
+    drop_reason = if reason == :policy_denied, do: :policy, else: :recovery
+    notify_owner(state.owner, {:dropped, drop_reason, sequence_number})
 
     state = %{
       state

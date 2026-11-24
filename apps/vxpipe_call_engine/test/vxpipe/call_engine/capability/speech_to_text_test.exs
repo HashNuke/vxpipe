@@ -1113,6 +1113,33 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   end
 
   test "async ingress receives final evidence before a failed native input closes the capability" do
+    {capability, ingress, provider, frame} = failing_input_connection()
+    monitor = Process.monitor(capability)
+    assert :ok = Ingress.push(ingress, frame)
+    assert_receive {:probe_input, ^provider}
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, text: "final evidence"}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :turn_ended, text: "final evidence"}}
+
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
+  end
+
+  test "an input submission failure keeps eligible phone ingress available for replacement" do
+    {capability, ingress, _provider, frame} = failing_input_connection({:error, :session_failed})
+    send(capability, {:caller_recovery_enabled, self(), true})
+    _ = :sys.get_state(capability)
+    assert :ok = Ingress.push(ingress, frame)
+    assert_receive {:vxpipe_stt_stalled, ^capability, _, _, :provider_failed, _}
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:dropped, :recovery, 1}}
+    assert {:ok, _, _} = SpeechToText.readiness(capability)
+  end
+
+  defp failing_input_connection(input_result \\ :final_then_fail) do
     assert {:module, SpeechSessionProbe} = Code.ensure_loaded(SpeechSessionProbe)
 
     identity = [
@@ -1133,7 +1160,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
              owner: self(),
              speech_scope: CapabilityTree.scope(tree),
              provider: {SpeechSessionProbe, []},
-             provider_private: [observer: self(), input_result: :final_then_fail]
+             provider_private: [observer: self(), input_result: input_result]
            ]},
         id: make_ref()
       )
@@ -1178,19 +1205,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
           ]
       )
 
-    monitor = Process.monitor(capability)
-    assert :ok = Ingress.push(ingress, frame)
-    assert_receive {:probe_input, ^provider}
-    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :transcript_updated, text: "final evidence"}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :turn_ended, text: "final evidence"}}
-
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
+    {capability, ingress, provider, frame}
   end
 
   defp start_capability(options \\ []) do

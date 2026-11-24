@@ -344,6 +344,48 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
   @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
   test "a stalled open question replaces recognition on the same caller media socket", context do
     {room, replacement, socket} = start_stalled_recovery(context)
+    capability = :sys.get_state(room).connections[@incoming_leg_id].speech_to_text.capability
+    state = :sys.get_state(capability)
+
+    frame =
+      struct(
+        Vxpipe.CallEngine.Media.AudioFrame,
+        Map.merge(
+          state.identity,
+          Map.merge(state.media_format, %{
+            track_id: "phone",
+            sequence_number: 1279,
+            timestamp: 0,
+            received_at: System.monotonic_time(:millisecond),
+            payload: <<0::320>>
+          })
+        )
+      )
+
+    # Phone packets can arrive before a replacement channel can service calls.
+    channel = Vxpipe.CallEngine.Speech.Channel.address(state.session)
+    :ok = :sys.suspend(channel)
+
+    try do
+      parent = self()
+
+      start_supervised!(
+        {Task,
+         fn ->
+           send(
+             parent,
+             {:early_audio,
+              Vxpipe.CallEngine.Capability.SpeechToText.push_audio(capability, frame)}
+           )
+         end}
+      )
+
+      assert_receive {:early_audio, {:error, :policy_denied}}, 500
+    after
+      :sys.resume(channel)
+    end
+
+    refute_received {:scribe_audio, ^replacement, _}
     Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(replacement, {:ready, "fresh-scribe"})
     await_recovery_phase(room, :awaiting_repeat, System.monotonic_time(:millisecond) + 9_000)
     assert_receive {:test_phone_output, ^socket, packet}, 2_000

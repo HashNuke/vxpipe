@@ -103,7 +103,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
           set(record(state, id, episode, :triggered), id, arm(episode, id, 5_000))
 
         %{replacement: ^generation} ->
-          exit_to_carrier(state, id)
+          exit_to_carrier(
+            state,
+            id,
+            if(turn == :provider_failed, do: :recognizer_failed, else: :repeat_stalled)
+          )
 
         _ ->
           state
@@ -137,7 +141,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
         set(record(state, id, episode, :hearing_requested), id, episode)
       else
         {:error, reason} when reason in [:stale_stall, :ineligible] -> finish(state, id, episode)
-        _ -> exit_to_carrier(state, id)
+        _ -> exit_to_carrier(state, id, :preparation_failed)
       end
     else
       _ -> state
@@ -162,7 +166,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
                     episode
                     | ready?: true
                   }),
-                else: exit_to_carrier(state, id)
+                else: exit_to_carrier(state, id, :ingress_binding_failed)
 
             :turn_started ->
               send(connection.pid, {:stop_caller_recovery_cue, self(), episode.token})
@@ -200,7 +204,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
             state
 
           status != :completed ->
-            exit_to_carrier(state, id)
+            exit_to_carrier(state, id, :playout_failed)
 
           episode.phase == :hearing ->
             maybe_repeat(record(state, id, episode, :hearing_completed), id, %{
@@ -228,7 +232,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
     case state.connections[id] do
       %{speech_recovery: %{timer: {_, ^ref}} = episode} = connection ->
         if available?(state, id, connection),
-          do: exit_to_carrier(state, id),
+          do: exit_to_carrier(state, id, :deadline_expired),
           else: finish(state, id, episode)
 
       _ ->
@@ -256,11 +260,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
       not STSSourceCutover.private_input_held?(state, id)
   end
 
-  defp exit_to_carrier(state, id) do
+  defp exit_to_carrier(state, id, reason) do
     connection = state.connections[id]
     cancel_timer(connection.speech_recovery)
     send(connection.pid, {:vxpipe_connection_unavailable, :speech_to_text_unavailable})
-    set(record(state, id, connection.speech_recovery, :carrier_exit), id, :closing)
+    episode = connection.speech_recovery
+
+    details = %{
+      "failed_phase" => Atom.to_string(episode.phase),
+      "reason" => Atom.to_string(reason)
+    }
+
+    set(record(state, id, episode, :carrier_exit, details), id, :closing)
   end
 
   defp finish(state, id, episode) do
@@ -269,9 +280,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
     set(state, id, :eligible)
   end
 
-  defp record(state, id, episode, phase) do
+  defp record(state, id, episode, phase, details \\ %{}) do
     recorder =
-      Recorder.caller_recovery(state.archive_recorder, state.connections[id], episode, phase)
+      Recorder.caller_recovery(
+        state.archive_recorder,
+        state.connections[id],
+        episode,
+        phase,
+        details
+      )
 
     %{state | archive_recorder: recorder}
   end

@@ -142,3 +142,48 @@ rooms ended. Automated carrier test: one passed. This trial did not measure
 handset audibility. A separate configured-room control finalized “Okay,”
 delivered the retired acoustic-offset timeout and verified the same
 recognizer remained eligible with no fallback.
+
+The previous release image starts cold without the recovery destination atom.
+A stored policy from the new release could therefore fail its safe term
+decoder. A focused regression reproduced the missing historical field.
+The codec now omits the unset optional field and encodes configured values
+under a string key, normalizing all three historical formats on read. Six
+codec tests passed. A cold instance of the actual prior QA image decoded
+both an unconfigured plan and a configured plan written by the corrected
+codec, preserving the pinned revision and original transfer timeout.
+
+Handset trial at 10:52 UTC on revision 12 with operational VAD enabled:
+the caller interrupted the agent to ask about gardening. The room recorded
+the interruption at 10:52:37.885 and a missing-final recovery at 10:52:42.619
+(4,000 ms from acoustic offset). It requested the hearing cue and selected
+carrier exit 12 ms after recovery started. The caller heard only the full
+callback message. The archive closed at 10:52:46.613. Logs show an
+unavailable STT audio delivery on frame 1279 and media teardown. Existing
+phase facts do not identify which transition first selected carrier exit.
+This verifies the announced-disconnect handset case. In-room recovery
+and the repeat prompt still require a successful handset trial.
+
+The handset call and carrier leg both reached ended. Its journal contains
+announcement request and completion, hangup request, and signed carrier end.
+
+With the replacement channel deliberately unavailable during preparation,
+a fresh inbound frame blocked the capability. The corrected path drops that
+frame before provider submission. A second regression returned a failed
+input submission from an active test provider; eligible ingress now drops
+the failed frame while the room handles that failure. Other calls retain
+their terminal behavior. The room archives the failed phase and a bounded
+exit reason. Both focused regressions passed. A real two-number Telnyx call
+then transcribed “repeat” on the far leg, followed by signed carrier exit
+after the second injected failure. The runner restored both QA numbers.
+The receiving Scribe transport was controlled; handset recovery with live
+Scribe is still open.
+
+One existing QA call written by the initial recovery release contains the
+atom field. Its data remains intact. Use revision 9e320582 or a compatible
+build when rolling back over that history. Cold 043a3845 lacks that atom.
+
+Final focused validation passed 26 recognizer and recovery tests, 48 gateway
+harness tests and six persisted-plan tests. Formatting, strict Credo,
+warnings-as-errors compilation, unused dependency checks and the Lean lane
+passed. The far-end repeat test used a real Telnyx call and a controlled
+receiving recognizer.

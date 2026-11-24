@@ -177,6 +177,12 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
       GenServer.stop(speech, :normal)
       assert_receive {:scribe_started, replacement}, 5_000
+      wire.deliver(replacement, {:ready, "carrier-recovery-replacement"})
+
+      await("far leg transcribes the repeat prompt", 14_000, fn ->
+        remote_phrase?(fixture, outgoing, "repeat")
+      end)
+
       GenServer.stop(replacement, :normal)
 
       await("signed Telnyx playback completion and carrier hangup", 20_000, fn ->

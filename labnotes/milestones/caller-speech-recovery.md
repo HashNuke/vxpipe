@@ -20,12 +20,12 @@ First acceptance profile is an established inbound, main-media, English-language
 - [ ] While its original owner lives, bind each effect to one tenant/call/incarnation/leg/attempt/phase. Journal intent before sending, with a 1 s storage budget inside the phase deadline. On unavailable or ambiguous storage, fall back to callback announcement and hangup on the known caller leg using stable command IDs retained by that owner. Suppress new dial/transfer effects until intent is durable. After a possibly submitted transfer, reconcile the existing effect under B. Retry evidence writes when storage returns; cleanup acknowledgement still requires durable final usage, drained commands and carrier evidence. Test write failure before first playback and ambiguous writes at each transition.
 - [ ] On HTTP-worker death the surviving owner reads its journal (or retained degraded-state intent), checks for a matching callback, and reconciles only that effect. Model a bounded, same-ID termination retry explicitly even when the old worker left command drainage unknown. Preserve the outstanding drainage evidence independently of this retry. Deduplicate late replies and never assert successful drainage from a new worker alone.
 - [ ] Treat original temporary leg-owner death and node restart as separate failure scopes. A reconciler may reload durable attempt metadata and match signed terminal events to an exact binding. It cannot recreate a leg owner or claim cleanup membership from a stored row. Without a living fenced owner or conclusive carrier evidence, record unresolved disposition for operator follow-up. Test worker death after send, owner death before/after send and node restart with delayed callbacks; assert who can issue effects and who can acknowledge cleanup.
-- [ ] Gate: fake carrier covers accepted, rejected, timeout, duplicate/reordered/missing callbacks, worker death after command send and concurrent remote hangup. Real handset hears the complete callback recording before disconnect. Confirm terminal carrier evidence and matching stored leg/call state.
+- [x] Gate: fake carrier covers accepted, rejected, timeout, duplicate/reordered/missing callbacks, worker death after command send and concurrent remote hangup. Real handset hears the complete callback recording before disconnect. Confirm terminal carrier evidence and matching stored leg/call state.
 
 A real Telnyx-to-Telnyx call passed the callback-and-end test. The far leg
 transcribed the initial greeting, the incoming room lost both recognizers,
 Telnyx confirmed completion of the callback recording, and both rooms ended.
-Handset listening and live transfer outcomes remain open.
+On a separate QA handset call, the caller heard the complete callback recording. The call and leg both reached ended, with signed playback completion and carrier hangup recorded. Live transfer outcomes and successful in-room handset recovery remain open.
 
 ## B. Configured human fallback
 

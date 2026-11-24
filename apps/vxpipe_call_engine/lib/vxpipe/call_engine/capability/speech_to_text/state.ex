@@ -122,7 +122,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       not supported_audio?(state, frame) ->
         {:error, :unsupported_audio}
 
-      is_nil(state.session) ->
+      is_nil(state.session) or
+          (state.caller_recovery_enabled? and state.readiness_status == :preparing) ->
         {:error, :policy_denied}
 
       true ->
