@@ -290,7 +290,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
           end
 
         :failed ->
-          {:error, report.failure || :readiness_failed}
+          # A departing connection can fail its probe after the inventory check above.
+          # Only a failure against the still-current graph can end this handoff.
+          case reconcile_preparation(prepared, collector, phase, request) do
+            {:ok, ^prepared} -> {:error, report.failure || :readiness_failed}
+            {:ok, current} -> await_preparation(current, collector, phase, request, progress)
+            error -> error
+          end
 
         :preparing ->
           await_preparation_change(prepared, collector, phase, request, progress)

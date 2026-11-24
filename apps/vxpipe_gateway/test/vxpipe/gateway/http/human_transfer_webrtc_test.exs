@@ -669,16 +669,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         {:connection, observer_client.connection_id}
       )
 
-    old_monitor = Process.monitor(old_connection)
     player_monitor = Process.monitor(observer_player)
 
-    assert :ok =
-             PeerConnection.close_data_channel(
-               observer_client.client,
-               observer_client.channel_ref
-             )
+    close_during_inventory_check(
+      pending.policy_authority,
+      worker,
+      observer_client,
+      old_connection
+    )
 
-    assert_receive {:DOWN, ^old_monitor, :process, ^old_connection, _}, 2_000
     drain_audio(second_sink)
 
     await_tone(second_sink, 250, 2_000)
@@ -4360,6 +4359,51 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert {:ok, session} = SessionSupervisor.issue(binding, 30_000)
     session
+  end
+
+  # Close one sink after the worker captures the room inventory and before it
+  # reads the collector. The old sink can fail that snapshot while its peer plays on.
+  defp close_during_inventory_check(policy, worker, observer_client, old_connection) do
+    old_monitor = Process.monitor(old_connection)
+
+    fence = make_ref()
+    test = self()
+
+    :ok =
+      :sys.install(
+        policy,
+        {fence,
+         fn
+           :armed, {:in, {:"$gen_call", {^worker, _}, {:validate_candidate, _}}}, _ ->
+             send(test, {:inventory_captured, fence})
+
+             receive do
+               {:release_validation, ^fence} -> :done
+             after
+               900 -> send(test, {:validation_gate_expired, fence})
+             end
+
+           state, _, _ ->
+             state
+         end, :armed}
+      )
+
+    try do
+      assert_receive {:inventory_captured, ^fence}, 1_000
+
+      assert :ok =
+               PeerConnection.close_data_channel(
+                 observer_client.client,
+                 observer_client.channel_ref
+               )
+
+      assert_receive {:DOWN, ^old_monitor, :process, ^old_connection, _}, 900
+    after
+      send(policy, {:release_validation, fence})
+      :sys.remove(policy, fence)
+    end
+
+    refute_received {:validation_gate_expired, ^fence}
   end
 
   defp connect_controlled_listener(plan, room, participant, phase, destination) do
