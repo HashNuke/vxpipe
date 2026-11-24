@@ -293,3 +293,9 @@ pending peer. Ending an established bridge retains its successful outcome.
 The transfer harness covers six outcomes. The worker-loss cases separately
 verify a signed playback completion after worker death and a bounded same-ID
 end retry that preserves uncertain command drainage.
+
+The journal test simulated committing a record and losing its acknowledgement
+at each of the 19 carrier phases. Each retry preserved the claim, phase,
+command ID and original deadline. Stale timers and duplicate observations
+produced no extra write. The gateway harness separately covers storage loss
+before announce or dial, and the persistence tests check incarnation fencing.
