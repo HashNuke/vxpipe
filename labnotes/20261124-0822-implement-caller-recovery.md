@@ -187,3 +187,11 @@ harness tests and six persisted-plan tests. Formatting, strict Credo,
 warnings-as-errors compilation, unused dependency checks and the Lean lane
 passed. The far-end repeat test used a real Telnyx call and a controlled
 receiving recognizer.
+
+The separate live ElevenLabs + Telnyx trial enabled operational VAD and
+used the live encrypted Scribe credential. The first injection correctly
+failed the allocation owner check, before disrupting the recognizer. The
+verified test stops only its own real Scribe socket after the far end
+transcribes the initial greeting. Call details then recorded a different
+ready recognizer on the same connection, and the remote leg transcribed the
+repeat prompt. The trial passed, and both numbers were restored to QA.

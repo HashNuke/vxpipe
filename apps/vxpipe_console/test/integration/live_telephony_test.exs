@@ -203,6 +203,60 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     end
   end
 
+  @tag :live_providers
+  @tag :live_telephony_recovery_elevenlabs
+  @tag timeout: 90_000
+  test "a Telnyx caller keeps the same phone leg while live Scribe is replaced", context do
+    fixture = live_fixture(context)
+
+    pair =
+      ConfiguredTelephonyFixture.publish_caller_recovery(
+        fixture,
+        System.fetch_env!("ELEVENLABS_API_KEY"),
+        true
+      )
+
+    try do
+      outgoing = submit(fixture, pair.outgoing, pair.to)
+      incoming = await_incoming_call(fixture, pair.incoming)
+
+      await("far leg transcribes the initial greeting", 15_000, fn ->
+        remote_phrase?(fixture, outgoing, "bravo")
+      end)
+
+      [{room, _}] =
+        Registry.lookup(CallEngine.RoomRegistry, {fixture.tenant.key, incoming.room_id})
+
+      [{connection_id, connection}] =
+        Enum.filter(:sys.get_state(room).connections, fn {_id, connection} ->
+          connection.role == :human
+        end)
+
+      capability = connection.speech_to_text.capability
+      original = :sys.get_state(capability).session
+      input = :sys.get_state(CallEngine.Speech.Session.provider(original))
+      recognizer = CallEngine.Speech.Session.provider(input.inner)
+      assert :ok = GenServer.stop(:sys.get_state(recognizer).wire, :normal)
+
+      await("fresh live Scribe is ready on the same Telnyx connection", 8_000, fn ->
+        assert {:ok, facts} =
+                 Calls.fetch_call_facts(fixture.principal, incoming.id, fixture.options)
+
+        Enum.any?(facts, fn fact ->
+          fact.kind == :caller_speech_recovery and fact.connection_id == connection_id and
+            fact.payload["phase"] == "recognizer_ready" and
+            fact.payload["replacement_generation"] != fact.payload["source_generation"]
+        end)
+      end)
+
+      await("far leg hears the repeat prompt", 12_000, fn ->
+        remote_phrase?(fixture, outgoing, "repeat")
+      end)
+    after
+      cleanup(fixture.tenant.key)
+    end
+  end
+
   # Shared carrier acceptance. GPT-Live remains the talk-over receiver because its
   # provider-owned overlap lets it interject while the counter is still speaking.
   @long_session_minutes String.to_integer(
