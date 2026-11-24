@@ -116,3 +116,12 @@ The corrected call-engine suite passed 2,937 tests. The preceding umbrella
 pass reported zero failures in the gateway (942), persistence (586) and
 console (677). The existing QA release image was retained locally for the
 rollback exercise.
+
+QA deployment of runtime revision `9e320582` passed after the complete
+umbrella run (6,560 reported tests, 432 excluded, zero failures). The running
+container label matched the commit, migration 20261124091700 completed, and
+the public health endpoint returned HTTP 200. A read-only instance of the
+previous release opened the migrated QA database and read the published
+revision relationship. A live traffic rollback and handset acceptance remain
+open. The Telnyx pool planner found zero eligible Rocksalt numbers after the
+app rename; no numbers were moved during this deployment.
