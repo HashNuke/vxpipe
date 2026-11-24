@@ -178,7 +178,13 @@ Inspect the leg's `caller_recovery` field in call details. An announcement reque
 records the intent to play. Its optional `reason` identifies the failure
 observed at handoff: `speech_to_text_unavailable`, `text_to_speech_unavailable`,
 `agent_unavailable`, or `media_process_lost` for an unexpected media-process
-exit. Older records may omit the reason. Completion requires a matching carrier event.
+exit. Older records may omit the reason. For phases observed by the original
+carrier owner, `elapsed_ms` measures time from the start of carrier recovery
+on its monotonic clock. Subtract two phase offsets to measure the interval
+between observations. A retried write retains its original offset, while
+`recorded_at` gives the wall time of persistence. Older records and events
+reconciled after owner loss can omit the offset. Completion requires a
+matching carrier event.
 After a transfer announcement, a signed callee decline produces
 `transfer_rejected`, a busy line produces `transfer_busy`, and a ring-out
 produces `transfer_unanswered`. When the caller leg remains available, each

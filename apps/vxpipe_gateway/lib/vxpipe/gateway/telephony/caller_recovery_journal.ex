@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
     :deadline,
     :command,
     :reason,
+    :started_ms,
     pending: [],
     recorded: MapSet.new(),
     retry: nil
@@ -22,22 +23,24 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
       claim: claim,
       command: leg_id,
       deadline: deadline,
+      started_ms: System.monotonic_time(:millisecond),
       reason: reason
     }
   end
 
-  def record(nil, _phase), do: nil
+  def record(journal, phase, now_ms \\ System.monotonic_time(:millisecond))
+  def record(nil, _phase, _now_ms), do: nil
 
-  def record(journal, phase) do
-    if MapSet.member?(journal.recorded, phase) or phase in journal.pending do
+  def record(journal, phase, now_ms) do
+    if MapSet.member?(journal.recorded, phase) or List.keymember?(journal.pending, phase, 0) do
       journal
     else
-      enqueue(journal, phase)
+      enqueue(journal, {phase, now_ms - journal.started_ms})
     end
   end
 
-  def retry(%{retry: token, pending: [phase | rest]} = journal, token) do
-    case persist(journal, phase) do
+  def retry(%{retry: token, pending: [{phase, _elapsed} = observation | rest]} = journal, token) do
+    case persist(journal, observation) do
       :ok ->
         schedule(%{
           journal
@@ -56,14 +59,14 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
   def settled?(nil), do: true
   def settled?(journal), do: journal.pending == []
 
-  defp enqueue(%{pending: []} = journal, phase) do
-    case persist(journal, phase) do
+  defp enqueue(%{pending: []} = journal, {phase, _elapsed} = observation) do
+    case persist(journal, observation) do
       :ok -> %{journal | recorded: MapSet.put(journal.recorded, phase)}
-      :unavailable -> schedule(%{journal | pending: [phase]})
+      :unavailable -> schedule(%{journal | pending: [observation]})
     end
   end
 
-  defp enqueue(journal, phase), do: %{journal | pending: journal.pending ++ [phase]}
+  defp enqueue(journal, observation), do: %{journal | pending: journal.pending ++ [observation]}
 
   defp schedule(%{pending: []} = journal), do: journal
 
@@ -117,13 +120,13 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
 
   defp entry(_journal, phase), do: phase
 
-  defp persist(%{backend: {module, context}} = journal, phase) do
+  defp persist(%{backend: {module, context}} = journal, {phase, elapsed_ms}) do
     task =
       Task.Supervisor.async_nolink(@supervisor, fn ->
         module.record_caller_recovery(
           context,
           journal.claim,
-          entry(journal, phase),
+          {:timed, entry(journal, phase), elapsed_ms},
           command_id(journal, phase),
           journal.deadline
         )

@@ -123,6 +123,10 @@ matrix are still open.
 - [ ] On a real QA handset run healthy, recovered, announced-disconnect, successful transfer and unanswered-transfer cases. Record perceived silence, exact prompt heard, whether the repeat was captured, number of agent answers and confirmed final disposition. Measure fault-to-first-audible-cue and total time to recovery/exit against the checkpoint budgets. Verify no competing voices or silent active leg after a recoverable carrier outcome. Redact sensitive data from evidence.
 - [x] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Gate broader rollout on handset evidence and an exercised rollback to the prior call spec/compatible release.
 
+Call details expose the original carrier owner's monotonic phase offsets under
+each leg's `caller_recovery`. Queued journal retries retain the first offset.
+Terminal evidence reconciled without the owner carries its wall timestamp only.
+
 The remaining handset repeat and answered-transfer checks can use one
 coordinated call to the pool receiver. The test waits for spoken consent and
 uses an authenticated carrier bridge event and destination-side transcription.

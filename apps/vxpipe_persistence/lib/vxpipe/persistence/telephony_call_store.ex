@@ -141,11 +141,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
   defp termination_intent(_evidence), do: nil
 
   def record_caller_recovery(repo, claim, entry, command_id, deadline) do
-    {phase, details} =
-      case entry do
-        {phase, reason} -> {phase, %{"reason" => Atom.to_string(reason)}}
-        phase -> {phase, %{}}
-      end
+    {phase, details} = recovery_details(entry)
 
     result =
       project_lifecycle(repo, claim, fn repo, call, leg ->
@@ -174,6 +170,14 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
       error -> error
     end
   end
+
+  defp recovery_details({:timed, entry, elapsed_ms}) do
+    {phase, details} = recovery_details(entry)
+    {phase, Map.put(details, "elapsed_ms", elapsed_ms)}
+  end
+
+  defp recovery_details({phase, reason}), do: {phase, %{"reason" => Atom.to_string(reason)}}
+  defp recovery_details(phase), do: {phase, %{}}
 
   defp insert_claim(repo, claim, authorize) do
     call = claim.call

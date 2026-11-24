@@ -4,7 +4,8 @@ defmodule Vxpipe.Calls.CallRepository do
   alias Vxpipe.Calls.{AdmissionClaim, JoinToken, PreparedCall, TelephonyAdmissionClaim}
 
   @type context :: term()
-  @type recovery_entry ::
+  @type recovery_entry :: recovery_phase() | {:timed, recovery_phase(), non_neg_integer()}
+  @type recovery_phase ::
           atom()
           | {:announcement_requested | :transfer_announcement_requested,
              :agent_unavailable

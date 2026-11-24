@@ -22,7 +22,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournalTest do
     }
 
     for {command, group} <- phases, phase <- group do
-      pending = Journal.record(journal, phase)
+      pending = Journal.record(journal, phase, journal.started_ms + 42)
       refute Journal.settled?(pending)
       assert Journal.record(pending, phase) == pending
       assert Journal.retry(pending, make_ref()) == pending
@@ -37,9 +37,33 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournalTest do
           do: {phase, :media_process_lost},
           else: phase
 
-      assert Agent.get(writes, &Map.fetch!(&1, entry)) ==
+      assert Agent.get(writes, &Map.fetch!(&1, {:timed, entry, 42})) ==
                List.duplicate({claim, command, deadline}, 2)
     end
+  end
+
+  test "a later phase keeps its observed offset while an earlier write is pending" do
+    writes = start_supervised!({Agent, fn -> %{} end})
+    deadline = ~U[2026-11-24 12:00:00Z]
+    journal = Journal.new({__MODULE__, writes}, :claim, "leg", deadline, :media_process_lost)
+    origin = journal.started_ms
+
+    queued =
+      journal
+      |> Journal.record(:hangup_requested, origin + 15)
+      |> Journal.record(:carrier_ended, origin + 180)
+      |> Journal.record(:carrier_ended, origin + 600)
+
+    terminal = {:timed, :carrier_ended, 180}
+    refute Agent.get(writes, &Map.has_key?(&1, terminal))
+
+    drained =
+      Enum.reduce(1..3, queued, fn _, pending -> Journal.retry(pending, pending.retry) end)
+
+    assert Journal.settled?(drained)
+
+    assert Agent.get(writes, &Map.fetch!(&1, terminal)) ==
+             List.duplicate({:claim, "hangup-leg", deadline}, 2)
   end
 
   # Simulate a committed write whose acknowledgement was lost.

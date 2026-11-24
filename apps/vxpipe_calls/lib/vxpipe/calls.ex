@@ -53,6 +53,12 @@ defmodule Vxpipe.Calls do
                         :carrier_unknown
                       ]
 
+  defguardp valid_recovery_entry(entry)
+            when entry in @recovery_entries or
+                   (is_tuple(entry) and tuple_size(entry) == 3 and elem(entry, 0) == :timed and
+                      elem(entry, 1) in @recovery_entries and is_integer(elem(entry, 2)) and
+                      elem(entry, 2) >= 0)
+
   @doc "Records exact-leg recovery evidence for an authenticated inbound call."
   def record_caller_recovery(
         %Vxpipe.Calls.TelephonyAdmissionClaim{} = claim,
@@ -61,7 +67,7 @@ defmodule Vxpipe.Calls do
         %DateTime{} = deadline,
         options
       )
-      when entry in @recovery_entries and
+      when valid_recovery_entry(entry) and
              is_binary(command_id) and byte_size(command_id) in 1..160 do
     with {:ok, repository} <- Vxpipe.Calls.Repositories.fetch(options, :call_repository) do
       Vxpipe.Calls.Repositories.call(repository, :record_caller_recovery, [

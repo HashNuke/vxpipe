@@ -219,6 +219,9 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
   end
 
   @impl true
+  def record_caller_recovery(agent, claim, {:timed, entry, _elapsed_ms}, command_id, deadline),
+    do: record_caller_recovery(agent, claim, entry, command_id, deadline)
+
   def record_caller_recovery(agent, claim, {phase, reason}, command_id, deadline) do
     operation(agent, {:caller_recovery_reason, reason, command_id})
     record_caller_recovery(agent, claim, phase, command_id, deadline)

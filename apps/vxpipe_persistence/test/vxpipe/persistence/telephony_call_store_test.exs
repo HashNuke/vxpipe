@@ -104,7 +104,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
     assert :ok =
              Calls.record_caller_recovery(
                claim,
-               {:announcement_requested, :agent_unavailable},
+               {:timed, {:announcement_requested, :agent_unavailable}, 12},
                "recovery-leg",
                expires,
                context.options
@@ -139,6 +139,8 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
 
     leg = Repo.one!(TelephonyLeg)
     assert leg.state == "active"
+    assert leg.recovery["announcement_requested"]["elapsed_ms"] == 12
+    refute Map.has_key?(leg.recovery["hangup_requested"], "elapsed_ms")
     assert leg.recovery["announcement_requested"]["reason"] == "agent_unavailable"
     assert leg.recovery["announcement_requested"]["deadline"] == DateTime.to_iso8601(expires)
     assert leg.recovery["hangup_requested"]["command_id"] == "hangup-leg"
