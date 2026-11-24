@@ -3,7 +3,7 @@
 Call Engine packages these assets for web, phone and embedded participants. Call specs
 select defaults by omission, silence with null / Elixir `nil`, or a custom HTTP(S) file URL.
 Authored configuration never selects these local filenames. See the
-[transfer readiness milestone](../../../../../labnotes/milestones/transfer-readiness-and-wait-sounds.md).
+[transfer readiness milestone](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/transfer-readiness-and-wait-sounds.md).
 
 | File | Packaged format | Duration | SHA-256 |
 | --- | --- | --- | --- |

@@ -132,8 +132,8 @@ summaries may persist after capture stops. Diagnostics stores no raw PCM or
 transcript text, and its records cascade with call deletion.
 
 See [operator interpretation](../usage/operations.md#passive-latency-diagnostics),
-[resource limits and authority rules](../../design/latency-diagnostics-runtime-limits.md)
-and the [measurement plan](../../design/latency-diagnostics-measurement-plan.md).
+[resource limits and authority rules](https://github.com/HashNuke/notes/blob/main/vxpipe/docs/design/latency-diagnostics-runtime-limits.md)
+and the [measurement plan](https://github.com/HashNuke/notes/blob/main/vxpipe/docs/design/latency-diagnostics-measurement-plan.md).
 In-process dirty-scheduler inference does not isolate native crashes or establish
 CPU/RSS overhead. Source-level deadlines fence results; they cannot prove a native
 job has stopped before its process exits.
@@ -143,7 +143,7 @@ Calls' `test/vxpipe/calls/diagnostics`, and Console's
 `test/integration/configured_latency_diagnostics_test.exs`. Run focused tests from
 the owning child application while iterating. Configured fixtures use local
 provider transports; they are not live-provider acceptance. The
-[milestone](../../../labnotes/milestones/passive-call-latency-diagnostics.md)
+[milestone](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/passive-call-latency-diagnostics.md)
 separately requires labelled acoustic accuracy, paired on/off load, Scribe/browser
 acceptance and final umbrella gates. No live Telnyx tests belong to this milestone.
 

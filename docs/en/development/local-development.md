@@ -132,7 +132,7 @@ directory, and `../vxpipe-docs` is the website checkout of `HashNuke/vxpipe-web`
 
 Keep code, focused checks and documentation together in coherent commits. Read
 [`AGENTS.md`](../../../AGENTS.md) for repository rules. Implementation milestones
-and dated evidence live under `labnotes/`, outside the handbook. See
+and dated evidence live under `~/notes/vxpipe/labnotes/`, outside the handbook. See
 [Testing and verification](testing.md) for required checks.
 
 ## Write documentation

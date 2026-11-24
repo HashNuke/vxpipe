@@ -207,7 +207,7 @@ Your account when no administrative destination is available. Self-account
 writes and connection list/revoke operations derive ownership from the current
 session; they do not accept a target user from the page.
 
-The [Personal settings and MCP consent milestone](../../../labnotes/milestones/personal-settings-and-mcp-consent.md)
+The [Personal settings and MCP consent milestone](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/personal-settings-and-mcp-consent.md)
 tracks the production route/sidebar cutover, self-account behavior, CIMD/DCR
 branding and OAuth completion integration. Its checklist records the real-app
 and protocol acceptance evidence.

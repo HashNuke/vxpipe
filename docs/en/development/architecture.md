@@ -116,4 +116,4 @@ delivery work. Existing reusable boundaries do not establish a published package
 
 Current source boundaries are visible in [`apps/`](../../../apps). Acceptance
 commands and evidence limits are in [Testing and verification](testing.md);
-historical checkpoint results remain in [milestones](../../../labnotes/milestones/index.md).
+historical checkpoint results remain in [milestones](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/index.md).

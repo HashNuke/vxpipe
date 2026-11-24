@@ -49,7 +49,7 @@ retrying. Changing the setting does not delete earlier reports.
 
 The browser acceptance calls verified both room-service and operational Silero
 with Scribe. The reported durations and resource costs are informational.
-[Verification evidence](../../../labnotes/20261120-0423-vad-milestone-verification.md).
+[Verification evidence](https://github.com/HashNuke/notes/blob/main/vxpipe/labnotes/20261120-0423-vad-milestone-verification.md).
 
 The first live acceptance profile is human ElevenLabs Scribe v2 Realtime input
 over browser WebRTC with local Silero off and on. Offline fixtures do not establish

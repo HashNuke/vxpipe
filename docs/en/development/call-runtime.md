@@ -150,4 +150,4 @@ their owning boundaries. Native WebRTC and controlled carrier tests verify
 transport composition; real carrier audibility remains a separate live gate.
 The transfer wait-sound milestone still retains its explicitly open acceptance
 items. See [Testing and verification](testing.md) and the
-[milestone index](../../../labnotes/milestones/index.md).
+[milestone index](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/index.md).
