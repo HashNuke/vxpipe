@@ -252,6 +252,26 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       await("far leg hears the repeat prompt", 12_000, fn ->
         remote_phrase?(fixture, outgoing, "repeat")
       end)
+
+      agent = Map.fetch!(incoming.plan.participants, "assistant")
+
+      [{voice, _}] =
+        Registry.lookup(
+          CallEngine.RoomRegistry,
+          {:text_to_speech, incoming.incarnation_id, agent.participant_id}
+        )
+
+      # Reproduce the session-closed notification observed on the QA handset.
+      send(voice, {:vxpipe_speech_closed, :sys.get_state(voice).session, :session_failed})
+
+      await(
+        "carrier plays the callback and ends the caller leg after agent voice loss",
+        20_000,
+        fn ->
+          handset_leg_evidence(incoming, "announcement_completed") and
+            handset_leg_evidence(incoming, "carrier_ended")
+        end
+      )
     after
       cleanup(fixture.tenant.key)
     end

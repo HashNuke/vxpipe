@@ -250,3 +250,32 @@ readiness message then confirmed the intended receiver.
 The receiver window expired without a confirmed spoken trigger. No transfer
 outcome was established. The runner restored both loaned numbers and the
 post-restore plan found both on the QA app.
+
+### Handset transfer trial on QA release source `8329df30`
+
+The coordinated runner admitted the operator's call on the designated
+Rocksalt receiver. They said “transfer test” and heard the transfer
+announcement. On ring-out they heard “We have lost the audio connection,
+please call back.” Before admitting the second test, the runner verified
+`transfer_unanswered`, callback playback completion and `carrier_ended` on
+the original leg. Perceived silence and fault-to-audibility time were not
+measured on this call.
+
+On the second handset call the caller interrupted the speaking agent, said
+the trigger, and heard silence. At 11:46:53 UTC the text-to-speech allocation
+reported `session_failed`; the room notified the established phone media
+process of `agent_unavailable`. That process exited with `media_unavailable`
+without signalling carrier recovery. The runner expired waiting for the
+confirmed trigger and did not inject its test fault or verify a bridge.
+The underlying reason for the provider session closure is unknown.
+
+A configured gateway regression disconnected the voice transport on an
+established call. It failed waiting for a carrier transfer announcement, then
+passed after the media process handed agent and speech-output unavailability to
+the surviving leg through the same main-media eligibility check. The harness
+observed the announcement before a single linked dial. The live Scribe/Telnyx
+case subsequently replaced the recognizer, transcribed the repeat prompt on
+the remote leg, injected the observed voice-session closure, and verified
+signed callback completion and carrier termination (one test, zero failures).
+Both Rocksalt numbers returned to QA. This live check exercised the callback
+branch. The successful handset bridge still needs independent evidence.

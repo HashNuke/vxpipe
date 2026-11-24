@@ -774,6 +774,25 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
         "cause" => cause
       })
 
+  @tag initial_outcome: :ready, caller_recovery: true, recovery_transfer: true
+  test "losing the agent voice on an established call announces the configured carrier transfer",
+       context do
+    {_speech, _socket, voice} = start_recovery_media(context)
+    TestTextToSpeechTransport.disconnect(voice, :session_failed)
+
+    assert_receive {:test_transfer_announcement, "inbound-call-control", id}, 2_000
+    refute_received {:test_linked_dial, _}
+
+    assert post_fixture(context, "call-playback-ended", %{
+             "status" => "completed",
+             "client_state" => Base.encode64(id)
+           }).status == 200
+
+    assert_receive {:test_linked_dial, request}, 2_000
+    assert request.caller == "inbound-call-control"
+    refute_received {:test_transfer_announcement, _, _}
+  end
+
   for fault <- [:recognizer_disconnected, :media_crash, :storage_outage] do
     @tag initial_outcome: :ready, caller_recovery: fault
     test "caller hears the carrier exit after #{fault}", context do

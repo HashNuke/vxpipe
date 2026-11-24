@@ -459,13 +459,18 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       do: {:noreply, %{state | cue_grant: nil}}
 
   def handle_info(
-        {:vxpipe_connection_unavailable, :speech_to_text_unavailable},
+        {:vxpipe_connection_unavailable, reason},
         %{attachment: %{admission: :main}, binding: %{provider: :telnyx}, private_media: nil} =
           state
-      ) do
+      )
+      when reason in [
+             :speech_to_text_unavailable,
+             :text_to_speech_unavailable,
+             :agent_unavailable
+           ] do
     if recovery_eligible?(state) do
-      # Keep this signal ordered before this process's DOWN. The leg can be
-      # waiting on another media frame while the recognizer fails.
+      # Deliver the failure before this process's DOWN, even when the leg
+      # is waiting on another media frame.
       send(state.binding.leg, {:caller_media_failed, self(), state.binding})
     end
 

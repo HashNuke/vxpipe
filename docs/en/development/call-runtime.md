@@ -167,8 +167,11 @@ milliseconds, and recognizer generations. A completed prompt means the
 output sink reported completion. A completed repeat means the fresh
 recognizer delivered a final turn.
 
-A media failure or exhausted recovery can trigger the carrier announcement
-and, when configured, a transfer to a human. The English recordings apply to
+If the agent loses speech output on an eligible main Telnyx connection, the
+phone media process asks the surviving carrier leg to play the announcement
+before it stops. Confirmed agent unavailability takes the same path. A
+configured transfer destination lets Telnyx connect the caller to a human;
+without one, it plays the callback recording and ends the call. The English recordings apply to
 an English or unspecified recognition language.
 
 Inspect the leg's `caller_recovery` field in call details. An announcement request
