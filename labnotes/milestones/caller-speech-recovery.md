@@ -70,7 +70,9 @@ dial preserves the caller leg for the callback. The second handset call lost
 agent speech output before the runner observed its spoken trigger; it did
 not establish an answered transfer. A configured regression now covers the
 carrier handoff on agent voice failure. A live two-number test verified
-callback completion and caller hangup after that failure.
+callback completion and caller hangup after that failure. The handset runner now
+requires durable managed cleanup and separately identified terminal usage for
+both attempts. This stronger check still needs a coordinated handset run.
 
 ## C. Restore recognition while room audio remains usable
 

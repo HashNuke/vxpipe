@@ -470,6 +470,10 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         await("original caller leg is terminal", 10_000, fn ->
           handset_leg_evidence(incoming, "carrier_ended")
         end)
+
+        await("managed cleanup and terminal usage for both transfer legs", 15_000, fn ->
+          transfer_settled?(incoming, binding, outcome)
+        end)
       end
     after
       cleanup(fixture.tenant.key)
@@ -535,6 +539,65 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       fact.kind == :agent_turn_completed and fact.participant_id == agent and
         fact.payload["outcome"] == "completed" and MapSet.member?(questions, fact.correlation_id)
     end)
+  end
+
+  defp transfer_settled?(incoming, binding, outcome) do
+    alias Vxpipe.Persistence.Schema.{Call, TelephonyLeg, UsageObservation}
+
+    call = Repo.get_by!(Call, public_id: incoming.id)
+
+    leg =
+      Repo.get_by!(TelephonyLeg,
+        call_id: call.id,
+        provider_call_leg_id: binding.provider_call_leg_id
+      )
+
+    peer = get_in(leg.recovery, ["transfer_requested", "command_id"])
+
+    if call.state == :ended and call.gateway_cleanup_required and
+         match?(%DateTime{}, call.gateway_cleanup_completed_at) and leg.state == "ended" and
+         is_binary(peer) do
+      observations = Repo.all_by(UsageObservation, call_id: call.id, capability: :telephony)
+      transfer_usage_complete?(observations, binding, peer, outcome)
+    else
+      false
+    end
+  end
+
+  defp transfer_usage_complete?(observations, binding, peer, outcome) do
+    caller = binding.client_state_leg_id
+    session = binding.provider_call_session_id
+    original_leg = binding.provider_call_leg_id
+    expected = if outcome == :answered, do: :succeeded, else: :failed
+
+    terminals =
+      observations
+      |> Enum.reject(&(&1.outcome == :in_progress))
+      |> Enum.group_by(& &1.attempt_id)
+
+    case terminals do
+      %{
+        ^caller => [
+          %{
+            outcome: :succeeded,
+            delivery_id: first,
+            provider: %{"operation_id" => ^original_leg, "session_id" => ^session}
+          }
+        ],
+        ^peer => [
+          %{
+            outcome: ^expected,
+            delivery_id: second,
+            provider: %{"operation_id" => linked_leg, "session_id" => ^session}
+          }
+        ]
+      } ->
+        is_binary(first) and is_binary(second) and first != second and
+          is_binary(linked_leg) and linked_leg != original_leg
+
+      _ ->
+        false
+    end
   end
 
   defp handset_leg_evidence(call, phase) do
@@ -987,6 +1050,42 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
              &(&1.kind == :tool_call_completed and
                  &1.payload["name"] == "transfer" and
                  &1.payload["result"]["status"] == "completed")
+           )
+  end
+
+  test "the transfer gate requires independent carrier terminal evidence for both attempts" do
+    caller = %{
+      attempt_id: "caller",
+      provider: %{"operation_id" => "original-leg", "session_id" => "session"},
+      outcome: :succeeded,
+      delivery_id: "caller-hangup"
+    }
+
+    peer = %{
+      caller
+      | attempt_id: "peer",
+        provider: %{"operation_id" => "linked-leg", "session_id" => "session"},
+        delivery_id: "peer-hangup"
+    }
+
+    binding = %{
+      client_state_leg_id: "caller",
+      provider_call_leg_id: "original-leg",
+      provider_call_session_id: "session"
+    }
+
+    check = &transfer_usage_complete?(&1, binding, "peer", &2)
+    assert check.([caller, peer], :answered)
+    assert check.([caller, %{peer | outcome: :failed}], :unanswered)
+    refute check.([caller], :answered)
+    refute check.([caller, peer, peer], :answered)
+    refute check.([caller, peer], :unanswered)
+    refute check.([caller, %{peer | provider: caller.provider}], :answered)
+    refute check.([caller, %{peer | delivery_id: caller.delivery_id}], :answered)
+
+    refute check.(
+             [caller, %{peer | provider: %{peer.provider | "session_id" => "other"}}],
+             :answered
            )
   end
 

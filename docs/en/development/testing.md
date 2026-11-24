@@ -151,7 +151,11 @@ a separate handset and says “transfer test” after the greeting. The first di
 rings out. When the test reports ready for the second call, the operator calls
 again and repeats the phrase. After the destination greeting, the operator
 says “bridge test” to verify audio crossed the human bridge. Both destination
-scenarios use the other machine-owned number.
+scenarios use the other machine-owned number. After hangup the runner waits
+for managed cleanup and checks the original call's stored carrier usage. The
+caller and linked destination each need one terminal observation from a
+distinct carrier event in the same session. Ring-out expects a failed
+destination attempt and an answered bridge expects a successful one.
 
 After ring-out has passed, set `VXPIPE_LIVE_HANDSET_WINDOW=repeat_and_transfer`
 with the same test selector to exercise recognition recovery and the answered
