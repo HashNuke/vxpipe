@@ -202,3 +202,16 @@ test” utterance triggers media loss. The second pool number has no receiving
 route for the first attempt and a controlled answering route for the second.
 The fixture publication test passed for both roles. Actual transfer outcomes
 still require the coordinated handset window.
+
+QA deployed `615f6975` with a successful public health check. The live number
+plan reported both Rocksalt numbers available on QA. All umbrella children
+except Console passed in the umbrella run. That run had loaded Console test
+support before the handset fixture was added. The full Console rerun on the
+final source passed (678 tests, 141 excluded). Formatting, warnings-as-errors
+compilation, strict Credo, unused dependency checks and Lean passed.
+
+Exercised call-spec and release rollback against a disposable database with
+the actual QA images. Release `9e320582` published an original spec, release
+`615f6975` enabled the transfer destination in a new revision, and the prior
+release republished the original source. Each step verified the effective
+inbound route. This rehearsal did not switch shared QA traffic.
