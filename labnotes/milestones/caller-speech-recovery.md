@@ -89,11 +89,21 @@ matrix are still open.
 - [ ] Record source generation, trigger, classified failure or unknown cause, cue request/playout, readiness, repeat, carrier command and terminal evidence with turn/leg correlation and monotonic timings. Keep transcripts, credentials, phone numbers and audio out of diagnostic labels. Distinguish server playback evidence, carrier acknowledgement and handset listening. Make the sequence inspectable with existing call details.
 - [x] Add scoped QA fault injection via test dependencies/harness: drop STT after barge-in, delay a final on a healthy stream, fail replacement readiness and suppress a playback completion. Keep injection unavailable to ordinary callers. Use synthetic equivalents of the gardening/commercial questions and a short acknowledgment as a healthy control.
 - [ ] On a real QA handset run healthy, recovered, announced-disconnect, successful transfer and unanswered-transfer cases. Record perceived silence, exact prompt heard, whether the repeat was captured, number of agent answers and confirmed final disposition. Measure fault-to-first-audible-cue and total time to recovery/exit against the checkpoint budgets. Verify no competing voices or silent active leg after a recoverable carrier outcome. Redact sensitive data from evidence.
-- [ ] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Gate broader rollout on handset evidence and an exercised rollback to the prior call spec/compatible release.
+- [x] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Gate broader rollout on handset evidence and an exercised rollback to the prior call spec/compatible release.
 
 The remaining handset repeat and answered-transfer checks can use one
 coordinated call to the pool receiver. The test waits for spoken consent and
 uses an authenticated carrier bridge event and destination-side transcription.
 The operator records audibility and perceived delays. [Handset procedure](../../docs/en/development/testing.md)
 
-QA deployed release `615f6975` and returned HTTP 200 on its public health check. In a disposable database, the previous QA release published the original inbound spec, the deployed release published a revision with a recovery destination, and the previous release (`9e320582`) republished the original source. Inbound route resolution selected the expected revision at each step. Shared QA continued serving the new release.
+QA is running `4f1283be`. Its public health endpoint returned HTTP 200. The
+umbrella suite reported 6,571 tests and zero failures. Formatting,
+warnings-as-errors compilation, strict Credo, unused-dependency checks and
+the Lean verification lane passed. The later single-call test runner change
+(`9fab161e`) passed the Console suite with 679 tests. The handset gate above
+still controls broader rollout. [Operator troubleshooting](../../docs/en/development/call-runtime.md#diagnosing-a-caller-left-in-silence)
+
+The release rollback rehearsal used a disposable database. Release `9e320582`
+published the original inbound spec. Release `615f6975` enabled a recovery
+destination, then the previous release republished the original source.
+Inbound route resolution selected the expected revision at each step.

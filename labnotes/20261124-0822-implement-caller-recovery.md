@@ -308,3 +308,9 @@ correlated with the commercial-property question. Saying “transfer now”
 allows the same caller to continue to the answered bridge. A local regression
 checks that an unrelated acknowledgement cannot count as the answer and that
 duplicate completed answers are detected. Human audibility remains unverified.
+
+Reconciled the QA release gate against the running container revision
+(`4f1283be`), successful public health probe, 6,571-test umbrella result,
+and a fresh successful Lean verification. Release verification and the
+isolated rollback rehearsal are complete. The broader rollout gate remains
+open pending handset acceptance.
