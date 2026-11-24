@@ -120,7 +120,7 @@ matrix are still open.
 
 ## D. Prove the caller experience and operability
 
-- [ ] Record source generation, trigger, classified failure or unknown cause, cue request/playout, readiness, repeat, carrier command and terminal evidence with turn/leg correlation and monotonic timings. Keep transcripts, credentials, phone numbers and audio out of diagnostic labels. Distinguish server playback evidence, carrier acknowledgement and handset listening. Make the sequence inspectable with existing call details.
+- [x] Record source generation, trigger, classified failure or unknown cause, cue request/playout, readiness, repeat, carrier command and terminal evidence with turn/leg correlation and monotonic timings. Keep transcripts, credentials, phone numbers and audio out of diagnostic labels. Distinguish server playback evidence, carrier acknowledgement and handset listening. Make the sequence inspectable with existing call details.
 - [x] Add scoped QA fault injection via test dependencies/harness: drop STT after barge-in, delay a final on a healthy stream, fail replacement readiness and suppress a playback completion. Keep injection unavailable to ordinary callers. Use synthetic equivalents of the gardening/commercial questions and a short acknowledgment as a healthy control.
 - [ ] On a real QA handset run healthy, recovered, announced-disconnect, successful transfer and unanswered-transfer cases. Record perceived silence, exact prompt heard, whether the repeat was captured, number of agent answers and confirmed final disposition. Measure fault-to-first-audible-cue and total time to recovery/exit against the checkpoint budgets. Verify no competing voices or silent active leg after a recoverable carrier outcome. Redact sensitive data from evidence.
 - [x] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Gate broader rollout on handset evidence and an exercised rollback to the prior call spec/compatible release.
@@ -128,6 +128,15 @@ matrix are still open.
 Call details expose the original carrier owner's monotonic phase offsets under
 each leg's `caller_recovery`. Queued journal retries retain the first offset.
 Terminal evidence reconciled without the owner carries its wall timestamp only.
+Room recovery facts identify the original and replacement generations, turn,
+connection, trigger, elapsed time, and cue and repeat outcomes. The carrier
+journal is attached to the original leg. The operator procedure distinguishes
+sink playout, carrier completion and handset listening.
+
+QA deployment of `b1dfb19f` included the carrier phase offsets and linked-leg
+terminal usage fix. The fresh umbrella run executed 6,148 tests with zero
+failures (435 excluded). The running container's revision matched the commit
+and the public health endpoint returned HTTP 200.
 
 The remaining handset repeat and answered-transfer checks can use one
 coordinated call to the pool receiver. The test waits for spoken consent and
