@@ -471,7 +471,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
     if recovery_eligible?(state) do
       # Deliver the failure before this process's DOWN, even when the leg
       # is waiting on another media frame.
-      send(state.binding.leg, {:caller_media_failed, self(), state.binding})
+      send(state.binding.leg, {:caller_media_failed, self(), state.binding, reason})
     end
 
     {:stop, :media_unavailable, state}

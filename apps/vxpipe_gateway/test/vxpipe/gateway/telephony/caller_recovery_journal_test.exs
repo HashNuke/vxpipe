@@ -7,7 +7,9 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournalTest do
     writes = start_supervised!({Agent, fn -> %{} end})
     claim = %{tenant: "tenant", call: "call", incarnation: "incarnation"}
     deadline = ~U[2026-11-24 12:00:00Z]
-    journal = Journal.new({__MODULE__, writes}, claim, "inbound-leg", deadline)
+
+    journal =
+      Journal.new({__MODULE__, writes}, claim, "inbound-leg", deadline, :media_process_lost)
 
     phases = %{
       "recovery-inbound-leg" =>
@@ -30,7 +32,12 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournalTest do
       assert Journal.retry(settled, pending.retry) == settled
       assert Journal.record(settled, phase) == settled
 
-      assert Agent.get(writes, &Map.fetch!(&1, phase)) ==
+      entry =
+        if phase in [:announcement_requested, :transfer_announcement_requested],
+          do: {phase, :media_process_lost},
+          else: phase
+
+      assert Agent.get(writes, &Map.fetch!(&1, entry)) ==
                List.duplicate({claim, command, deadline}, 2)
     end
   end

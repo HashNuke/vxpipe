@@ -22,40 +22,51 @@ defmodule Vxpipe.Calls do
     end
   end
 
+  @announcement_entries for phase <- [:announcement_requested, :transfer_announcement_requested],
+                            reason <- [
+                              :agent_unavailable,
+                              :speech_to_text_unavailable,
+                              :text_to_speech_unavailable,
+                              :media_process_lost
+                            ],
+                            do: {phase, reason}
+  @recovery_entries @announcement_entries ++
+                      [
+                        :transfer_announcement_requested,
+                        :transfer_announcement_completed,
+                        :transfer_announcement_failed,
+                        :transfer_announcement_unknown,
+                        :transfer_requested,
+                        :transfer_bridged,
+                        :transfer_failed,
+                        :transfer_busy,
+                        :transfer_rejected,
+                        :transfer_unanswered,
+                        :transfer_unknown,
+                        :transfer_abandoned,
+                        :announcement_requested,
+                        :announcement_completed,
+                        :announcement_failed,
+                        :announcement_unknown,
+                        :hangup_requested,
+                        :carrier_ended,
+                        :carrier_unknown
+                      ]
+
   @doc "Records exact-leg recovery evidence for an authenticated inbound call."
   def record_caller_recovery(
         %Vxpipe.Calls.TelephonyAdmissionClaim{} = claim,
-        phase,
+        entry,
         command_id,
         %DateTime{} = deadline,
         options
       )
-      when phase in [
-             :transfer_announcement_requested,
-             :transfer_announcement_completed,
-             :transfer_announcement_failed,
-             :transfer_announcement_unknown,
-             :transfer_requested,
-             :transfer_bridged,
-             :transfer_failed,
-             :transfer_busy,
-             :transfer_rejected,
-             :transfer_unanswered,
-             :transfer_unknown,
-             :transfer_abandoned,
-             :announcement_requested,
-             :announcement_completed,
-             :announcement_failed,
-             :announcement_unknown,
-             :hangup_requested,
-             :carrier_ended,
-             :carrier_unknown
-           ] and
+      when entry in @recovery_entries and
              is_binary(command_id) and byte_size(command_id) in 1..160 do
     with {:ok, repository} <- Vxpipe.Calls.Repositories.fetch(options, :call_repository) do
       Vxpipe.Calls.Repositories.call(repository, :record_caller_recovery, [
         claim,
-        phase,
+        entry,
         command_id,
         deadline
       ])

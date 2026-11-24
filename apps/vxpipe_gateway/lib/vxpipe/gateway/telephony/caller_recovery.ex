@@ -24,15 +24,20 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
   end
 
   def handle_info(
-        {:caller_media_failed, media, binding},
+        {:caller_media_failed, media, binding, reason},
         %{
           status: :running,
           recovery_journal: nil,
           caller_media: {media, _, true},
           incoming_identity: %{binding: binding}
         } = state
-      ),
-      do: {:continue, start(state, binding)}
+      )
+      when reason in [
+             :speech_to_text_unavailable,
+             :text_to_speech_unavailable,
+             :agent_unavailable
+           ],
+      do: {:continue, start(state, binding, reason)}
 
   def handle_info(
         {:caller_media_eligible, media, eligible?},
@@ -52,7 +57,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
         not match?({:shutdown, _}, reason)
 
     if eligible? and unexpected? and state.status == :running and is_nil(state.recovery_journal) do
-      {:continue, start(state, state.incoming_identity.binding)}
+      {:continue, start(state, state.incoming_identity.binding, :media_process_lost)}
     else
       {:continue, state}
     end
@@ -202,7 +207,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
 
   def watch_media(state, _event), do: state
 
-  defp start(state, binding) do
+  defp start(state, binding, reason) do
     deadline = System.monotonic_time(:millisecond) + @exit_budget_ms
     Process.send_after(self(), :caller_carrier_deadline, deadline, abs: true)
 
@@ -211,7 +216,8 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
         state.backend,
         state.claim,
         binding.client_state_leg_id,
-        DateTime.add(DateTime.utc_now(), @exit_budget_ms, :millisecond)
+        DateTime.add(DateTime.utc_now(), @exit_budget_ms, :millisecond),
+        reason
       )
 
     anchor = %{

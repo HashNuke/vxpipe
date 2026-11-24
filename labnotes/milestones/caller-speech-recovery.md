@@ -22,6 +22,8 @@ First acceptance profile is an established inbound, main-media, English-language
 - [ ] Treat original temporary leg-owner death and node restart as separate failure scopes. A reconciler may reload durable attempt metadata and match signed terminal events to an exact binding. It cannot recreate a leg owner or claim cleanup membership from a stored row. Without a living fenced owner or conclusive carrier evidence, record unresolved disposition for operator follow-up. Test worker death after send, owner death before/after send and node restart with delayed callbacks; assert who can issue effects and who can acknowledge cleanup.
 - [x] Gate: fake carrier covers accepted, rejected, timeout, duplicate/reordered/missing callbacks, worker death after command send and concurrent remote hangup. Real handset hears the complete callback recording before disconnect. Confirm terminal carrier evidence and matching stored leg/call state.
 
+The initial announcement intent now carries the classified media failure. An unexpected media process exit records `media_process_lost`. Retries retain the first recorded reason and deadline.
+
 A real Telnyx-to-Telnyx call passed the callback-and-end test. The far leg
 transcribed the initial greeting, the incoming room lost both recognizers,
 Telnyx confirmed completion of the callback recording, and both rooms ended.

@@ -10,13 +10,20 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
     :claim,
     :deadline,
     :command,
+    :reason,
     pending: [],
     recorded: MapSet.new(),
     retry: nil
   ]
 
-  def new(backend, claim, leg_id, deadline) do
-    %__MODULE__{backend: backend, claim: claim, command: leg_id, deadline: deadline}
+  def new(backend, claim, leg_id, deadline, reason) do
+    %__MODULE__{
+      backend: backend,
+      claim: claim,
+      command: leg_id,
+      deadline: deadline,
+      reason: reason
+    }
   end
 
   def record(nil, _phase), do: nil
@@ -104,13 +111,19 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
     prefix <> journal.command
   end
 
+  defp entry(journal, phase)
+       when phase in [:announcement_requested, :transfer_announcement_requested],
+       do: {phase, journal.reason}
+
+  defp entry(_journal, phase), do: phase
+
   defp persist(%{backend: {module, context}} = journal, phase) do
     task =
       Task.Supervisor.async_nolink(@supervisor, fn ->
         module.record_caller_recovery(
           context,
           journal.claim,
-          phase,
+          entry(journal, phase),
           command_id(journal, phase),
           journal.deadline
         )

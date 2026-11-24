@@ -175,7 +175,10 @@ without one, it plays the callback recording and ends the call. The English reco
 an English or unspecified recognition language.
 
 Inspect the leg's `caller_recovery` field in call details. An announcement request
-records the intent to play. Completion requires a matching carrier event.
+records the intent to play. Its optional `reason` identifies the failure
+observed at handoff: `speech_to_text_unavailable`, `text_to_speech_unavailable`,
+`agent_unavailable`, or `media_process_lost` for an unexpected media-process
+exit. Older records may omit the reason. Completion requires a matching carrier event.
 After a transfer announcement, a signed callee decline produces
 `transfer_rejected`, a busy line produces `transfer_busy`, and a ring-out
 produces `transfer_unanswered`. When the caller leg remains available, each

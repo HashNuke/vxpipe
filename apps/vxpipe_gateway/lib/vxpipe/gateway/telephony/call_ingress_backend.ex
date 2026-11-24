@@ -60,7 +60,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
   @callback record_caller_recovery(
               context(),
               TelephonyAdmissionClaim.t(),
-              atom(),
+              Vxpipe.Calls.CallRepository.recovery_entry(),
               String.t(),
               DateTime.t()
             ) ::

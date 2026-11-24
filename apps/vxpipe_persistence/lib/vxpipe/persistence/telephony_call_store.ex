@@ -127,18 +127,26 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
 
   defp termination_intent(%{
          "announcement_requested" => %{"command_id" => "recovery-" <> leg, "deadline" => deadline}
-       }), do: {"hangup-" <> leg, deadline}
+       }),
+       do: {"hangup-" <> leg, deadline}
 
   defp termination_intent(%{
          "transfer_announcement_requested" => %{
            "command_id" => "recovery-transfer-" <> leg,
            "deadline" => deadline
          }
-       }), do: {"hangup-" <> leg, deadline}
+       }),
+       do: {"hangup-" <> leg, deadline}
 
   defp termination_intent(_evidence), do: nil
 
-  def record_caller_recovery(repo, claim, phase, command_id, deadline) do
+  def record_caller_recovery(repo, claim, entry, command_id, deadline) do
+    {phase, details} =
+      case entry do
+        {phase, reason} -> {phase, %{"reason" => Atom.to_string(reason)}}
+        phase -> {phase, %{}}
+      end
+
     result =
       project_lifecycle(repo, claim, fn repo, call, leg ->
         if leg.incarnation_id == claim.call.incarnation_id and call.incarnation_binding_verified and
@@ -149,7 +157,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
             "recorded_at" => DateTime.to_iso8601(DateTime.utc_now())
           }
 
-          evidence = Map.put_new(leg.recovery, Atom.to_string(phase), record)
+          evidence = Map.put_new(leg.recovery, Atom.to_string(phase), Map.merge(record, details))
           state = if phase == :carrier_ended, do: "ended", else: leg.state
 
           with {:ok, _leg} <-

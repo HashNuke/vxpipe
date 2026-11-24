@@ -789,6 +789,11 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     TestTextToSpeechTransport.disconnect(voice, :session_failed)
 
     assert_receive {:test_transfer_announcement, "inbound-call-control", id}, 2_000
+
+    assert {:caller_recovery_reason, :agent_unavailable, id} in TelephonyHarnessBackend.operations(
+             context.backend
+           )
+
     refute_received {:test_linked_dial, _}
 
     assert post_fixture(context, "call-playback-ended", %{
@@ -830,6 +835,15 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
                context.backend
              )
 
+      reason =
+        if unquote(fault) == :media_crash,
+          do: :media_process_lost,
+          else: :speech_to_text_unavailable
+
+      assert {:caller_recovery_reason, reason, command_id} in TelephonyHarnessBackend.operations(
+               context.backend
+             )
+
       refute_received {:test_telephony_end_leg, _}
 
       assert post_fixture(context, "call-playback-ended", %{
@@ -845,6 +859,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
              }).status == 200
 
       assert_receive {:test_telephony_end_leg, request}, 2_000
+      assert request.reason == reason
       assert request.leg.leg_id == @incoming_leg_id
 
       assert post_fixture(context, "call-playback-ended", %{
@@ -1081,7 +1096,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     assert_receive {:test_telephony_end_pending, worker}, 2_000
 
     try do
-      send(leg, {:caller_media_failed, media, binding})
+      send(leg, {:caller_media_failed, media, binding, :agent_unavailable})
       state = :sys.get_state(leg)
       assert state.room_closed?
       assert state.status == :closing

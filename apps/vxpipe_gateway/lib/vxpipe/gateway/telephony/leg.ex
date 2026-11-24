@@ -125,7 +125,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
          %{id: id} when id == event.playback_id <- state.recovery do
       case CallerRecovery.playback_result(state, event.playback_outcome) do
         {:continue, state} -> {:reply, :ok, state}
-        {:end, state} -> {:reply, :ok, close(state, :speech_to_text_unavailable)}
+        {:end, state} -> {:reply, :ok, close(state, state.recovery_journal.reason)}
       end
     else
       {:error, _} = error -> {:reply, error, state}
@@ -275,7 +275,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   def handle_info(message, state) do
     case CallerRecovery.handle_info(message, state) do
       {:continue, state} -> maybe_retire(state)
-      {:end, state} -> maybe_retire(close(state, :speech_to_text_unavailable))
+      {:end, state} -> maybe_retire(close(state, state.recovery_journal.reason))
       {:end, state, reason} -> maybe_retire(close(state, reason))
       :unhandled -> handle_leg_info(message, state)
     end

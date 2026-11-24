@@ -328,3 +328,5 @@ delayed partial, final, and close from the old session leave it active. Only
 the fresh final emits a completed turn. The recognition suite passed all
 10 tests. The configured gateway repeat test independently observed one
 agent request on the same media socket (one test passed).
+
+The established-media failure notification dropped the room’s classification before carrier handoff. A gateway voice-failure assertion and a PostgreSQL journal assertion reproduced the loss. The leg now records the bounded cause on its opening announcement intent, including transfer announcements, and carries it into its end request. Unexpected process loss has a separate classification. The PostgreSQL suite passed all 11 tests, including duplicate writes with an unchanged first deadline. The initial combined gateway run had two failures during media startup and repeat-prompt handling. The unchanged gateway harness and journal suite then passed all 53 tests. This rerun does not establish the cause of the intermittent failures.

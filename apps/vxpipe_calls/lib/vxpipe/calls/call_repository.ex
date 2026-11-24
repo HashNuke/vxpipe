@@ -4,6 +4,13 @@ defmodule Vxpipe.Calls.CallRepository do
   alias Vxpipe.Calls.{AdmissionClaim, JoinToken, PreparedCall, TelephonyAdmissionClaim}
 
   @type context :: term()
+  @type recovery_entry ::
+          atom()
+          | {:announcement_requested | :transfer_announcement_requested,
+             :agent_unavailable
+             | :speech_to_text_unavailable
+             | :text_to_speech_unavailable
+             | :media_process_lost}
 
   @doc "Traverses unresolved cleanup in finite keyset cycles; never loads plans or creates runtime ownership."
   @callback scan_call_cleanup(context(), Vxpipe.Calls.CallCleanupScan.cursor(), pos_integer()) ::
@@ -21,7 +28,7 @@ defmodule Vxpipe.Calls.CallRepository do
   @callback record_caller_recovery(
               context(),
               Vxpipe.Calls.TelephonyAdmissionClaim.t(),
-              atom(),
+              recovery_entry(),
               String.t(),
               DateTime.t()
             ) ::
