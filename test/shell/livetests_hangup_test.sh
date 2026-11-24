@@ -179,7 +179,7 @@ reset_api() {
   {"call_control_id":"v3:ended","call_leg_id":"ended","connection_id":"app-a","active":false,"from":"+13125550142","to":"+14155550199"}
 ]
 JSON
-  echo '[{"phone_number":"+13125550100","connection_id":"app-a","tags":["vxpipe-test-rocksalt-other","vxpipe-test"]},{"phone_number":"+13125550142","connection_id":"app-a","tags":["vxpipe-test-rocksalt","vxpipe-test"]},{"phone_number":"+13125550143","connection_id":"app-b","tags":["vxpipe-test-rocksalt","vxpipe-test"]}]' > "$scratch/api/telnyx-numbers.json"
+  echo '[{"phone_number":"+13125550100","connection_id":"app-a","tags":["vxpipe-test-rocksalt-other","vxpipe-test"]},{"phone_number":"+13125550142","connection_id":"app-a","tags":["vxpipe-rocksalt","vxp-rocksalt-test"]},{"phone_number":"+13125550143","connection_id":"app-b","tags":["vxpipe-rocksalt","vxp-rocksalt-test"]}]' > "$scratch/api/telnyx-numbers.json"
   cat > "$scratch/api/twilio.json" <<'JSON'
 [
   {"sid":"CAactive1","status":"in-progress","from":"+14155550199","to":"+13125550142"},

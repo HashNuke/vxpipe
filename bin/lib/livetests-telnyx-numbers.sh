@@ -13,6 +13,12 @@ telnyx_number_inventory() {
   jq -c 'unique_by(.id)' <<< "$numbers"
 }
 
+# Both stable tags are required for a number to participate in this machine's tests.
+telnyx_test_inventory() {
+  telnyx_number_inventory | jq -ce --arg machine "$telnyx_machine_tag" --arg test "$telnyx_test_tag" '
+    [.[] | select((.tags // []) | contains([$machine, $test]))]'
+}
+
 buy_telnyx_number() {
   local app_id="$1" candidate number attempt
   candidate="$(telnyx_api GET "/available_phone_numbers?filter[country_code]=US&filter[phone_number_type]=local&filter[features][]=voice&filter[limit]=1" |
@@ -33,8 +39,8 @@ buy_telnyx_number() {
 
 ensure_telnyx_numbers() {
   local mode="$1" purchase="$2" app_id="$3" inventory profile='{}' roles role id number wanted
-  local selected='{}' temp profile_path="$node_dir/telnyx-profile.json"
-  inventory="$(telnyx_number_inventory)" || return 2
+  local bought=false selected='{}' temp profile_path="$node_dir/telnyx-profile.json"
+  inventory="$(telnyx_test_inventory)" || return 2
   if [[ -f "$profile_path" ]]; then
     profile="$(jq -ce --arg app "$app_id" 'select(.application_id == $app)' "$profile_path" 2>/dev/null)" || profile='{}'
   fi
@@ -47,17 +53,16 @@ ensure_telnyx_numbers() {
     | if .caller == .receiver then .receiver = "" else . end' <<< "$inventory")" || return 2
 
   for role in caller receiver; do
+    bought=false
     id="$(jq -r --arg role "$role" '.[$role]' <<< "$roles")"
     number="$(jq -c --arg id "$id" 'first(.[] | select(.id == $id)) // empty' <<< "$inventory")"
     if [[ -z "$number" ]]; then
-      number="$(jq -c --arg app "$app_id" --arg machine "$telnyx_machine_tag" --arg pool "$telnyx_pool_tag" \
+      number="$(jq -c --arg app "$app_id" \
         --arg mode "$mode" --argjson roles "$roles" '
         [.[] | select(.status == "active" and .id != $roles.caller and .id != $roles.receiver)
           | if .connection_id == $app then . + {priority: 0}
             elif $mode != "check" and ((.connection_id // "") == "") then
-              if ((.tags // []) | index($machine)) != null then . + {priority: 1}
-              elif ((.tags // []) | index($pool)) != null then . + {priority: 2}
-              else empty end
+              . + {priority: 1}
             else empty end]
         | sort_by(.priority, .phone_number, .id) | first // empty' <<< "$inventory")" || return 2
     fi
@@ -68,21 +73,22 @@ ensure_telnyx_numbers() {
         return 1
       }
       number="$(buy_telnyx_number "$app_id")" || return 2
+      bought=true
     fi
 
     id="$(jq -r .id <<< "$number")"
     if [[ "$mode" != check ]]; then
       # A snapshot is not permission to take a number another app has since claimed.
       number="$(telnyx_api GET "/phone_numbers/$id" | jq -ce .data)" || return 2
-      jq -e --arg id "$id" --arg app "$app_id" '
+      jq -e --arg id "$id" --arg app "$app_id" --argjson bought "$bought" --arg machine "$telnyx_machine_tag" --arg test "$telnyx_test_tag" '
         .id == $id and .status == "active" and
+        (($bought and .connection_id == $app) or ((.tags // []) | contains([$machine, $test]))) and
         (.connection_id == $app or ((.connection_id // "") == ""))' <<< "$number" > /dev/null || {
         carrier_error "Telnyx number assignment changed during discovery; re-run telephony:provision"
         return 2
       }
-      # Move machine affinity when reusing a shared number; preserve unrelated tags.
-      wanted="$(jq -c --arg app "$app_id" --arg machine "$telnyx_machine_tag" --arg pool "$telnyx_pool_tag" \
-        '{connection_id: $app, tags: (((.tags // [] | map(select(startswith($pool + "-") | not))) + [$machine, $pool]) | unique)}' <<< "$number")" || return 2
+      wanted="$(jq -c --arg app "$app_id" --arg machine "$telnyx_machine_tag" --arg test "$telnyx_test_tag" \
+        '{connection_id: $app, tags: (((.tags // []) + [$machine, $test]) | unique)}' <<< "$number")" || return 2
       if ! jq -e --argjson wanted "$wanted" \
         '.connection_id == $wanted.connection_id and ((.tags // [] | sort) == $wanted.tags)' <<< "$number" > /dev/null; then
         number="$(telnyx_api PATCH "/phone_numbers/$id" "$wanted" | jq -ce .data)" || return 2

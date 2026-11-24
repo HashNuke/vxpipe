@@ -114,23 +114,33 @@ bin/livetests run --only live_telnyx
 `telephony:provision` discovers/creates machine resources; number purchase requires
 its explicit `--allow-purchase` flag and separate authorization for that expense.
 
-Telnyx numbers use `vxpipe-test` for the shared test pool and
-`vxpipe-test-<machine>` for machine affinity. Provisioning keeps numbers already
-assigned to the machine's Voice API application, then fills its two-number
-requirement with active, unassigned numbers from the machine pool first and the
-shared pool second. A number present in both pools is counted once. Numbers
-assigned to another application are never taken; only the remaining shortage
-may be purchased with `--allow-purchase`.
+Telnyx numbers available to the test runner carry two stable tags.
+`vxpipe-<machine>` identifies the machine, and `vxp-<machine>-test` marks the
+number as eligible for its live tests. Provisioning keeps eligible numbers
+assigned to `vxpipe-<machine>-test` and fills missing roles from active,
+unassigned numbers carrying both tags. The runner tags new purchases with both.
+Caller and receiver IDs are saved in the local `telnyx-profile.json`. The
+Tailscale node and outbound profile use `vxp-test-<machine>`.
 
-Selected numbers receive both tags. Reusing a shared number moves its machine
-tag to the current machine while preserving unrelated tags. Caller and receiver
-roles are saved as number IDs in
-`$XDG_STATE_HOME/vxpipe/livetests/vxp-test-<machine>/telnyx-profile.json`
-(default state root: `~/.local/state`). The profile is checked against Telnyx on
-each run and can be rebuilt from application assignments when absent. Status
-and test runs do not change carrier resources or write the profile. The Voice
-API application, outbound profile and Tailscale node retain their
-`vxp-test-<machine>` names.
+For a scheduled test window, `bin/livetests telnyx:numbers plan` counts eligible
+numbers on `vxpipe-<machine>-qa`. Borrowing routes their incoming calls to the
+test application until restoration. Both tags and unrelated tags stay in place.
+For an existing deployment, rename the two Telnyx Call Control applications in
+place and apply both tags to the intended numbers before using the runner.
+
+```bash
+(
+  set -e
+  trap 'bin/livetests telnyx:numbers restore' EXIT
+  bin/livetests telnyx:numbers borrow
+  bin/livetests run --only live_telephony_caller_recovery apps/vxpipe_console/test/integration/live_telephony_test.exs
+)
+```
+
+A private journal records the original application IDs and number IDs before the
+first assignment changes. After an interrupted run, use `restore` from the same
+machine and branch. Each switch verifies the live application names, number tags
+and assignment. A third-party reassignment requires operator reconciliation.
 
 Live work reserves the named Git branch across checkouts. Before switching away,
 finish live activity and run `bin/livetests release`. A failed test retains the

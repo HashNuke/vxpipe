@@ -30,6 +30,10 @@ Commands:
                             outbound profile and two numbers, and Twilio number,
                             and point them at this machine. Buys numbers only
                             with --allow-purchase. Safe to re-run.
+  telnyx:numbers plan|borrow [QA-application]
+                            Preview or move active QA numbers to this machine's
+                            existing test application (QA defaults to vxpipe-<machine>-qa).
+  telnyx:numbers restore    Return only the numbers saved by the last borrow.
   telephony:status          Show this machine's carrier resources (read-only).
   telephony:hangup [--all-calls]
                             End this machine's calls on configured carriers.
@@ -101,8 +105,10 @@ machine_name() {
 }
 
 node_name="vxp-test-$(machine_name)"
-telnyx_pool_tag="vxpipe-test"
-telnyx_machine_tag="$telnyx_pool_tag-$(machine_name)"
+telnyx_machine_tag="vxpipe-$(machine_name)"
+telnyx_test_tag="vxp-$(machine_name)-test"
+telnyx_test_app="$telnyx_machine_tag-test"
+telnyx_qa_app="$telnyx_machine_tag-qa"
 node_dir="$state_root/$node_name"
 ts_socket="$node_dir/tailscaled.sock"
 ts_pidfile="$node_dir/tailscaled.pid"
@@ -409,24 +415,24 @@ ensure_telnyx_profile() {
 
 ensure_telnyx_app() {
   local mode="$1" profile_id="$2" webhook="$3" app wanted
-  app="$(telnyx_api GET "/call_control_applications?filter[application_name][contains]=$node_name" |
-    exact_by application_name "$node_name")" || return 2
+  app="$(telnyx_api GET "/call_control_applications?filter[application_name][contains]=$telnyx_test_app" |
+    exact_by application_name "$telnyx_test_app")" || return 2
   wanted="$(jq -nc --arg w "$webhook" --arg p "$profile_id" \
     '{webhook_event_url: $w, webhook_api_version: "2", call_cost_in_webhooks: true, outbound: {outbound_voice_profile_id: $p}}')"
   if [[ -z "$app" ]]; then
     [[ "$mode" == check ]] && return 1
     app="$(telnyx_api POST /call_control_applications \
-      "$(jq -c --arg n "$node_name" '. + {application_name: $n}' <<< "$wanted")" | jq -c .data)" || return 2
-    report telnyx "voice API application" "created $node_name"
+      "$(jq -c --arg n "$telnyx_test_app" '. + {application_name: $n}' <<< "$wanted")" | jq -c .data)" || return 2
+    report telnyx "voice API application" "created $telnyx_test_app"
   elif [[ "$(jq -r '.webhook_event_url' <<< "$app")" != "$webhook" ||
     "$(jq -r '.webhook_api_version' <<< "$app")" != "2" ||
     "$(jq -r '.call_cost_in_webhooks' <<< "$app")" != "true" ||
     "$(jq -r '.outbound.outbound_voice_profile_id' <<< "$app")" != "$profile_id" ]]; then
-    [[ "$mode" == check ]] && { carrier_error "Telnyx application $node_name is not wired to this machine; run bin/livetests telephony:provision"; return 2; }
+    [[ "$mode" == check ]] && { carrier_error "Telnyx application $telnyx_test_app is not wired to this machine; run bin/livetests telephony:provision"; return 2; }
     app="$(telnyx_api PATCH "/call_control_applications/$(jq -r .id <<< "$app")" "$wanted" | jq -c .data)" || return 2
-    report telnyx "voice API application" "updated $node_name"
+    report telnyx "voice API application" "updated $telnyx_test_app"
   else
-    report telnyx "voice API application" "found $node_name ($(jq -r .id <<< "$app"))"
+    report telnyx "voice API application" "found $telnyx_test_app ($(jq -r .id <<< "$app"))"
   fi
   jq -r .id <<< "$app"
 }
@@ -637,6 +643,10 @@ case "$command" in
   tools:down) tools_down ;;
   tools:status) tools_status ;;
   telephony:provision) telephony_provision "$@" ;;
+  telnyx:numbers)
+    source "$repo_root/bin/lib/livetests-telnyx-switch.sh"
+    switch_telnyx_numbers "$@"
+    ;;
   telephony:status) telephony_status ;;
   telephony:hangup|telnyx:hangup|twilio:hangup)
     # shellcheck source=bin/lib/livetests-call-cleanup.sh
