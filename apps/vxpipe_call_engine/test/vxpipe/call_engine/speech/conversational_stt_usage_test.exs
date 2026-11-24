@@ -161,14 +161,45 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTUsageTest do
         assert_receive {:recognizer, fresh, _}
         assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :connected}}
 
+        repeat = make_ref()
+
+        assert :ok =
+                 GenServer.call(fresh, {:emit, :transcript, [turn_ref: repeat, text: "repeated"]})
+
+        assert_receive {:vxpipe_stt_signal, ^capability, _,
+                        %{kind: :transcript_updated, text: "repeated", turn_ref: fresh_turn}}
+
+        delayed = %Event{
+          session: session,
+          generation: session.generation,
+          kind: :turn_ended,
+          turn_ref: turn,
+          text: "retired final",
+          endpointing: :provider_gap
+        }
+
+        send(
+          capability,
+          {:vxpipe_speech, %{delayed | kind: :transcript, text: "retired partial"}}
+        )
+
+        send(capability, {:vxpipe_speech, delayed})
+        send(capability, {:vxpipe_speech_closed, session, :session_failed})
+        assert :sys.get_state(capability).session == replacement
+        refute_received {:vxpipe_stt_signal, ^capability, _, %{text: "retired partial"}}
+        refute_received {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_ended}}
+
         assert :ok =
                  GenServer.call(
                    fresh,
-                   {:emit, :transcript, [turn_ref: make_ref(), text: "repeated"]}
+                   {:emit, :turn_ended,
+                    [turn_ref: repeat, text: "fresh final", endpointing: :provider_gap]}
                  )
 
         assert_receive {:vxpipe_stt_signal, ^capability, _,
-                        %{kind: :transcript_updated, text: "repeated"}}
+                        %{kind: :turn_ended, turn_ref: ^fresh_turn, text: "fresh final"}}
+
+        refute_received {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_ended}}
       else
         assert result == {:error, :stale_stall}
         assert :sys.get_state(capability).session == session

@@ -321,3 +321,10 @@ from the originally bound media process to the leg. The leg stayed closing
 with no recovery journal, playback, or dial. The focused run included recovery
 before room shutdown, explicit platform hangup, a busy leg with queued media
 loss, and six transfer outcomes (10 tests, zero failures).
+
+Verified both sides of the recognizer cutover. A final arriving before
+retirement cancels replacement. After replacement starts a fresh turn, a
+delayed partial, final, and close from the old session leave it active. Only
+the fresh final emits a completed turn. The recognition suite passed all
+10 tests. The configured gateway repeat test independently observed one
+agent request on the same media socket (one test passed).

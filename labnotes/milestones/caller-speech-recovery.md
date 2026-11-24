@@ -78,6 +78,9 @@ fresh Scribe allocation after an injected offset deadline. The test waits for
 both caller-specific recordings to finish before submitting the repeat and
 observes one agent request. Separate tests exercise resumed speech, a final
 before cutover, readiness timeout, missing repeat and replacement failure.
+The recognition test delivers an old partial, final and session-close notification
+after the replacement has started transcribing the repeated question. The fresh
+session stays active and emits exactly one completed turn, from its own final.
 A two-participant room-authority test also covers an expiring repeat prompt
 during hold and during private briefing. Only the affected caller receives a
 stop command, and a delayed playout failure cannot interrupt the other participant
