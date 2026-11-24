@@ -14,6 +14,33 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert {:error, :output_unavailable} = OutputArbiter.clear_for_caller_recovery(output)
   end
 
+  test "caller recovery waits for the native sink to clear conversation playback" do
+    {output, native} = start_output()
+    assert :ok = OutputSink.push(output, %{direct("agent") | audio_scope: :conversation})
+    assert_receive {:pace, ^native, tick}
+    clear = :gen_server.send_request(output, :clear_for_caller_recovery)
+    _ = :sys.get_state(output)
+    assert :timeout = :gen_server.wait_response(clear, 0)
+    send(native, tick)
+    assert {:reply, {:ok, 0}} = :gen_server.wait_response(clear, 1_000)
+  end
+
+  test "caller recovery preserves both queued and playing private audio" do
+    {output, native} = start_output()
+    assert {:ok, binding} = OutputArbiter.bind_room(output, identity())
+    assert :ok = OutputArbiter.push_room(output, binding, mixed(0))
+    assert_receive {:pace, ^native, tick}
+    private = :gen_server.send_request(output, {:vxpipe_audio_output, direct("briefing")})
+
+    assert {:error, :output_unavailable} = OutputArbiter.clear_for_caller_recovery(output)
+    assert :timeout = :gen_server.wait_response(private, 0)
+    send(native, tick)
+    assert {:reply, :ok} = :gen_server.wait_response(private, 1_000)
+    assert_receive {:vxpipe_audio_playback, ^output, "briefing", :started}
+    assert {:error, :output_unavailable} = OutputArbiter.clear_for_caller_recovery(output)
+    assert :ok = OutputSink.finish(output, "briefing", self())
+  end
+
   test "collects private output readiness while room binding and hold change independently" do
     alias Vxpipe.CallEngine.Readiness.Collector
 

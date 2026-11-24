@@ -81,8 +81,8 @@ The stronger handset check still needs a coordinated call.
 - [x] Expose operational acoustic transitions from ConversationalSTT independently of canonical caller-turn events. Carry allocation generation, input source epoch, segment sequence and sample index, anchored to a monotonic capture timestamp and sample rate for that epoch. Reject events from retired sources, duplicate segments and late inference from an earlier generation. Emit resumed speech even if the same transcript turn stays open. Test speech → confirmed offset → new speech without text → original timer expiry, with diagnostics off. The original timer must be inert.
 - [x] Begin with the completed caller question and delayed final transcript in a configured-room test. Maintain an explicit active-turn identity and consume operational speech-end evidence. Trial 4 s of waiting from acoustic end, accounting for offset confirmation time. Disarm on resumed speech, normal completion, source change or caller departure. Long speech, ordinary silence before a turn, and passive-only VAD must never fire the timer.
 - [x] Route confirmed STT failure immediately according to path health. If ingress and output can remain bound independently of the failed recognizer, preserve audio and attempt recovery. If room media is lost or its output cannot play the cue, yield to A/B. Define the recovery decision before the current connection-unavailable notification tears down the path.
-- [ ] Play a prepared system cue (“One moment, I’m having trouble hearing you”). Deliver both prompts only to the affected caller's current main output. Arbitrate with that sink's existing playback and wait for clear acknowledgement before injecting audio. Leave other sinks and participants’ playback alone. Hold or private briefing withdraws eligibility, cancels pending prompts and fences delayed callbacks; recheck source ownership on return. Where a caller-only route cannot be established, skip the cue and use the carrier exit only for an eligible failed main leg. Test a second participant and private briefing for disclosure and unintended output cancellation. Start one fresh allocation for this participant on the pinned configuration. Require provider readiness and successful ingress binding within a proposed 5 s from recovery start. Escalate a second failure within this recovery episode. Never replay buffered caller audio across generations.
-- [ ] Define the atomic decision point between accepting a late valid final and retiring the old allocation. Normal completion before this point cancels pending effects; later old partials, finals, timers and readiness are discarded. On successful replacement ask once, “I missed that last part. Could you repeat it?” Admit fresh caller input while the prompt plays and stop the prompt on new speech. Keep interrupted/lost input and system messages out of agent-authored history and bill actual usage once.
+- [x] Play a prepared system cue (“One moment, I’m having trouble hearing you”). Deliver both prompts only to the affected caller's current main output. Arbitrate with that sink's existing playback and wait for clear acknowledgement before injecting audio. Leave other sinks and participants’ playback alone. Hold or private briefing withdraws eligibility, cancels pending prompts and fences delayed callbacks; recheck source ownership on return. Where a caller-only route cannot be established, skip the cue and use the carrier exit only for an eligible failed main leg. Test a second participant and private briefing for disclosure and unintended output cancellation. Start one fresh allocation for this participant on the pinned configuration. Require provider readiness and successful ingress binding within a proposed 5 s from recovery start. Escalate a second failure within this recovery episode. Never replay buffered caller audio across generations.
+- [x] Define the atomic decision point between accepting a late valid final and retiring the old allocation. Normal completion before this point cancels pending effects; later old partials, finals, timers and readiness are discarded. On successful replacement ask once, “I missed that last part. Could you repeat it?” Admit fresh caller input while the prompt plays and stop the prompt on new speech. Keep interrupted/lost input and system messages out of agent-authored history and bill actual usage once.
 - [ ] Gate: controlled-clock tests for late final on each side of cutover, continued speech, missing transcript, provider crash, stale media events, repeated failure, hangup, transfer and hold. One accepted repeated question produces exactly one answer. Recovery leaves unrelated participants and tools intact. On cue failure or readiness timeout the caller enters A/B once.
 
 ### Deadlines and episode boundaries
@@ -112,11 +112,20 @@ before cutover, readiness timeout, missing repeat and replacement failure.
 The recognition test delivers an old partial, final and session-close notification
 after the replacement has started transcribing the repeated question. The fresh
 session stays active and emits exactly one completed turn, from its own final.
+At cutover, the usage reporter closes the original attempt as failed. A late
+old final carrying 85 ms of audio produces no billable measurement. A 20 ms
+fresh final yields one audio measurement and one text measurement on the new
+attempt. These are provider-usage observations, independent of handset audibility.
 A two-participant room-authority test also covers an expiring repeat prompt
 during hold and during private briefing. Only the affected caller receives a
 stop command, and a delayed playout failure cannot interrupt the other participant
-or trigger carrier exit. Handset evidence and the full checkpoint acceptance
-matrix are still open.
+or trigger carrier exit. The sink test waits for native clear acknowledgement
+and exercises recovery while private frames are queued and playing. During
+repeat playout, a packet sent through the caller’s Telnyx media socket reaches
+the replacement Scribe transport as PCM before recognition results are injected.
+A signed caller hangup during replacement admission ends the room, recognizer
+and carrier owner without a second exit. Handset evidence and the full
+checkpoint acceptance matrix are still open.
 
 ## D. Prove the caller experience and operability
 

@@ -155,6 +155,12 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTUsageTest do
       result = SpeechToText.replace_stalled(capability, session, turn, offset)
 
       if @outcome == :replace do
+        assert_receive {:vxpipe_usage_observations, ^capability, [original]}
+        assert_receive {:vxpipe_usage_observations, ^capability, [closed]}
+        assert original.outcome == :in_progress
+        assert closed.outcome == :failed
+        assert closed.attempt_id == original.attempt_id
+
         assert {:ok, replacement} = result
         refute replacement == session
         assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}
@@ -169,12 +175,17 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTUsageTest do
         assert_receive {:vxpipe_stt_signal, ^capability, _,
                         %{kind: :transcript_updated, text: "repeated", turn_ref: fresh_turn}}
 
+        assert_receive {:vxpipe_usage_observations, ^capability, [fresh_attempt]}
+        assert fresh_attempt.outcome == :in_progress
+        refute fresh_attempt.attempt_id == original.attempt_id
+
         delayed = %Event{
           session: session,
           generation: session.generation,
           kind: :turn_ended,
           turn_ref: turn,
           text: "retired final",
+          audio_duration_ms: 85,
           endpointing: :provider_gap
         }
 
@@ -193,12 +204,23 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTUsageTest do
                  GenServer.call(
                    fresh,
                    {:emit, :turn_ended,
-                    [turn_ref: repeat, text: "fresh final", endpointing: :provider_gap]}
+                    [
+                      turn_ref: repeat,
+                      text: "fresh final",
+                      audio_duration_ms: 20,
+                      endpointing: :provider_gap
+                    ]}
                  )
 
         assert_receive {:vxpipe_stt_signal, ^capability, _,
                         %{kind: :turn_ended, turn_ref: ^fresh_turn, text: "fresh final"}}
 
+        assert_receive {:vxpipe_usage_observations, ^capability, measurements}
+        assert [audio, text] = Enum.sort_by(measurements, & &1.measurement.component)
+        assert audio.measurement.quantity == 20
+        assert text.measurement.quantity == String.length("fresh final")
+        assert Enum.all?(measurements, &(&1.attempt_id == fresh_attempt.attempt_id))
+        refute_received {:vxpipe_usage_observations, ^capability, _duplicate}
         refute_received {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_ended}}
       else
         assert result == {:error, :stale_stall}

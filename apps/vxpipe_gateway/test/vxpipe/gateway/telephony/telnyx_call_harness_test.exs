@@ -415,10 +415,15 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
   @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
   test "speaking during the repeat prompt sends only the fresh question to the agent",
        context do
-    {room, replacement, _socket} = start_stalled_recovery(context)
+    {room, replacement, socket} = start_stalled_recovery(context)
     wire = Vxpipe.CallEngine.TestElevenLabsScribeTransport
     wire.deliver(replacement, {:ready, "fresh-scribe"})
     await_recovery_phase(room, :repeat, System.monotonic_time(:millisecond) + 9_000)
+
+    # A phone packet must reach the new provider before we inject recognition results.
+    send_caller_audio(socket)
+    assert_receive {:scribe_audio, ^replacement, pcm}, 2_000
+    assert byte_size(pcm) > 0
 
     question = "Do you serve office buildings?"
     wire.deliver(replacement, {:partial, question})
@@ -449,6 +454,26 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     GenServer.stop(replacement, :normal)
     assert_receive {:test_recovery_playback, "inbound-call-control", _id}, 2_000
     refute_received {:scribe_started, _}
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
+  test "a caller hangup during replacement admission retires recognition and carrier ownership",
+       context do
+    {room, replacement, _socket} = start_stalled_recovery(context)
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+    leg_monitor = Process.monitor(leg)
+    room_monitor = Process.monitor(room)
+    wire_monitor = Process.monitor(replacement)
+
+    assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
+             200
+
+    assert_receive {:DOWN, ^room_monitor, :process, ^room, {:shutdown, :remote_hangup}}, 2_000
+    assert_receive {:DOWN, ^wire_monitor, :process, ^replacement, _reason}, 2_000
+    assert_receive {:DOWN, ^leg_monitor, :process, ^leg, :normal}, 2_000
+    refute_received {:scribe_started, _}
+    refute_received {:test_recovery_playback, _, _}
+    refute_received {:test_telephony_end_leg, _}
   end
 
   for failure <- [:readiness_timeout, :no_repeat, :replacement_failure] do
@@ -1746,6 +1771,11 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
   end
 
   defp assert_caller_audio(stt_transport, socket) do
+    payload = send_caller_audio(socket)
+    assert_receive {:test_stt_audio, ^stt_transport, ^payload}, 2_000
+  end
+
+  defp send_caller_audio(socket) do
     encoder = Membrane.Opus.Encoder.Native.create(16_000, 1, 2_048, -1_000, 3_001)
 
     assert {:ok, payload} =
@@ -1770,7 +1800,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     assert {:ok, _socket} =
              TestTelephonySocket.input(socket, {JSON.encode!(message), opcode: :text})
 
-    assert_receive {:test_stt_audio, ^stt_transport, ^payload}, 2_000
+    payload
   end
 
   defp turn_message(event, sequence, transcript, trigger \\ nil) do
