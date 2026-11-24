@@ -653,6 +653,10 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
                           %{leg: %{provider_call_control_id: "peer-control"}}},
                          2_000
 
+          refute {:caller_recovery, :transfer_abandoned, request.id} in TelephonyHarnessBackend.operations(
+                   context.backend
+                 )
+
           assert peer_event(context, request.id, "call.hangup").status == 200
 
         outcome when outcome in [:no_answer, :busy, :rejected] ->
@@ -695,6 +699,10 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
           assert_receive {:test_telephony_end_leg,
                           %{leg: %{provider_call_control_id: "peer-control"}}},
                          2_000
+
+          assert {:caller_recovery, :transfer_abandoned, request.id} in TelephonyHarnessBackend.operations(
+                   context.backend
+                 )
 
           assert peer_event(context, request.id, "call.hangup").status == 200
           refute_received {:test_recovery_playback, _, _}

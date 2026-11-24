@@ -208,6 +208,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     with :ok <- matching_event(state.claim, event) do
       state =
         state
+        |> CallerRecovery.abandon_transfer()
         |> CallerRecovery.journal(:carrier_ended)
         |> CallerRecovery.cancel()
         |> observe_usage(event)

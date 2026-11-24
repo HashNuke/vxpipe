@@ -21,4 +21,4 @@ A participant-scoped operational Silero offset may arm a stall timer. Scribe rem
 - An onset-based timeout would interrupt long questions. Scoring short backchannels solves a different problem and remains in the [voice milestone](../../labnotes/milestones/voice-agent-turns-and-listening.md).
 - Replaying audio into a fresh session risks duplicate answers and transferring private or retired audio. Request a repeat once fresh recognition is ready.
 
-Verification so far consists of the incident timeline, existing source boundaries and specification review. Implementation, carrier interoperability and handset audibility are acceptance gates below the linked milestone.
+The two-number Telnyx test verified replacement of a live ElevenLabs recognizer on the same caller connection. A remote listener transcribed the repeat prompt. A separate handset trial verified that an unanswered transfer preserved the caller leg for callback playback and hangup. The answered handset bridge and one audible answer to a repeated question remain open. [Implementation and acceptance evidence](../../labnotes/milestones/caller-speech-recovery.md)

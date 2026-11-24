@@ -284,3 +284,12 @@ The umbrella reported 6,570 tests with zero failures. Formatting,
 warnings-as-errors compilation, strict Credo, unused dependencies and Lean
 also passed. The QA container revision matched `d28a2f25`. Its public
 health endpoint returned HTTP 200 after startup.
+
+On the gateway harness, the signed caller hangup during ringing ended the
+destination but did not journal the transfer outcome. Added a regression
+requiring `transfer_abandoned` with the original linked dial command ID and
+observed it fail. The original leg now records abandonment before retiring a
+pending peer. Ending an established bridge retains its successful outcome.
+The transfer harness covers six outcomes. The worker-loss cases separately
+verify a signed playback completion after worker death and a bounded same-ID
+end retry that preserves uncertain command drainage.

@@ -20,8 +20,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
   end
 
   def handle_info({:hangup_caller_recovery, binding}, %{recovery: %{binding: binding}} = state) do
-    state = if state.recovery.peer, do: journal(state, :transfer_abandoned), else: state
-    {:end, state, :api_hangup}
+    {:end, abandon_transfer(state), :api_hangup}
   end
 
   def handle_info(
@@ -404,6 +403,12 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
     timer = Process.send_after(self(), {:caller_recovery_expired, token}, expires, abs: true)
     Map.merge(recovery, %{token: token, timer: timer})
   end
+
+  def abandon_transfer(%{recovery: %{peer: peer, phase: phase}} = state)
+      when is_pid(peer) and phase != :bridged,
+      do: journal(state, :transfer_abandoned)
+
+  def abandon_transfer(state), do: state
 
   def cancel(%{recovery: nil} = state), do: state
 
