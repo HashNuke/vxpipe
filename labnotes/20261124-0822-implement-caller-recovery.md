@@ -330,3 +330,20 @@ the fresh final emits a completed turn. The recognition suite passed all
 agent request on the same media socket (one test passed).
 
 The established-media failure notification dropped the room’s classification before carrier handoff. A gateway voice-failure assertion and a PostgreSQL journal assertion reproduced the loss. The leg now records the bounded cause on its opening announcement intent, including transfer announcements, and carries it into its end request. Unexpected process loss has a separate classification. The PostgreSQL suite passed all 11 tests, including duplicate writes with an unchanged first deadline. The initial combined gateway run had two failures during media startup and repeat-prompt handling. The unchanged gateway harness and journal suite then passed all 53 tests. This rerun does not establish the cause of the intermittent failures.
+
+A cold-restart drill used two independent BEAM VMs and a disposable PostgreSQL
+database. The first persisted an inbound leg, pinned tenant-local service and
+opening announcement intent, then exited. The second found an expired intent
+with no room or leg owner. The mounted webhook initially returned HTTP 503 on
+the older service format. Those plans pin service and credential IDs but lack
+the later credential-owner and credential-name fields.
+
+The webhook now resolves that tenant service, requires an exact match to the
+pinned reference and uses its registered Telnyx verification key. The cold VM
+rejected a wrong signature with HTTP 401, accepted the matching signed hangup
+with HTTP 200 and marked the leg ended. No outbound hangup intent was created,
+the leg supervisor remained empty and the call retained a null gateway cleanup
+acknowledgement. The disposable database was removed after verification.
+The mounted route covers both credential formats and rejects a changed
+credential ID. Together with owner death before/after playback submission and
+HTTP-worker death after send, 13 focused Gateway cases passed.

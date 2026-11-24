@@ -19,8 +19,16 @@ First acceptance profile is an established inbound, main-media, English-language
 - [x] Have the original leg owner accept carrier-recovery ownership for the current binding before initiating AI room teardown. Serialize media loss, room DOWN and carrier commands in that owner. Once accepted, room DOWN retires AI resources while carrier playback, ringing or a human bridge continues. If room DOWN wins before handoff, run ordinary leg termination; stale recovery cannot reopen a closing leg. An explicit whole-call hangup overrides either owner state and ends every owned leg. Test both message orders and simultaneous hangup.
 - [x] While its original owner lives, bind each effect to one tenant/call/incarnation/leg/attempt/phase. Journal intent before sending, with a 1 s storage budget inside the phase deadline. On unavailable or ambiguous storage, fall back to callback announcement and hangup on the known caller leg using stable command IDs retained by that owner. Suppress new dial/transfer effects until intent is durable. After a possibly submitted transfer, reconcile the existing effect under B. Retry evidence writes when storage returns; cleanup acknowledgement still requires durable final usage, drained commands and carrier evidence. Test write failure before first playback and ambiguous writes at each transition.
 - [x] On HTTP-worker death the surviving owner reads its journal (or retained degraded-state intent), checks for a matching callback, and reconciles only that effect. Model a bounded, same-ID termination retry explicitly even when the old worker left command drainage unknown. Preserve the outstanding drainage evidence independently of this retry. Deduplicate late replies and never assert successful drainage from a new worker alone.
-- [ ] Treat original temporary leg-owner death and node restart as separate failure scopes. A reconciler may reload durable attempt metadata and match signed terminal events to an exact binding. It cannot recreate a leg owner or claim cleanup membership from a stored row. Without a living fenced owner or conclusive carrier evidence, record unresolved disposition for operator follow-up. Test worker death after send, owner death before/after send and node restart with delayed callbacks; assert who can issue effects and who can acknowledge cleanup.
+- [x] Treat original temporary leg-owner death and node restart as separate failure scopes. A reconciler may reload durable attempt metadata and match signed terminal events to an exact binding. It cannot recreate a leg owner or claim cleanup membership from a stored row. Without a living fenced owner or conclusive carrier evidence, record unresolved disposition for operator follow-up. Test worker death after send, owner death before/after send and node restart with delayed callbacks; assert who can issue effects and who can acknowledge cleanup.
 - [x] Gate: fake carrier covers accepted, rejected, timeout, duplicate/reordered/missing callbacks, worker death after command send and concurrent remote hangup. Real handset hears the complete callback recording before disconnect. Confirm terminal carrier evidence and matching stored leg/call state.
+
+A cold-restart drill wrote the opening intent to disposable PostgreSQL, stopped
+the VM, and submitted a delayed callback to the mounted route on a fresh VM.
+The expired attempt remained unknown until the original service authenticated
+the hangup. The signed event ended the leg. The call retained its outstanding
+cleanup acknowledgement and the leg supervisor had no children. Focused tests
+also kill the live leg owner before and after playback submission and kill an
+HTTP worker while its carrier command is in flight.
 
 The initial announcement intent now carries the classified media failure. An unexpected media process exit records `media_process_lost`. Retries retain the first recorded reason and deadline.
 
@@ -101,7 +109,7 @@ coordinated call to the pool receiver. The test waits for spoken consent and
 uses an authenticated carrier bridge event and destination-side transcription.
 The operator records audibility and perceived delays. [Handset procedure](../../docs/en/development/testing.md)
 
-QA is running `4f1283be`. Its public health endpoint returned HTTP 200. The
+The QA release at `4f1283be` returned HTTP 200 on its public health endpoint. The
 umbrella suite reported 6,571 tests and zero failures. Formatting,
 warnings-as-errors compilation, strict Credo, unused-dependency checks and
 the Lean verification lane passed. The later single-call test runner change

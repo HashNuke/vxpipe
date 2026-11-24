@@ -33,42 +33,56 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
     }
   end
 
-  test "late carrier hangup authenticates against the retained leg and records only terminal evidence",
-       data do
-    reference = Vxpipe.Calls.TelephonyServices.reference(data.first.service)
+  for binding <- [:named, :legacy] do
+    test "late carrier hangup authenticates the #{binding} binding and records only terminal evidence",
+         data do
+      selected = recovery_snapshot(unquote(binding), data.first)
+      context = %{data.context | snapshots: [selected]}
+      reference = Vxpipe.Calls.TelephonyServices.reference(selected.service)
 
-    claim =
-      struct!(Vxpipe.Calls.TelephonyAdmissionClaim,
-        call: %{
-          tenant_key: @first,
-          plan: %{participants: %{"caller" => %{telephony_service: reference}}}
-        },
-        participant_ref: "caller",
-        participant_id: "part-test",
-        provider: :telnyx,
-        service: reference.name,
-        service_id: reference.service_id,
-        provider_event_id: "initial",
-        provider_connection_id: "first-app",
-        provider_call_control_id: "inbound-call-control",
-        provider_call_leg_id: "inbound-call-leg",
-        provider_call_session_id: "inbound-call-session",
-        accepted_at: DateTime.utc_now()
-      )
+      claim =
+        struct!(Vxpipe.Calls.TelephonyAdmissionClaim,
+          call: %{
+            tenant_key: @first,
+            plan: %{participants: %{"caller" => %{telephony_service: reference}}}
+          },
+          participant_ref: "caller",
+          participant_id: "part-test",
+          provider: :telnyx,
+          service: reference.name,
+          service_id: reference.service_id,
+          provider_event_id: "initial",
+          provider_connection_id: "first-app",
+          provider_call_control_id: "inbound-call-control",
+          provider_call_leg_id: "inbound-call-leg",
+          provider_call_session_id: "inbound-call-session",
+          accepted_at: DateTime.utc_now()
+        )
 
-    mount = mount(data.context, call_repository: {__MODULE__, {self(), claim}})
+      mount = mount(context, call_repository: {__MODULE__, {self(), claim}})
 
-    body =
-      Vxpipe.Gateway.TelnyxFixture.body("call-hangup-incoming", %{
-        "call_leg_id" => "inbound-call-leg"
-      })
-      |> String.replace("voice-application-harness", "first-app")
+      body =
+        Vxpipe.Gateway.TelnyxFixture.body("call-hangup-incoming", %{
+          "call_leg_id" => "inbound-call-leg"
+        })
+        |> String.replace("voice-application-harness", "first-app")
 
-    assert request(mount, :platform, body, data.tenant_private).status == 401
-    refute_received :terminal_recorded
-    assert request(mount, :platform, body, data.platform_private).status == 200
-    assert_received :terminal_recorded
-    refute_received {:event, _, _, _}
+      changed =
+        put_in(
+          claim.call.plan.participants["caller"].telephony_service.credential_id,
+          Vxpipe.Calls.PublicId.uuid()
+        )
+
+      mismatched = mount(context, call_repository: {__MODULE__, {self(), changed}})
+      assert request(mismatched, :platform, body, data.platform_private).status == 503
+      refute_received :terminal_recorded
+
+      assert request(mount, :platform, body, data.tenant_private).status == 401
+      refute_received :terminal_recorded
+      assert request(mount, :platform, body, data.platform_private).status == 200
+      assert_received :terminal_recorded
+      refute_received {:event, _, _, _}
+    end
   end
 
   def find_caller_recovery({_observer, claim}, :platform, %{kind: :ended}),
@@ -392,6 +406,31 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
           original.credential
           | credential: credential,
             payload: Map.put(original.credential.payload, "public_key", Base.encode64(public))
+        }
+    }
+  end
+
+  defp recovery_snapshot(:named, snapshot), do: snapshot
+
+  defp recovery_snapshot(:legacy, snapshot) do
+    tenant = snapshot.service.tenant_key
+
+    service = %{
+      snapshot.service
+      | credential_owner: nil,
+        credential_name: nil,
+        application_owner: nil
+    }
+
+    credential = %{snapshot.credential.credential | owner: {:tenant, tenant}, tenant_key: tenant}
+
+    %{
+      snapshot
+      | service: service,
+        credential: %{
+          snapshot.credential
+          | credential: credential,
+            payload: Map.delete(snapshot.credential.payload, "public_key")
         }
     }
   end
