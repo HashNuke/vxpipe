@@ -56,6 +56,28 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
   end
 
   @impl true
+  def dial_recovery_peer(options, request) do
+    with {:ok, connection} <- required_option(options, :provider_connection_id) do
+      payload = %{
+        "connection_id" => connection,
+        "from" => request.from,
+        "to" => request.to,
+        "link_to" => request.caller,
+        "bridge_on_answer" => true,
+        "prevent_double_bridge" => true,
+        "retry_on_timeout" => false,
+        "timeout_secs" => request.timeout_secs,
+        "webhook_url" => request.callback_url,
+        "webhook_url_method" => "POST",
+        "command_id" => request.id,
+        "client_state" => client_state(request.id)
+      }
+
+      VoiceClient.dial(options, payload) |> submission(nil)
+    end
+  end
+
+  @impl true
   def answer(options, %Answer{} = request) do
     with {:ok, _api_key} <- required_option(options, :api_key) do
       payload =
@@ -72,8 +94,13 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
   end
 
   @impl true
-  def play_recovery_prompt(options, control_id, command_id) do
-    file = Application.app_dir(:vxpipe_gateway, "priv/telephony/callback.wav")
+  def play_recovery_prompt(options, control_id, command_id),
+    do: play_recovery_prompt(options, control_id, command_id, :callback)
+
+  @impl true
+  def play_recovery_prompt(options, control_id, command_id, kind)
+      when kind in [:callback, :transfer] do
+    file = Application.app_dir(:vxpipe_gateway, "priv/telephony/#{kind}.wav")
 
     with {:ok, audio} <- File.read(file) do
       payload = %{

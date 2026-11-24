@@ -21,6 +21,9 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     }
   end
 
+  def clear_for_caller_recovery(output),
+    do: GenServer.call(output, :clear_for_caller_recovery, @timeout)
+
   def bind_room(output, identity), do: GenServer.call(output, {:bind_room, identity}, @timeout)
 
   def prepare_room(output, identity, options),
@@ -254,6 +257,21 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     end
   end
 
+  def handle_call(:clear_for_caller_recovery, {caller, _} = from, %{owner: caller} = state) do
+    protected? =
+      match?(%{audio_scope: :private}, state.current) or
+        match?({%{audio_scope: :private}, _}, state.pending_direct)
+
+    if state.held? or state.clearing? or state.draining? or protected? do
+      {:reply, {:error, :output_unavailable}, state}
+    else
+      {:noreply, clear(state, {:caller_recovery, from, state.generation})}
+    end
+  end
+
+  def handle_call(:clear_for_caller_recovery, _from, state),
+    do: {:reply, {:error, :output_unavailable}, state}
+
   def handle_call(:vxpipe_audio_output_clear, from, %{clearing?: false} = state),
     do: {:noreply, clear(state, {:clear, from})}
 
@@ -458,6 +476,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   defp response(action, {:ok, played}, state) do
     case action do
       {:clear, from} -> GenServer.reply(from, {:ok, played})
+      {:caller_recovery, from, generation} -> GenServer.reply(from, {:ok, generation})
       {:hold, from} -> GenServer.reply(from, :ok)
       {:bind, from, token} -> GenServer.reply(from, {:ok, token})
       :discard -> :ok
@@ -546,6 +565,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
       state.current ||
         %{
           kind: :direct,
+          audio_scope: frame.audio_scope,
           token: token(),
           turn: frame.correlation_id,
           callback: frame.reply_to,

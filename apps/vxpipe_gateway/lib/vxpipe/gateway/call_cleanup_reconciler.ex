@@ -86,6 +86,12 @@ defmodule Vxpipe.Gateway.CallCleanupReconciler do
   # revisits their durable intent instead of starving the rest of the page.
   defp finished(state, %{kind: :row}, _reason), do: dispatch(state)
 
+  defp finished(%{wake?: true} = state, %{kind: :carrier_expiry}, _reason),
+    do: scan(%{state | wake?: false})
+
+  defp finished(state, %{kind: :carrier_expiry}, _reason),
+    do: schedule(state, state.settings.interval_ms)
+
   defp scan(state) do
     cursor = state.cursor
     settings = state.settings
@@ -107,10 +113,16 @@ defmodule Vxpipe.Gateway.CallCleanupReconciler do
   end
 
   defp dispatch(%{queue: [], tasks: tasks} = state) when map_size(tasks) == 0 do
-    cond do
-      not is_nil(state.cursor) -> scan(state)
-      state.wake? -> scan(%{state | wake?: false})
-      true -> schedule(state, state.settings.interval_ms)
+    if state.cursor do
+      scan(state)
+    else
+      start_task(state, :carrier_expiry, fn ->
+        Calls.expire_caller_recoveries(
+          DateTime.utc_now(),
+          state.settings.page_size,
+          state.settings.calls_options
+        )
+      end)
     end
   end
 

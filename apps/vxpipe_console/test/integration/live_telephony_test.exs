@@ -139,6 +139,64 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     end
   end
 
+  @tag :live_providers
+  @tag :live_telephony_caller_recovery
+  @tag timeout: 90_000
+  test "a live Telnyx caller receives carrier callback playback after recognition fails",
+       context do
+    fixture = live_fixture(context)
+    app = Vxpipe.CallEngine.Application
+    configured = Application.fetch_env!(:vxpipe_call_engine, app)
+    providers = configured |> Keyword.fetch!(:speech_to_text) |> Keyword.fetch!(:providers)
+    wire = Vxpipe.CallEngine.TestElevenLabsScribeTransport
+
+    providers =
+      Map.put(providers, Vxpipe.Providers.ElevenLabs.STTSession,
+        enabled: true,
+        wire_module: wire,
+        wire_options: [observer: self()]
+      )
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      app,
+      put_in(configured, [:speech_to_text, :providers], providers)
+    )
+
+    pair = ConfiguredTelephonyFixture.publish_caller_recovery(fixture)
+
+    try do
+      outgoing = submit(fixture, pair.outgoing, pair.to)
+      incoming = await_incoming_call(fixture, pair.incoming)
+      assert_receive {:scribe_started, speech}, 10_000
+      wire.deliver(speech, {:ready, "carrier-recovery-test"})
+
+      await("caller hears the room greeting", 15_000, fn ->
+        remote_phrase?(fixture, outgoing, "bravo")
+      end)
+
+      GenServer.stop(speech, :normal)
+      assert_receive {:scribe_started, replacement}, 5_000
+      GenServer.stop(replacement, :normal)
+
+      await("signed Telnyx playback completion and carrier hangup", 20_000, fn ->
+        leg =
+          Repo.get_by(Vxpipe.Persistence.Schema.TelephonyLeg,
+            call_id: Repo.get_by!(Vxpipe.Persistence.Schema.Call, public_id: incoming.id).id
+          )
+
+        leg.state == "ended" and Map.has_key?(leg.recovery, "announcement_completed") and
+          Map.has_key?(leg.recovery, "carrier_ended")
+      end)
+
+      await("both call rooms reach terminal state", 15_000, fn ->
+        ended?(fixture, outgoing.id) and ended?(fixture, incoming.id)
+      end)
+    after
+      cleanup(fixture.tenant.key)
+    end
+  end
+
   # Shared carrier acceptance. GPT-Live remains the talk-over receiver because its
   # provider-owned overlap lets it interject while the counter is still speaking.
   @long_session_minutes String.to_integer(

@@ -27,6 +27,13 @@ defmodule Vxpipe.Gateway.CallCleanupReconcilerTest do
              )
   end
 
+  test "an empty runtime starts a bounded pass over durable carrier deadlines" do
+    reconciler()
+    assert_receive {:cleanup_scan, scan, nil, 2}
+    send(scan, {:scan_result, {:ok, %{items: [], next_cursor: nil}}})
+    assert_receive {:expire_carrier_attempts, %DateTime{}, 2}, 1_000
+  end
+
   test "unverified or absent intent cannot stop an active room or fabricate membership" do
     binding = room()
     service = reconciler()

@@ -66,24 +66,51 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryJournal do
     %{journal | retry: token}
   end
 
-  defp persist(%{backend: {module, context}} = journal, phase) do
+  def command_id(journal, phase) do
     prefix =
-      if phase in [
-           :announcement_requested,
-           :announcement_completed,
-           :announcement_failed,
-           :announcement_unknown
-         ],
-         do: "recovery-",
-         else: "hangup-"
+      cond do
+        phase in [
+          :announcement_requested,
+          :announcement_completed,
+          :announcement_failed,
+          :announcement_unknown
+        ] ->
+          "recovery-"
 
+        phase in [
+          :transfer_announcement_requested,
+          :transfer_announcement_completed,
+          :transfer_announcement_failed,
+          :transfer_announcement_unknown
+        ] ->
+          "recovery-transfer-"
+
+        phase in [
+          :transfer_requested,
+          :transfer_bridged,
+          :transfer_failed,
+          :transfer_busy,
+          :transfer_unanswered,
+          :transfer_unknown,
+          :transfer_abandoned
+        ] ->
+          "peer-"
+
+        true ->
+          "hangup-"
+      end
+
+    prefix <> journal.command
+  end
+
+  defp persist(%{backend: {module, context}} = journal, phase) do
     task =
       Task.Supervisor.async_nolink(@supervisor, fn ->
         module.record_caller_recovery(
           context,
           journal.claim,
           phase,
-          prefix <> journal.command,
+          command_id(journal, phase),
           journal.deadline
         )
       end)

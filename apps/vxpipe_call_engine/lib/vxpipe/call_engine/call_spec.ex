@@ -112,7 +112,8 @@ defmodule Vxpipe.CallEngine.CallSpec do
          :ok <- Direction.validate(direction, participants),
          :ok <- validate_transfers(participants, code, message),
          :ok <- validate_media_policies(media_policy, participants),
-         {:ok, transfer_policy} <- TransferPolicy.new(Map.get(input, :transfer_policy)),
+         {:ok, transfer_policy} <-
+           TransferPolicy.new(Map.get(input, :transfer_policy), direction, participants),
          :ok <- validate_variable_permissions(participants, call_variables, code, message),
          :ok <- validate_dial_destinations(participants, call_variables, code, message),
          {:ok, tool_visibility} <-

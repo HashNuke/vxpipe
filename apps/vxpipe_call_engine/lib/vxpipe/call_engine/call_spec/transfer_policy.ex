@@ -11,28 +11,57 @@ defmodule Vxpipe.CallEngine.CallSpec.TransferPolicy do
   @message "The call spec is invalid."
 
   @enforce_keys [:attempt_timeout_ms]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [recovery_destination: nil]
 
-  @type t :: %__MODULE__{attempt_timeout_ms: pos_integer()}
+  @type t :: %__MODULE__{
+          attempt_timeout_ms: pos_integer(),
+          recovery_destination: String.t() | nil
+        }
 
-  @spec new(nil | map()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
-  def new(value) when value in [nil, %{}] do
+  @spec new(nil | map(), struct(), map()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
+  def new(value, _direction, _participants) when value in [nil, %{}] do
     {:ok, %__MODULE__{attempt_timeout_ms: @default_attempt_timeout_ms}}
   end
 
-  def new(value) do
+  def new(value, direction, participants) do
     with {:ok, input} <-
            CallSpecValidation.normalize_map(
              value,
-             [:attempt_timeout_ms],
+             [:attempt_timeout_ms, :recovery_destination],
              @code,
              @message,
              @path
            ),
-         {:ok, timeout} <- attempt_timeout(input) do
-      {:ok, %__MODULE__{attempt_timeout_ms: timeout}}
+         {:ok, timeout} <- attempt_timeout(input),
+         {:ok, destination} <- destination(input, direction, participants) do
+      {:ok, %__MODULE__{attempt_timeout_ms: timeout, recovery_destination: destination}}
     end
   end
+
+  defp destination(%{recovery_destination: key}, direction, participants) do
+    with %{kind: :incoming, caller: caller, handled_by: handler} <- direction,
+         %{kind: :human, connection: %{service: service, number: inbound}} when is_binary(service) <-
+           Map.get(participants, caller),
+         %{kind: :agent, transfers: allowed} <- Map.get(participants, handler),
+         true <- key in allowed,
+         %{
+           kind: :human,
+           connection: %{service: ^service, mode: :dial, admission: :transfer, number: number}
+         }
+         when is_binary(number) and number != inbound <- Map.get(participants, key) do
+      {:ok, key}
+    else
+      _invalid ->
+        CallSpecValidation.invalid(
+          @code,
+          @message,
+          @path ++ ["recovery_destination"],
+          "must reference a permitted human transfer participant with a distinct fixed number on the inbound telephone service"
+        )
+    end
+  end
+
+  defp destination(_input, _direction, _participants), do: {:ok, nil}
 
   defp attempt_timeout(input) do
     case Map.fetch(input, :attempt_timeout_ms) do

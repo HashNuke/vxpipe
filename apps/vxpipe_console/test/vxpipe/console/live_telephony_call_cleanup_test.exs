@@ -43,6 +43,53 @@ defmodule Vxpipe.Console.LiveTelephonyCallCleanupTest do
     assert :ok = LiveTelephonyCallCleanup.close(context.scope, context.tracker)
   end
 
+  test "live test playback reaches the existing carrier leg" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.request_path == "/v2/calls/caller/actions/playback_start"
+      Req.Test.json(conn, %{data: %{result: "ok"}})
+    end)
+
+    assert {:ok, %Submission{status: :accepted}} =
+             Vxpipe.Console.Test.LiveTelephonyAdapter.play_recovery_prompt(
+               options(),
+               "caller",
+               "recovery-leg"
+             )
+  end
+
+  test "a linked recovery dial is captured for independent teardown", context do
+    options = Keyword.put(options(), :provider_connection_id, "app")
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.request_path == "/v2/calls"
+
+      Req.Test.json(conn, %{
+        data: %{call_control_id: "transfer-leg", call_session_id: "session", call_leg_id: "peer"}
+      })
+    end)
+
+    request = %{
+      id: "peer-test",
+      from: "+13125550142",
+      to: "+13125550143",
+      caller: "caller-control",
+      callback_url: "https://voice.example/events",
+      timeout_secs: 20
+    }
+
+    assert {:ok, %Submission{provider_call_control_id: "transfer-leg"}} =
+             LiveTelephonyCallCleanup.command(
+               :telnyx,
+               :dial_recovery_peer,
+               options,
+               request,
+               context.tracker
+             )
+
+    expect_hangup("transfer-leg")
+    assert :ok = LiveTelephonyCallCleanup.close(context.scope, context.tracker)
+  end
+
   test "duplicate callback handles are cleaned once", context do
     options = options()
 

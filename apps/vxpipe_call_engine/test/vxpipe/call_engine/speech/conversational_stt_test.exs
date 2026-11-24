@@ -86,6 +86,58 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}
   end
 
+  test "operational offsets and resumed speech retain one turn before any transcript" do
+    classify = fn _model, stream, <<sample::little-16, _::binary>> = audio ->
+      frames = div(byte_size(audio), 1_024)
+      probability = if sample > 0, do: 0.9, else: 0.0
+      {:ok, stream, List.duplicate(probability, frames)}
+    end
+
+    session = start_session(true, load: fn -> {:ok, :model} end, classify: classify)
+    assert_receive {:recognizer, _pid, _inner}
+    _ = event(session, :ready)
+    voice = :binary.copy(<<1, 0>>, 2_048)
+    silence = :binary.copy(<<0, 0>>, 8_192)
+    assert :ok = Session.push_audio(session, voice)
+    turn = event(session, :speech_started).turn_ref
+    assert_receive {:vxpipe_acoustic_activity, ^session, ^turn, :speech_started, onset}, 1_000
+
+    assert :ok = Session.push_audio(session, silence)
+    assert_receive {:vxpipe_acoustic_activity, ^session, ^turn, :speech_ended, offset}, 1_000
+    assert %{sample_index: 0, sample_rate: 16_000, sequence: 1} = onset
+    assert %{sample_index: 2_048, sequence: 2} = offset
+    assert offset.at_ms - onset.at_ms == 128
+
+    assert :ok = Session.push_audio(session, voice)
+    assert_receive {:vxpipe_acoustic_activity, ^session, ^turn, :speech_started, resumed}, 1_000
+    assert %{sample_index: 10_240, sequence: 3} = resumed
+    assert resumed.at_ms - offset.at_ms == 512
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}
+  end
+
+  test "confirmed ongoing speech keeps a long utterance open past the orphan timeout" do
+    classify = fn _model, stream, audio ->
+      {:ok, stream, List.duplicate(0.9, div(byte_size(audio), 1_024))}
+    end
+
+    session =
+      start_session(
+        true,
+        [load: fn -> {:ok, :model} end, classify: classify],
+        [sample_rate: 16_000],
+        [],
+        boundary_timeout_ms: 50
+      )
+
+    assert_receive {:recognizer, recognizer, _inner}
+    _ = event(session, :ready)
+    assert :ok = Session.push_audio(session, :binary.copy(<<1, 0>>, 2_048))
+    _ = event(session, :speech_started)
+    refute_receive {:vxpipe_speech_closed, ^session, _}, 100
+    assert :ok = emit(recognizer, :transcript, turn_ref: make_ref(), text: "still speaking")
+    _ = event(session, :transcript)
+  end
+
   test "detector preparation failure fails allocation rather than silently changing mode" do
     session = start_session(true, load: fn -> {:error, :not_available} end)
     tree = Session.tree(session)

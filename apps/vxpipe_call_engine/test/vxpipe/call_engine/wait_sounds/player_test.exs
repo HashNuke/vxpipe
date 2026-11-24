@@ -5,6 +5,15 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.CallEngine.WaitSounds.Player
 
+  test "caller recovery audio uses the conversation route so a held sink can reject it" do
+    {_player, sink} =
+      start_player(asset(:binary.copy(<<0, 1>>, 960)), "hearing", phase: :caller_recovery)
+
+    assert_receive {:test_audio_output, ^sink, frame}
+    assert frame.audio_scope == :conversation
+    assert frame.connection_id == "connection-hearing"
+  end
+
   # A frame-by-frame player waited for each 20 ms frame to finish playing before sending the
   # next, so every round trip became a gap in the caller's audio and a 250 ms cue took up to a
   # second on a busy server. The sink must always hold the next frames already.
@@ -55,6 +64,16 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     assert :ok = TestAudioOutputSink.playback_completed(sink)
     assert_receive {:vxpipe_wait_playback, ^player, "streamed-cue", :completed}
     assert_receive {:DOWN, ^monitor, :process, ^player, :normal}
+  end
+
+  test "a carrier mark before the finish reply still completes the cue after that reply" do
+    {player, sink} = start_player(asset(<<0::16>>), "early-mark", loop: false, defer_finish: true)
+    assert_receive {:test_audio_output_finish, ^sink, _}
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    _ = :sys.get_state(player)
+    refute_received {:vxpipe_wait_playback, ^player, "early-mark", :completed}
+    assert :ok = TestAudioOutputSink.complete_finish(sink)
+    assert_receive {:vxpipe_wait_playback, ^player, "early-mark", :completed}
   end
 
   test "stop interrupts playback at once and reports stopped" do
@@ -275,6 +294,8 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
         id: make_ref()
       )
 
+    if options[:defer_finish], do: TestAudioOutputSink.defer_finish(sink, true)
+
     sinks =
       case Keyword.get(options, :extra_sink) do
         nil -> %{"connection-#{episode}" => sink}
@@ -294,7 +315,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
            participant_id: episode,
            connection_generation: 1,
            attempt_id: "attempt",
-           phase: :transfer,
+           phase: Keyword.get(options, :phase, :transfer),
            sinks: sinks
          ] ++ options},
         id: make_ref()

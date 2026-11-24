@@ -54,6 +54,49 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     end)
   end
 
+  def expire_caller_recoveries(repo, now, limit) do
+    timestamp = DateTime.to_iso8601(now)
+
+    query =
+      from(leg in StoredTelephonyLeg,
+        join: call in assoc(leg, :call),
+        where: leg.incarnation_id == call.incarnation_id and call.incarnation_binding_verified,
+        where:
+          fragment(
+            "? <> '{}'::jsonb AND NOT jsonb_exists(?, 'carrier_unknown') AND NOT jsonb_exists(?, 'carrier_ended') AND NOT jsonb_exists(?, 'transfer_bridged')",
+            leg.recovery,
+            leg.recovery,
+            leg.recovery,
+            leg.recovery
+          ),
+        where:
+          fragment(
+            "COALESCE(? #>> '{announcement_requested,deadline}', ? #>> '{transfer_announcement_requested,deadline}')::timestamptz <= ?::timestamptz",
+            leg.recovery,
+            leg.recovery,
+            type(^timestamp, :string)
+          ),
+        order_by: leg.id,
+        limit: ^limit,
+        lock: fragment("FOR UPDATE OF ? SKIP LOCKED", leg)
+      )
+
+    repo.transaction(fn ->
+      legs = repo.all(query)
+
+      Enum.each(legs, fn leg ->
+        {id, deadline} = termination_intent(leg.recovery)
+        evidence = %{"recorded_at" => timestamp, "deadline" => deadline, "command_id" => id}
+
+        repo.update!(
+          Ecto.Changeset.change(leg, recovery: Map.put(leg.recovery, "carrier_unknown", evidence))
+        )
+      end)
+
+      length(legs)
+    end)
+  end
+
   def find_caller_recovery(repo, scope, event) do
     query =
       from(leg in StoredTelephonyLeg,
@@ -61,25 +104,39 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
         join: tenant in assoc(call, :tenant),
         join: revision in assoc(call, :call_spec_revision),
         join: spec in assoc(revision, :call_spec),
-        where: leg.provider == "telnyx" and leg.tenant_id == tenant.id and
-          leg.provider_connection_id == ^event.provider_connection_id and
-          leg.provider_call_control_id == ^event.provider_call_control_id and
-          leg.provider_call_leg_id == ^event.provider_call_leg_id and
-          leg.provider_call_session_id == ^event.provider_call_session_id and
-          leg.incarnation_id == call.incarnation_id and call.incarnation_binding_verified,
+        where:
+          leg.provider == "telnyx" and leg.tenant_id == tenant.id and
+            leg.provider_connection_id == ^event.provider_connection_id and
+            leg.provider_call_control_id == ^event.provider_call_control_id and
+            leg.provider_call_leg_id == ^event.provider_call_leg_id and
+            leg.provider_call_session_id == ^event.provider_call_session_id and
+            leg.incarnation_id == call.incarnation_id and call.incarnation_binding_verified,
         select: {leg, call, {tenant, spec, revision}}
       )
 
     with {leg, call, {tenant, _, _} = selection} <- repo.one(query),
          true <- scope in [:platform, {:tenant, tenant.key}],
-         %{"command_id" => id, "deadline" => deadline} <- leg.recovery["announcement_requested"],
+         {id, deadline} <- termination_intent(leg.recovery),
          {:ok, expiry, 0} <- DateTime.from_iso8601(deadline),
          %TelephonyAdmissionClaim{} = claim <- to_claim(leg, call, selection) do
-      {:ok, claim, String.replace_prefix(id, "recovery-", "hangup-"), expiry}
+      {:ok, claim, id, expiry}
     else
       _unmatched -> {:error, :not_found}
     end
   end
+
+  defp termination_intent(%{
+         "announcement_requested" => %{"command_id" => "recovery-" <> leg, "deadline" => deadline}
+       }), do: {"hangup-" <> leg, deadline}
+
+  defp termination_intent(%{
+         "transfer_announcement_requested" => %{
+           "command_id" => "recovery-transfer-" <> leg,
+           "deadline" => deadline
+         }
+       }), do: {"hangup-" <> leg, deadline}
+
+  defp termination_intent(_evidence), do: nil
 
   def record_caller_recovery(repo, claim, phase, command_id, deadline) do
     result =

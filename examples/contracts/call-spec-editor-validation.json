@@ -1853,6 +1853,77 @@
         "output_speech_to_text",
         "vad"
       ]
+    },
+    {
+      "name": "fixed human recovery destination on the inbound service",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "caller",
+            "connection",
+            "service"
+          ],
+          "value": "office"
+        },
+        {
+          "path": [
+            "participants",
+            "caller",
+            "connection",
+            "number"
+          ],
+          "value": "+15550001000"
+        },
+        {
+          "path": [
+            "participants",
+            "support",
+            "connection"
+          ],
+          "value": {
+            "service": "office",
+            "mode": "dial",
+            "number": "+15550001002"
+          }
+        },
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "transfers"
+          ],
+          "value": [
+            "support"
+          ]
+        },
+        {
+          "path": [
+            "transfer_policy",
+            "recovery_destination"
+          ],
+          "value": "support"
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "recovery destination requires an authorized transfer",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "transfer_policy",
+            "recovery_destination"
+          ],
+          "value": "support"
+        }
+      ],
+      "expected_path": [
+        "transfer_policy",
+        "recovery_destination"
+      ]
     }
   ]
 }

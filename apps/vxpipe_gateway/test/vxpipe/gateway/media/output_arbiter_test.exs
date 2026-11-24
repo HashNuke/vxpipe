@@ -7,6 +7,13 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
   alias Vxpipe.Gateway.TestOpusEncoder
   alias Vxpipe.Gateway.WebRTC.AudioEgress
 
+  test "recovery obtains a cleared conversation generation only on an available main output" do
+    {output, _native} = start_output()
+    assert {:ok, 0} = OutputArbiter.clear_for_caller_recovery(output)
+    assert :ok = OutputSink.hold(output, 1)
+    assert {:error, :output_unavailable} = OutputArbiter.clear_for_caller_recovery(output)
+  end
+
   test "collects private output readiness while room binding and hold change independently" do
     alias Vxpipe.CallEngine.Readiness.Collector
 

@@ -107,6 +107,9 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          diagnostic_last_link: nil,
          diagnostic_inference: nil,
          inference_epoch: nil,
+         acoustic_origin_ms: nil,
+         acoustic_source: :unbound,
+         acoustic_sequence: 0,
          recognition_epoch: 0,
          pending_epoch: nil,
          pending_pcm: "",
@@ -377,6 +380,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
           %{
             state
             | recognition_epoch: state.recognition_epoch + 1,
+              acoustic_origin_ms: nil,
               diagnostic_tap:
                 InferenceTap.reset(
                   state.diagnostic_tap,
@@ -438,6 +442,37 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     end
   end
 
+  defp acoustic_source(%{acoustic_source: :unbound} = state, %{source_epoch: epoch})
+       when not is_nil(state.runtime) do
+    send(state.allocation.consumer, {:vxpipe_acoustic_epoch, state.allocation, epoch})
+    %{state | acoustic_source: epoch}
+  end
+
+  defp acoustic_source(state, %{source_epoch: epoch})
+       when epoch != state.acoustic_source and not is_nil(state.runtime) do
+    send(state.allocation.consumer, {:vxpipe_acoustic_epoch, state.allocation, epoch})
+    next = state.recognition_epoch + 1
+    if state.orphan, do: Process.cancel_timer(elem(state.orphan, 0))
+
+    %{
+      state
+      | acoustic_source: epoch,
+        acoustic_origin_ms: nil,
+        recognition_epoch: next,
+        orphan: nil,
+        diagnostic_tap: InferenceTap.reset(state.diagnostic_tap, next, state.odd_pcm == ""),
+        pending_pcm: "",
+        pending_epoch: nil,
+        stream: Silero.new(),
+        boundary: ActivityBoundary.new()
+    }
+  end
+
+  defp acoustic_source(%{acoustic_source: :unbound} = state, nil),
+    do: %{state | acoustic_source: nil}
+
+  defp acoustic_source(state, _frame), do: state
+
   defp accept_input(state, audio, pcm, timestamp \\ nil, frame \\ nil) do
     if byte_size(state.pending_pcm) + byte_size(pcm) > @maximum_pcm_bytes do
       {:reply, {:error, :busy}, state}
@@ -449,12 +484,20 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
       case result do
         :ok ->
+          state = acoustic_source(state, frame)
+
           pending_epoch =
             if state.pending_pcm == "", do: state.recognition_epoch, else: state.pending_epoch
 
+          origin =
+            if pcm != "" and is_nil(state.acoustic_origin_ms),
+              do: (frame && frame.received_at) || System.monotonic_time(:millisecond),
+              else: state.acoustic_origin_ms
+
           case advance_detector(%{
                  state
-                 | diagnostic_tap:
+                 | acoustic_origin_ms: origin,
+                   diagnostic_tap:
                      InferenceTap.accept(
                        state.diagnostic_tap,
                        state.recognition_epoch,
@@ -540,35 +583,70 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   defp acoustic(state, events) do
     Enum.reduce_while(events, {:ok, state}, fn
-      {:speech_started, _sample}, {:ok, current} ->
+      {:speech_started, sample}, {:ok, current} ->
         with {:ok, turns, emissions} <- STTTurnStart.activity_started(current.turns),
              :ok <- publish(current.channel, emissions) do
           current = diagnostic_links(%{current | turns: turns}, emissions)
+          current = notify_activity(current, :speech_started, sample)
           {:cont, {:ok, update_orphan(current, emissions)}}
         else
           _failure -> {:halt, {:error, :session_failed}}
         end
 
-      {:speech_ended, _sample}, {:ok, current} ->
-        {:cont, {:ok, current}}
+      {:speech_ended, sample}, {:ok, current} ->
+        current = notify_activity(current, :speech_ended, sample)
+        {:cont, {:ok, arm_orphan(current)}}
     end)
+  end
+
+  defp notify_activity(state, kind, sample) do
+    if is_reference(state.turns.active) and Channel.input_active?(state.channel) do
+      sequence = state.acoustic_sequence + 1
+
+      evidence = %{
+        at_ms: state.acoustic_origin_ms + div(sample * 1_000, 16_000),
+        capture_origin_ms: state.acoustic_origin_ms,
+        source_epoch: state.acoustic_source,
+        sample_index: sample,
+        sample_rate: 16_000,
+        sequence: sequence
+      }
+
+      send(state.allocation.consumer, {
+        :vxpipe_acoustic_activity,
+        state.allocation,
+        state.turns.active,
+        kind,
+        evidence
+      })
+
+      %{state | acoustic_sequence: sequence}
+    else
+      state
+    end
   end
 
   defp update_orphan(state, emissions) do
     cond do
-      is_nil(state.turns.active) ->
+      is_nil(state.turns.active) or match?(%{speaking?: true}, state.boundary) ->
         if state.orphan, do: Process.cancel_timer(elem(state.orphan, 0))
         %{state | orphan: nil}
 
       Enum.any?(emissions, fn {kind, _} -> kind in [:speech_started, :transcript] end) ->
-        if state.orphan, do: Process.cancel_timer(elem(state.orphan, 0))
-        token = make_ref()
-        timer = Process.send_after(self(), {:orphan, token}, state.boundary_timeout)
-        %{state | orphan: {timer, token}}
+        arm_orphan(state)
 
       true ->
         state
     end
+  end
+
+  defp arm_orphan(%{turns: %{active: nil}} = state), do: state
+
+  defp arm_orphan(state) do
+    if state.orphan, do: Process.cancel_timer(elem(state.orphan, 0))
+    token = make_ref()
+    timer = Process.send_after(self(), {:orphan, token}, state.boundary_timeout)
+    %{state | orphan: {timer, token}}
   end
 
   defp publish(channel, emissions) do

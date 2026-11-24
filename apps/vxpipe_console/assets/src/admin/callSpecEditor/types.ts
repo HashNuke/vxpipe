@@ -96,7 +96,7 @@ export type CallSpecSource = {
   wait_sounds?: WaitSounds;
   media_policy?: MediaPolicy;
   call_variables?: { sections?: Record<string, VariableSection> };
-  transfer_policy?: { attempt_timeout_ms?: number } | null;
+  transfer_policy?: { attempt_timeout_ms?: number; recovery_destination?: string } | null;
   tool_visibility?: Visibility;
   tool_visibility_overrides?: Record<string, Record<string, Visibility>>;
   limits?: { max_duration_ms?: number };

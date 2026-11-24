@@ -164,6 +164,7 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
     if owner_matches?(leg, &(&1.identity == identity)) do
       case kind do
         :incoming -> Leg.dispatch(leg, event, timeout)
+        :recovery_peer -> Leg.dispatch(leg, event, timeout)
         :outgoing -> OutgoingLeg.dispatch(leg, event, timeout)
       end
     else

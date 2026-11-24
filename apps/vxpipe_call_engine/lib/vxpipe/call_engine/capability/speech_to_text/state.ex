@@ -34,6 +34,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
               [
                 diagnostic_tap: nil,
                 diagnostic_probe: nil,
+                stall_watch: nil,
+                reported_stall: nil,
+                caller_recovery_enabled?: false,
+                acoustic_epoch: nil,
+                last_activity: nil,
                 diagnostic_source: nil,
                 activity_agent_id: nil,
                 readiness_generation: nil,
@@ -343,7 +348,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
     case Session.retire(session, deadline) do
       :ok ->
-        state = SourceDiscovery.cancel(state)
+        state = state |> SourceDiscovery.cancel() |> cancel_stall_watch()
 
         retired = %{
           state
@@ -364,11 +369,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   @spec close(t()) :: t()
   def close(%__MODULE__{session: session} = state) when not is_nil(session) do
-    state = SourceDiscovery.cancel(state)
+    state = state |> SourceDiscovery.cancel() |> cancel_stall_watch()
     AudioTap.close(state.diagnostic_tap)
     _ = Session.close(session)
 
-    %{state | session: nil, diagnostic_tap: nil, turn_indexes: %{}, next_turn_index: 0}
+    %{
+      state
+      | session: nil,
+        diagnostic_tap: nil,
+        turn_indexes: %{},
+        next_turn_index: 0,
+        acoustic_epoch: nil,
+        last_activity: nil
+    }
     |> invalidate_readiness()
   end
 
@@ -583,6 +596,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     end
   end
 
+  def restart_stalled(state) do
+    next_index = state.next_turn_index
+    closed = close(state)
+    closed = %{closed | next_turn_index: next_index, last_provider_sequence: -1}
+
+    case start_replacement(closed) do
+      {:ok, replacement} -> {:ok, replacement}
+      {:error, reason} -> {:error, reason, closed}
+    end
+  end
+
   defp start_replacement(%__MODULE__{} = state) do
     case start_native_session(
            true,
@@ -602,6 +626,55 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   defp supported_channels?(%__MODULE__{media_format: format}, channels),
     do: channels == format.channels
+
+  def acoustic_epoch(state, epoch), do: %{cancel_stall_watch(state) | acoustic_epoch: epoch}
+
+  def acoustic_activity(
+        %{
+          descriptor: %{speech_start_evidence: :local_acoustic},
+          private_allocation: nil,
+          pending_policy: nil
+        } = state,
+        turn,
+        kind,
+        %{source_epoch: epoch, sequence: sequence, at_ms: at_ms}
+      )
+      when is_map_key(state.turn_indexes, turn) and is_integer(at_ms) and
+             epoch == state.acoustic_epoch and
+             is_integer(sequence) and sequence > 0 and
+             (state.last_activity == nil or elem(state.last_activity, 0) != state.session or
+                sequence > elem(state.last_activity, 1)) do
+    state = %{cancel_stall_watch(state) | last_activity: {state.session, sequence}}
+
+    case kind do
+      :speech_started ->
+        state
+
+      :speech_ended ->
+        token = make_ref()
+        timer = Process.send_after(self(), {:stt_stall_timeout, token}, at_ms + 4_000, abs: true)
+
+        %{
+          state
+          | stall_watch: %{
+              turn: turn,
+              timer: timer,
+              token: token,
+              at_ms: at_ms,
+              session: state.session
+            }
+        }
+    end
+  end
+
+  def acoustic_activity(state, _turn, _kind, _at_ms), do: state
+
+  defp cancel_stall_watch(%{stall_watch: nil} = state), do: %{state | reported_stall: nil}
+
+  defp cancel_stall_watch(state) do
+    Process.cancel_timer(state.stall_watch.timer)
+    %{state | stall_watch: nil, reported_stall: nil}
+  end
 
   defp semantic_signal(state, %Event{kind: :ready} = event) do
     signal = %Signal{
@@ -648,6 +721,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         | end_of_turn_confidence: 1.0,
           trigger: endpointing_trigger(event.endpointing)
       }
+
+      state =
+        if match?(
+             %{turn: turn} when turn == event.turn_ref,
+             state.stall_watch || state.reported_stall
+           ),
+           do: cancel_stall_watch(state),
+           else: state
 
       {:ok, signal, %{state | turn_indexes: Map.delete(state.turn_indexes, event.turn_ref)}}
     end

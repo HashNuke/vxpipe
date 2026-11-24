@@ -154,13 +154,24 @@ items. See [Testing and verification](testing.md) and the
 
 ### Diagnosing a caller left in silence
 
-For an established inbound Telnyx caller using Scribe v2 realtime on the main
-audio path, loss of recognition or a crash of the media process can trigger an
-English callback recording on the original carrier leg. An explicitly selected
-non-English recognition language excludes this recording. When the language is
-unspecified, QA uses the English recording.
+An established inbound Telnyx caller using Scribe v2 realtime can get one
+fresh recognizer on the same main audio connection. Recovery starts on
+confirmed recognition failure or when an open turn has gone four seconds
+past its Silero speech offset. Resumed speech cancels that timer.
 
-Inspect the leg's `recovery` field in call details. An announcement request
+The caller participant’s `events` in call details contain
+`caller_speech_recovery` entries. Group them by command ID for one recovery
+attempt. The connection ID links them to the phone leg. The original turn ID
+is present when a turn had opened. The payload records the trigger, elapsed
+milliseconds, and recognizer generations. A completed prompt means the
+output sink reported completion. A completed repeat means the fresh
+recognizer delivered a final turn.
+
+A media failure or exhausted recovery can trigger the carrier announcement
+and, when configured, a transfer to a human. The English recordings apply to
+an English or unspecified recognition language.
+
+Inspect the leg's `caller_recovery` field in call details. An announcement request
 records the intent to play. Completion requires a matching carrier event.
 The gateway requests hangup on completion, rejection or expiry. A
 `carrier_unknown` entry means the exit deadline elapsed without terminal

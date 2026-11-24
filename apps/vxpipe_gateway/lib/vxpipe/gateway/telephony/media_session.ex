@@ -99,8 +99,16 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       {:ok, setup} ->
         monitors = Map.put(monitors, setup.attachment.room_monitor, :room)
 
-        if binding.caller_recovery? and is_pid(setup.attachment.media_ingress),
-          do: send(binding.leg, {:caller_media_eligible, self(), true})
+        if binding.caller_recovery? and is_pid(setup.attachment.media_ingress) do
+          send(binding.leg, {:caller_media_eligible, self(), true})
+
+          if is_pid(setup.attachment.room_authority) do
+            send(
+              setup.attachment.room_authority,
+              {:caller_recovery_bound, self(), Keyword.fetch!(options, :connection_id)}
+            )
+          end
+        end
 
         {:ok,
          Map.merge(setup, %{
@@ -116,6 +124,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
                binding: Keyword.fetch!(options, :connection_id)
              ),
            connection_id: Keyword.fetch!(options, :connection_id),
+           recovery_cue: nil,
+           cue_grant: nil,
            private_media: nil,
            speech_normalizer: nil,
            source_gate: SourceGate.new(),
@@ -160,7 +170,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       output: state.audio_output
     ]
 
-    report_eligibility(state, false)
+    state = report_eligibility(state, false)
 
     case Vxpipe.Gateway.Media.PrivateMedia.prepare(state, attempt_id, options) do
       {:ok, receipt, state} -> {:reply, {:ok, receipt}, state}
@@ -172,7 +182,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   def handle_call({:vxpipe_handoff_gate, action, scope}, {caller, _}, state) do
     case Vxpipe.Gateway.Media.HandoffGate.control(action, scope, caller, state) do
       {:ok, state} ->
-        report_eligibility(state, recovery_eligible?(state))
+        state = report_eligibility(state, recovery_eligible?(state))
         {:reply, :ok, state}
 
       {:error, reason} ->
@@ -332,7 +342,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
         {:vxpipe_transfer_pending, monitor, authority, attempt_id},
         %{attachment: %{room_monitor: monitor}} = state
       ) do
-    report_eligibility(state, false)
+    state = report_eligibility(state, false)
 
     case Vxpipe.Gateway.Media.HandoffGate.pending(
            state,
@@ -354,13 +364,99 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
     case state.engine.activate_speech_to_text(command) do
       {:ok, ingress} ->
         state = %{state | attachment: %{state.attachment | media_ingress: ingress}}
-        report_eligibility(state, recovery_eligible?(state))
+        state = report_eligibility(state, recovery_eligible?(state))
         {:noreply, state}
 
       _failed ->
         {:stop, :shutdown, state}
     end
   end
+
+  def handle_info(
+        {:prepare_caller_recovery, room, token},
+        %{attachment: %{room_authority: room}} = state
+      ) do
+    result =
+      if recovery_eligible?(state) and state.private_media == nil do
+        Vxpipe.Gateway.Media.OutputArbiter.clear_for_caller_recovery(state.audio_output)
+      else
+        {:error, :ineligible}
+      end
+
+    grant =
+      case result do
+        {:ok, generation} -> {token, generation, :hearing}
+        _ -> nil
+      end
+
+    send(room, {:caller_recovery_prepared, self(), state.connection_id, token, result})
+    {:noreply, %{state | cue_grant: grant}}
+  end
+
+  def handle_info(
+        {:play_caller_recovery, room, token, kind, generation},
+        %{
+          attachment: %{room_authority: room},
+          recovery_cue: nil,
+          cue_grant: {token, generation, kind}
+        } = state
+      ) do
+    with true <- recovery_eligible?(state) and state.private_media == nil,
+         {:ok, asset} <- Vxpipe.Gateway.Telephony.CallerRecoveryCue.asset(kind),
+         {:ok, player} <-
+           state.child_supervisor.start_child(
+             state.connection_id,
+             {Vxpipe.CallEngine.WaitSounds.Player,
+              [
+                owner: self(),
+                episode_id: token,
+                tenant_id: state.binding.tenant_id,
+                room_id: state.binding.room_id,
+                incarnation_id: state.binding.incarnation_id,
+                participant_id: state.binding.participant_id,
+                connection_generation: generation,
+                attempt_id: token,
+                phase: :caller_recovery,
+                loop: false,
+                output_generation: generation,
+                sinks: %{state.connection_id => state.audio_output},
+                asset: asset
+              ]}
+           ) do
+      next = if kind == :hearing, do: {token, generation, :repeat}
+      {:noreply, %{state | recovery_cue: {token, player}, cue_grant: next}}
+    else
+      _ ->
+        send(room, {:caller_recovery_playout, self(), state.connection_id, token, :failed})
+        {:noreply, state}
+    end
+  end
+
+  def handle_info(
+        {:vxpipe_wait_playback, player, token, result},
+        %{recovery_cue: {token, player}} = state
+      ) do
+    send(
+      state.attachment.room_authority,
+      {:caller_recovery_playout, self(), state.connection_id, token, result}
+    )
+
+    {:noreply, %{state | recovery_cue: nil}}
+  end
+
+  def handle_info(
+        {:stop_caller_recovery_cue, room, token},
+        %{attachment: %{room_authority: room}, recovery_cue: {token, player}} = state
+      ) do
+    Vxpipe.CallEngine.WaitSounds.Player.stop(player)
+    {:noreply, %{state | cue_grant: nil}}
+  end
+
+  def handle_info(
+        {:stop_caller_recovery_cue, room, token},
+        %{attachment: %{room_authority: room}, cue_grant: {token, _, _}} = state
+      ),
+      do: {:noreply, %{state | cue_grant: nil}}
 
   def handle_info(
         {:vxpipe_connection_unavailable, :speech_to_text_unavailable},
@@ -423,20 +519,43 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   defp recovery_eligible?(%{binding: %{caller_recovery?: true}} = state) do
     state.attachment.admission == :main and
       is_pid(state.attachment.media_ingress) and is_nil(state.private_media) and
-      is_nil(Map.get(state, :handoff_gate)) and not SourceGate.held?(state.source_gate)
+      is_nil(Map.get(state, :handoff_gate)) and is_nil(state.source_request) and
+      not SourceGate.held?(state.source_gate)
   end
 
   defp recovery_eligible?(_state), do: false
 
-  defp report_eligibility(%{binding: %{caller_recovery?: true, leg: leg}}, eligible?),
-    do: send(leg, {:caller_media_eligible, self(), eligible?})
+  defp report_eligibility(%{binding: %{caller_recovery?: true, leg: leg}} = state, eligible?) do
+    send(leg, {:caller_media_eligible, self(), eligible?})
 
-  defp report_eligibility(_state, _eligible?), do: :ok
+    if is_pid(state.attachment.room_authority) do
+      if eligible? do
+        send(
+          state.attachment.room_authority,
+          {:caller_recovery_bound, self(), state.connection_id}
+        )
+      else
+        if state.recovery_cue do
+          {_token, player} = state.recovery_cue
+          Vxpipe.CallEngine.WaitSounds.Player.stop(player)
+        end
+
+        send(
+          state.attachment.room_authority,
+          {:caller_recovery_withdrawn, self(), state.connection_id}
+        )
+      end
+    end
+
+    if eligible?, do: state, else: %{state | cue_grant: nil}
+  end
+
+  defp report_eligibility(state, _eligible?), do: state
 
   defp source_request(kind, scope, from, %{source_request: nil} = state) do
     with :ok <- authorize_source_request(scope, from, state),
          :ok <- valid_source_scope(kind, scope) do
-      if kind == :hold, do: report_eligibility(state, false)
+      state = if kind == :hold, do: report_eligibility(state, false), else: state
       token = scope.token
       send(state.socket_owner, source_request_message(kind, scope))
 
@@ -519,8 +638,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
     Process.cancel_timer(request.timer)
     GenServer.reply(request.from, {:ok, epoch})
     state = %{state | source_gate: {:active, epoch}, source_request: nil}
-    report_eligibility(state, recovery_eligible?(state))
-    {:noreply, state}
+    {:noreply, report_eligibility(state, recovery_eligible?(state))}
   end
 
   defp settle_source_request({:error, reason}, request, state) do

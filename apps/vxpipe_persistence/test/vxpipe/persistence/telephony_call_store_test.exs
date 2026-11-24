@@ -152,10 +152,86 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
              )
 
     ended = %{incoming_event() | kind: :ended, end_reason: :hangup}
-    assert {:ok, ^claim, "hangup-leg", ^expires} = Calls.find_caller_recovery(:platform, ended, context.options)
-    assert {:error, :not_found} = Calls.find_caller_recovery({:tenant, "BBBBBBBBBBBBBBBB"}, ended, context.options)
-    assert {:error, :not_found} = Calls.find_caller_recovery(:platform, %{ended | provider_call_session_id: "other"}, context.options)
+
+    assert {:ok, ^claim, "hangup-leg", ^expires} =
+             Calls.find_caller_recovery(:platform, ended, context.options)
+
+    assert {:error, :not_found} =
+             Calls.find_caller_recovery({:tenant, "BBBBBBBBBBBBBBBB"}, ended, context.options)
+
+    assert {:error, :not_found} =
+             Calls.find_caller_recovery(
+               :platform,
+               %{ended | provider_call_session_id: "other"},
+               context.options
+             )
+
     assert Repo.one!(TelephonyLeg).state == "ended"
+  end
+
+  for {phase, command} <- [
+        {:announcement_requested, "recovery-leg"},
+        {:transfer_announcement_requested, "recovery-transfer-leg"}
+      ] do
+    test "a restarted reconciliation lane marks an expired #{phase} unknown without owning the call",
+         context do
+      {:ok, claim} =
+        Calls.claim_incoming_telephony(
+          {:tenant, context.tenant.key},
+          "primary-phone",
+          incoming_event(),
+          context.options
+        )
+
+      {:ok, claim} =
+        Calls.mark_incoming_telephony_started(
+          claim,
+          "rinc-dead-owner",
+          @started_at,
+          context.options
+        )
+
+      deadline = DateTime.add(@started_at, 60)
+
+      assert :ok =
+               Calls.record_caller_recovery(
+                 claim,
+                 unquote(phase),
+                 unquote(command),
+                 deadline,
+                 context.options
+               )
+
+      assert {:ok, 0} =
+               Calls.expire_caller_recoveries(DateTime.add(deadline, -1), 10, context.options)
+
+      assert {:ok, 1} = Calls.expire_caller_recoveries(deadline, 10, context.options)
+
+      assert {:ok, 0} =
+               Calls.expire_caller_recoveries(DateTime.add(deadline, 1), 10, context.options)
+
+      leg = Repo.one!(TelephonyLeg)
+      assert leg.recovery["carrier_unknown"]["deadline"] == DateTime.to_iso8601(deadline)
+      refute Map.has_key?(leg.recovery, "hangup_requested")
+      assert leg.state == "active"
+      assert {:ok, current} = Calls.fetch_call(context.tenant.key, claim.call.id, context.options)
+      assert is_nil(current.gateway_cleanup_completed_at)
+      ended = %{incoming_event() | kind: :ended, end_reason: :hangup}
+
+      assert {:ok, ^claim, "hangup-leg", ^deadline} =
+               Calls.find_caller_recovery(:platform, ended, context.options)
+
+      assert :ok =
+               Calls.record_caller_recovery(
+                 claim,
+                 :carrier_ended,
+                 "hangup-leg",
+                 deadline,
+                 context.options
+               )
+
+      assert Repo.one!(TelephonyLeg).state == "ended"
+    end
   end
 
   test "retains a SIP caller address separately from the receiving number", context do

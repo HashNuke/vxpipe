@@ -176,6 +176,33 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     assert component_status(unconfigured, "recording") == :unconfigured
   end
 
+  test "call details expose recovery timing on the affected caller", context do
+    caller = context.call.plan.participants["caller"]
+    payload = %{"phase" => "hearing_completed", "elapsed_ms" => 1732}
+
+    item =
+      fact(context, 1, :caller_speech_recovery,
+        participant_id: caller.participant_id,
+        payload: payload
+      )
+
+    assert {:ok, ^item} = Calls.archive_call_fact(item, context.options)
+
+    closure =
+      fact(context, 2, :archive_stream_closed,
+        occurred_at: @ended_at,
+        payload: %{"accepted" => 1, "incomplete" => false}
+      )
+
+    assert {:ok, ^closure} = Calls.archive_call_fact(closure, context.options)
+
+    assert {:ok, assessment} =
+             CallDetailsSource.read([repo: Repo, recording: :unconfigured], @tenant_key, @call_id)
+
+    participant = Enum.find(assessment.source.participants, &(&1["call_spec_key"] == "caller"))
+    assert [%{"kind" => "caller_speech_recovery", "payload" => ^payload}] = participant["events"]
+  end
+
   test "round-trips mixed message formats and trusted columns into deterministic publications",
        context do
     assistant = context.call.plan.participants["assistant"]

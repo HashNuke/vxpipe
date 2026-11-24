@@ -72,7 +72,47 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
   @impl true
   def play_recovery_prompt(options, control_id, command_id) do
     send(observer(options), {:test_recovery_playback, control_id, command_id})
+
+    accepted = {:ok, %Submission{status: :accepted, provider_call_control_id: control_id}}
+
+    if String.starts_with?(Keyword.fetch!(options, :api_key), "blocked-playback:") do
+      send(observer(options), {:test_playback_in_flight, self()})
+
+      receive do
+        :release_playback ->
+          accepted
+
+        :reject_playback ->
+          {:error, {:telnyx_command_rejected, 422}}
+
+        :unknown_playback ->
+          {:ok, %Submission{status: :unknown, provider_call_control_id: control_id}}
+      end
+    else
+      accepted
+    end
+  end
+
+  @impl true
+  def play_recovery_prompt(options, control_id, command_id, :transfer) do
+    send(observer(options), {:test_transfer_announcement, control_id, command_id})
     {:ok, %Submission{status: :accepted, provider_call_control_id: control_id}}
+  end
+
+  def play_recovery_prompt(options, control_id, command_id, :callback),
+    do: play_recovery_prompt(options, control_id, command_id)
+
+  @impl true
+  def dial_recovery_peer(options, request) do
+    send(observer(options), {:test_linked_dial, request})
+
+    {:ok,
+     %Submission{
+       status: :accepted,
+       provider_call_control_id: "peer-control",
+       provider_call_leg_id: "peer-leg",
+       provider_call_session_id: "inbound-call-session"
+     }}
   end
 
   @impl true
@@ -130,6 +170,7 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
       "unknown:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "reject:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "control-only:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
+      "blocked-playback:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "blocked-end:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "blocked:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       _other -> self()

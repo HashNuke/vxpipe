@@ -24,7 +24,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
       )
       when provider in [:telnyx, :twilio] and is_pid(observer) do
     plan = compile_plan(provider, options)
-    service_options = service_options(provider, plan.tenant_id, credential, observer)
+    service_options = service_options(provider, plan.tenant_id, credential, observer, options)
     plan = Vxpipe.Gateway.TestTelephonyServiceRepository.pin_plan(plan, service_options)
     caller = Map.fetch!(plan.participants, "caller")
 
@@ -73,6 +73,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           %{
             provider: "elevenlabs",
             model: "scribe_v2_realtime",
+            vad: Keyword.get(options, :caller_vad, false),
             options: if(language, do: %{language_code: language}, else: %{})
           }
 
@@ -133,7 +134,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
               transfer_notice: "This call is recorded."
             }
           },
-          transfer_policy: %{attempt_timeout_ms: 10_000},
+          transfer_policy: Keyword.get(options, :transfer_policy, %{attempt_timeout_ms: 10_000}),
           limits: %{max_duration_ms: 60_000}
         },
         resource_id: "telephony-harness-call-spec",
@@ -234,7 +235,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
     }
   end
 
-  defp service_options(:telnyx, tenant_id, public_key, observer) do
+  defp service_options(:telnyx, tenant_id, public_key, observer, options) do
     [
       id: "primary-phone",
       ingress_key: tenant_id,
@@ -242,14 +243,15 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
       provider: :telnyx,
       provider_connection_id: "voice-application-harness",
       public_key: Base.encode64(public_key),
-      api_key: "observer:#{:erlang.pid_to_list(observer)}",
+      api_key:
+        "#{Keyword.get(options, :command_mode, "observer")}:#{:erlang.pid_to_list(observer)}",
       outbound_number: "+15550001000",
       public_base_url: "https://voice.example.test",
       adapter: Vxpipe.Gateway.TestTelephonyAdapter
     ]
   end
 
-  defp service_options(:twilio, tenant_id, auth_token, _observer) do
+  defp service_options(:twilio, tenant_id, auth_token, _observer, _options) do
     [
       id: "primary-phone",
       ingress_key: tenant_id,

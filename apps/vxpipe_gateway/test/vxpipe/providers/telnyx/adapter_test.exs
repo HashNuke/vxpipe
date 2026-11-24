@@ -112,6 +112,78 @@ defmodule Vxpipe.Providers.Telnyx.AdapterTest do
              TelnyxAdapter.play_recovery_prompt(config(), "known-leg", "recovery-known-leg")
   end
 
+  test "transfer announcement plays the separate recording on the original phone leg" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.request_path == "/v2/calls/caller-control/actions/playback_start"
+      body = JSON.decode!(Req.Test.raw_body(conn))
+      assert body["target_legs"] == "self"
+      assert Base.decode64!(body["client_state"]) == "recovery-transfer-leg"
+      clip = Base.decode64!(body["playback_content"])
+      assert <<"RIFF", _::32-little, "WAVE", _::binary>> = clip
+
+      refute clip ==
+               File.read!(Application.app_dir(:vxpipe_gateway, "priv/telephony/callback.wav"))
+
+      Req.Test.json(conn, %{data: %{result: "ok"}})
+    end)
+
+    assert {:ok, %Submission{status: :accepted}} =
+             TelnyxAdapter.play_recovery_prompt(
+               config(),
+               "caller-control",
+               "recovery-transfer-leg",
+               :transfer
+             )
+  end
+
+  test "recovery dials a single carrier-linked leg with bounded ringing" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.request_path == "/v2/calls"
+      body = JSON.decode!(Req.Test.raw_body(conn))
+
+      assert %{
+               "link_to" => "original-control",
+               "bridge_on_answer" => true,
+               "prevent_double_bridge" => true,
+               "retry_on_timeout" => false,
+               "timeout_secs" => 20,
+               "command_id" => "recovery-peer",
+               "from" => "+15550001000",
+               "to" => "+15550001002"
+             } = body
+
+      assert {:ok, "recovery-peer"} =
+               Vxpipe.Providers.Telnyx.ClientState.decode(body["client_state"])
+
+      refute Map.has_key?(body, "stream_url")
+
+      Req.Test.json(conn, %{
+        data: %{
+          call_control_id: "peer-control",
+          call_leg_id: "peer-leg",
+          call_session_id: "shared-session"
+        }
+      })
+    end)
+
+    request = %{
+      id: "recovery-peer",
+      caller: "original-control",
+      from: "+15550001000",
+      to: "+15550001002",
+      callback_url: "https://voice.example.test/webhooks/platform/telnyx",
+      timeout_secs: 20
+    }
+
+    assert {:ok,
+            %Submission{
+              provider_call_control_id: "peer-control",
+              provider_call_leg_id: "peer-leg",
+              provider_call_session_id: "shared-session"
+            }} =
+             TelnyxAdapter.dial_recovery_peer(config(), request)
+  end
+
   test "hangs up only the exact known provider leg" do
     Req.Test.expect(__MODULE__, fn conn ->
       assert conn.method == "POST"

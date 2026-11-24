@@ -9,6 +9,11 @@ defmodule Vxpipe.Gateway.TestCleanupReconciliationRepository do
     end
   end
 
+  def expire_caller_recoveries(observer, now, limit) do
+    send(observer, {:expire_carrier_attempts, now, limit})
+    {:ok, 0}
+  end
+
   def complete_call_cleanup(observer, binding, completed_at) do
     send(observer, {:cleanup_replay, self(), binding, completed_at})
 

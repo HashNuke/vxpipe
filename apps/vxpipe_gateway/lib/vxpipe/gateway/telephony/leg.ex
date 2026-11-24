@@ -78,6 +78,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       recovery_journal: nil,
       recovery_end_retry?: false,
       playback_worker: nil,
+      playback_monitors: %{},
       caller_media: nil,
       incoming_identity: nil,
       prepared: nil,
@@ -122,11 +123,10 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   def handle_call({:event, %Event{kind: :recovery_playback_ended} = event}, _from, state) do
     with :ok <- matching_event(state.claim, event),
          %{id: id} when id == event.playback_id <- state.recovery do
-      {:reply, :ok,
-       close(
-         CallerRecovery.record_playback(state, event.playback_outcome),
-         :speech_to_text_unavailable
-       )}
+      case CallerRecovery.playback_result(state, event.playback_outcome) do
+        {:continue, state} -> {:reply, :ok, state}
+        {:end, state} -> {:reply, :ok, close(state, :speech_to_text_unavailable)}
+      end
     else
       {:error, _} = error -> {:reply, error, state}
       _stale -> {:reply, :ok, state}
@@ -275,6 +275,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     case CallerRecovery.handle_info(message, state) do
       {:continue, state} -> maybe_retire(state)
       {:end, state} -> maybe_retire(close(state, :speech_to_text_unavailable))
+      {:end, state, reason} -> maybe_retire(close(state, reason))
       :unhandled -> handle_leg_info(message, state)
     end
   end
@@ -406,7 +407,8 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     ready? =
       CallerRecoveryJournal.settled?(state.recovery_journal) and state.carrier_ended? and
         state.room_closed? and state.commands_drained? and
-        is_nil(state.answer_worker) and is_nil(state.playback_worker) and is_nil(state.end_worker) and
+        is_nil(state.answer_worker) and map_size(state.playback_monitors) == 0 and
+        is_nil(state.end_worker) and
         not is_nil(state.cleanup) and
         CarrierCleanup.final_usage_stored?(state.cleanup, state.usage)
 
@@ -428,12 +430,12 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
          %{
            retire?: true,
            answer_worker: nil,
-           playback_worker: nil,
+           playback_monitors: monitors,
            end_worker: nil,
            status: status
          } = state
        )
-       when status in [:ended, :unclaimed, :replay],
+       when status in [:ended, :unclaimed, :replay] and map_size(monitors) == 0,
        do:
          if(CallerRecoveryJournal.settled?(state.recovery_journal),
            do: {:stop, :normal, state},

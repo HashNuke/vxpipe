@@ -29,6 +29,7 @@ defmodule Vxpipe.Persistence.CallDetailsFactProjection do
     :participant_transfer_failed
   ]
   @participant_kinds [
+    :caller_speech_recovery,
     :participant_joined,
     :participant_left,
     :connection_attached,

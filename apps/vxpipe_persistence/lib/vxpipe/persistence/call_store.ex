@@ -177,6 +177,9 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   @impl true
+  defdelegate expire_caller_recoveries(repo, now, limit), to: TelephonyCallStore
+
+  @impl true
   defdelegate find_caller_recovery(repo, scope, event), to: TelephonyCallStore
 
   @impl true

@@ -40,8 +40,11 @@ defmodule Vxpipe.Gateway.CallCleanupRecovery do
   defp recover(_row, binding, _options) do
     # Exact stop is safe even if the tracker was lost. That loss remains unknown:
     # only the existing owner or durable archive can establish completion.
+    carrier = Vxpipe.Gateway.Telephony.CallerRecovery.request_hangup(binding)
+
     case CallEngine.hangup_call(binding.tenant_key, binding.room_id, binding.incarnation_id) do
       :ok -> :requested
+      _room_gone when carrier == :requested -> :requested
       _unavailable -> :unknown
     end
   end

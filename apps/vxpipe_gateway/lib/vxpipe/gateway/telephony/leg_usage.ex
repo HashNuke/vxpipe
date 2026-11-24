@@ -98,7 +98,7 @@ defmodule Vxpipe.Gateway.Telephony.LegUsage do
       )
 
     case event.kind do
-      kind when kind in [:answered, :media_started] ->
+      kind when kind in [:answered, :media_started, :bridged] ->
         connect(usage, event, observed_at, provenance)
 
       :ended ->

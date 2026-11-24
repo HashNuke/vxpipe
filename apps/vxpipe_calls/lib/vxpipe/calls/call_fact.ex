@@ -11,6 +11,7 @@ defmodule Vxpipe.Calls.CallFact do
     :connection_attached,
     :connection_detached,
     :participant_turn_started,
+    :caller_speech_recovery,
     :participant_turn_completed,
     :participant_transcription_final,
     :accepted_input,

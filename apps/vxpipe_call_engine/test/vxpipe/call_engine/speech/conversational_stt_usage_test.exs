@@ -8,6 +8,177 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTUsageTest do
   alias Vxpipe.CallEngine.SpeechOnsetProbe
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
+  test "resumed speech invalidates the old stall timeout without another transcript" do
+    {capability, recognizer, _inner, _identity, _policy} = start_capability(true)
+    native = make_ref()
+
+    assert :ok =
+             GenServer.call(recognizer, {:emit, :transcript, [turn_ref: native, text: "opening"]})
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_started, turn_ref: turn}}
+    session = :sys.get_state(capability).session
+    now = System.monotonic_time(:millisecond)
+    send(capability, {:vxpipe_acoustic_activity, session, turn, :speech_ended, evidence(now)})
+    watch = :sys.get_state(capability).stall_watch
+
+    send(
+      capability,
+      {:vxpipe_acoustic_activity, session, turn, :speech_started, evidence(now + 1)}
+    )
+
+    send(capability, {:stt_stall_timeout, watch.token})
+    _ = :sys.get_state(capability)
+    refute_received {:vxpipe_stt_stalled, ^capability, _, _, _, _}
+
+    send(
+      capability,
+      {:vxpipe_acoustic_activity, session, turn, :speech_ended, evidence(now - 4_000)}
+    )
+
+    assert_receive {:vxpipe_stt_stalled, ^capability, _, ^session, ^turn, _}, 500
+    assert :sys.get_state(capability).stall_watch == nil
+  end
+
+  test "an input source change fences a confirmed offset and late evidence from its previous source" do
+    {capability, recognizer, _, _, _} = start_capability(true)
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :transcript, [turn_ref: make_ref(), text: "opening"]}
+             )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_started, turn_ref: turn}}
+    session = :sys.get_state(capability).session
+    first = make_ref()
+    fresh = make_ref()
+    send(capability, {:vxpipe_acoustic_epoch, session, first})
+    offset = %{source_epoch: first, sequence: 1, at_ms: System.monotonic_time(:millisecond)}
+    send(capability, {:vxpipe_acoustic_activity, session, turn, :speech_ended, offset})
+    watch = :sys.get_state(capability).stall_watch
+    send(capability, {:vxpipe_acoustic_epoch, session, fresh})
+
+    send(
+      capability,
+      {:vxpipe_acoustic_activity, session, turn, :speech_ended, %{offset | sequence: 2}}
+    )
+
+    send(capability, {:stt_stall_timeout, watch.token})
+    assert :sys.get_state(capability).stall_watch == nil
+    refute_received {:vxpipe_stt_stalled, ^capability, _, _, _, _}
+    started = %{offset | source_epoch: fresh, sequence: 3}
+    send(capability, {:vxpipe_acoustic_activity, session, turn, :speech_started, started})
+    send(capability, {:vxpipe_acoustic_activity, session, turn, :speech_ended, started})
+    assert :sys.get_state(capability).stall_watch == nil
+  end
+
+  test "a final before cutover retires the pending offset and queued timeout" do
+    {capability, recognizer, _inner, _identity, _policy} = start_capability(true)
+    native = make_ref()
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :transcript, [turn_ref: native, text: "question"]}
+             )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_started, turn_ref: turn}}
+    session = :sys.get_state(capability).session
+
+    send(
+      capability,
+      {:vxpipe_acoustic_activity, session, turn, :speech_ended,
+       evidence(System.monotonic_time(:millisecond))}
+    )
+
+    token = :sys.get_state(capability).stall_watch.token
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :turn_ended,
+                [turn_ref: native, text: "question", endpointing: :provider_gap]}
+             )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_ended, turn_ref: ^turn}}
+    send(capability, {:stt_stall_timeout, token})
+    assert :sys.get_state(capability).stall_watch == nil
+    refute_received {:vxpipe_stt_stalled, ^capability, _, _, _, _}
+  end
+
+  for outcome <- [:replace, :late_final, :resumed] do
+    @outcome outcome
+    test "the recognizer checks the stalled turn again at cutover: #{outcome}" do
+      {capability, recognizer, _, _, _} = start_capability(true)
+      native = make_ref()
+
+      assert :ok =
+               GenServer.call(
+                 recognizer,
+                 {:emit, :transcript, [turn_ref: native, text: "partial"]}
+               )
+
+      assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :turn_started, turn_ref: turn}}
+      session = :sys.get_state(capability).session
+      offset = System.monotonic_time(:millisecond) - 4_000
+
+      send(
+        capability,
+        {:vxpipe_acoustic_activity, session, turn, :speech_ended, evidence(offset)}
+      )
+
+      assert_receive {:vxpipe_stt_stalled, ^capability, _, ^session, ^turn, ^offset}
+
+      case @outcome do
+        :late_final ->
+          assert :ok =
+                   GenServer.call(
+                     recognizer,
+                     {:emit, :turn_ended,
+                      [turn_ref: native, text: "complete", endpointing: :provider_gap]}
+                   )
+
+          assert_receive {:vxpipe_stt_signal, ^capability, _,
+                          %{kind: :turn_ended, turn_ref: ^turn}}
+
+        :resumed ->
+          send(
+            capability,
+            {:vxpipe_acoustic_activity, session, turn, :speech_started, evidence(offset + 1)}
+          )
+
+        :replace ->
+          :ok
+      end
+
+      monitor = Process.monitor(recognizer)
+      result = SpeechToText.replace_stalled(capability, session, turn, offset)
+
+      if @outcome == :replace do
+        assert {:ok, replacement} = result
+        refute replacement == session
+        assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}
+        assert_receive {:recognizer, fresh, _}
+        assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :connected}}
+
+        assert :ok =
+                 GenServer.call(
+                   fresh,
+                   {:emit, :transcript, [turn_ref: make_ref(), text: "repeated"]}
+                 )
+
+        assert_receive {:vxpipe_stt_signal, ^capability, _,
+                        %{kind: :transcript_updated, text: "repeated"}}
+      else
+        assert result == {:error, :stale_stall}
+        assert :sys.get_state(capability).session == session
+      end
+
+      assert {:error, :stale_stall} =
+               SpeechToText.replace_stalled(capability, session, turn, offset)
+    end
+  end
+
   for vad <- [false, true] do
     @vad vad
     test "decoded PCM does not duplicate recognition or caller usage with VAD=#{vad}" do
@@ -155,6 +326,9 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTUsageTest do
       refute_received {:vxpipe_usage_observations, _owner, _duplicate}
     end
   end
+
+  defp evidence(ms),
+    do: %{source_epoch: nil, sequence: System.unique_integer([:positive, :monotonic]), at_ms: ms}
 
   defp start_capability(vad) do
     tree = start_supervised!({CapabilityTree, owner: self()})

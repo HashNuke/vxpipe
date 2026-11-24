@@ -22,6 +22,7 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
       %{
         available?: true,
         answer_observer: nil,
+        journal_observer: nil,
         claim: Keyword.fetch!(options, :claim),
         claimed?: false,
         operations: [],
@@ -29,6 +30,9 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
       }
     end)
   end
+
+  def hold_next_journal_write(agent, observer),
+    do: Agent.update(agent, &%{&1 | journal_observer: observer})
 
   def block_answer(agent, observer), do: Agent.update(agent, &%{&1 | answer_observer: observer})
   def claim(agent), do: Agent.get(agent, & &1.claim)
@@ -217,6 +221,18 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
   @impl true
   def record_caller_recovery(agent, _claim, phase, command_id, _deadline) do
     operation(agent, {:caller_recovery, phase, command_id})
+
+    if observer =
+         Agent.get_and_update(agent, fn state ->
+           {state.journal_observer, %{state | journal_observer: nil}}
+         end) do
+      send(observer, {:journal_write_in_flight, self(), phase})
+
+      receive do
+        :finish_write -> :ok
+      end
+    end
+
     if available?(agent), do: :ok, else: {:error, :storage_unavailable}
   end
 

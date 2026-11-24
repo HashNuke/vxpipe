@@ -1,7 +1,28 @@
 defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
   @moduledoc "Carrier announcement lifecycle held by the original inbound leg."
   alias Vxpipe.CallEngine.Telephony.{Event, Submission}
-  alias Vxpipe.Gateway.Telephony.{CallerRecoveryJournal, IncomingSubmission}
+  alias Vxpipe.Gateway.Telephony.{CallerRecoveryJournal, CallerRecoveryPeer, IncomingSubmission}
+
+  @exit_budget_ms 60_000
+  @end_reserve_ms 5_000
+  @command_budget_ms 5_000
+  @clip_budget_ms 5_150
+
+  def request_hangup(binding) do
+    case Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, {:caller_recovery, binding}) do
+      [{leg, _}] ->
+        send(leg, {:hangup_caller_recovery, binding})
+        :requested
+
+      [] ->
+        :unavailable
+    end
+  end
+
+  def handle_info({:hangup_caller_recovery, binding}, %{recovery: %{binding: binding}} = state) do
+    state = if state.recovery.peer, do: journal(state, :transfer_abandoned), else: state
+    {:end, state, :api_hangup}
+  end
 
   def handle_info(
         {:caller_media_failed, media, binding},
@@ -46,6 +67,67 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
      }}
   end
 
+  def handle_info(:caller_carrier_deadline, %{recovery: %{phase: :bridged}} = state),
+    do: {:continue, state}
+
+  def handle_info(
+        {:recovery_peer, peer, :bridged},
+        %{recovery: %{peer: peer, phase: phase} = r} = state
+      )
+      when phase in [:ringing, :reconciling] do
+    Process.cancel_timer(r.timer)
+
+    {:continue,
+     journal(
+       %{state | recovery: %{r | phase: :bridged, timer: nil, token: nil}},
+       :transfer_bridged
+     )}
+  end
+
+  def handle_info(
+        {:recovery_peer, peer, {:ended, _}},
+        %{recovery: %{peer: peer, phase: :bridged}} = state
+      ),
+      do: {:end, state}
+
+  def handle_info(
+        {:recovery_peer, peer, outcome},
+        %{recovery: %{peer: peer, phase: phase}} = state
+      )
+      when phase in [:ringing, :reconciling] do
+    classification =
+      case outcome do
+        {:ended, :busy} -> :transfer_busy
+        {:ended, reason} when reason in [:no_answer, :timeout] -> :transfer_unanswered
+        _ -> :transfer_failed
+      end
+
+    fallback(journal(state, classification))
+  end
+
+  def handle_info(
+        {:DOWN, ref, :process, peer, _},
+        %{recovery: %{peer: peer, peer_ref: ref, phase: phase}} = state
+      ) do
+    case phase do
+      :bridged -> {:end, journal(state, :transfer_unknown)}
+      phase when phase in [:ringing, :reconciling] -> {:end, journal(state, :transfer_unknown)}
+      _ -> fallback(state)
+    end
+  end
+
+  def handle_info(
+        {:caller_recovery_expired, token},
+        %{recovery: %{token: token, phase: :ringing} = r} = state
+      ),
+      do: {:continue, %{state | recovery: arm_recovery(%{r | phase: :reconciling}, 5_000)}}
+
+  def handle_info(
+        {:caller_recovery_expired, token},
+        %{recovery: %{token: token, phase: :reconciling}} = state
+      ),
+      do: {:end, journal(state, :transfer_unknown)}
+
   def handle_info(
         :caller_carrier_deadline,
         %{carrier_ended?: false, recovery_journal: %{}} = state
@@ -53,35 +135,44 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
       do: {:continue, journal(state, :carrier_unknown)}
 
   def handle_info({:caller_recovery_expired, token}, %{recovery: %{token: token}} = state),
-    do: {:end, record_playback(state, :unknown)}
+    do: playback_result(state, :unknown)
 
   def handle_info(
         {:incoming_submission, :playback, worker, result},
-        %{playback_worker: {worker, _}, recovery: %{} = recovery} = state
+        %{playback_worker: {worker, _}, recovery: %{phase: :submitting} = recovery} = state
       ) do
     case result do
       {:ok, %Submission{status: status}} when status in [:accepted, :unknown] ->
-        {:continue, %{state | recovery: arm_recovery(recovery, 5_150)}}
+        {:continue,
+         %{
+           state
+           | recovery: arm_recovery(%{recovery | phase: :playing}, clip_budget(recovery.clip))
+         }}
 
       {:error, {:telnyx_command_rejected, _}} ->
-        {:end, record_playback(state, :failed)}
+        playback_result(state, :failed)
 
       _failure ->
-        {:end, record_playback(state, :unknown)}
+        playback_result(state, :unknown)
     end
   end
 
   def handle_info(
         {:DOWN, monitor, :process, worker, reason},
-        %{playback_worker: {worker, monitor}} = state
-      ) do
+        %{playback_monitors: monitors} = state
+      )
+      when :erlang.map_get(worker, monitors) == monitor do
     state = %{
       state
-      | playback_worker: nil,
+      | playback_monitors: Map.delete(monitors, worker),
+        playback_worker:
+          if(state.playback_worker == {worker, monitor}, do: nil, else: state.playback_worker),
         commands_drained?: state.commands_drained? and reason == :normal
     }
 
-    if reason == :normal or is_nil(state.recovery), do: {:continue, state}, else: {:end, state}
+    # The carrier may already be playing the clip. Its signed completion or
+    # the existing deadline can settle the attempt after observer loss.
+    {:continue, state}
   end
 
   def handle_info(_message, _state), do: :unhandled
@@ -112,35 +203,126 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
   def watch_media(state, _event), do: state
 
   defp start(state, binding) do
-    service = state.service
-    id = "recovery-" <> binding.client_state_leg_id
-    Process.send_after(self(), :caller_carrier_deadline, 60_000)
+    deadline = System.monotonic_time(:millisecond) + @exit_budget_ms
+    Process.send_after(self(), :caller_carrier_deadline, deadline, abs: true)
 
     journal =
       CallerRecoveryJournal.new(
         state.backend,
         state.claim,
         binding.client_state_leg_id,
-        DateTime.add(DateTime.utc_now(), 60, :second)
+        DateTime.add(DateTime.utc_now(), @exit_budget_ms, :millisecond)
       )
 
-    state = %{
-      state
-      | recovery_journal: CallerRecoveryJournal.record(journal, :announcement_requested)
+    anchor = %{
+      tenant_key: binding.tenant_id,
+      call_id: binding.call_id,
+      room_id: binding.room_id,
+      incarnation_id: binding.incarnation_id
     }
 
-    recovery = arm_recovery(%{id: id, timer: nil}, 5_000)
-    state = %{state | recovery: recovery}
+    {:ok, _} =
+      Registry.register(
+        Vxpipe.Gateway.Telephony.LegRegistry,
+        {:caller_recovery, anchor},
+        :carrier_owner
+      )
+
+    recovery = %{
+      binding: anchor,
+      id: nil,
+      phase: nil,
+      clip: nil,
+      deadline: deadline,
+      timer: nil,
+      token: nil,
+      peer: nil,
+      peer_ref: nil
+    }
+
+    state = %{state | recovery: recovery, recovery_journal: journal}
+
+    case recovery_destination(state) do
+      nil ->
+        play(state, :callback)
+
+      participant ->
+        case CallerRecoveryPeer.prepare(state, participant) do
+          {:ok, peer} ->
+            play(
+              %{state | recovery: %{recovery | peer: peer, peer_ref: Process.monitor(peer)}},
+              :transfer
+            )
+
+          _unavailable ->
+            play(state, :callback)
+        end
+    end
+  end
+
+  defp recovery_destination(state) do
+    plan = state.claim.call.plan
+    caller = Map.fetch!(plan.participants, state.claim.participant_ref)
+
+    with key when is_binary(key) <- Map.get(plan.transfer_policy || %{}, :recovery_destination),
+         %{kind: :human, telephony_service: service, connection: %{mode: :dial, number: to}} =
+           target
+         when is_binary(to) <- Map.get(plan.participants, key),
+         true <- service != nil and service == caller.telephony_service,
+         true <-
+           is_binary(state.service.outbound_number) and
+             to not in [
+               state.initial_event.from,
+               state.initial_event.to,
+               state.service.outbound_number
+             ] do
+      target
+    else
+      _ -> nil
+    end
+  end
+
+  defp play(state, clip) do
+    phase =
+      if clip == :callback, do: :announcement_requested, else: :transfer_announcement_requested
+
+    id = CallerRecoveryJournal.command_id(state.recovery_journal, phase)
+
+    recovery =
+      arm_recovery(%{state.recovery | id: id, phase: :submitting, clip: clip}, @command_budget_ms)
+
+    state = journal(%{state | recovery: recovery}, phase)
+
+    if clip == :transfer and not CallerRecoveryJournal.settled?(state.recovery_journal) do
+      play(drop_peer(state), :callback)
+    else
+      submit_playback(state)
+    end
+  end
+
+  defp submit_playback(state) do
+    service = state.service
+    recovery = state.recovery
+    control = state.incoming_identity.binding.provider_call_control_id
 
     case IncomingSubmission.start(self(), :playback, fn ->
-           service.adapter.play_recovery_prompt(
-             service.adapter_options,
-             binding.provider_call_control_id,
-             id
-           )
+           if recovery.clip == :callback,
+             do:
+               service.adapter.play_recovery_prompt(service.adapter_options, control, recovery.id),
+             else:
+               service.adapter.play_recovery_prompt(
+                 service.adapter_options,
+                 control,
+                 recovery.id,
+                 :transfer
+               )
          end) do
       {:ok, pid, ref} ->
-        %{state | playback_worker: {pid, ref}}
+        %{
+          state
+          | playback_worker: {pid, ref},
+            playback_monitors: Map.put(state.playback_monitors, pid, ref)
+        }
 
       _failed ->
         send(self(), {:caller_recovery_expired, recovery.token})
@@ -148,9 +330,65 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
     end
   end
 
-  def record_playback(state, :completed), do: journal(state, :announcement_completed)
-  def record_playback(state, :failed), do: journal(state, :announcement_failed)
-  def record_playback(state, :unknown), do: journal(state, :announcement_unknown)
+  def playback_result(%{recovery: %{phase: phase}} = state, _)
+      when phase not in [:submitting, :playing], do: {:continue, state}
+
+  def playback_result(%{recovery: %{clip: :callback}} = state, outcome) do
+    phase = %{
+      completed: :announcement_completed,
+      failed: :announcement_failed,
+      unknown: :announcement_unknown
+    }
+
+    {:end, journal(state, Map.fetch!(phase, outcome))}
+  end
+
+  def playback_result(state, outcome) do
+    phase = %{
+      completed: :transfer_announcement_completed,
+      failed: :transfer_announcement_failed,
+      unknown: :transfer_announcement_unknown
+    }
+
+    state = journal(state, Map.fetch!(phase, outcome))
+
+    if outcome == :completed do
+      state = journal(state, :transfer_requested)
+
+      if CallerRecoveryJournal.settled?(state.recovery_journal) do
+        CallerRecoveryPeer.dial(state.recovery.peer)
+
+        {:continue,
+         %{state | recovery: arm_recovery(%{state.recovery | phase: :ringing}, 20_000)}}
+      else
+        fallback(state)
+      end
+    else
+      fallback(state)
+    end
+  end
+
+  defp fallback(state) do
+    state = drop_peer(state)
+
+    if state.recovery.deadline - System.monotonic_time(:millisecond) >=
+         @end_reserve_ms + @clip_budget_ms do
+      {:continue, play(state, :callback)}
+    else
+      {:end, state}
+    end
+  end
+
+  defp drop_peer(%{recovery: %{peer: nil}} = state), do: state
+
+  defp drop_peer(%{recovery: r} = state) do
+    Process.demonitor(r.peer_ref, [:flush])
+    CallerRecoveryPeer.abandon(r.peer)
+    %{state | recovery: %{r | peer: nil, peer_ref: nil}}
+  end
+
+  defp clip_budget(:transfer), do: 6_460
+  defp clip_budget(:callback), do: @clip_budget_ms
 
   def journal(state, phase),
     do: %{state | recovery_journal: CallerRecoveryJournal.record(state.recovery_journal, phase)}
@@ -158,14 +396,19 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
   defp arm_recovery(recovery, delay) do
     if recovery.timer, do: Process.cancel_timer(recovery.timer)
     token = make_ref()
-    timer = Process.send_after(self(), {:caller_recovery_expired, token}, delay)
+
+    expires =
+      min(System.monotonic_time(:millisecond) + delay, recovery.deadline - @end_reserve_ms)
+
+    timer = Process.send_after(self(), {:caller_recovery_expired, token}, expires, abs: true)
     Map.merge(recovery, %{token: token, timer: timer})
   end
 
   def cancel(%{recovery: nil} = state), do: state
 
   def cancel(state) do
-    Process.cancel_timer(state.recovery.timer)
+    if state.recovery.timer, do: Process.cancel_timer(state.recovery.timer)
+    state = drop_peer(state)
     %{state | recovery: nil}
   end
 end

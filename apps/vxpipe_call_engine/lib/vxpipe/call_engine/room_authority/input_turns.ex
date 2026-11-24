@@ -22,6 +22,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
     CallerIdle,
+    CallerSpeechRecovery,
     ConnectionLifecycle,
     EventPublisher,
     FirstMessage,
@@ -89,10 +90,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
              signal.kind != :connected do
           state
         else
-          if current_native_signal?(signal, connection, state),
-            do:
-              apply_speech_to_text_signal(signal, connection_id, connection, state, observation),
-            else: state
+          if current_native_signal?(signal, connection, state) do
+            state = CallerSpeechRecovery.signal(state, connection_id, signal)
+
+            apply_speech_to_text_signal(
+              signal,
+              connection_id,
+              state.connections[connection_id],
+              state,
+              observation
+            )
+          else
+            state
+          end
         end
 
       :error ->

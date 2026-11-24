@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
     :incoming,
     :outgoing,
     :answered,
+    :bridged,
     :recovery_playback_ended,
     :media_started,
     :media,
@@ -63,6 +64,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           :incoming
           | :outgoing
           | :answered
+          | :bridged
           | :recovery_playback_ended
           | :media_started
           | :media
@@ -125,7 +127,8 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
       present?(event.leg_id) and present?(event.from) and present?(event.to) and
         present?(event.provider_connection_id) and webhook_identified?(event)
 
-  defp valid_kind?(%__MODULE__{kind: :answered} = event), do: webhook_identified?(event)
+  defp valid_kind?(%__MODULE__{kind: kind} = event) when kind in [:answered, :bridged],
+    do: webhook_identified?(event)
 
   defp valid_kind?(%__MODULE__{kind: :recovery_playback_ended} = event),
     do:

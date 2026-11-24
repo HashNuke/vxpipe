@@ -143,6 +143,42 @@ defmodule Vxpipe.CallEngine.CallSpec.AgentTransferCompilerTest do
     end
   end
 
+  test "pins an authorized human phone participant as the inbound recovery destination" do
+    input = recovery_spec()
+    assert {:ok, spec} = CallSpec.new(input, resource_id: "support", revision: 7)
+    assert spec.transfer_policy.recovery_destination == "billing"
+    assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation("telephony"), registries())
+    assert plan.transfer_policy.recovery_destination == "billing"
+    assert plan.participants["billing"].connection.number == "+15550001002"
+
+    for invalid <- [
+          put_in(input, [:participants, "reception", :transfers], []),
+          put_in(input, [:participants, "billing", :connection, :service], "other-phone"),
+          put_in(input, [:participants, "billing", :connection, :number], "+15550001000"),
+          put_in(input, [:transfer_policy, :recovery_destination], "reception"),
+          put_in(input, [:transfer_policy, :recovery_destination], "missing")
+        ] do
+      assert {:error, %Error{details: %{"path" => ["transfer_policy", "recovery_destination"]}}} =
+               CallSpec.new(invalid, resource_id: "support", revision: 8)
+    end
+  end
+
+  defp recovery_spec do
+    transfer_call_spec()
+    |> put_in([:participants, "caller", :connection], %{
+      service: "primary-phone",
+      mode: "receive",
+      admission: "start_call",
+      number: "+15550001000"
+    })
+    |> put_in([:participants, "billing"], %{
+      type: "human",
+      description: "A billing specialist",
+      connection: %{service: "primary-phone", mode: "dial", number: "+15550001002"}
+    })
+    |> Map.put(:transfer_policy, %{recovery_destination: "billing"})
+  end
+
   test "pins each destination agent's inbound transfer history policy" do
     assert {:ok, default_call_spec} =
              transfer_call_spec()
@@ -464,13 +500,13 @@ defmodule Vxpipe.CallEngine.CallSpec.AgentTransferCompilerTest do
     }
   end
 
-  defp invocation do
+  defp invocation(transport \\ "web") do
     {:ok, invocation} =
       CallInvocation.new(
         %{
           call_spec: %{id: "support", revision: 7},
           initial_variables: %{},
-          transport: %{type: "web"}
+          transport: %{type: transport}
         },
         tenant_id: "tenant-demo",
         actor_id: "actor-demo"

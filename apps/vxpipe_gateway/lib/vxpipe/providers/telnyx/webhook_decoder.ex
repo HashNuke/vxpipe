@@ -67,6 +67,15 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoder do
 
   defp decode_event("call.answered", data), do: build_event(:answered, data)
 
+  defp decode_event("call.bridged", data) do
+    with {:ok, payload} <- payload(data),
+         {:ok, "peer-" <> _ = id} <- ClientState.decode(payload["client_state"]) do
+      build_event(:bridged, data, leg_id: id)
+    else
+      _unrelated -> :ignore
+    end
+  end
+
   defp decode_event("call.playback.ended", data) do
     with {:ok, payload} <- payload(data),
          {:ok, encoded} <- bounded_field(payload, "client_state", 256),

@@ -149,6 +149,38 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     )
   end
 
+  def caller_recovery(recorder, connection, episode, phase) do
+    emit(recorder, :caller_speech_recovery,
+      id: Id.generate(:event),
+      participant_id: connection.participant_id,
+      connection_id: episode.connection_id,
+      activation_id: activation(recorder, connection.participant_id),
+      command_id: episode.token,
+      correlation_id: episode.room_turn_id,
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{
+        "phase" => Atom.to_string(phase),
+        "trigger" =>
+          if(episode.turn == :provider_failed,
+            do: "provider_failure",
+            else: "missing_final_after_offset"
+          ),
+        "source_generation" => generation_id(episode.session.generation),
+        "replacement_generation" => generation_id(episode.replacement),
+        "elapsed_ms" => max(0, System.monotonic_time(:millisecond) - episode.started_ms),
+        "trigger_age_ms" => max(0, episode.started_ms - episode.offset)
+      }
+    )
+  end
+
+  defp generation_id(nil), do: nil
+
+  defp generation_id(reference) when is_reference(reference) do
+    :crypto.hash(:sha256, :erlang.term_to_binary(reference))
+    |> binary_part(0, 12)
+    |> Base.url_encode64(padding: false)
+  end
+
   @spec accepted_input(t(), SendText.t(), :audio | :text, map()) :: t()
   def accepted_input(
         %__MODULE__{} = recorder,

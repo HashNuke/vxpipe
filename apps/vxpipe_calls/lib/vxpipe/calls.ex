@@ -2,10 +2,23 @@ defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
   @doc "Locates retained recovery evidence for an exact inbound carrier terminal event."
-  def find_caller_recovery(scope, %Vxpipe.CallEngine.Telephony.Event{provider: :telnyx, kind: :ended} = event, options) do
+  def find_caller_recovery(
+        scope,
+        %Vxpipe.CallEngine.Telephony.Event{provider: :telnyx, kind: :ended} = event,
+        options
+      ) do
     with :ok <- Vxpipe.Calls.ProviderAuth.owner(scope),
          {:ok, repository} <- Vxpipe.Calls.Repositories.fetch(options, :call_repository) do
       Vxpipe.Calls.Repositories.call(repository, :find_caller_recovery, [scope, event])
+    end
+  end
+
+  @doc "Marks expired durable carrier attempts unresolved without issuing commands or acknowledging cleanup."
+  def expire_caller_recoveries(%DateTime{} = now, limit, options) when limit in 1..100 do
+    with {:ok, {module, context}} <- Vxpipe.Calls.Repositories.fetch(options, :call_repository) do
+      if Code.ensure_loaded?(module) and function_exported?(module, :expire_caller_recoveries, 3),
+        do: module.expire_caller_recoveries(context, now, limit),
+        else: {:ok, 0}
     end
   end
 
@@ -18,6 +31,17 @@ defmodule Vxpipe.Calls do
         options
       )
       when phase in [
+             :transfer_announcement_requested,
+             :transfer_announcement_completed,
+             :transfer_announcement_failed,
+             :transfer_announcement_unknown,
+             :transfer_requested,
+             :transfer_bridged,
+             :transfer_failed,
+             :transfer_busy,
+             :transfer_unanswered,
+             :transfer_unknown,
+             :transfer_abandoned,
              :announcement_requested,
              :announcement_completed,
              :announcement_failed,

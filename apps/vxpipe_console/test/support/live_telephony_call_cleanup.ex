@@ -13,7 +13,7 @@ defmodule Vxpipe.Console.Test.LiveTelephonyCallCleanup do
   def current(server \\ __MODULE__), do: GenServer.call(server, :current)
 
   def command(provider, operation, options, request, server \\ __MODULE__)
-      when operation in [:dial, :answer] do
+      when operation in [:dial, :answer, :dial_recovery_peer] do
     scope = current(server)
 
     if operation == :answer do
@@ -21,7 +21,17 @@ defmodule Vxpipe.Console.Test.LiveTelephonyCallCleanup do
       :ok = record(scope, provider, options, leg.provider_call_control_id, server)
     end
 
-    result = apply(Adapter, operation, [adapter(provider), options, request])
+    result =
+      case {provider, operation} do
+        {:telnyx, :dial_recovery_peer} ->
+          Vxpipe.Providers.Telnyx.Adapter.dial_recovery_peer(options, request)
+
+        {_, :dial_recovery_peer} ->
+          {:error, :unsupported_provider}
+
+        _ ->
+          apply(Adapter, operation, [adapter(provider), options, request])
+      end
 
     case result do
       {:ok, %Submission{provider_call_control_id: handle}} when is_binary(handle) ->

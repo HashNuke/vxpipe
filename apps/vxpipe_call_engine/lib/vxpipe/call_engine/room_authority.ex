@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery
   alias Vxpipe.CallEngine.RoomAuthority.DiagnosticNotifications, as: Diagnostics
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
@@ -701,6 +702,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       ) do
     {:noreply, InputTurns.speech_to_text(capability, identity, signal, state, observation)}
   end
+
+  require CallerSpeechRecovery
+
+  def handle_info(message, state) when CallerSpeechRecovery.recovery_message?(message),
+    do: CallerSpeechRecovery.handle(message, state)
 
   def handle_info({:vxpipe_stt_signal, capability, identity, %Signal{} = signal}, state) do
     {:noreply, InputTurns.speech_to_text(capability, identity, signal, state)}

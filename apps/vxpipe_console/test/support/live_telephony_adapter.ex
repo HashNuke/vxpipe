@@ -36,6 +36,18 @@ defmodule Vxpipe.Console.Test.LiveTelephonyAdapter do
   def end_leg(options, request), do: delegate(options, :end_leg, request)
 
   @impl true
+  defdelegate play_recovery_prompt(options, control_id, command_id),
+    to: Vxpipe.Providers.Telnyx.Adapter
+
+  @impl true
+  defdelegate play_recovery_prompt(options, control_id, command_id, kind),
+    to: Vxpipe.Providers.Telnyx.Adapter
+
+  @impl true
+  def dial_recovery_peer(options, request),
+    do: LiveTelephonyCallCleanup.command(provider(options), :dial_recovery_peer, options, request)
+
+  @impl true
   def send_media(options, request), do: delegate(options, :send_media, request)
 
   @impl true

@@ -18,7 +18,8 @@ export function validateSource(value: unknown): SourceIssue[] {
   validatePolicies(fields, source, participants);
   validateVariables(fields, source, participants);
   if (source.transfer_policy !== undefined && source.transfer_policy !== null) {
-    const policy = fields.object(source.transfer_policy, ["transfer_policy"], ["attempt_timeout_ms"]);
+    const policy = fields.object(source.transfer_policy, ["transfer_policy"], ["attempt_timeout_ms", "recovery_destination"]);
+    if (Object.hasOwn(policy, "recovery_destination")) validateRecoveryDestination(fields, source, participants, policy.recovery_destination);
     if (Object.hasOwn(policy, "attempt_timeout_ms")) fields.integer(policy.attempt_timeout_ms, ["transfer_policy", "attempt_timeout_ms"], 1000, 120000, "must be between 1 and 120 seconds");
   }
   if (source.limits !== undefined) {
@@ -26,6 +27,23 @@ export function validateSource(value: unknown): SourceIssue[] {
     if (Object.hasOwn(limits, "max_duration_ms")) fields.integer(limits.max_duration_ms, ["limits", "max_duration_ms"], 1000, 86400000, "must be between 1 and 86400 seconds");
   }
   return fields.issues;
+}
+
+function validateRecoveryDestination(fields: Fields, source: ObjectValue, participants: ObjectValue, key: unknown): void {
+  const path = ["transfer_policy", "recovery_destination"];
+  if (!fields.identifier(key, path)) return;
+  const incoming = record(source.incoming_call) ? source.incoming_call : {};
+  const callerKey = incoming.caller ?? source.entry_caller;
+  const handlerKey = incoming.handled_by ?? source.entry_receiver;
+  const caller = typeof callerKey === "string" ? participants[callerKey] : undefined;
+  const handler = typeof handlerKey === "string" ? participants[handlerKey] : undefined;
+  const target = participants[key];
+  if (record(caller) && record(caller.connection) && record(handler) && handler.type === "agent" &&
+      Array.isArray(handler.transfers) && handler.transfers.includes(key) && record(target) &&
+      target.type === "human" && record(target.connection) && target.connection.mode === "dial" &&
+      target.connection.service !== "web" && target.connection.service === caller.connection.service &&
+      typeof target.connection.number === "string" && target.connection.number !== caller.connection.number) return;
+  fields.issue(path, "must reference a permitted human transfer participant with a distinct fixed number on the inbound telephone service");
 }
 
 function direction(fields: Fields, source: ObjectValue, participants: ObjectValue): void {

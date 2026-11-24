@@ -88,6 +88,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       }
       when byte_size(payload) > 0 and rem(byte_size(payload), 2) == 0 ->
         if is_pid(state.owner) and map_size(state.sinks) > 0 and
+             (state.phase != :caller_recovery or map_size(state.sinks) == 1) and
              Enum.all?(state.sinks, fn {id, sink} -> is_binary(id) and is_pid(sink) end) do
           monitors =
             [state.owner | Map.values(state.sinks)] |> Map.new(&{Process.monitor(&1), &1})
@@ -153,6 +154,10 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       )
       when is_integer(duration) and duration >= 0 do
     case Map.fetch(state.pending, sink) do
+      {:ok, %{stage: :finish} = pending} ->
+        {:noreply,
+         %{state | pending: Map.put(state.pending, sink, Map.put(pending, :played?, true))}}
+
       {:ok, %{stage: :playback} = pending} ->
         advance(%{state | pending: Map.put(state.pending, sink, %{pending | done?: true})})
 
@@ -186,7 +191,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
         {:noreply, state}
 
       {sink, %{stage: :finish} = pending, {:reply, :ok}} ->
-        pending = %{pending | id: nil, stage: :playback, done?: false}
+        pending = %{pending | id: nil, stage: :playback, done?: Map.get(pending, :played?, false)}
         advance(%{state | pending: Map.put(state.pending, sink, pending)})
 
       {sink, pending, {:reply, :ok}} ->
@@ -400,7 +405,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       channels: 1,
       byte_order: :little,
       payload: payload,
-      audio_scope: :private,
+      audio_scope: if(state.phase == :caller_recovery, do: :conversation, else: :private),
       output_generation: state.output_generation,
       reply_to: self()
     }

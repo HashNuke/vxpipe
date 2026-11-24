@@ -32,6 +32,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  def replace_stalled(capability, session, turn, offset) do
+    GenServer.call(capability, {:replace_stalled, session, turn, offset}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   def input_binding(capability) do
     GenServer.call(capability, :input_binding, @call_timeout)
   catch
@@ -155,6 +161,31 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @impl true
   def handle_call(:readiness, _from, state), do: {:reply, State.readiness(state), state}
+
+  def handle_call(
+        {:replace_stalled, session, turn, offset},
+        {owner, _},
+        %{
+          owner: owner,
+          session: session,
+          pending_policy: nil,
+          private_allocation: nil,
+          reported_stall: %{turn: turn, at_ms: offset}
+        } = state
+      )
+      when turn == :provider_failed or is_map_key(state.turn_indexes, turn) do
+    case state |> Usage.finish_session(:failed) |> State.restart_stalled() do
+      {:ok, replacement} ->
+        Watch.changed()
+        {:reply, {:ok, replacement.session}, replacement}
+
+      {:error, reason, closed} ->
+        {:stop, reason, {:error, reason}, closed}
+    end
+  end
+
+  def handle_call({:replace_stalled, _, _, _}, _from, state),
+    do: {:reply, {:error, :stale_stall}, state}
 
   def handle_call({:prepare_policy, candidate, options}, _from, state) do
     with :ok <- PrivateAllocation.validate_preparation(state.private_allocation, options),
@@ -298,6 +329,45 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     announce_readiness(result, state)
   end
 
+  def handle_info({:caller_recovery_enabled, owner, enabled?}, %{owner: owner} = state)
+      when is_boolean(enabled?) do
+    {:noreply, %{state | caller_recovery_enabled?: enabled?}}
+  end
+
+  def handle_info(
+        {:caller_recovery_failure_expired, session, offset},
+        %{session: session, reported_stall: %{turn: :provider_failed, at_ms: offset}} = state
+      ),
+      do: stop_unavailable(:provider_failed, state)
+
+  def handle_info({:vxpipe_acoustic_epoch, session, epoch}, %{session: session} = state),
+    do: {:noreply, State.acoustic_epoch(state, epoch)}
+
+  def handle_info(
+        {:vxpipe_acoustic_activity, session, turn, kind, at_ms},
+        %{session: session} = state
+      )
+      when kind in [:speech_started, :speech_ended] do
+    {:noreply, State.acoustic_activity(state, turn, kind, at_ms)}
+  end
+
+  def handle_info(
+        {:stt_stall_timeout, token},
+        %{session: session, stall_watch: %{token: token, session: session} = watch} = state
+      ) do
+    if is_nil(state.pending_policy) and is_nil(state.private_allocation) and
+         Map.has_key?(state.turn_indexes, watch.turn) do
+      send(
+        state.owner,
+        {:vxpipe_stt_stalled, self(), state.identity, session, watch.turn, watch.at_ms}
+      )
+
+      {:noreply, %{state | stall_watch: nil, reported_stall: watch}}
+    else
+      {:noreply, %{state | stall_watch: nil}}
+    end
+  end
+
   def handle_info({:vxpipe_speech, event}, state) do
     result =
       case State.event(state, event) do
@@ -319,7 +389,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
         {:vxpipe_speech_closed, allocation, _reason},
         %{session: allocation} = state
       ),
-      do: stop_unavailable(:provider_failed, state)
+      do: observed_failure(state)
 
   def handle_info(
         {:DOWN, monitor, :process, _owner, _reason},
@@ -348,7 +418,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
       {:error, :unavailable} ->
         acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unavailable})
-        stop_unavailable(:provider_failed, state)
+        observed_failure(state)
 
       :ok ->
         acknowledge_audio(ingress, reference, frame.sequence_number, :ok)
@@ -379,7 +449,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     state = Usage.observe_signal(state, signal)
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
 
-    stop_unavailable(:provider_failed, %{state | last_provider_sequence: signal.provider_sequence})
+    observed_failure(%{state | last_provider_sequence: signal.provider_sequence})
   end
 
   defp handle_signal(%Signal{} = signal, state) do
@@ -431,6 +501,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     {state.readiness_status, state.session != nil, state.readiness_generation,
      state.policy_revision, pending && {pending.readiness_status, pending.session != nil}}
   end
+
+  defp observed_failure(%{reported_stall: %{turn: :provider_failed}} = state),
+    do: {:noreply, state}
+
+  defp observed_failure(
+         %{caller_recovery_enabled?: true, pending_policy: nil, private_allocation: nil} = state
+       ) do
+    offset = System.monotonic_time(:millisecond)
+
+    send(
+      state.owner,
+      {:vxpipe_stt_stalled, self(), state.identity, state.session, :provider_failed, offset}
+    )
+
+    Process.send_after(self(), {:caller_recovery_failure_expired, state.session, offset}, 5_000)
+    {:noreply, %{state | reported_stall: %{turn: :provider_failed, at_ms: offset}}}
+  end
+
+  defp observed_failure(state), do: stop_unavailable(:provider_failed, state)
 
   defp stop_unavailable(reason, state) do
     state = Usage.finish_session(state, :failed)

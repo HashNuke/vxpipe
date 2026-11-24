@@ -102,8 +102,15 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
         )
 
         [
+          caller_vad: context[:caller_vad] == true,
           caller_stt: if(context[:caller_recovery], do: :scribe, else: :default),
           language: context[:language],
+          command_mode: context[:command_mode] || "observer",
+          transfer_policy:
+            if(context[:recovery_transfer],
+              do: %{recovery_destination: "human-support"},
+              else: %{}
+            ),
           model: if(outcome == :model, do: "test:blocked-unavailable", else: "test:blocked"),
           wait_sounds: if(outcome in [:max_duration, :disconnected], do: nil, else: %{})
         ]
@@ -150,6 +157,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       )
 
       LegSupervisor.stop_outgoing(@outgoing_leg_id)
+      LegSupervisor.stop_outgoing("peer-" <> @incoming_leg_id)
     end)
 
     %{
@@ -274,6 +282,392 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     refute_receive {:test_recovery_playback, _, _}
   end
 
+  @tag initial_outcome: :ready, caller_recovery: true
+  @tag recovery_permission: true
+  test "a delayed playout request without its cleared output grant is inert", context do
+    {_speech, _socket} = start_recovery_call(context)
+
+    [{room, _}] =
+      Registry.lookup(
+        Vxpipe.CallEngine.RoomRegistry,
+        {context.plan.tenant_id, context.plan.room_id}
+      )
+
+    [{media, _}] =
+      Registry.lookup(Vxpipe.Gateway.Media.Registry, {:telephony_media_session, @incoming_leg_id})
+
+    send(media, {:play_caller_recovery, room, "retired-grant", :hearing, 0})
+    assert :sys.get_state(media).recovery_cue == nil
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
+  test "a stalled open question replaces recognition on the same caller media socket", context do
+    {room, replacement, socket} = start_stalled_recovery(context)
+    Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(replacement, {:ready, "fresh-scribe"})
+    await_recovery_phase(room, :awaiting_repeat, System.monotonic_time(:millisecond) + 9_000)
+    assert_receive {:test_phone_output, ^socket, packet}, 2_000
+    assert JSON.decode!(packet)["event"] in ["clear", "media"]
+
+    Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(
+      replacement,
+      {:segment, "Do you service commercial properties?"}
+    )
+
+    Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(replacement, {:partial, ""})
+    assert_receive {:test_agent_runtime_stream, _provider, _request}, 3_000
+    refute_received {:test_agent_runtime_stream, _, _}
+    refute_received {:test_recovery_playback, _, _}
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true
+  test "a confirmed recognizer disconnect gets one fresh allocation while phone audio remains healthy",
+       context do
+    {speech, _socket} = start_recovery_call(context)
+    GenServer.stop(speech, :normal)
+    assert_receive {:scribe_started, replacement}, 2_000
+    refute_received {:test_recovery_playback, _, _}
+    GenServer.stop(replacement, :normal)
+    assert_receive {:test_recovery_playback, "inbound-call-control", _id}, 2_000
+    refute_received {:scribe_started, _}
+  end
+
+  for failure <- [:readiness_timeout, :no_repeat, :replacement_failure] do
+    @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
+    @tag recovery_scenario: true
+    test "recovery enters carrier fallback once on #{failure}", context do
+      {room, replacement, _socket} = start_stalled_recovery(context)
+
+      case unquote(failure) do
+        :readiness_timeout ->
+          expire_recovery(room, :hearing)
+
+        :no_repeat ->
+          Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(
+            replacement,
+            {:ready, "replacement"}
+          )
+
+          expire_recovery(room, :awaiting_repeat)
+
+        :replacement_failure ->
+          Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(
+            replacement,
+            {:ready, "replacement"}
+          )
+
+          GenServer.stop(replacement, :normal)
+      end
+
+      assert_receive {:test_recovery_playback, "inbound-call-control", id}, 2_000
+      refute_received {:scribe_started, _}
+
+      assert post_fixture(context, "call-playback-ended", %{
+               "status" => "completed",
+               "client_state" => Base.encode64(id)
+             }).status == 200
+
+      assert_receive {:test_telephony_end_leg, _}, 2_000
+
+      assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
+               200
+    end
+  end
+
+  defp expire_recovery(room, phase) do
+    await_recovery_phase(room, phase, System.monotonic_time(:millisecond) + 9_000)
+    %{timer: {_, token}} = :sys.get_state(room).connections[@incoming_leg_id].speech_recovery
+    send(room, {:caller_recovery_expired, @incoming_leg_id, token})
+  end
+
+  defp start_stalled_recovery(context) do
+    {speech, socket} = start_recovery_call(context)
+
+    [{room, _}] =
+      Registry.lookup(
+        Vxpipe.CallEngine.RoomRegistry,
+        {context.plan.tenant_id, context.plan.room_id}
+      )
+
+    Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(
+      speech,
+      {:partial, "Do you service commercial properties?"}
+    )
+
+    {capability, turn} = await_open_question(room, System.monotonic_time(:millisecond) + 2_000)
+    session = :sys.get_state(capability).session
+
+    send(
+      capability,
+      {:vxpipe_acoustic_activity, session, turn, :speech_ended,
+       %{
+         source_epoch: :sys.get_state(capability).acoustic_epoch,
+         sequence: System.unique_integer([:positive, :monotonic]),
+         at_ms: System.monotonic_time(:millisecond) - 4_000
+       }}
+    )
+
+    assert_receive {:scribe_started, replacement}, 2_000
+    refute replacement == speech
+    {room, replacement, socket}
+  end
+
+  defp await_recovery_phase(room, phase, deadline) do
+    connection = Map.fetch!(:sys.get_state(room).connections, @incoming_leg_id)
+
+    case connection.speech_recovery do
+      %{phase: ^phase} ->
+        :ok
+
+      other ->
+        assert System.monotonic_time(:millisecond) < deadline,
+               "recovery phase: #{inspect(if is_map(other), do: Map.take(other, [:phase, :ready?, :hearing_done?]), else: other)}"
+
+        receive do
+        after
+          10 -> await_recovery_phase(room, phase, deadline)
+        end
+    end
+  end
+
+  defp await_open_question(room, deadline) do
+    connection = Map.fetch!(:sys.get_state(room).connections, @incoming_leg_id)
+
+    case connection.speech_to_text do
+      %{turn: %{turn_ref: turn}, capability: capability} when is_reference(turn) ->
+        {capability, turn}
+
+      _ ->
+        assert System.monotonic_time(:millisecond) < deadline, "caller turn never opened"
+
+        receive do
+        after
+          10 -> await_open_question(room, deadline)
+        end
+    end
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, commercial: true
+  test "commercial-property barge-in interrupts phone output before the recognizer disconnects",
+       context do
+    {speech, socket, voice} = start_recovery_media(context)
+    scribe = Vxpipe.CallEngine.TestElevenLabsScribeTransport
+    scribe.deliver(speech, {:segment, "Do you offer gardening services?"})
+    scribe.deliver(speech, {:partial, ""})
+    assert_receive {:test_agent_runtime_stream, provider, _}, 3_000
+    {:ok, response} = ModelResponse.new(text: "We offer gardening services.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_control, ^voice, speak}, 2_000
+    assert %{"type" => "Speak", "text" => "We offer gardening services."} = JSON.decode!(speak)
+    assert_receive {:test_tts_control, ^voice, flush}, 2_000
+    assert JSON.decode!(flush)["type"] == "Flush"
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"gardening"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(
+      voice,
+      :binary.copy(<<1000::little-signed-16>>, 9_600)
+    )
+
+    assert_receive {:test_phone_output, ^socket, packet}, 2_000
+    assert %{"event" => "media"} = JSON.decode!(packet)
+    scribe.deliver(speech, {:partial, "Do you service commercial properties?"})
+    assert_receive {:test_phone_output, ^socket, ~s({"event":"clear"})}, 2_000
+    exhaust_recognition(speech)
+    assert_receive {:test_recovery_playback, "inbound-call-control", id}, 2_000
+
+    assert post_fixture(context, "call-playback-ended", %{
+             "status" => "completed",
+             "client_state" => Base.encode64(id)
+           }).status == 200
+
+    assert_receive {:test_telephony_end_leg, _}, 2_000
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, recovery_transfer: true
+  test "a configured fallback journals and announces the handoff before submitting one linked dial",
+       context do
+    {speech, _} = start_recovery_call(context)
+    exhaust_recognition(speech)
+    assert_receive {:test_transfer_announcement, "inbound-call-control", id}, 2_000
+    refute_received {:test_linked_dial, _}
+
+    for _duplicate <- 1..2 do
+      assert post_fixture(context, "call-playback-ended", %{
+               "status" => "completed",
+               "client_state" => Base.encode64(id)
+             }).status == 200
+    end
+
+    assert_receive {:test_linked_dial, request}, 2_000
+    assert request.to == "+15550001002"
+    assert request.caller == "inbound-call-control"
+
+    assert {:caller_recovery, :transfer_requested, request.id} in TelephonyHarnessBackend.operations(
+             context.backend
+           )
+
+    refute_received {:test_linked_dial, _}
+    refute_received {:test_telephony_end_leg, _}
+  end
+
+  for outcome <- [:bridged, :no_answer, :abandoned, :platform_after_bridge] do
+    @tag initial_outcome: :ready, caller_recovery: true, recovery_transfer: true
+    test "human fallback handles #{outcome} after AI room shutdown", context do
+      {speech, _} = start_recovery_call(context)
+      exhaust_recognition(speech)
+      assert_receive {:test_transfer_announcement, _, id}, 2_000
+      stop_room(context.plan.tenant_id, context.plan.room_id)
+
+      assert post_fixture(context, "call-playback-ended", %{
+               "status" => "completed",
+               "client_state" => Base.encode64(id)
+             }).status == 200
+
+      assert_receive {:test_linked_dial, request}, 2_000
+      assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+
+      case unquote(outcome) do
+        :bridged ->
+          assert peer_event(context, request.id, "call.bridged").status == 200
+          assert :sys.get_state(leg).recovery.phase == :bridged
+          refute_received {:test_telephony_end_leg, _}
+          assert peer_event(context, request.id, "call.hangup").status == 200
+
+          assert_receive {:test_telephony_end_leg,
+                          %{leg: %{provider_call_control_id: "inbound-call-control"}}},
+                         2_000
+
+        :platform_after_bridge ->
+          assert peer_event(context, request.id, "call.bridged").status == 200
+          assert :sys.get_state(leg).recovery.phase == :bridged
+          call = TelephonyHarnessBackend.claim(context.backend).call
+
+          row = %{
+            tenant_key: call.tenant_key,
+            call_id: call.id,
+            room_id: call.room_id,
+            incarnation_id: call.incarnation_id,
+            incarnation_binding_verified: true,
+            hangup_requested_at: DateTime.utc_now(),
+            gateway_cleanup_required: false
+          }
+
+          assert :requested = Vxpipe.Gateway.CallCleanupRecovery.reconcile(row, [])
+
+          assert_receive {:test_telephony_end_leg,
+                          %{leg: %{provider_call_control_id: "inbound-call-control"}}},
+                         2_000
+
+          assert_receive {:test_telephony_end_leg,
+                          %{leg: %{provider_call_control_id: "peer-control"}}},
+                         2_000
+
+          assert peer_event(context, request.id, "call.hangup").status == 200
+
+        :no_answer ->
+          assert peer_event(context, request.id, "call.hangup", "no_answer").status == 200
+          assert_receive {:test_recovery_playback, "inbound-call-control", callback}, 2_000
+          refute_received {:test_telephony_end_leg, _}
+
+          assert post_fixture(context, "call-playback-ended", %{
+                   "status" => "completed",
+                   "client_state" => Base.encode64(callback)
+                 }).status == 200
+
+          assert_receive {:test_telephony_end_leg,
+                          %{leg: %{provider_call_control_id: "inbound-call-control"}}},
+                         2_000
+
+        :abandoned ->
+          assert post_fixture(context, "call-hangup-incoming", %{
+                   "call_leg_id" => "inbound-call-leg"
+                 }).status == 200
+
+          assert_receive {:test_telephony_end_leg,
+                          %{leg: %{provider_call_control_id: "peer-control"}}},
+                         2_000
+
+          assert peer_event(context, request.id, "call.hangup").status == 200
+          refute_received {:test_recovery_playback, _, _}
+      end
+    end
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, recovery_transfer: true
+  test "a bridge arriving after the reconciliation deadline cannot reverse termination",
+       context do
+    {speech, _} = start_recovery_call(context)
+    exhaust_recognition(speech)
+    assert_receive {:test_transfer_announcement, _, id}, 2_000
+
+    assert post_fixture(context, "call-playback-ended", %{
+             "status" => "completed",
+             "client_state" => Base.encode64(id)
+           }).status == 200
+
+    assert_receive {:test_linked_dial, request}, 2_000
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+    %{phase: :ringing, token: ring_timer} = :sys.get_state(leg).recovery
+    send(leg, {:caller_recovery_expired, ring_timer})
+    %{phase: :reconciling, token: reconciliation_timer} = :sys.get_state(leg).recovery
+    refute_received {:test_telephony_end_leg, _}
+    send(leg, {:caller_recovery_expired, reconciliation_timer})
+
+    assert_receive {:test_telephony_end_leg, %{leg: %{provider_call_control_id: "peer-control"}}},
+                   2_000
+
+    assert_receive {:test_telephony_end_leg,
+                    %{leg: %{provider_call_control_id: "inbound-call-control"}}},
+                   2_000
+
+    assert peer_event(context, request.id, "call.bridged").status == 200
+    assert peer_event(context, request.id, "call.hangup").status == 200
+    refute_received {:test_linked_dial, _}
+    refute_received {:test_recovery_playback, _, _}
+
+    assert {:caller_recovery, :transfer_unknown, request.id} in TelephonyHarnessBackend.operations(
+             context.backend
+           )
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, recovery_transfer: true
+  test "storage loss between announcement and dial selects callback without submitting a transfer",
+       context do
+    {speech, _} = start_recovery_call(context)
+    exhaust_recognition(speech)
+    assert_receive {:test_transfer_announcement, _, id}, 2_000
+    TelephonyHarnessBackend.make_storage_unavailable(context.backend)
+
+    assert post_fixture(context, "call-playback-ended", %{
+             "status" => "completed",
+             "client_state" => Base.encode64(id)
+           }).status == 200
+
+    assert_receive {:test_recovery_playback, "inbound-call-control", callback}, 2_000
+    refute_received {:test_linked_dial, _}
+    refute callback == id
+
+    assert post_fixture(context, "call-playback-ended", %{
+             "status" => "completed",
+             "client_state" => Base.encode64(callback)
+           }).status == 200
+
+    assert_receive {:test_telephony_end_leg,
+                    %{leg: %{provider_call_control_id: "inbound-call-control"}}},
+                   2_000
+  end
+
+  defp peer_event(context, id, type, cause \\ "normal_clearing"),
+    do:
+      post_fixture(context, "recovery-peer-event", %{
+        "client_state" => ClientState.encode(id),
+        "event_type" => type,
+        "cause" => cause
+      })
+
   for fault <- [:recognizer_disconnected, :media_crash, :storage_outage] do
     @tag initial_outcome: :ready, caller_recovery: fault
     test "caller hears the carrier exit after #{fault}", context do
@@ -291,10 +685,10 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
         :storage_outage ->
           TelephonyHarnessBackend.make_storage_unavailable(context.backend)
-          GenServer.stop(speech, :normal)
+          exhaust_recognition(speech)
 
         :recognizer_disconnected ->
-          GenServer.stop(speech, :normal)
+          exhaust_recognition(speech)
       end
 
       assert_receive {:test_recovery_playback, "inbound-call-control", command_id}, 2_000
@@ -329,10 +723,174 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     end
   end
 
+  @tag initial_outcome: :ready, caller_recovery: true, command_mode: "blocked-playback"
+  test "losing the playback observer waits for signed completion without replaying the clip",
+       context do
+    {speech, _} = start_recovery_call(context)
+    exhaust_recognition(speech)
+    assert_receive {:test_recovery_playback, _, id}, 2_000
+    assert_receive {:test_playback_in_flight, http}, 2_000
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+    {worker, _ref} = :sys.get_state(leg).playback_worker
+    monitor = Process.monitor(worker)
+
+    try do
+      Process.exit(worker, :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}
+      refute_receive {:test_telephony_end_leg, _}, 250
+
+      assert post_fixture(context, "call-playback-ended", %{
+               "status" => "completed",
+               "client_state" => Base.encode64(id)
+             }).status == 200
+
+      assert_receive {:test_telephony_end_leg, _}, 2_000
+      refute_received {:test_recovery_playback, _, _}
+      refute :sys.get_state(leg).commands_drained?
+    after
+      send(http, :release_playback)
+    end
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, command_mode: "blocked-playback"
+  test "an ambiguous intent write consumes part of the acknowledgement budget", context do
+    {speech, _} = start_recovery_call(context)
+    TelephonyHarnessBackend.hold_next_journal_write(context.backend, self())
+    exhaust_recognition(speech)
+    assert_receive {:journal_write_in_flight, _writer, :announcement_requested}, 2_000
+    assert_receive {:test_playback_in_flight, http}, 2_000
+
+    try do
+      assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+      assert Process.read_timer(:sys.get_state(leg).recovery.timer) <= 4_050
+      assert_receive {:test_telephony_end_leg, _}, 5_000
+
+      assert {:caller_recovery, :announcement_unknown, "recovery-" <> @incoming_leg_id} in TelephonyHarnessBackend.operations(
+               context.backend
+             )
+    after
+      send(http, :release_playback)
+    end
+  end
+
+  for outcome <- [:rejected, :unknown] do
+    @tag initial_outcome: :ready, caller_recovery: true, command_mode: "blocked-playback"
+    test "carrier reports #{outcome} on the playback request", context do
+      {speech, _} = start_recovery_call(context)
+      exhaust_recognition(speech)
+      assert_receive {:test_recovery_playback, _, id}, 2_000
+      assert_receive {:test_playback_in_flight, http}, 2_000
+
+      evidence =
+        case unquote(outcome) do
+          :rejected ->
+            send(http, :reject_playback)
+            :announcement_failed
+
+          :unknown ->
+            send(http, :unknown_playback)
+            refute_receive {:test_telephony_end_leg, _}, 150
+
+            assert post_fixture(context, "call-playback-ended", %{
+                     "status" => "completed",
+                     "client_state" => Base.encode64(id)
+                   }).status == 200
+
+            :announcement_completed
+        end
+
+      assert_receive {:test_telephony_end_leg, _}, 2_000
+
+      assert {:caller_recovery, evidence, id} in TelephonyHarnessBackend.operations(
+               context.backend
+             )
+
+      refute_received {:test_recovery_playback, _, _}
+    end
+  end
+
+  for phase <- [:before_playback, :after_playback] do
+    @tag initial_outcome: :ready, caller_recovery: true, command_mode: "blocked-playback"
+    test "loss of the original leg owner #{phase} cannot recreate an effect owner", context do
+      {speech, _} = start_recovery_call(context)
+      assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+
+      if unquote(phase) == :before_playback,
+        do: TelephonyHarnessBackend.hold_next_journal_write(context.backend, self())
+
+      exhaust_recognition(speech)
+
+      {operation, release} =
+        case unquote(phase) do
+          :before_playback ->
+            assert_receive {:journal_write_in_flight, writer, :announcement_requested}, 2_000
+            {writer, :finish_write}
+
+          :after_playback ->
+            assert_receive {:test_recovery_playback, _, _}, 2_000
+            assert_receive {:test_playback_in_flight, http}, 2_000
+            {http, :release_playback}
+        end
+
+      monitor = Process.monitor(leg)
+      Process.exit(leg, :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^leg, :killed}, 2_000
+      send(operation, release)
+      # Registry may retain the dead pid until it processes its own DOWN.
+      assert LegSupervisor.lookup(context.service_identity, "inbound-call-leg") in [
+               {:ok, leg},
+               {:error, :leg_not_found}
+             ]
+
+      refute_receive {:test_recovery_playback, _, _}, 150
+      refute_received {:test_telephony_end_leg, _}
+
+      refute Enum.any?(
+               TelephonyHarnessBackend.operations(context.backend),
+               &match?({:caller_recovery, :carrier_ended, _}, &1)
+             )
+    end
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, command_mode: "blocked-end"
+  test "an end observer lost after send permits one same-leg retry and retains uncertain drainage",
+       context do
+    {speech, _} = start_recovery_call(context)
+    exhaust_recognition(speech)
+    assert_receive {:test_recovery_playback, _, id}, 2_000
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+
+    assert post_fixture(context, "call-playback-ended", %{
+             "status" => "completed",
+             "client_state" => Base.encode64(id)
+           }).status == 200
+
+    assert_receive {:test_telephony_end_leg, request}, 2_000
+    assert_receive {:test_telephony_end_pending, first_http}, 2_000
+
+    try do
+      {worker, _} = :sys.get_state(leg).end_worker
+      Process.exit(worker, :kill)
+      assert_receive {:test_telephony_end_leg, ^request}, 2_000
+      assert_receive {:test_telephony_end_pending, retry_http}, 2_000
+      send(retry_http, :accept_test_telephony_end)
+
+      assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
+               200
+
+      state = :sys.get_state(leg)
+      assert state.carrier_ended?
+      refute state.commands_drained?
+      refute_received {:test_telephony_end_leg, _}
+    after
+      send(first_http, :accept_test_telephony_end)
+    end
+  end
+
   @tag initial_outcome: :ready, caller_recovery: true
   test "carrier playback failure ends the call without reporting a completed prompt", context do
     {speech, _} = start_recovery_call(context)
-    GenServer.stop(speech, :normal)
+    exhaust_recognition(speech)
     assert_receive {:test_recovery_playback, _, id}, 2_000
 
     assert post_fixture(context, "call-playback-ended", %{
@@ -349,7 +907,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
   @tag initial_outcome: :ready, caller_recovery: true
   test "missing carrier playback completion still ends the same leg", context do
     {speech, _} = start_recovery_call(context)
-    GenServer.stop(speech, :normal)
+    exhaust_recognition(speech)
     assert_receive {:test_recovery_playback, _, _}, 2_000
     assert_receive {:test_telephony_end_leg, request}, 7_000
     assert request.reason == :speech_to_text_unavailable
@@ -366,7 +924,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
   @tag initial_outcome: :ready, caller_recovery: true
   test "caller hangup while a recovery recording plays retires the announcement", context do
     {speech, _} = start_recovery_call(context)
-    GenServer.stop(speech, :normal)
+    exhaust_recognition(speech)
     assert_receive {:test_recovery_playback, _, _}, 2_000
     assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
     ref = Process.monitor(leg)
@@ -382,7 +940,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     @tag initial_outcome: :ready, caller_recovery: true
     test "carrier playback observes #{loss} after taking ownership", context do
       {speech, _} = start_recovery_call(context)
-      GenServer.stop(speech, :normal)
+      exhaust_recognition(speech)
       assert_receive {:test_recovery_playback, _, command_id}, 2_000
 
       [{room, _}] =
@@ -435,7 +993,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     :ok = :sys.suspend(leg)
 
     try do
-      GenServer.stop(speech, :normal)
+      exhaust_recognition(speech)
       assert_receive {:DOWN, ^monitor, :process, ^media, :media_unavailable}, 1_000
     after
       :sys.resume(leg)
@@ -840,7 +1398,18 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
   end
 
+  defp exhaust_recognition(speech) do
+    GenServer.stop(speech, :normal)
+    assert_receive {:scribe_started, replacement}, 2_000
+    GenServer.stop(replacement, :normal)
+  end
+
   defp start_recovery_call(context) do
+    {speech, transport, _voice} = start_recovery_media(context)
+    {speech, transport}
+  end
+
+  defp start_recovery_media(context) do
     assert post_fixture(context, "call-initiated-incoming").status == 200
     assert_receive {:test_telephony_answer, answer}, 2_000
     assert post_fixture(context, "call-answered-incoming").status == 200
@@ -874,7 +1443,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(speech, {:ready, "qa-call"})
     Vxpipe.CallEngine.TestCallStartup.await_open(context.plan)
-    {speech, transport}
+    {speech, transport, voice}
   end
 
   defp assert_caller_audio(stt_transport, socket) do

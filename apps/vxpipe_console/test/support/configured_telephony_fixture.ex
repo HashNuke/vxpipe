@@ -142,6 +142,35 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
     %{outgoing: outgoing, incoming: incoming, to: Map.fetch!(fixture.settings.numbers, receiving)}
   end
 
+  def publish_caller_recovery(fixture) do
+    # Only the recognizer transport is simulated. The two machine-owned
+    # carrier numbers, signed webhooks, callback recording and hangup are live.
+    provision(
+      :platform,
+      "elevenlabs",
+      "recovery-fixture",
+      "api_key",
+      %{"api_key" => "synthetic-scribe"},
+      fixture.options
+    )
+
+    incoming =
+      source(fixture, :incoming, "telnyx-b", "telnyx-b")
+      |> put_in([:participants, "human", :capabilities, :speech_to_text], %{
+        provider: "elevenlabs",
+        model: "scribe_v2_realtime",
+        credential_name: "recovery-fixture"
+      })
+
+    outgoing = source(fixture, :outgoing, "telnyx", "telnyx-b")
+
+    %{
+      incoming: publish_source(fixture, incoming),
+      outgoing: publish_source(fixture, outgoing),
+      to: Map.fetch!(fixture.settings.numbers, "telnyx-b")
+    }
+  end
+
   @doc """
   An outgoing call handled by the selected speech-to-speech provider and a carrier-answered incoming
   call. The handler opens with "Alpha." and must answer the callee's "Bravo." with
