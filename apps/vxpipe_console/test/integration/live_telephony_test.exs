@@ -144,24 +144,24 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   @tag timeout: 90_000
   test "a live Telnyx caller receives carrier callback playback after recognition fails",
        context do
-    fixture = live_fixture(context)
-    app = Vxpipe.CallEngine.Application
-    configured = Application.fetch_env!(:vxpipe_call_engine, app)
-    providers = configured |> Keyword.fetch!(:speech_to_text) |> Keyword.fetch!(:providers)
     wire = Vxpipe.CallEngine.TestElevenLabsScribeTransport
 
-    providers =
-      Map.put(providers, Vxpipe.Providers.ElevenLabs.STTSession,
-        enabled: true,
-        wire_module: wire,
-        wire_options: [observer: self()]
-      )
+    speech_runtime = [
+      speech_to_text: [
+        providers: %{
+          Vxpipe.Providers.ElevenLabs.STTSession => [
+            wire_module: wire,
+            wire_options: [observer: self()]
+          ]
+        }
+      ]
+    ]
 
-    Application.put_env(
-      :vxpipe_call_engine,
-      app,
-      put_in(configured, [:speech_to_text, :providers], providers)
-    )
+    fixture =
+      live_fixture(%{
+        context
+        | options: Keyword.put(context.options, :speech_runtime, speech_runtime)
+      })
 
     pair = ConfiguredTelephonyFixture.publish_caller_recovery(fixture)
 

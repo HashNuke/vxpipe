@@ -22,6 +22,11 @@ First acceptance profile is an established inbound, main-media, English-language
 - [ ] Treat original temporary leg-owner death and node restart as separate failure scopes. A reconciler may reload durable attempt metadata and match signed terminal events to an exact binding. It cannot recreate a leg owner or claim cleanup membership from a stored row. Without a living fenced owner or conclusive carrier evidence, record unresolved disposition for operator follow-up. Test worker death after send, owner death before/after send and node restart with delayed callbacks; assert who can issue effects and who can acknowledge cleanup.
 - [ ] Gate: fake carrier covers accepted, rejected, timeout, duplicate/reordered/missing callbacks, worker death after command send and concurrent remote hangup. Real handset hears the complete callback recording before disconnect. Confirm terminal carrier evidence and matching stored leg/call state.
 
+A real Telnyx-to-Telnyx call passed the callback-and-end test. The far leg
+transcribed the initial greeting, the incoming room lost both recognizers,
+Telnyx confirmed completion of the callback recording, and both rooms ended.
+Handset listening and live transfer outcomes remain open.
+
 ## B. Configured human fallback
 
 - [ ] Add an optional, revision-pinned inbound recovery destination to the call spec. Select one validated tenant-authorized PSTN destination through the existing service/routing policy, reject self-routing loops and invalid numbers before publication, and preserve old pinned revisions. Omission selects checkpoint A. Inspect current transfer contracts before deciding whether an existing destination reference can be reused.
@@ -65,6 +70,6 @@ Handset evidence and the full checkpoint acceptance matrix are still open.
 ## D. Prove the caller experience and operability
 
 - [ ] Record source generation, trigger, classified failure or unknown cause, cue request/playout, readiness, repeat, carrier command and terminal evidence with turn/leg correlation and monotonic timings. Keep transcripts, credentials, phone numbers and audio out of diagnostic labels. Distinguish server playback evidence, carrier acknowledgement and handset listening. Make the sequence inspectable with existing call details.
-- [ ] Add scoped QA fault injection via test dependencies/harness: drop STT after barge-in, delay a final on a healthy stream, fail replacement readiness and suppress a playback completion. Keep injection unavailable to ordinary callers. Use synthetic equivalents of the gardening/commercial questions and a short acknowledgment as a healthy control.
+- [x] Add scoped QA fault injection via test dependencies/harness: drop STT after barge-in, delay a final on a healthy stream, fail replacement readiness and suppress a playback completion. Keep injection unavailable to ordinary callers. Use synthetic equivalents of the gardening/commercial questions and a short acknowledgment as a healthy control.
 - [ ] On a real QA handset run healthy, recovered, announced-disconnect, successful transfer and unanswered-transfer cases. Record perceived silence, exact prompt heard, whether the repeat was captured, number of agent answers and confirmed final disposition. Measure fault-to-first-audible-cue and total time to recovery/exit against the checkpoint budgets. Verify no competing voices or silent active leg after a recoverable carrier outcome. Redact sensitive data from evidence.
 - [ ] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Gate broader rollout on handset evidence and an exercised rollback to the prior call spec/compatible release.

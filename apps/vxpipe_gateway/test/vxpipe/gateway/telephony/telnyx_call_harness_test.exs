@@ -301,6 +301,47 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
   end
 
   @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
+  test "a completed short acknowledgment leaves its recognizer listening after the offset deadline",
+       context do
+    {speech, _socket} = start_recovery_call(context)
+
+    [{room, _}] =
+      Registry.lookup(
+        Vxpipe.CallEngine.RoomRegistry,
+        {context.plan.tenant_id, context.plan.room_id}
+      )
+
+    wire = Vxpipe.CallEngine.TestElevenLabsScribeTransport
+    wire.deliver(speech, {:partial, "Okay"})
+    {capability, turn} = await_open_question(room, System.monotonic_time(:millisecond) + 2_000)
+    state = :sys.get_state(capability)
+
+    send(
+      capability,
+      {:vxpipe_acoustic_activity, state.session, turn, :speech_ended,
+       %{
+         source_epoch: state.acoustic_epoch,
+         sequence: 1,
+         at_ms: System.monotonic_time(:millisecond)
+       }}
+    )
+
+    %{stall_watch: %{token: token}} = :sys.get_state(capability)
+
+    wire.deliver(speech, {:segment, "Okay."})
+    wire.deliver(speech, {:partial, ""})
+    assert_receive {:test_agent_runtime_stream, _, _}, 3_000
+    send(capability, {:stt_stall_timeout, token})
+    settled = :sys.get_state(capability)
+    assert settled.session == state.session
+    assert settled.stall_watch == nil
+    assert settled.reported_stall == nil
+    assert :sys.get_state(room).connections[@incoming_leg_id].speech_recovery == :eligible
+    refute_received {:scribe_started, _}
+    refute_received {:test_recovery_playback, _, _}
+  end
+
+  @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
   test "a stalled open question replaces recognition on the same caller media socket", context do
     {room, replacement, socket} = start_stalled_recovery(context)
     Vxpipe.CallEngine.TestElevenLabsScribeTransport.deliver(replacement, {:ready, "fresh-scribe"})

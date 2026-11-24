@@ -125,3 +125,20 @@ previous release opened the migrated QA database and read the published
 revision relationship. A live traffic rollback and handset acceptance remain
 open. The Telnyx pool planner found zero eligible Rocksalt numbers after the
 app rename; no numbers were moved during this deployment.
+
+The two active numbers on the Rocksalt QA application carrying both legacy
+test tags received the machine and test eligibility tags. The migration
+preserved their prior tags and routing. The planner then identified two
+eligible QA numbers. Two live test windows each borrowed and restored both
+numbers. The final plan confirmed both back on the QA application.
+
+The first trial reproduced the receiving Scribe startup timeout. The live
+room takes its speech transport override through call admission. Supplying
+the fake transport on that per-call path made the next trial pass. All three
+public relays returned 200, the outgoing leg transcribed the greeting,
+one replacement Scribe started after the injected disconnect, and its loss
+triggered a signed Telnyx playback completion and terminal leg record. Both
+rooms ended. Automated carrier test: one passed. This trial did not measure
+handset audibility. A separate configured-room control finalized “Okay,”
+delivered the retired acoustic-offset timeout and verified the same
+recognizer remained eligible with no fallback.
