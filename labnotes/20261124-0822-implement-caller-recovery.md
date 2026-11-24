@@ -347,3 +347,14 @@ acknowledgement. The disposable database was removed after verification.
 The mounted route covers both credential formats and rejects a changed
 credential ID. Together with owner death before/after playback submission and
 HTTP-worker death after send, 13 focused Gateway cases passed.
+
+The first umbrella run for the cold-restart change failed while opening the
+simulated carrier socket, before the platform-hangup test exercised recovery.
+With the fixture forwarding the bounded dispatch reason, five recovery cases
+reproduced `:media_session_not_found`. The fixture reuses the same leg IDs and
+the previous media connection supervisor can outlive the session it owned.
+Teardown now terminates those fixture media trees synchronously. A first stress
+run also saw HTTP 404 at inbound admission before media startup. The harness
+now waits for its scoped webhook registry key to clear before reusing the leg.
+The 404 alone does not prove which lookup returned it. The final five-case
+group passed 401 consecutive runs at the original seed (2,005 case executions).

@@ -56,6 +56,7 @@ defmodule Vxpipe.Gateway.TelnyxFixture do
          {:ok, socket} <- Vxpipe.Gateway.TestSocketDispatch.await(socket) do
       {:ok, binding, socket}
     else
+      {:error, reason} when is_atom(reason) -> {:error, reason}
       _invalid -> {:error, :media_harness_failed}
     end
   end

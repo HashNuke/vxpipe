@@ -158,6 +158,16 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
       LegSupervisor.stop_outgoing(@outgoing_leg_id)
       LegSupervisor.stop_outgoing("peer-" <> @incoming_leg_id)
+
+      # Every case reuses these connection IDs. A media supervisor can still
+      # be stopping its pipelines after its session and carrier leg have exited.
+      for id <- [@incoming_leg_id, @outgoing_leg_id, "peer-" <> @incoming_leg_id],
+          {tree, _} <-
+            Registry.lookup(Vxpipe.Gateway.Media.Registry, {:telephony_media_connection, id}) do
+        DynamicSupervisor.terminate_child(MediaSupervisor, tree)
+      end
+
+      await_carrier_leg_release(System.monotonic_time(:millisecond) + 2_000)
     end)
 
     %{
@@ -1679,6 +1689,21 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       briefing_tts,
       ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"private-briefing"})
     )
+  end
+
+  # Owner termination and removal of its secondary webhook lookup key are asynchronous.
+  defp await_carrier_leg_release(deadline) do
+    key = {:scoped_telnyx, "voice-application-harness", "inbound-call-leg"}
+
+    if Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, key) != [] do
+      assert System.monotonic_time(:millisecond) < deadline,
+             "previous fixture still owns carrier leg"
+
+      receive do
+      after
+        5 -> await_carrier_leg_release(deadline)
+      end
+    end
   end
 
   defp stop_transfer_room!(plan) do
