@@ -156,7 +156,11 @@ sink playout, carrier completion and handset listening.
 QA deployment of `b1dfb19f` included the carrier phase offsets and linked-leg
 terminal usage fix. The fresh umbrella run executed 6,148 tests with zero
 failures (435 excluded). The running container's revision matched the commit
-and the public health endpoint returned HTTP 200.
+and the public health endpoint returned HTTP 200. The subsequent clean run of
+the final test fixtures at `12f098af` executed 6,154 tests across all ten
+umbrella applications with zero failures (435 excluded). The live handset
+gates are excluded from that count. The QA container still served the verified
+runtime revision when this run finished.
 
 The remaining handset repeat and answered-transfer checks can use one
 coordinated call to the pool receiver. The test waits for spoken consent and
