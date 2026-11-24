@@ -279,3 +279,8 @@ the remote leg, injected the observed voice-session closure, and verified
 signed callback completion and carrier termination (one test, zero failures).
 Both Rocksalt numbers returned to QA. This live check exercised the callback
 branch. The successful handset bridge still needs independent evidence.
+
+The umbrella reported 6,570 tests with zero failures. Formatting,
+warnings-as-errors compilation, strict Credo, unused dependencies and Lean
+also passed. The QA container revision matched `d28a2f25`. Its public
+health endpoint returned HTTP 200 after startup.
