@@ -84,6 +84,7 @@ defmodule Vxpipe.Persistence.CallDetailsCallProjection do
   defp leg(%TelephonyLeg{} = leg) do
     compact(%{
       "provider" => leg.provider,
+      "caller_recovery" => if(leg.recovery != %{}, do: leg.recovery),
       "service" => leg.service,
       "state" => leg.state,
       "provider_event_id" => leg.provider_event_id,

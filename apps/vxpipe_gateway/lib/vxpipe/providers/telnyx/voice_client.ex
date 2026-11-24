@@ -13,6 +13,10 @@ defmodule Vxpipe.Providers.Telnyx.VoiceClient do
     request(options, "/calls/#{path_segment(call_control_id)}/actions/answer", payload)
   end
 
+  def start_playback(options, call_control_id, payload) do
+    request(options, "/calls/#{path_segment(call_control_id)}/actions/playback_start", payload)
+  end
+
   @spec hangup(keyword(), String.t(), map()) :: outcome()
   def hangup(options, call_control_id, payload) do
     request(options, "/calls/#{path_segment(call_control_id)}/actions/hangup", payload)

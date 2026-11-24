@@ -214,6 +214,12 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
     )
   end
 
+  @impl true
+  def record_caller_recovery(agent, _claim, phase, command_id, _deadline) do
+    operation(agent, {:caller_recovery, phase, command_id})
+    if available?(agent), do: :ok, else: {:error, :storage_unavailable}
+  end
+
   defp operation(agent, value) do
     Agent.get_and_update(agent, fn state ->
       {state.runtime_options, record(state, value)}

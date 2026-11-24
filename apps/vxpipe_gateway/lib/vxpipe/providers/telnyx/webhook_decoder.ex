@@ -67,6 +67,19 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoder do
 
   defp decode_event("call.answered", data), do: build_event(:answered, data)
 
+  defp decode_event("call.playback.ended", data) do
+    with {:ok, payload} <- payload(data),
+         {:ok, encoded} <- bounded_field(payload, "client_state", 256),
+         {:ok, "recovery-" <> _ = command_id} <- Base.decode64(encoded) do
+      build_event(:recovery_playback_ended, data,
+        playback_id: command_id,
+        playback_outcome: playback_outcome(payload["status"])
+      )
+    else
+      _unrelated -> :ignore
+    end
+  end
+
   defp decode_event("call.dtmf.received", data) do
     with {:ok, payload} <- payload(data),
          {:ok, digit} <- bounded_field(payload, "digit", 1) do
@@ -92,6 +105,14 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoder do
   end
 
   defp decode_event(_unconsumed_event, _data), do: :ignore
+
+  defp playback_outcome("completed"), do: :completed
+
+  defp playback_outcome(status)
+       when status in ["file_not_found", "failed", "call_hangup", "cancelled", "cancelled_amd"],
+       do: :failed
+
+  defp playback_outcome(_status), do: :unknown
 
   defp decode_answering_machine(event_type, data) do
     with {:ok, payload} <- payload(data),

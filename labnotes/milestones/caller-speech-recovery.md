@@ -1,6 +1,6 @@
 # Caller recovery after speech recognition or room audio failure
 
-**Status:** planned. The user approved bounded in-room recovery and a carrier-controlled exit. The timings and configuration below are proposed implementation choices. Track design review in the [planning record](../20261124-0807-caller-recovery-milestone.md).
+**Status:** checkpoint A in progress. The gateway harness covers carrier playback, bounded disconnect, and signed terminal reconciliation. Handset verification and checkpoints B–D remain open. See the [implementation evidence](../20261124-0822-implement-caller-recovery.md). The user approved bounded in-room recovery and a carrier-controlled exit. The timings and configuration below are proposed implementation choices. Track design review in the [planning record](../20261124-0807-caller-recovery-milestone.md).
 
 ## Runnable outcome and dependencies
 

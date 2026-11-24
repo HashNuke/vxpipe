@@ -72,8 +72,27 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
   # Unsigned fields locate one candidate. Only a verified raw body can reach resolve/2
   # and dispatch; a tenant URL cannot select another tenant's credential.
   defp fresh(registry, scope, body) do
-    with {:ok, event} <- incoming_event(body),
-         {:ok, candidate} <-
+    case WebhookDecoder.decode(%Webhook{body: body, headers: %{}, received_at: 0}) do
+      {:ok, %Event{kind: :incoming} = event} ->
+        fresh_incoming(registry, scope, event)
+
+      {:ok, %Event{kind: :ended} = event} ->
+        Vxpipe.Providers.Telnyx.CallerRecoveryWebhook.select(
+          scope,
+          event,
+          registry.repository_options
+        )
+
+      {:error, _reason} = error ->
+        error
+
+      _unrelated ->
+        {:error, :service_not_found}
+    end
+  end
+
+  defp fresh_incoming(registry, scope, event) do
+    with {:ok, candidate} <-
            TelephonyServices.fetch_telnyx_route(
              scope,
              event.provider_connection_id,
@@ -140,13 +159,5 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
          {credential.id, credential.version} == selection.credential,
        do: :ok,
        else: {:error, :webhook_source_mismatch}
-  end
-
-  defp incoming_event(body) do
-    case WebhookDecoder.decode(%Webhook{body: body, headers: %{}, received_at: 0}) do
-      {:ok, %Event{kind: :incoming} = event} -> {:ok, event}
-      {:error, _reason} = error -> error
-      _not_a_new_call -> {:error, :service_not_found}
-    end
   end
 end

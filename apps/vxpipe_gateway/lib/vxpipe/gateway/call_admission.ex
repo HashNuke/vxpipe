@@ -212,6 +212,10 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   @impl CallIngressBackend
+  def record_caller_recovery(options, claim, phase, command_id, deadline),
+    do: Calls.record_caller_recovery(claim, phase, command_id, deadline, options)
+
+  @impl CallIngressBackend
   def mark_incoming_failed(options, claim, reason) do
     Calls.mark_incoming_telephony_failed(claim, reason, options)
   end

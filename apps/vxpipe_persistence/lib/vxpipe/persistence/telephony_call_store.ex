@@ -54,6 +54,62 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     end)
   end
 
+  def find_caller_recovery(repo, scope, event) do
+    query =
+      from(leg in StoredTelephonyLeg,
+        join: call in assoc(leg, :call),
+        join: tenant in assoc(call, :tenant),
+        join: revision in assoc(call, :call_spec_revision),
+        join: spec in assoc(revision, :call_spec),
+        where: leg.provider == "telnyx" and leg.tenant_id == tenant.id and
+          leg.provider_connection_id == ^event.provider_connection_id and
+          leg.provider_call_control_id == ^event.provider_call_control_id and
+          leg.provider_call_leg_id == ^event.provider_call_leg_id and
+          leg.provider_call_session_id == ^event.provider_call_session_id and
+          leg.incarnation_id == call.incarnation_id and call.incarnation_binding_verified,
+        select: {leg, call, {tenant, spec, revision}}
+      )
+
+    with {leg, call, {tenant, _, _} = selection} <- repo.one(query),
+         true <- scope in [:platform, {:tenant, tenant.key}],
+         %{"command_id" => id, "deadline" => deadline} <- leg.recovery["announcement_requested"],
+         {:ok, expiry, 0} <- DateTime.from_iso8601(deadline),
+         %TelephonyAdmissionClaim{} = claim <- to_claim(leg, call, selection) do
+      {:ok, claim, String.replace_prefix(id, "recovery-", "hangup-"), expiry}
+    else
+      _unmatched -> {:error, :not_found}
+    end
+  end
+
+  def record_caller_recovery(repo, claim, phase, command_id, deadline) do
+    result =
+      project_lifecycle(repo, claim, fn repo, call, leg ->
+        if leg.incarnation_id == claim.call.incarnation_id and call.incarnation_binding_verified and
+             call.room_id == claim.call.room_id and call.incarnation_id == leg.incarnation_id do
+          record = %{
+            "command_id" => command_id,
+            "deadline" => DateTime.to_iso8601(deadline),
+            "recorded_at" => DateTime.to_iso8601(DateTime.utc_now())
+          }
+
+          evidence = Map.put_new(leg.recovery, Atom.to_string(phase), record)
+          state = if phase == :carrier_ended, do: "ended", else: leg.state
+
+          with {:ok, _leg} <-
+                 repo.update(Ecto.Changeset.change(leg, recovery: evidence, state: state)) do
+            {:ok, call}
+          end
+        else
+          {:error, :call_incarnation_mismatch}
+        end
+      end)
+
+    case result do
+      {:ok, _claim} -> :ok
+      error -> error
+    end
+  end
+
   defp insert_claim(repo, claim, authorize) do
     call = claim.call
 

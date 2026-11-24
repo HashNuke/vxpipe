@@ -81,8 +81,86 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
     assert Repo.aggregate(TelephonyLeg, :count) == 1
   end
 
+  test "recovery journal fences the incarnation and preserves first evidence on a retry",
+       context do
+    {:ok, claim} =
+      Calls.claim_incoming_telephony(
+        {:tenant, context.tenant.key},
+        "primary-phone",
+        incoming_event(),
+        context.options
+      )
+
+    {:ok, claim} =
+      Calls.mark_incoming_telephony_started(
+        claim,
+        "rinc-recovery-1",
+        @started_at,
+        context.options
+      )
+
+    expires = DateTime.add(@started_at, 60, :second)
+
+    assert :ok =
+             Calls.record_caller_recovery(
+               claim,
+               :announcement_requested,
+               "recovery-leg",
+               expires,
+               context.options
+             )
+
+    assert :ok =
+             Calls.record_caller_recovery(
+               claim,
+               :announcement_requested,
+               "recovery-leg",
+               DateTime.add(expires, 10),
+               context.options
+             )
+
+    assert {:error, _} =
+             Calls.record_caller_recovery(
+               put_in(claim.call.incarnation_id, "retired"),
+               :hangup_requested,
+               "hangup-leg",
+               expires,
+               context.options
+             )
+
+    assert :ok =
+             Calls.record_caller_recovery(
+               claim,
+               :hangup_requested,
+               "hangup-leg",
+               expires,
+               context.options
+             )
+
+    leg = Repo.one!(TelephonyLeg)
+    assert leg.state == "active"
+    assert leg.recovery["announcement_requested"]["deadline"] == DateTime.to_iso8601(expires)
+    assert leg.recovery["hangup_requested"]["command_id"] == "hangup-leg"
+
+    assert :ok =
+             Calls.record_caller_recovery(
+               claim,
+               :carrier_ended,
+               "hangup-leg",
+               expires,
+               context.options
+             )
+
+    ended = %{incoming_event() | kind: :ended, end_reason: :hangup}
+    assert {:ok, ^claim, "hangup-leg", ^expires} = Calls.find_caller_recovery(:platform, ended, context.options)
+    assert {:error, :not_found} = Calls.find_caller_recovery({:tenant, "BBBBBBBBBBBBBBBB"}, ended, context.options)
+    assert {:error, :not_found} = Calls.find_caller_recovery(:platform, %{ended | provider_call_session_id: "other"}, context.options)
+    assert Repo.one!(TelephonyLeg).state == "ended"
+  end
+
   test "retains a SIP caller address separately from the receiving number", context do
-    event = incoming_event()
+    event =
+      incoming_event()
       |> Map.put(:from, "+15550001001")
       |> Map.put(:from_sip_uri, "sip:caller@example.com")
       |> Map.put(:caller_id_name, "Example caller")

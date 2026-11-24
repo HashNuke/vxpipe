@@ -1,6 +1,42 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  @doc "Locates retained recovery evidence for an exact inbound carrier terminal event."
+  def find_caller_recovery(scope, %Vxpipe.CallEngine.Telephony.Event{provider: :telnyx, kind: :ended} = event, options) do
+    with :ok <- Vxpipe.Calls.ProviderAuth.owner(scope),
+         {:ok, repository} <- Vxpipe.Calls.Repositories.fetch(options, :call_repository) do
+      Vxpipe.Calls.Repositories.call(repository, :find_caller_recovery, [scope, event])
+    end
+  end
+
+  @doc "Records exact-leg recovery evidence for an authenticated inbound call."
+  def record_caller_recovery(
+        %Vxpipe.Calls.TelephonyAdmissionClaim{} = claim,
+        phase,
+        command_id,
+        %DateTime{} = deadline,
+        options
+      )
+      when phase in [
+             :announcement_requested,
+             :announcement_completed,
+             :announcement_failed,
+             :announcement_unknown,
+             :hangup_requested,
+             :carrier_ended,
+             :carrier_unknown
+           ] and
+             is_binary(command_id) and byte_size(command_id) in 1..160 do
+    with {:ok, repository} <- Vxpipe.Calls.Repositories.fetch(options, :call_repository) do
+      Vxpipe.Calls.Repositories.call(repository, :record_caller_recovery, [
+        claim,
+        phase,
+        command_id,
+        deadline
+      ])
+    end
+  end
+
   @doc "Internal bounded recovery scan; cursors and cleanup ownership are not public API inputs."
   def scan_call_cleanup(cursor \\ nil, limit \\ 100, options \\ []),
     do: Vxpipe.Calls.CallCleanupScan.scan(cursor, limit, options)

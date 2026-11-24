@@ -33,6 +33,58 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
     }
   end
 
+  test "late carrier hangup authenticates against the retained leg and records only terminal evidence",
+       data do
+    reference = Vxpipe.Calls.TelephonyServices.reference(data.first.service)
+
+    claim =
+      struct!(Vxpipe.Calls.TelephonyAdmissionClaim,
+        call: %{
+          tenant_key: @first,
+          plan: %{participants: %{"caller" => %{telephony_service: reference}}}
+        },
+        participant_ref: "caller",
+        participant_id: "part-test",
+        provider: :telnyx,
+        service: reference.name,
+        service_id: reference.service_id,
+        provider_event_id: "initial",
+        provider_connection_id: "first-app",
+        provider_call_control_id: "inbound-call-control",
+        provider_call_leg_id: "inbound-call-leg",
+        provider_call_session_id: "inbound-call-session",
+        accepted_at: DateTime.utc_now()
+      )
+
+    mount = mount(data.context, call_repository: {__MODULE__, {self(), claim}})
+
+    body =
+      Vxpipe.Gateway.TelnyxFixture.body("call-hangup-incoming", %{
+        "call_leg_id" => "inbound-call-leg"
+      })
+      |> String.replace("voice-application-harness", "first-app")
+
+    assert request(mount, :platform, body, data.tenant_private).status == 401
+    refute_received :terminal_recorded
+    assert request(mount, :platform, body, data.platform_private).status == 200
+    assert_received :terminal_recorded
+    refute_received {:event, _, _, _}
+  end
+
+  def find_caller_recovery({_observer, claim}, :platform, %{kind: :ended}),
+    do: {:ok, claim, "hangup-fixture", ~U[2026-11-24 08:00:00Z]}
+
+  def record_caller_recovery(
+        {observer, claim},
+        claim,
+        :carrier_ended,
+        "hangup-fixture",
+        _deadline
+      ) do
+    send(observer, :terminal_recorded)
+    :ok
+  end
+
   test "mounted scoped routes authenticate raw bytes and dispatch the mapped tenant", data do
     handler_id = {__MODULE__, self()}
 

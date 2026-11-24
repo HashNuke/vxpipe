@@ -25,6 +25,8 @@ defmodule Vxpipe.CallEngine.Telephony.Adapter do
   @callback dial(config(), Dial.t()) :: submission_result()
   @callback answer(config(), Answer.t()) :: submission_result()
   @callback send_media(config(), SendMedia.t()) :: :ok | {:error, error_reason()}
+  @callback play_recovery_prompt(config(), String.t(), String.t()) :: submission_result()
+  @optional_callbacks play_recovery_prompt: 3
   @callback end_leg(config(), EndLeg.t()) :: submission_result()
   @callback verify_webhook(config(), Webhook.t()) :: :ok | {:error, error_reason()}
   @callback decode_webhook(config(), Webhook.t()) :: event_result()

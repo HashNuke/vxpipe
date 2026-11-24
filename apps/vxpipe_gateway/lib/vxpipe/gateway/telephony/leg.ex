@@ -9,6 +9,8 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   alias Vxpipe.Gateway.Telephony.{
     CarrierCleanup,
+    CallerRecovery,
+    CallerRecoveryJournal,
     ConfiguredService,
     EndCommandRetry,
     IncomingLegActivationResult,
@@ -72,6 +74,11 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
     state = %{
       activation: nil,
+      recovery: nil,
+      recovery_journal: nil,
+      recovery_end_retry?: false,
+      playback_worker: nil,
+      caller_media: nil,
       incoming_identity: nil,
       prepared: nil,
       answer_worker: nil,
@@ -112,6 +119,20 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   @impl true
+  def handle_call({:event, %Event{kind: :recovery_playback_ended} = event}, _from, state) do
+    with :ok <- matching_event(state.claim, event),
+         %{id: id} when id == event.playback_id <- state.recovery do
+      {:reply, :ok,
+       close(
+         CallerRecovery.record_playback(state, event.playback_outcome),
+         :speech_to_text_unavailable
+       )}
+    else
+      {:error, _} = error -> {:reply, error, state}
+      _stale -> {:reply, :ok, state}
+    end
+  end
+
   def handle_call({:await_incoming, service, event}, from, state) do
     fields = [
       :provider,
@@ -149,7 +170,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       case project_started(state, event) do
         {:ok, state} ->
           case dispatch_start_event(state, source, event) do
-            :ok -> {:reply, :ok, state}
+            :ok -> {:reply, :ok, CallerRecovery.watch_media(state, event)}
             {:error, reason} -> {:reply, {:error, reason}, state}
           end
 
@@ -185,7 +206,12 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   def handle_call({:event, %Event{kind: :ended} = event}, {source, _tag}, state)
       when state.status in [:answering, :running, :closing, :failed] do
     with :ok <- matching_event(state.claim, event) do
-      state = state |> observe_usage(event) |> revoke_media()
+      state =
+        state
+        |> CallerRecovery.journal(:carrier_ended)
+        |> CallerRecovery.cancel()
+        |> observe_usage(event)
+        |> revoke_media()
 
       result =
         if state.activation do
@@ -231,7 +257,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
                source,
                event
              ]) do
-          :ok -> {:reply, :ok, state}
+          :ok -> {:reply, :ok, CallerRecovery.watch_media(state, event)}
           {:error, reason} -> {:reply, {:error, reason}, state}
         end
 
@@ -245,26 +271,34 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   @impl true
-  def handle_info(:retire, state), do: maybe_retire(%{state | retire?: true})
+  def handle_info(message, state) do
+    case CallerRecovery.handle_info(message, state) do
+      {:continue, state} -> maybe_retire(state)
+      {:end, state} -> maybe_retire(close(state, :speech_to_text_unavailable))
+      :unhandled -> handle_leg_info(message, state)
+    end
+  end
 
-  def handle_info(
-        {:incoming_submission, :answer, worker, result},
-        %{answer_worker: {worker, _monitor}} = state
-      ) do
+  defp handle_leg_info(:retire, state), do: maybe_retire(%{state | retire?: true})
+
+  defp handle_leg_info(
+         {:incoming_submission, :answer, worker, result},
+         %{answer_worker: {worker, _monitor}} = state
+       ) do
     state = answer_result(%{state | answer_result_received?: true}, result)
     maybe_retire(state)
   end
 
-  def handle_info(
-        {:incoming_submission, :end, worker, result},
-        %{end_worker: {worker, _monitor}} = state
-      ),
-      do: {:noreply, %{state | end_accepted?: EndCommandRetry.accepted?(result)}}
+  defp handle_leg_info(
+         {:incoming_submission, :end, worker, result},
+         %{end_worker: {worker, _monitor}} = state
+       ),
+       do: {:noreply, %{state | end_accepted?: EndCommandRetry.accepted?(result)}}
 
-  def handle_info(
-        {:DOWN, monitor, :process, worker, reason},
-        %{answer_worker: {worker, monitor}} = state
-      ) do
+  defp handle_leg_info(
+         {:DOWN, monitor, :process, worker, reason},
+         %{answer_worker: {worker, monitor}} = state
+       ) do
     state = %{
       state
       | answer_worker: nil,
@@ -279,10 +313,10 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     maybe_retire(state)
   end
 
-  def handle_info(
-        {:DOWN, monitor, :process, worker, reason},
-        %{end_worker: {worker, monitor}} = state
-      ) do
+  defp handle_leg_info(
+         {:DOWN, monitor, :process, worker, reason},
+         %{end_worker: {worker, monitor}} = state
+       ) do
     state = %{
       state
       | end_worker: nil,
@@ -291,16 +325,27 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
     state =
       cond do
-        not state.commands_drained? or state.carrier_ended? -> terminal_end(state)
-        state.end_retry? -> retry_end(%{state | end_retry?: false})
-        not state.end_accepted? -> schedule_end(state)
-        true -> state
+        not state.commands_drained? and state.recovery_journal != nil and
+          not state.recovery_end_retry? and not state.carrier_ended? ->
+          request_end(%{state | end_requested?: false})
+
+        not state.commands_drained? or state.carrier_ended? ->
+          terminal_end(state)
+
+        state.end_retry? ->
+          retry_end(%{state | end_retry?: false})
+
+        not state.end_accepted? ->
+          schedule_end(state)
+
+        true ->
+          state
       end
 
     maybe_retire(state)
   end
 
-  def handle_info({:retry_carrier_end, token}, state) do
+  defp handle_leg_info({:retry_carrier_end, token}, state) do
     state =
       case EndCommandRetry.take(state.end_command_retry, token) do
         {:ok, retry} -> request_end(%{state | end_command_retry: retry, end_requested?: false})
@@ -310,7 +355,22 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     maybe_retire(state)
   end
 
-  def handle_info({:DOWN, monitor, :process, _room, _reason}, %{room_monitor: monitor} = state) do
+  defp handle_leg_info(
+         {:DOWN, monitor, :process, _room, reason},
+         %{room_monitor: monitor, recovery: %{}} = state
+       )
+       when reason not in [
+              {:shutdown, :api_hangup},
+              {:shutdown, :remote_hangup},
+              {:shutdown, :agent_hangup}
+            ] do
+    {:noreply, %{state | room_monitor: nil, room_closed?: true}}
+  end
+
+  defp handle_leg_info(
+         {:DOWN, monitor, :process, _room, _reason},
+         %{room_monitor: monitor} = state
+       ) do
     state = %{state | room_monitor: nil, room_closed?: true}
 
     state =
@@ -321,7 +381,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     maybe_retire(state)
   end
 
-  def handle_info(message, %{cleanup: %CarrierCleanup{} = cleanup} = state) do
+  defp handle_leg_info(message, %{cleanup: %CarrierCleanup{} = cleanup} = state) do
     case CarrierCleanup.handle_info(cleanup, message) do
       {:handled, cleanup} ->
         state = %{state | cleanup: cleanup}
@@ -338,14 +398,16 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     end
   end
 
-  def handle_info(_message, state), do: {:noreply, state}
+  defp handle_leg_info(_message, state), do: {:noreply, state}
 
   defp maybe_retire(%{managed_cleanup?: true} = state) do
     state = store_final(state)
 
     ready? =
-      state.carrier_ended? and state.room_closed? and state.commands_drained? and
-        is_nil(state.answer_worker) and is_nil(state.end_worker) and not is_nil(state.cleanup) and
+      CallerRecoveryJournal.settled?(state.recovery_journal) and state.carrier_ended? and
+        state.room_closed? and state.commands_drained? and
+        is_nil(state.answer_worker) and is_nil(state.playback_worker) and is_nil(state.end_worker) and
+        not is_nil(state.cleanup) and
         CarrierCleanup.final_usage_stored?(state.cleanup, state.usage)
 
     if ready? do
@@ -362,9 +424,21 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   # A lost observer cannot attest that its separate HTTP operation has drained.
   defp maybe_retire(%{commands_drained?: false} = state), do: {:noreply, state}
 
-  defp maybe_retire(%{retire?: true, answer_worker: nil, end_worker: nil, status: status} = state)
+  defp maybe_retire(
+         %{
+           retire?: true,
+           answer_worker: nil,
+           playback_worker: nil,
+           end_worker: nil,
+           status: status
+         } = state
+       )
        when status in [:ended, :unclaimed, :replay],
-       do: {:stop, :normal, state}
+       do:
+         if(CallerRecoveryJournal.settled?(state.recovery_journal),
+           do: {:stop, :normal, state},
+           else: {:noreply, state}
+         )
 
   defp maybe_retire(state), do: {:noreply, state}
 
@@ -591,7 +665,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   defp close(%{status: :ended} = state, _reason), do: reply_waiters(state, :ok)
 
   defp close(state, reason) do
-    state = revoke_media(state)
+    state = state |> CallerRecovery.cancel() |> revoke_media()
 
     if state.incarnation_id do
       _cancel = call_backend(state.backend, :cancel_incoming, [state.claim, state.token, reason])
@@ -601,13 +675,26 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     state |> request_end() |> reply_waiters(:ok)
   end
 
-  defp request_end(%{commands_drained?: false} = state), do: terminal_end(state)
+  # During recovery the original owner may issue one same-ID end command after
+  # losing a command observer. Drainage remains unknown for cleanup purposes.
+  defp request_end(%{commands_drained?: false, recovery_journal: nil} = state),
+    do: terminal_end(state)
+
+  defp request_end(%{commands_drained?: false, recovery_end_retry?: true} = state),
+    do: terminal_end(state)
+
   defp request_end(%{carrier_ended?: true} = state), do: terminal_end(state)
   defp request_end(%{end_worker: worker} = state) when not is_nil(worker), do: state
   defp request_end(%{end_requested?: true} = state), do: state
 
   defp request_end(state) do
-    state = %{state | end_command_retry: EndCommandRetry.cancel(state.end_command_retry)}
+    state = CallerRecovery.journal(state, :hangup_requested)
+
+    state = %{
+      state
+      | end_command_retry: EndCommandRetry.cancel(state.end_command_retry),
+        recovery_end_retry?: not state.commands_drained?
+    }
 
     case IncomingSubmission.start(self(), :end, fn ->
            call_backend(state.backend, :end_incoming, [

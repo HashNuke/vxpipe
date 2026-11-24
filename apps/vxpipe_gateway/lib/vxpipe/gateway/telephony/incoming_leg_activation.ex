@@ -174,9 +174,29 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
       provider_call_leg_id: claim.provider_call_leg_id,
       provider_call_session_id: claim.provider_call_session_id,
       client_state_leg_id: client_state_leg_id,
-      leg: leg
+      leg: leg,
+      caller_recovery?: caller_recovery?(claim)
     }
   end
+
+  defp caller_recovery?(
+         %{provider: :telnyx, call: %{plan: %{participants: participants}}} = claim
+       ) do
+    case Map.get(participants, claim.participant_ref) do
+      %{
+        kind: :human,
+        capabilities: %{
+          speech_to_text: %{provider: "elevenlabs", model: "scribe_v2_realtime", options: options}
+        }
+      } ->
+        Map.get(options, "language_code") in [nil, "en", "eng"]
+
+      _other ->
+        false
+    end
+  end
+
+  defp caller_recovery?(_claim), do: false
 
   defp answer_request(binding, media_url) do
     %Answer{

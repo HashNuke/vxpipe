@@ -9,6 +9,20 @@ defmodule Vxpipe.Calls.CallRepository do
   @callback scan_call_cleanup(context(), Vxpipe.Calls.CallCleanupScan.cursor(), pos_integer()) ::
               {:ok, Vxpipe.Calls.CallCleanupScan.page()} | {:error, term()}
 
+  @callback find_caller_recovery(context(), term(), Vxpipe.CallEngine.Telephony.Event.t()) ::
+              {:ok, Vxpipe.Calls.TelephonyAdmissionClaim.t(), String.t(), DateTime.t()} | {:error, term()}
+  @optional_callbacks find_caller_recovery: 3
+
+  @callback record_caller_recovery(
+              context(),
+              Vxpipe.Calls.TelephonyAdmissionClaim.t(),
+              atom(),
+              String.t(),
+              DateTime.t()
+            ) ::
+              :ok | {:error, term()}
+  @optional_callbacks record_caller_recovery: 5
+
   @callback complete_call_cleanup(context(), map(), DateTime.t()) ::
               {:ok, PreparedCall.t()} | {:error, term()}
 

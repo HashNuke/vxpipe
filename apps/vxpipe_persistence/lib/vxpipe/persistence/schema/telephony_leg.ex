@@ -18,6 +18,7 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
     field(:state, :string)
     field(:accepted_at, :utc_datetime_usec)
     field(:incarnation_id, :string)
+    field(:recovery, :map, default: %{})
 
     belongs_to(:tenant, Tenant)
     belongs_to(:call, Call)

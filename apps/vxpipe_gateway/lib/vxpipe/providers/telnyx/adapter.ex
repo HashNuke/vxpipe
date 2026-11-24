@@ -72,6 +72,23 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
   end
 
   @impl true
+  def play_recovery_prompt(options, control_id, command_id) do
+    file = Application.app_dir(:vxpipe_gateway, "priv/telephony/callback.wav")
+
+    with {:ok, audio} <- File.read(file) do
+      payload = %{
+        "command_id" => command_id,
+        "client_state" => Base.encode64(command_id),
+        "audio_type" => "wav",
+        "target_legs" => "self",
+        "playback_content" => Base.encode64(audio)
+      }
+
+      VoiceClient.start_playback(options, control_id, payload) |> submission(control_id)
+    end
+  end
+
+  @impl true
   def end_leg(options, %EndLeg{} = request) do
     with {:ok, _api_key} <- required_option(options, :api_key) do
       payload = %{"command_id" => "hangup-#{request.leg.leg_id}"}

@@ -90,6 +90,28 @@ defmodule Vxpipe.Providers.Telnyx.AdapterTest do
             }} = Adapter.answer(TelnyxAdapter, config(), request)
   end
 
+  test "submits the packaged callback recording directly to the affected carrier leg" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.request_path == "/v2/calls/known-leg/actions/playback_start"
+
+      assert %{
+               "target_legs" => "self",
+               "command_id" => "recovery-known-leg",
+               "client_state" => encoded,
+               "audio_type" => "wav",
+               "playback_content" => audio
+             } =
+               JSON.decode!(Req.Test.raw_body(conn))
+
+      assert Base.decode64!(encoded) == "recovery-known-leg"
+      assert <<"RIFF", _::32-little, "WAVE", _::binary>> = Base.decode64!(audio)
+      Req.Test.json(conn, %{data: %{result: "ok"}})
+    end)
+
+    assert {:ok, %Submission{status: :accepted}} =
+             TelnyxAdapter.play_recovery_prompt(config(), "known-leg", "recovery-known-leg")
+  end
+
   test "hangs up only the exact known provider leg" do
     Req.Test.expect(__MODULE__, fn conn ->
       assert conn.method == "POST"

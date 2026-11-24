@@ -65,6 +65,21 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
   defp compile_plan(provider, options) do
     id = System.unique_integer([:positive, :monotonic])
 
+    caller_speech =
+      case Keyword.get(options, :caller_stt, :default) do
+        :scribe ->
+          language = Keyword.get(options, :language)
+
+          %{
+            provider: "elevenlabs",
+            model: "scribe_v2_realtime",
+            options: if(language, do: %{language_code: language}, else: %{})
+          }
+
+        :default ->
+          speech_selection(provider)
+      end
+
     {:ok, call_spec} =
       CallSpec.new(
         %{
@@ -76,7 +91,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           participants: %{
             "caller" => %{
               type: "human",
-              capabilities: %{speech_to_text: speech_selection(provider)},
+              capabilities: %{speech_to_text: caller_speech},
               connection: %{
                 service: "primary-phone",
                 mode: "receive",

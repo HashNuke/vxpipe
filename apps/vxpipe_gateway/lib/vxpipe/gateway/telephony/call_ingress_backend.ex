@@ -57,6 +57,16 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
               :ok | {:error, term()}
   @callback end_incoming(context(), ConfiguredService.t(), Event.t(), term(), atom()) :: term()
 
+  @callback record_caller_recovery(
+              context(),
+              TelephonyAdmissionClaim.t(),
+              atom(),
+              String.t(),
+              DateTime.t()
+            ) ::
+              :ok | {:error, term()}
+  @optional_callbacks record_caller_recovery: 5
+
   @callback mark_incoming_started(
               context(),
               TelephonyAdmissionClaim.t(),

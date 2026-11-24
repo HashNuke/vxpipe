@@ -38,7 +38,7 @@ defmodule Vxpipe.Providers.Telnyx.Events do
          :ok <- WebhookVerifier.verify(webhook, selection.verifier_options),
          {:ok, result} <- resolve(selection, webhook) do
       case result do
-        :cost -> send_resp(conn, 200, "ok")
+        status when status in [:cost, :carrier_ended] -> send_resp(conn, 200, "ok")
         {service, owner} -> handle_verified(conn, options.handler, service, webhook, owner)
       end
     else
@@ -97,6 +97,11 @@ defmodule Vxpipe.Providers.Telnyx.Events do
       :ignore -> WebhookSelection.select(registry, locator, body)
       error -> error
     end
+  end
+
+  defp resolve(%{recovery_claim: _} = selection, _webhook) do
+    with :ok <- Vxpipe.Providers.Telnyx.CallerRecoveryWebhook.store(selection),
+         do: {:ok, :carrier_ended}
   end
 
   defp resolve(%{cost: _cost} = selection, _webhook) do

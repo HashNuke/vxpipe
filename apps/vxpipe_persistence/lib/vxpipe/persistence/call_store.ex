@@ -177,6 +177,13 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   @impl true
+  defdelegate find_caller_recovery(repo, scope, event), to: TelephonyCallStore
+
+  @impl true
+  defdelegate record_caller_recovery(repo, claim, phase, command_id, deadline),
+    to: TelephonyCallStore
+
+  @impl true
   def mark_incoming_telephony_started(repo, claim, incarnation_id, started_at) do
     TelephonyCallStore.mark_started(repo, claim, incarnation_id, started_at)
   end

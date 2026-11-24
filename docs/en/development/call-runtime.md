@@ -151,3 +151,19 @@ transport composition; real carrier audibility remains a separate live gate.
 The transfer wait-sound milestone still retains its explicitly open acceptance
 items. See [Testing and verification](testing.md) and the
 [milestone index](../../../labnotes/milestones/index.md).
+
+### Diagnosing a caller left in silence
+
+For an established inbound Telnyx caller using Scribe v2 realtime on the main
+audio path, loss of recognition or a crash of the media process can trigger an
+English callback recording on the original carrier leg. An explicitly selected
+non-English recognition language excludes this recording. When the language is
+unspecified, QA uses the English recording.
+
+Inspect the leg's `recovery` field in call details. An announcement request
+records the intent to play. Completion requires a matching carrier event.
+The gateway requests hangup on completion, rejection or expiry. A
+`carrier_unknown` entry means the exit deadline elapsed without terminal
+evidence. Look for a later `carrier_ended` entry and final usage before closing
+an investigation. The recording travels through Telnyx independently of the
+room's WebSocket. Handset listening is needed to confirm what the caller heard.

@@ -25,6 +25,7 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
         public_url_provider: nil,
         provider_credential_repository: nil,
         telephony_service_repository: nil,
+        call_repository: nil,
         usage_repository: nil,
         adapters: %{}
       )
@@ -34,6 +35,7 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
       |> Keyword.take([
         :telephony_service_repository,
         :provider_credential_repository,
+        :call_repository,
         :usage_repository
       ])
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)

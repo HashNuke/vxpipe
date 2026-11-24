@@ -28,7 +28,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
     :client_state_leg_id,
     :leg
   ]
-  defstruct @enforce_keys ++ [cleanup_binding: nil]
+  defstruct @enforce_keys ++ [cleanup_binding: nil, caller_recovery?: false]
 
   @type t :: %__MODULE__{
           provider: atom(),
@@ -45,6 +45,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
           provider_call_session_id: nil | String.t(),
           client_state_leg_id: String.t(),
           leg: pid(),
+          caller_recovery?: boolean(),
           cleanup_binding: map() | nil
         }
 

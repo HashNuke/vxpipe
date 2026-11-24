@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
     :incoming,
     :outgoing,
     :answered,
+    :recovery_playback_ended,
     :media_started,
     :media,
     :dtmf,
@@ -42,6 +43,8 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
                 provider_call_leg_id: nil,
                 provider_call_session_id: nil,
                 leg_id: nil,
+                playback_id: nil,
+                playback_outcome: nil,
                 occurred_at: nil,
                 occurred_at_provenance: nil,
                 stream_id: nil,
@@ -60,6 +63,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           :incoming
           | :outgoing
           | :answered
+          | :recovery_playback_ended
           | :media_started
           | :media
           | :dtmf
@@ -77,6 +81,8 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           provider_call_leg_id: nil | String.t(),
           provider_call_session_id: nil | String.t(),
           leg_id: nil | String.t(),
+          playback_id: nil | String.t(),
+          playback_outcome: nil | :completed | :failed | :unknown,
           occurred_at: nil | DateTime.t(),
           occurred_at_provenance: nil | :provider_reported | :locally_measured,
           stream_id: nil | String.t(),
@@ -120,6 +126,11 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
         present?(event.provider_connection_id) and webhook_identified?(event)
 
   defp valid_kind?(%__MODULE__{kind: :answered} = event), do: webhook_identified?(event)
+
+  defp valid_kind?(%__MODULE__{kind: :recovery_playback_ended} = event),
+    do:
+      present?(event.playback_id) and event.playback_outcome in [:completed, :failed, :unknown] and
+        webhook_identified?(event)
 
   defp valid_kind?(%__MODULE__{kind: :media_started} = event),
     do: present?(event.stream_id)

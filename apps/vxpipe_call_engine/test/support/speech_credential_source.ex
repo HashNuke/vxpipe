@@ -3,7 +3,8 @@ defmodule Vxpipe.CallEngine.TestSpeechCredentialSource do
   @behaviour Vxpipe.CallEngine.CredentialSource
 
   @impl true
-  def resolve(:synthetic, tenant_id, provider, name) when provider in ["deepgram", "google"] do
+  def resolve(:synthetic, tenant_id, provider, name)
+      when provider in ["deepgram", "google", "elevenlabs"] do
     {:ok,
      %Vxpipe.CallEngine.ProviderCredential{
        id: "synthetic-speech-credential",

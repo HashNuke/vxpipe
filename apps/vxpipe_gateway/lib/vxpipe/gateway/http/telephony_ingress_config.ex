@@ -21,6 +21,7 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
         provider_credential_repository: nil,
         telephony_service_repository: nil,
         usage_repository: nil,
+        call_repository: nil,
         adapters: %{},
         handler: {CallIngress, []},
         media_admission: MediaAdmission,
@@ -36,6 +37,7 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
         provider_credential_repository: Keyword.fetch!(options, :provider_credential_repository),
         telephony_service_repository: Keyword.fetch!(options, :telephony_service_repository),
         usage_repository: Keyword.fetch!(options, :usage_repository),
+        call_repository: Keyword.fetch!(options, :call_repository),
         adapters: Keyword.fetch!(options, :adapters)
       )
 

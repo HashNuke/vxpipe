@@ -99,6 +99,9 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       {:ok, setup} ->
         monitors = Map.put(monitors, setup.attachment.room_monitor, :room)
 
+        if binding.caller_recovery? and is_pid(setup.attachment.media_ingress),
+          do: send(binding.leg, {:caller_media_eligible, self(), true})
+
         {:ok,
          Map.merge(setup, %{
            binding: binding,
@@ -157,6 +160,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       output: state.audio_output
     ]
 
+    report_eligibility(state, false)
+
     case Vxpipe.Gateway.Media.PrivateMedia.prepare(state, attempt_id, options) do
       {:ok, receipt, state} -> {:reply, {:ok, receipt}, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -166,8 +171,12 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
   def handle_call({:vxpipe_handoff_gate, action, scope}, {caller, _}, state) do
     case Vxpipe.Gateway.Media.HandoffGate.control(action, scope, caller, state) do
-      {:ok, state} -> {:reply, :ok, state}
-      {:error, reason} -> {:reply, {:error, reason}, state}
+      {:ok, state} ->
+        report_eligibility(state, recovery_eligible?(state))
+        {:reply, :ok, state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
     end
   end
 
@@ -323,6 +332,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
         {:vxpipe_transfer_pending, monitor, authority, attempt_id},
         %{attachment: %{room_monitor: monitor}} = state
       ) do
+    report_eligibility(state, false)
+
     case Vxpipe.Gateway.Media.HandoffGate.pending(
            state,
            authority,
@@ -342,11 +353,27 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
     case state.engine.activate_speech_to_text(command) do
       {:ok, ingress} ->
-        {:noreply, %{state | attachment: %{state.attachment | media_ingress: ingress}}}
+        state = %{state | attachment: %{state.attachment | media_ingress: ingress}}
+        report_eligibility(state, recovery_eligible?(state))
+        {:noreply, state}
 
       _failed ->
         {:stop, :shutdown, state}
     end
+  end
+
+  def handle_info(
+        {:vxpipe_connection_unavailable, :speech_to_text_unavailable},
+        %{attachment: %{admission: :main}, binding: %{provider: :telnyx}, private_media: nil} =
+          state
+      ) do
+    if recovery_eligible?(state) do
+      # Keep this signal ordered before this process's DOWN. The leg can be
+      # waiting on another media frame while the recognizer fails.
+      send(state.binding.leg, {:caller_media_failed, self(), state.binding})
+    end
+
+    {:stop, :media_unavailable, state}
   end
 
   def handle_info({:vxpipe_connection_unavailable, _reason}, state) do
@@ -393,9 +420,23 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   def handle_info({:vxpipe_event, _event}, state), do: {:noreply, state}
   def handle_info(_message, state), do: {:noreply, state}
 
+  defp recovery_eligible?(%{binding: %{caller_recovery?: true}} = state) do
+    state.attachment.admission == :main and
+      is_pid(state.attachment.media_ingress) and is_nil(state.private_media) and
+      is_nil(Map.get(state, :handoff_gate)) and not SourceGate.held?(state.source_gate)
+  end
+
+  defp recovery_eligible?(_state), do: false
+
+  defp report_eligibility(%{binding: %{caller_recovery?: true, leg: leg}}, eligible?),
+    do: send(leg, {:caller_media_eligible, self(), eligible?})
+
+  defp report_eligibility(_state, _eligible?), do: :ok
+
   defp source_request(kind, scope, from, %{source_request: nil} = state) do
     with :ok <- authorize_source_request(scope, from, state),
          :ok <- valid_source_scope(kind, scope) do
+      if kind == :hold, do: report_eligibility(state, false)
       token = scope.token
       send(state.socket_owner, source_request_message(kind, scope))
 
@@ -477,7 +518,9 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
        when is_reference(epoch) do
     Process.cancel_timer(request.timer)
     GenServer.reply(request.from, {:ok, epoch})
-    {:noreply, %{state | source_gate: {:active, epoch}, source_request: nil}}
+    state = %{state | source_gate: {:active, epoch}, source_request: nil}
+    report_eligibility(state, recovery_eligible?(state))
+    {:noreply, state}
   end
 
   defp settle_source_request({:error, reason}, request, state) do
