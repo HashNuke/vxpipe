@@ -47,7 +47,61 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecoveryTest do
     end
   end
 
+  test "caller speech interrupts the repeat prompt and fences its late failure and expiry" do
+    {state, episode, expiry} = active_episode(:repeat)
+    owner = self()
+    token = episode.token
+
+    fresh = %{
+      kind: :turn_started,
+      turn_ref: make_ref(),
+      allocation_generation: episode.replacement
+    }
+
+    stale = %{fresh | allocation_generation: episode.session.generation}
+
+    assert CallerSpeechRecovery.signal(state, "phone", stale) == state
+    refute_received {:stop_caller_recovery_cue, _, _}
+
+    speaking = CallerSpeechRecovery.signal(state, "phone", fresh)
+    assert_receive {:stop_caller_recovery_cue, ^owner, ^token}
+    assert speaking.connections["phone"].speech_recovery.phase == :speaking
+    assert CallerSpeechRecovery.playout(speaking, "phone", owner, token, :failed) == speaking
+    assert CallerSpeechRecovery.expired(speaking, "phone", expiry) == speaking
+    refute_received {:vxpipe_connection_unavailable, _}
+
+    finished = CallerSpeechRecovery.signal(speaking, "phone", %{fresh | kind: :turn_ended})
+    assert finished.connections["phone"].speech_recovery == :eligible
+    assert_receive {:vxpipe_archive, :fact, _, %{payload: %{"phase" => "repeat_completed"}}}
+
+    assert CallerSpeechRecovery.signal(finished, "phone", %{fresh | kind: :turn_ended}) ==
+             finished
+
+    refute_received {:vxpipe_archive, :fact, _, %{payload: %{"phase" => "repeat_completed"}}}
+  end
+
   test "call details distinguish a failed cue from expiry during the same hearing phase" do
+    {state, episode, expiry} = active_episode(:hearing)
+    token = episode.token
+
+    for {event, expected} <- [{:playout, "playout_failed"}, {:timeout, "deadline_expired"}] do
+      case event do
+        :playout -> CallerSpeechRecovery.playout(state, "phone", self(), token, :failed)
+        :timeout -> CallerSpeechRecovery.expired(state, "phone", expiry)
+      end
+
+      assert_receive {:vxpipe_archive, :fact, _,
+                      %{
+                        payload: %{
+                          "phase" => "carrier_exit",
+                          "failed_phase" => "hearing",
+                          "reason" => ^expected
+                        }
+                      }}
+    end
+  end
+
+  defp active_episode(phase) do
     identity = %{tenant_id: "tenant", call_id: "call", room_id: "room", incarnation_id: "rinc"}
     port = Port.new(Handoff.new(self(), 4), identity, %{"revision" => 0})
     token = "recovery-command"
@@ -55,7 +109,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecoveryTest do
 
     episode = %{
       token: token,
-      phase: :hearing,
+      phase: phase,
       connection_id: "phone",
       room_turn_id: "turn",
       started_ms: 0,
@@ -74,20 +128,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecoveryTest do
       archive_recorder: %Recorder{port: port, participant_activations: %{}}
     }
 
-    for {event, expected} <- [{:playout, "playout_failed"}, {:timeout, "deadline_expired"}] do
-      case event do
-        :playout -> CallerSpeechRecovery.playout(state, "phone", self(), token, :failed)
-        :timeout -> CallerSpeechRecovery.expired(state, "phone", expiry)
-      end
-
-      assert_receive {:vxpipe_archive, :fact, _,
-                      %{
-                        payload: %{
-                          "phase" => "carrier_exit",
-                          "failed_phase" => "hearing",
-                          "reason" => ^expected
-                        }
-                      }}
-    end
+    {state, episode, expiry}
   end
 end

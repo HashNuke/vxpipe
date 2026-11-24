@@ -412,6 +412,33 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     refute_received {:test_recovery_playback, _, _}
   end
 
+  @tag initial_outcome: :ready, caller_recovery: true, caller_vad: true, commercial: true
+  test "speaking during the repeat prompt sends only the fresh question to the agent",
+       context do
+    {room, replacement, _socket} = start_stalled_recovery(context)
+    wire = Vxpipe.CallEngine.TestElevenLabsScribeTransport
+    wire.deliver(replacement, {:ready, "fresh-scribe"})
+    await_recovery_phase(room, :repeat, System.monotonic_time(:millisecond) + 9_000)
+
+    question = "Do you serve office buildings?"
+    wire.deliver(replacement, {:partial, question})
+    await_recovery_phase(room, :speaking, System.monotonic_time(:millisecond) + 2_000)
+    wire.deliver(replacement, {:segment, question})
+    wire.deliver(replacement, {:partial, ""})
+
+    assert_receive {:test_agent_runtime_stream, provider, request}, 3_000
+    messages = Enum.map(request.messages, & &1.content)
+    assert Enum.count(messages, &String.contains?(&1, question)) == 1
+    refute Enum.any?(messages, &String.contains?(&1, "Do you service commercial properties?"))
+    refute Enum.any?(messages, &String.contains?(&1, ["trouble hearing", "repeat it"]))
+    {:ok, response} = ModelResponse.new(text: "Yes, we serve office buildings.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_control, _, speak}, 2_000
+    assert %{"type" => "Speak", "text" => "Yes, we serve office buildings."} = JSON.decode!(speak)
+    refute_received {:test_agent_runtime_stream, _, _}
+    refute_received {:test_recovery_playback, _, _}
+  end
+
   @tag initial_outcome: :ready, caller_recovery: true
   test "a confirmed recognizer disconnect gets one fresh allocation while phone audio remains healthy",
        context do

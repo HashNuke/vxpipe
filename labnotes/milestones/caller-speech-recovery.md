@@ -102,7 +102,10 @@ Exercise no repeat, resumed speech, ready-then-failed replacement, missing clip 
 Configured harness evidence: an open commercial-property question reaches one
 fresh Scribe allocation after an injected offset deadline. The test waits for
 both caller-specific recordings to finish before submitting the repeat and
-observes one agent request. Separate tests exercise resumed speech, a final
+observes one agent request. A second configured test starts the repeat during the
+prompt, confirms the fresh question reaches the model once, and observes the
+answer submitted for synthesis. The room test delivers both an expired timer
+and a failed playout callback after caller onset. Separate tests exercise resumed speech, a final
 before cutover, readiness timeout, missing repeat and replacement failure.
 The recognition test delivers an old partial, final and session-close notification
 after the replacement has started transcribing the repeated question. The fresh
