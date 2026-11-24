@@ -130,10 +130,26 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
         scenario_options
       )
 
+    runtime_options =
+      if context[:managed_transfer] do
+        repository =
+          start_supervised!(
+            {Vxpipe.Gateway.TestManagedIncomingBackend, claim: scenario.claim, observer: self()}
+          )
+
+        Keyword.merge(scenario.runtime_options,
+          managed_cleanup: true,
+          call_repository: {Vxpipe.Gateway.TestManagedIncomingBackend, repository},
+          usage_repository: {Vxpipe.Gateway.TestFinalUsageRepository, {self(), &{:ok, &1}}},
+          publication_enabled: false
+        )
+      else
+        scenario.runtime_options
+      end
+
     backend =
       start_supervised!(
-        {TelephonyHarnessBackend,
-         claim: scenario.claim, runtime_options: scenario.runtime_options}
+        {TelephonyHarnessBackend, claim: scenario.claim, runtime_options: runtime_options}
       )
 
     endpoint =
@@ -656,6 +672,68 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     refute_received {:test_linked_dial, _}
     refute_received {:test_telephony_end_leg, _}
+  end
+
+  @tag initial_outcome: :ready,
+       caller_recovery: true,
+       recovery_transfer: true,
+       managed_transfer: true
+  test "both carrier owners join cleanup before transfer and settle their own terminal usage",
+       context do
+    {speech, _socket} = start_recovery_call(context)
+    exhaust_recognition(speech)
+    assert_receive {:test_transfer_announcement, _, announcement}, 2_000
+    call = TelephonyHarnessBackend.claim(context.backend).call
+    binding = Vxpipe.Gateway.CallAdmission.Cleanup.binding_for(call)
+    assert {:ok, tracker} = Vxpipe.Gateway.CallCleanupSupervisor.lookup(binding)
+    assert {:ok, caller} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+    assert {:ok, peer} = LegSupervisor.lookup_outgoing("peer-" <> @incoming_leg_id)
+    resources = Vxpipe.Gateway.CallCleanup.snapshot(tracker).resources
+    assert %{kind: :incoming_leg, acknowledgement: :pending} = Map.fetch!(resources, caller)
+    assert %{kind: :outgoing_leg, acknowledgement: :pending} = Map.fetch!(resources, peer)
+    caller_ref = Process.monitor(caller)
+    peer_ref = Process.monitor(peer)
+
+    assert post_fixture(context, "call-playback-ended", %{
+             "status" => "completed",
+             "client_state" => Base.encode64(announcement)
+           }).status == 200
+
+    assert_receive {:test_linked_dial, request}, 2_000
+    assert peer_event(context, request.id, "call.bridged").status == 200
+    stop_transfer_room!(context.plan)
+    assert :sys.get_state(caller).recovery.phase == :bridged
+    refute_received {:test_telephony_end_leg, _}
+
+    assert peer_event(context, request.id, "call.hangup").status == 200
+
+    assert_receive {:stored_carrier_usage,
+                    %{
+                      attempt_id: peer_attempt,
+                      outcome: :succeeded,
+                      provider: %{operation_id: "peer-leg"}
+                    }},
+                   2_000
+
+    assert peer_attempt == request.id
+    assert_receive {:DOWN, ^peer_ref, :process, ^peer, :normal}, 2_000
+
+    assert Map.fetch!(Vxpipe.Gateway.CallCleanup.snapshot(tracker).resources, caller).acknowledgement ==
+             :pending
+
+    assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
+             200
+
+    assert_receive {:stored_carrier_usage,
+                    %{
+                      attempt_id: @incoming_leg_id,
+                      outcome: :succeeded,
+                      provider: %{operation_id: "inbound-call-leg"}
+                    }},
+                   2_000
+
+    assert_receive {:DOWN, ^caller_ref, :process, ^caller, :normal}, 2_000
+    assert_receive {:incoming_cleanup_completed, ^binding, _}, 2_000
   end
 
   for outcome <- [:bridged, :no_answer, :busy, :rejected, :abandoned, :platform_after_bridge] do

@@ -84,6 +84,16 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
 
   @impl true
   def bind_incoming(agent, claim, incarnation) do
+    options = Agent.get(agent, & &1.runtime_options)
+
+    if Keyword.get(options, :managed_cleanup, false) do
+      CallAdmission.bind_incoming(options, claim, incarnation)
+    else
+      bind_legacy(agent, claim, incarnation)
+    end
+  end
+
+  defp bind_legacy(agent, claim, incarnation) do
     Agent.get_and_update(agent, fn state ->
       if state.available? do
         claim = %{claim | call: %{claim.call | incarnation_id: incarnation}}
