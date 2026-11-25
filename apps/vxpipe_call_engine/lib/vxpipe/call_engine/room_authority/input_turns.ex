@@ -26,7 +26,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     ConnectionLifecycle,
     EventPublisher,
     FirstMessage,
-    SpokenHistory,
     State,
     STTAudioAdmission,
     TurnState
@@ -390,7 +389,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
                 state
                 |> Map.put(:archive_recorder, archive_recorder)
-                |> confirm_user(command)
                 |> TurnState.put(command, observation)
 
               {:error, reason} ->
@@ -521,7 +519,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       )
 
     state = %{state | archive_recorder: archive_recorder}
-    state = confirm_user(state, command)
     state = EventPublisher.publish(state, connection.pid, completed)
     %{state | next_sequence: state.next_sequence + 2}
   end
@@ -533,10 +530,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       retryable: true,
       details: %{"reason" => Atom.to_string(reason)}
     )
-  end
-
-  defp confirm_user(state, command) do
-    %{state | spoken_history: SpokenHistory.confirm_user(state.spoken_history, command)}
   end
 
   defp with_model_input(command, mode) do

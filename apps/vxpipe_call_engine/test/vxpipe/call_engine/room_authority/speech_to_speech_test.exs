@@ -456,21 +456,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
                     }}
   end
 
-  test "partial caller transcripts publish without settling history" do
+  test "partial caller transcripts publish and only final text enters the STS agent history" do
     state = state()
-    before = state.spoken_history
 
     state =
       caller_transcript(state, "HE", "turn-p", false)
 
     assert_receive {:vxpipe_event, %ParticipantTranscription{text: "HE", final: false}}
-    assert state.spoken_history == before
+    refute_received {:vxpipe_sts_published_history, _, _}
 
-    state =
-      caller_transcript(state, "HELLO", "turn-p", true)
+    _state = caller_transcript(state, "HELLO", "turn-p", true)
 
     assert_receive {:vxpipe_event, %ParticipantTranscription{text: "HELLO", final: true}}
-    assert state.spoken_history != before
+    assert_received {:vxpipe_sts_published_history, _, {:caller, "HELLO"}}
   end
 
   test "STS usage source resolves with activation for observation attribution" do

@@ -6,7 +6,7 @@ export function SectionPermissionMatrix({ document, onChange, issues, agentKey }
   const declared = document.source.call_variables?.sections ?? {};
   const agents = Object.entries(document.source.participants).filter(([key, value]) => value.type === "agent" && (!agentKey || key === agentKey));
   const sections = [...new Set([...Object.keys(declared), ...agents.flatMap(([, value]) => value.type === "agent" ? Object.keys(value.variable_permissions ?? {}) : [])])];
-  if (!sections.length || !agents.length) return <p className="text-xs text-muted-foreground">Add a section and an agent to configure variable access.</p>;
+  if (!sections.length || !agents.length) return null;
   return <section className="space-y-3" aria-label="Section permissions"><h3 className="text-sm font-semibold">Section permissions</h3>
     <p className="text-xs text-muted-foreground">Agents can read a section, or read and write it.</p>
     <Table><TableHeader><TableRow><TableHead>Section</TableHead>{agents.map(([key]) => <TableHead key={key}>{key}</TableHead>)}</TableRow></TableHeader><TableBody>

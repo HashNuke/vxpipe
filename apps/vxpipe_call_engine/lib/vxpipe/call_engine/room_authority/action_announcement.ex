@@ -9,7 +9,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement do
     EndCall,
     EventPublisher,
     ParticipantTransfer,
-    SpokenHistory,
     State
   }
 
@@ -218,11 +217,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement do
   end
 
   defp record_delivery(state, request, :delivered) do
-    %{
-      state
-      | archive_recorder: Recorder.delivered_output(state.archive_recorder, request),
-        spoken_history: SpokenHistory.played_assistant(state.spoken_history, request)
-    }
+    %{state | archive_recorder: Recorder.delivered_output(state.archive_recorder, request)}
   end
 
   defp record_delivery(state, _request, :unconfirmed), do: state

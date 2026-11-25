@@ -34,7 +34,6 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
           Runtime.t(),
           Participant.t(),
           boolean(),
-          [Vxpipe.AgentRuntime.Message.t()],
           nil | TextToSpeechRuntime.t(),
           %{attempt_id: String.t(), deadline_ms: integer()}
         ) ::
@@ -45,12 +44,10 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
         %Runtime{} = runtime,
         %Participant{} = destination,
         first_activation?,
-        initial_messages,
         source_text_to_speech,
         %{attempt_id: attempt_id, deadline_ms: deadline_ms}
       )
-      when is_boolean(first_activation?) and is_list(initial_messages) and
-             is_integer(deadline_ms) do
+      when is_boolean(first_activation?) and is_integer(deadline_ms) do
     scope = %{
       authority: self(),
       incarnation_id: incarnation_id,
@@ -67,7 +64,6 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
             runtime,
             destination,
             first_activation?,
-            initial_messages,
             source_text_to_speech,
             deadline_ms
           )

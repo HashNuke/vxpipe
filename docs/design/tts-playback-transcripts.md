@@ -40,8 +40,8 @@ add provider timing, precise cutoff evidence and voice-specific settlement.
 
 - [AgentOutput](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority/agent_output.ex)
   publishes generated `TextOutput` segments before synthesis. On completed
-  playback it records the whole segment as delivered and appends it to
-  [SpokenHistory](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority/spoken_history.ex).
+  playback it records the whole segment as delivered and confirms it in the
+  active agent’s [output history](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority/output_history.ex).
   Discarded segments do not append a timed partial prefix. Interruption records
   a played duration, not a word-level spoken transcript.
 - [Archive projection](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/archive/event_projection.ex)

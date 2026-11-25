@@ -6,9 +6,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
-  alias Vxpipe.CallEngine.PlanStartup.EntryConnection
-  alias Vxpipe.CallEngine.PlanStartup.AgentDestination
-  alias Vxpipe.CallEngine.PlanStartup.HumanDestination
+  alias Vxpipe.CallEngine.PlanStartup.{AgentDestination, EntryConnection, HumanDestination}
   alias Vxpipe.CallEngine.PlanStartup.OutputSTTFormat
   alias Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
@@ -176,6 +174,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         options
       )
       when is_list(options) do
+    options = Keyword.drop(options, [:initial_messages, :transfer_reason])
+
     with {:ok, activation_options} <- agent_activation_options(plan, participant, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(plan, participant, options),
          {:ok, command} <- participant_command(plan, participant) do

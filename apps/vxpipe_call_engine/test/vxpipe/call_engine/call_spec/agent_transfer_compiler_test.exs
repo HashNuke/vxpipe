@@ -179,7 +179,7 @@ defmodule Vxpipe.CallEngine.CallSpec.AgentTransferCompilerTest do
     |> Map.put(:transfer_policy, %{recovery_destination: "billing"})
   end
 
-  test "pins each destination agent's inbound transfer history policy" do
+  test "accepts historical history settings and compiles fresh agent destinations" do
     assert {:ok, default_call_spec} =
              transfer_call_spec()
              |> CallSpec.new(resource_id: "support", revision: 7)
@@ -207,11 +207,11 @@ defmodule Vxpipe.CallEngine.CallSpec.AgentTransferCompilerTest do
       assert {:ok, plan} =
                CallSpecCompiler.compile(call_spec, invocation(), registries())
 
-      assert Map.take(plan.participants["billing"].transfer_history, [:mode, :turns]) == expected
+      assert %{mode: :fresh, turns: nil} = plan.participants["billing"].transfer_history
     end
   end
 
-  test "requires an explicit bounded reason only for selected-history destinations" do
+  test "a legacy selected agent destination requires only its destination name" do
     input =
       put_in(
         transfer_call_spec(),
@@ -235,28 +235,21 @@ defmodule Vxpipe.CallEngine.CallSpec.AgentTransferCompilerTest do
                  "type" => "string",
                  "enum" => ["billing"],
                  "description" => "Permitted destination: billing (A billing specialist)."
-               },
-               "reason" => %{
-                 "type" => "string",
-                 "minLength" => 1,
-                 "maxLength" => 1_024,
-                 "description" =>
-                   "Required for destination billing. Explain why the caller is being transferred."
                }
              },
-             "required" => ["destination", "reason"],
+             "required" => ["destination"],
              "additionalProperties" => false
            }
 
     assert {:ok, registry} = ToolRegistry.new([descriptor])
 
-    assert {:ok, ^descriptor} =
+    assert {:error, :invalid_arguments} =
              ToolRegistry.resolve(registry, "transfer", %{
                "destination" => "billing",
                "reason" => "The caller needs help understanding invoice 17."
              })
 
-    assert {:error, :invalid_arguments} =
+    assert {:ok, ^descriptor} =
              ToolRegistry.resolve(registry, "transfer", %{"destination" => "billing"})
   end
 

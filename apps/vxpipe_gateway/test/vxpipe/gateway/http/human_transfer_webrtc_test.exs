@@ -1560,7 +1560,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              ]
 
       contents = Enum.map(request.messages, & &1.content)
-      assert "Please connect me to billing." in Enum.map(contents, &model_text/1)
+      refute "Please connect me to billing." in Enum.map(contents, &model_text/1)
       assert "Billing is ready." in Enum.map(contents, &model_text/1)
 
       for marker <- [

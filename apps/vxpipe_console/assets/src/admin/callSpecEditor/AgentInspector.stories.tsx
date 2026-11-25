@@ -35,8 +35,12 @@ if (tools.source.participants.intake?.type === "agent") tools.source.participant
   calendar__find_slots: { type: "mcp", integration: "calendar", tool: "find_slots", conversation_mode: "non_blocking" },
   hangup: { type: "platform", tool: "hangup" },
 };
-const history = structuredClone(initial);
-if (history.source.participants.intake?.type === "agent") history.source.participants.intake.transfer_history = { mode: "last_n_spoken", turns: 3 };
+const invalidLegacyTransfer = structuredClone(initial);
+if (invalidLegacyTransfer.source.participants.intake?.type === "agent") invalidLegacyTransfer.source.participants.intake.transfer_history = { mode: "last_n_spoken", turns: 0 };
+const emptyVariables = structuredClone(initial);
+delete emptyVariables.source.call_variables;
+const intake = emptyVariables.source.participants.intake;
+if (intake?.type === "agent") delete intake.variable_permissions;
 const meta = {
   title: "Vxpipe/Console/Call spec editor/components/Agent inspector",
   component: AgentInspectorStory,
@@ -53,15 +57,20 @@ export const AgentInspectorDefault: Story = { play: async ({ canvasElement }) =>
   await expect(canvas.findByRole("tab", { name: "Variables" })).resolves.toBeInTheDocument();
 } };
 export const AgentVariables: Story = { args: { initialTab: "variables" }, play: async ({ canvasElement }) => {
-  await expect(within(canvasElement).findByRole("combobox", { name: "appointment access for intake" })).resolves.toHaveTextContent("Read and write");
+  const canvas = within(canvasElement);
+  await expect(canvas.findByRole("combobox", { name: "appointment access for intake" })).resolves.toHaveTextContent("Read and write");
+  await expect(canvas.getByRole("button", { name: "Add variable to appointment" })).toBeEnabled();
 } };
-export const AgentTransfers: Story = { args: { initialTab: "transfers", initial: history }, play: async ({ canvasElement }) => {
+export const EmptyAgentVariables: Story = { args: { initialTab: "variables", initial: emptyVariables } };
+export const ReadOnlyAgentVariables: Story = { args: { initialTab: "variables", initial: { ...initial, readOnly: true } } };
+export const AgentTransfers: Story = { args: { initialTab: "transfers" }, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   const destinations = within(await canvas.findByRole("region", { name: "Allowed destinations" }));
   await expect(destinations.getByText("specialist")).toBeInTheDocument();
   await expect(destinations.queryByText("Human destination")).not.toBeInTheDocument();
   await expect(canvas.findByRole("button", { name: "Add destination" })).resolves.toBeInTheDocument();
 } };
+export const InvalidLegacyTransfer: Story = { args: { initialTab: "transfers", initial: invalidLegacyTransfer } };
 export const VoiceAndModel: Story = { name: "Models", args: { initialTab: "voice", initial: voice } };
 export const SpeechToSpeech: Story = { args: { initialTab: "voice", initial: speechToSpeech } };
 export const FixedFirstMessage: Story = { args: { initial: fixed } };

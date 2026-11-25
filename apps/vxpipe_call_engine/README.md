@@ -207,27 +207,21 @@ continues to select only a compiler-allowlisted participant ref, never a service
 the definition/compiler boundary; provider adapters and live phone legs are implemented by the
 telephony milestone rather than inferred from accepting the schema.
 
-The schema also accepts validated call-spec-local participant transfer allowlists, derives one private default-blocking transfer binding
-for each non-empty list, pins the call-level total transfer-attempt deadline, and pins each agent's
-inbound `transfer_history` policy. Omission selects the privacy-safe `fresh` mode; the closed set is
-`fresh`, `all_spoken`, `last_n_spoken` with a positive `turns` value, and `selected`.
-Transfer-capable
+The schema also accepts validated call-spec-local participant transfer allowlists, derives one
+private default-blocking transfer binding for each non-empty list, and pins the call-level total
+transfer-attempt deadline. Transfer-capable
 activations ensure their supervised tool timeout encloses that configured budget. Destination setup
 runs under a separate room-owned task supervisor, leaving Room Authority responsive while it
 prepares the agent and selected TTS. Room Authority reauthorizes the source and destination at
 commit, retains the source through preparation, cleans up failure/expiry, rejects late results,
 then routes successful later turns through the destination and tears the source subtree down.
-Room state now retains a private transcript projection of caller input accepted for processing and
-assistant text acknowledged as played. Transfer preparation snapshots that projection once and
-seeds `all_spoken` or the configured `last_n_spoken` window into the destination runtime after its
-own prompt. `fresh` and `selected` seed no prior messages. A transfer into a `selected` destination
-now requires a non-empty reason of at most 1,024 characters. The descriptor requires it only for
-that destination, and the private transfer request retains it without exposing it through
-inspection. Each Agent Runtime generation receives a separately bounded transient projection of
-only that participant's readable Call Variables. A selected destination additionally receives the
-transfer reason in that private state, not in conversation history. Re-entry preserves participant
-identity with a fresh activation, and failed preparation has one bounded source-capability
-restoration attempt.
+Every successful transfer to an agent starts a fresh conversation with its own instructions.
+Each Agent Runtime generation receives a bounded projection of the destination's readable Call
+Variables. Older call specs may still contain `transfer_history` settings. The compiler resolves
+these to `fresh`, and the same conversation boundary applies when executing an older prepared
+plan. A private reason in a previously prepared transfer request goes only to a human destination
+for its briefing. Re-entry preserves participant identity with a fresh activation. Failed
+preparation has one bounded source-capability restoration attempt.
 Schema `20260910.06` added inbound transfer history and selected projections; schema
 `20260910.04` added the transfer allowlists and generated binding. Schema `20260910.03`
 added explicitly selected platform

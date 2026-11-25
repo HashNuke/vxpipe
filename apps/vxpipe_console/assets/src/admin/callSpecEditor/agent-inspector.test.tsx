@@ -170,20 +170,35 @@ test("transfer search adds only eligible destinations and keeps the graph projec
   fireEvent.click(screen.getByRole("button", { name: "Remove transfer to specialist" }));
   expect(saved().participants.intake.transfers).toEqual(["reviewer"]);
 });
-test("transfer history preserves saved null until edited and clears turn count when changing mode", async () => {
+test("transfer settings show destinations without exposing historical transcript modes", () => {
   const initial = structuredClone(editorFixture);
   const intake = initial.source.participants.intake!;
-  if (intake.type === "agent") intake.transfer_history = null;
+  if (intake.type === "agent") intake.transfer_history = { mode: "last_n_spoken", turns: 3 };
   render(<Harness initial={initial} initialTab="transfers" />);
-  expect(saved().participants.intake.transfer_history).toBeNull();
-  await choose("Transfer history", "Last spoken turns");
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Spoken turns" }), { target: { value: "3" } });
-  expect(saved().participants.intake.transfer_history).toEqual({ mode: "last_n_spoken", turns: 3 });
-  await choose("Transfer history", "Selected history");
-  expect(saved().participants.intake.transfer_history).toEqual({ mode: "selected" });
-  await choose("Transfer history", "Fresh");
-  expect(saved().participants.intake).not.toHaveProperty("transfer_history");
+  expect(screen.getByRole("button", { name: "Add destination" })).toBeEnabled();
+  expect(screen.queryByRole("combobox", { name: "Transfer history" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("spinbutton", { name: "Spoken turns" })).not.toBeInTheDocument();
 });
+
+test("an agent can create its first section and variable from the Variables tab", () => {
+  const initial = structuredClone(editorFixture);
+  delete initial.source.call_variables;
+  initial.source.participants.intake = { type: "agent", prompt: "Collect intake." };
+  initial.source.participants.reviewer = { type: "agent", prompt: "Review." };
+  render(<Harness initial={initial} initialTab="variables" />);
+  fireEvent.click(screen.getByRole("button", { name: "Add section" }));
+  fill("Section name", "contact");
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add section" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add variable to contact" }));
+  fill("Name", "email");
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add variable" }));
+  expect(saved().call_variables.sections.contact.schema.properties.email.type).toBe("string");
+  expect(saved().participants.intake.variable_permissions).toEqual({ contact: ["read", "write"] });
+  expect(saved().participants.reviewer).toEqual(initial.source.participants.reviewer);
+  switchTab("Prompt"); switchTab("Variables");
+  expect(screen.getByText("email")).toBeVisible();
+});
+
 test("MCP tools are picked with individual modes and integration-qualified names", () => {
   render(<Harness initialTab="tools" />);
   fireEvent.click(screen.getByRole("button", { name: "Add tool" }));
@@ -273,4 +288,20 @@ test("enabled tools show one source and name row with a tooltip only for blockin
   fireEvent.focus(indicator);
   expect(await screen.findByRole("tooltip")).toHaveTextContent("Blocking");
   expect(saved()).toEqual(initial.source);
+});
+
+test("a draft with malformed legacy history points the author to participant JSON", () => {
+  const initial = structuredClone(editorFixture);
+  Object.assign(initial.source.participants.intake!, { transfer_history: { mode: "last_n_spoken", turns: 0 } });
+  render(<Harness initial={initial} initialTab="transfers" />);
+  expect(screen.getByText("Remove the obsolete transfer_history setting in the participant JSON editor.")).toBeVisible();
+});
+
+test("a read-only revision with malformed legacy history explains the fresh transfer behavior", () => {
+  const initial = structuredClone(editorFixture);
+  initial.readOnly = true;
+  Object.assign(initial.source.participants.intake!, { transfer_history: { mode: "last_n_spoken", turns: 0 } });
+  render(<Harness initial={initial} initialTab="transfers" />);
+  expect(screen.getByText("Agent transfers always start with fresh history.")).toBeVisible();
+  expect(screen.queryByText(/Remove the obsolete/)).not.toBeInTheDocument();
 });

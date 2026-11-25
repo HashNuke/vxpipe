@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  alias Vxpipe.CallEngine.RoomAuthority.{SpokenHistory, SpeechToSpeech, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
@@ -75,8 +75,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         request.destination_call_spec_key
       )
 
-    initial_messages = projected_history(state.spoken_history, destination)
-
     previously_activated? =
       MapSet.member?(state.activated_agent_participant_ids, destination.participant_id)
 
@@ -89,7 +87,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
            state.participant_transfer_runtime,
            destination,
            not previously_activated?,
-           initial_messages,
            state.text_to_speech_runtime,
            %{attempt_id: attempt_id, deadline_ms: deadline_ms}
          ) do
@@ -338,10 +335,4 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   defp deadline_elapsed?(pending) do
     System.monotonic_time(:millisecond) >= pending.deadline_ms
   end
-
-  defp projected_history(spoken_history, %{kind: :agent, transfer_history: transfer_history}) do
-    SpokenHistory.project(spoken_history, transfer_history)
-  end
-
-  defp projected_history(_spoken_history, %{kind: :human}), do: []
 end

@@ -26,7 +26,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
           Runtime.t(),
           Participant.t(),
           boolean(),
-          [Vxpipe.AgentRuntime.Message.t()],
           nil | Vxpipe.CallEngine.TextToSpeechRuntime.t(),
           integer()
         ) ::
@@ -36,12 +35,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
         %Runtime{} = runtime,
         %Participant{} = participant,
         first_activation?,
-        initial_messages,
         source_text_to_speech,
         deadline_ms
       )
-      when is_boolean(first_activation?) and is_list(initial_messages) and
-             is_integer(deadline_ms) do
+      when is_boolean(first_activation?) and is_integer(deadline_ms) do
     case participant.kind do
       :agent ->
         prepare_agent(
@@ -49,7 +46,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
           runtime,
           participant,
           first_activation?,
-          initial_messages,
           deadline_ms
         )
 
@@ -69,10 +65,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
          runtime,
          participant,
          first_activation?,
-         initial_messages,
          deadline_ms
        ) do
-    case agent_destination(request, runtime, participant, initial_messages, deadline_ms) do
+    options = Keyword.put(runtime.startup_options, :mcp_initialization_deadline, deadline_ms)
+
+    case PlanStartup.agent_destination(runtime.plan, participant, options) do
       {:ok, %AgentDestination{} = destination} ->
         prepare_participant(request, runtime, destination, first_activation?)
 
@@ -99,20 +96,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
       {:error, _reason} ->
         {:error, :destination_participant_unavailable}
     end
-  end
-
-  defp agent_destination(request, runtime, participant, initial_messages, deadline_ms) do
-    options =
-      runtime.startup_options
-      |> Keyword.put(:initial_messages, initial_messages)
-      |> Keyword.put(:transfer_reason, request.reason)
-      |> Keyword.put(:mcp_initialization_deadline, deadline_ms)
-
-    PlanStartup.agent_destination(
-      runtime.plan,
-      participant,
-      options
-    )
   end
 
   defp prepare_text_to_speech(

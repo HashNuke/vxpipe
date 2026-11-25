@@ -281,7 +281,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
   test "denied caller text cannot leak through turn-end fallback or retain a settled slot" do
     state = state()
     denied = %{policy() | effective: %{policy().effective | transcript_routes: %{}}}
-    before = state.spoken_history
 
     {:ok, state} =
       CallerTurns.handle(state, self(), evidence(state, :speech_started, "turn", 1), denied)
@@ -298,13 +297,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
 
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{}}
     refute_received {:vxpipe_event, %ParticipantTranscription{}}
-    assert state.spoken_history == before
+    refute_received {:vxpipe_sts_published_history, _, _}
     assert state.sts_caller_turns == %{}
   end
 
-  test "completed calls retain only the sequence watermark, not retired provider IDs" do
+  test "settled caller turns release transcripts and retain only the sequence watermark" do
     initial = state()
     old_start = evidence(initial, :speech_started, "turn-1", 1)
+    transcript = "Caller speech released after the turn."
 
     state =
       Enum.reduce(1..100, initial, fn index, state ->
@@ -312,7 +312,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
         assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}
 
         state =
-          handle(state, evidence(state, :turn_ended, "turn-#{index}", index * 2, text: "HI"))
+          handle(
+            state,
+            evidence(state, :turn_ended, "turn-#{index}", index * 2, text: transcript)
+          )
 
         assert_receive {:vxpipe_event, %ParticipantTranscription{final: true}}
         assert_receive {:vxpipe_event, %ParticipantTurnCompleted{}}
@@ -321,6 +324,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
       end)
 
     assert state.sts_caller_sequence == 200
+    assert :binary.match(:erlang.term_to_binary(state), transcript) == :nomatch
     assert handle(state, old_start) == state
     refute_received {:vxpipe_event, _}
   end

@@ -3,13 +3,10 @@ import { Bot, UserRound, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
-import { ChoiceField, NumberField } from "./editor-fields";
-import { editSource } from "./editSource";
 import { IssueAnchor } from "./issue-anchor";
 import { agent } from "./edits";
 import type { InspectorProps } from "./inspectorTypes";
 import { isTransferDestination, setTransfer } from "./participants";
-import type { TransferHistory } from "./types";
 
 export function AgentTransfersPanel({ document, onChange, issues, participantKey }: InspectorProps & { participantKey: string }) {
   const [open, setOpen] = useState(false);
@@ -18,9 +15,6 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
   const transfers = target.transfers ?? [];
   const path = ["participants", participantKey];
   const available = Object.entries(document.source.participants).filter(([key]) => key !== participantKey && !transfers.includes(key) && isTransferDestination(document.source, key) && key.toLowerCase().includes(query.trim().toLowerCase()));
-  function history(value: TransferHistory | undefined) {
-    onChange(editSource(document, (source) => { const target = agent(source, participantKey); if (value === undefined) delete target.transfer_history; else target.transfer_history = value; }));
-  }
   return <div className="space-y-5">
     <section className="space-y-3" aria-label="Allowed destinations">
       <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-medium">Allowed destinations</h3>
@@ -46,10 +40,10 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
       })}
       {!transfers.length && <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">Add a destination to let this agent transfer the call.</p>}
     </section>
-    <ChoiceField label="Transfer history" path={[...path, "transfer_history", "mode"]} issues={issues} disabled={document.readOnly} value={target.transfer_history?.mode ?? "fresh"}
-      choices={[{ value: "fresh", label: "Fresh" }, { value: "all_spoken", label: "All spoken history" }, { value: "last_n_spoken", label: "Last spoken turns" }, { value: "selected", label: "Selected history" }]}
-      hint="Choose the history this agent receives when a call transfers to it."
-      onChange={(mode) => history(mode === "last_n_spoken" ? { mode, turns: 1 } : mode === "all_spoken" || mode === "selected" ? { mode } : undefined)} />
-    {target.transfer_history?.mode === "last_n_spoken" && <NumberField label="Spoken turns" path={[...path, "transfer_history", "turns"]} issues={issues} disabled={document.readOnly} value={target.transfer_history.turns} hint="At least one spoken turn." onChange={(turns) => history({ mode: "last_n_spoken", turns: turns ?? 0 })} />}
+    {issues?.some(({ path: [root, key, field] }) => root === "participants" && key === participantKey && field === "transfer_history") && (
+      <IssueAnchor path={[...path, "transfer_history"]} issues={issues} className="text-sm text-muted-foreground">
+        {document.readOnly ? "Agent transfers always start with fresh history." : "Remove the obsolete transfer_history setting in the participant JSON editor."}
+      </IssueAnchor>
+    )}
   </div>;
 }

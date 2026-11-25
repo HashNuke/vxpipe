@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Archive.Fact
+  alias Vxpipe.CallEngine.CallSpec.TransferHistory
 
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
@@ -353,8 +354,15 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                     }}
   end
 
-  test "all_spoken seeds confirmed caller input but excludes generated unplayed output" do
-    plan = compile_plan(transfer_history: %{mode: "all_spoken"})
+  test "an old all_spoken plan starts the destination agent with a fresh conversation" do
+    plan = compile_plan()
+
+    plan =
+      put_in(plan.participants["billing"].transfer_history, %TransferHistory{
+        mode: :all_spoken,
+        turns: nil
+      })
+
     caller = Map.fetch!(plan.participants, "caller")
 
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
@@ -400,26 +408,12 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                 "type" => "participant_message",
                 "participant_id" => caller.participant_id,
                 "agent_mode" => "listener",
-                "message" => "Remember invoice 17."
-              })},
-             {:user,
-              JSON.encode!(%{
-                "type" => "participant_message",
-                "participant_id" => caller.participant_id,
-                "agent_mode" => "listener",
-                "message" => "Please transfer me to billing."
-              })},
-             {:user,
-              JSON.encode!(%{
-                "type" => "participant_message",
-                "participant_id" => caller.participant_id,
-                "agent_mode" => "listener",
                 "message" => "Can you see what I told reception?"
               })}
            ]
   end
 
-  test "all_spoken preserves the original speaking agent in the destination request" do
+  test "confirmed speech from the previous agent stays out of the destination model request" do
     configure_text_to_speech(ready_on_start: true)
     plan = compile_plan(transfer_history: %{mode: "all_spoken"}, text_to_speech: true)
     caller = Map.fetch!(plan.participants, "caller")
@@ -496,17 +490,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     {destination, request} = receive_request_for_prompt("Handle billing requests.")
 
-    spoken =
-      request.messages
-      |> Enum.filter(&(&1.role == :assistant))
-      |> Enum.map(&JSON.decode!(&1.content))
-
-    assert %{
-             "type" => "participant_message",
-             "participant_id" => reception.participant_id,
-             "agent_mode" => "speaker",
-             "message" => "Invoice 17 is confirmed."
-           } in spoken
+    assert Enum.map(request.messages, & &1.role) == [:system, :user]
 
     latest = JSON.decode!(List.last(request.messages).content)
     assert latest["participant_id"] == caller.participant_id
@@ -518,12 +502,12 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
   for outcome <- [:drained, :expired] do
     @announcement_outcome outcome
     @tag :protected_announcement
-    test "the destination's all_spoken history reflects #{@announcement_outcome} announcement playback" do
+    test "#{@announcement_outcome} announcement playback stays out of the destination conversation" do
       configure_text_to_speech(ready_on_start: true)
       plan = compile_plan(transfer_history: %{mode: "all_spoken"}, text_to_speech: true)
       caller = Map.fetch!(plan.participants, "caller")
       reception = Map.fetch!(plan.participants, "reception")
-      {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+      {:ok, room} = CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
       assert_receive {:test_tts_transport_started, voice, _}
       sink = start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
 
@@ -574,24 +558,26 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       assert :ok = CallEngine.TestTransferConnection.send_text(command)
       {_provider, request} = receive_request_for_prompt("Handle billing requests.")
 
-      spoken =
-        for message <- request.messages,
-            message.role == :assistant,
-            do: JSON.decode!(message.content)
+      assert Enum.map(request.messages, & &1.role) == [:system, :user]
+      assert_receive {:test_archive_fact, %Fact{kind: :participant_transfer_completed}}, 2_000
 
-      expected = %{
-        "type" => "participant_message",
-        "participant_id" => reception.participant_id,
-        "agent_mode" => "speaker",
-        "message" => announcement
-      }
+      source_id = reception.participant_id
 
-      assert spoken == if(@announcement_outcome == :drained, do: [expected], else: [])
+      if @announcement_outcome == :drained do
+        assert_received {:test_archive_fact,
+                         %Fact{
+                           kind: :agent_output_delivered,
+                           participant_id: ^source_id,
+                           payload: %{"text" => ^announcement}
+                         }}
+      else
+        refute_received {:test_archive_fact, %Fact{kind: :agent_output_delivered}}
+      end
     end
   end
 
-  test "selected history requires and privately retains a bounded transfer reason" do
-    plan = compile_plan(transfer_history: %{mode: "selected"})
+  test "a previously prepared selected transfer binding accepts its bounded private reason" do
+    plan = legacy_selected_plan()
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
 
@@ -631,12 +617,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     refute inspect(request) =~ reason
   end
 
-  test "selected history supplies only destination-readable variables and transfer reason" do
-    plan =
-      compile_plan(
-        transfer_history: %{mode: "selected"},
-        selected_variables: true
-      )
+  test "a transfer from a legacy selected plan supplies only destination-readable variables" do
+    plan = legacy_selected_plan(selected_variables: true)
 
     caller = Map.fetch!(plan.participants, "caller")
 
@@ -692,8 +674,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                    "value" => %{"id" => "invoice-17"}
                  }
                }
-             },
-             "transfer" => %{"reason" => reason}
+             }
            }
 
     refute inspect(destination_request) =~ reason
@@ -1275,13 +1256,18 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     refute_receive {:test_tts_transport_started, _transport, _connection}, 100
   end
 
-  test "agent re-entry keeps identity, refreshes activation, and does not replay its greeting" do
+  test "agent re-entry keeps identity and starts a fresh conversation without replaying its greeting" do
     plan =
       compile_plan(
         billing_first_message: %{mode: "fixed", text: "Billing is ready."},
-        billing_transfers: ["reception"],
-        reception_transfer_history: %{mode: "last_n_spoken", turns: 1}
+        billing_transfers: ["reception"]
       )
+
+    plan =
+      put_in(plan.participants["reception"].transfer_history, %TransferHistory{
+        mode: :last_n_spoken,
+        turns: 1
+      })
 
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
@@ -1346,13 +1332,6 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert Enum.map(request.messages, &{&1.role, &1.content}) == [
              {:system, system_prompt("Route callers safely.")},
-             {:user,
-              JSON.encode!(%{
-                "type" => "participant_message",
-                "participant_id" => caller.participant_id,
-                "agent_mode" => "listener",
-                "message" => "Please send me back to reception."
-              })},
              {:user,
               JSON.encode!(%{
                 "type" => "participant_message",
@@ -1468,6 +1447,21 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     refute Enum.any?(request.messages, &(&1.content =~ ~s("event":"idle_timeout")))
     send(resumed, {:test_agent_runtime_response, {:ok, silence}})
+  end
+
+  defp legacy_selected_plan(options \\ []) do
+    plan = compile_plan(options)
+
+    plan =
+      put_in(plan.participants["billing"].transfer_history, %TransferHistory{
+        mode: :selected,
+        turns: nil
+      })
+
+    put_in(
+      plan.participants["reception"].tools["transfer"].transfer.targets["billing"].reason_required,
+      true
+    )
   end
 
   defp compile_plan(options \\ []) do

@@ -87,6 +87,12 @@ Call variables are named sections, each with an object schema. Agents receive
 explicit read/write permissions for sections. A section cannot itself have an
 `enum`; individual fields, nested fields and array items can.
 
+In the editor, select an agent and open **Variables**. Choose **Add section**
+to create a group, then **Add variable** inside the group to define a field.
+A section created here gives the selected agent **Read and write** access.
+Fields belong to the call, so edits also apply to other agents with access to
+that section. Use **Section permissions** to change the selected agent’s access.
+
 Variable values accept `null` by default. Set `nullable: false` to require a
 non-null value at a particular schema node:
 

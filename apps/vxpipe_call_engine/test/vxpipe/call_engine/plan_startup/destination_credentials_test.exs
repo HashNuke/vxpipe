@@ -59,6 +59,23 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
     refute_received {:tenant_credential_resolved, _, _, "default"}
   end
 
+  test "building a transfer destination ignores previously prepared conversation options" do
+    tenant = "tenant-fresh-history"
+    plan = plan(tenant)
+    agent = Map.fetch!(plan.participants, "agent")
+    previous_turn = Vxpipe.AgentRuntime.Message.user("Private source conversation")
+
+    settings =
+      Keyword.merge(options({self(), bindings(tenant)}),
+        initial_messages: [previous_turn],
+        transfer_reason: "Private source reason"
+      )
+
+    assert {:ok, destination} = PlanStartup.agent_destination(plan, agent, settings)
+    refute Keyword.has_key?(destination.agent_activation, :initial_messages)
+    refute Keyword.has_key?(destination.agent_activation, :model_context_source)
+  end
+
   test "every new destination construction rechecks the binding instead of retaining its payload" do
     tenant = "tenant-fresh"
     plan = plan(tenant)
@@ -168,7 +185,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
                  runtime,
                  destination,
                  true,
-                 [],
                  startup.text_to_speech,
                  System.monotonic_time(:millisecond) + 1_000
                )
@@ -220,7 +236,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
                  rebound_runtime,
                  destination,
                  true,
-                 [],
                  startup.text_to_speech,
                  System.monotonic_time(:millisecond) + 1_000
                )

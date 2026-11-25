@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns do
 
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
-  alias Vxpipe.CallEngine.RoomAuthority.{CallerIdle, EventPublisher, SpokenHistory}
+  alias Vxpipe.CallEngine.RoomAuthority.{CallerIdle, EventPublisher}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence
   alias Vxpipe.CallEngine.Speech.Event
 
@@ -176,12 +176,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns do
       })
     end
 
-    history =
-      if final?,
-        do: SpokenHistory.confirm_user(state.spoken_history, text),
-        else: state.spoken_history
-
-    %{state | next_sequence: state.next_sequence + 1, spoken_history: history}
+    %{state | next_sequence: state.next_sequence + 1}
   end
 
   defp publish(state, module, turn, extra) do

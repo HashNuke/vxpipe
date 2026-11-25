@@ -108,8 +108,8 @@ declared schema and routing rules.
 The caller remains in a controlled wait while the destination is prepared. A
 rejection, timeout or failed destination can recover the original agent where
 the transfer contract permits. Successful handoff retires the source activation,
-including its live MCP resources. Transfer history settings select what the new
-agent receives without expanding private-state visibility.
+including its live MCP resources. The receiving agent starts a fresh conversation
+and can read the Call Variables sections it has permission to access.
 
 ## Acceptance checklist
 

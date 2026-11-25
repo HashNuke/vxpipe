@@ -75,9 +75,10 @@ validation, Session owns history sequencing, the coordinator owns correlation an
 queue admission, and Room Authority owns delivery evidence. Raw output budgets
 and encoded JSON bounds are checked separately to account for escaping.
 
-Transfer history now preserves known participant identity and original admission
-mode, with confirmed assistant segments attributed to their source agent. Legacy
-plain entries remain literal and gain no invented mode. Host-settled compaction
+Within an activation, history preserves known participant identity and original
+admission mode, with confirmed assistant segments attributed to their source
+agent. A transferred agent begins its own conversation. Legacy plain entries
+remain literal and gain no invented mode. Host-settled compaction
 emits conversation_summary/text; standalone generated-history sessions keep the
 legacy summary wrapper. Canonical editable prompt files are packaged under
 Agent Runtime priv/prompts, with the documentation prompt paths linking there.

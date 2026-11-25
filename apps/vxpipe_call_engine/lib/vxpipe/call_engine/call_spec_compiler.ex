@@ -215,7 +215,8 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
          while_present: while_present,
          tools: tools,
          transfers: participant.transfers,
-         transfer_history: participant.transfer_history,
+         transfer_history:
+           if(participant.kind == :agent, do: %CallSpec.TransferHistory{mode: :fresh, turns: nil}),
          variable_permissions: participant.variable_permissions
        }}
     end
@@ -301,8 +302,7 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
            call_spec_key: call_spec_key,
            participant_id: destination.participant_id,
            description: destination.description,
-           reason_required:
-             destination.kind == :human or destination.transfer_history.mode == :selected
+           reason_required: destination.kind == :human
          }}
       end)
 

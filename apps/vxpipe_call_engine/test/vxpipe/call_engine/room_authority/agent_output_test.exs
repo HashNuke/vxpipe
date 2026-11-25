@@ -155,7 +155,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutputTest do
     assert TurnState.get(settled, command).pending_speech == 0
     assert TurnState.active?(settled, command)
     assert TurnState.get(settled, replacement) == TurnState.get(state, replacement)
-    assert settled.spoken_history == state.spoken_history
     assert settled.archive_recorder == state.archive_recorder
     refute_receive {:vxpipe_event, _event}
 
@@ -163,7 +162,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutputTest do
     settled = AgentOutput.playback(self(), request, :discarded, finished)
     refute TurnState.active?(settled, command)
     assert TurnState.active?(settled, replacement)
-    assert settled.spoken_history == state.spoken_history
     assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.AgentTurnCompleted{command_id: "old"}}
     assert AgentOutput.playback(self(), request, :discarded, settled) == settled
     refute_receive {:vxpipe_event, _event}

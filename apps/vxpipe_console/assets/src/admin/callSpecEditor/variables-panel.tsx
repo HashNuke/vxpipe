@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Eye, List, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { SectionPermissionMatrix } from "./section-permission-matrix";
 import { VariableModal } from "./variable-modal";
 import { VariableSectionModal } from "./variable-section-modal";
 import { IssueAnchor } from "./issue-anchor";
@@ -13,7 +14,7 @@ import type { VariableSchema } from "./types";
 
 type Editing = { kind: "section"; name?: string } | { kind: "variable"; section: string; name?: string };
 
-export function VariablesPanel(props: InspectorProps) {
+export function VariablesPanel({ agentKey, ...props }: InspectorProps & { agentKey?: string }) {
   const { document, onChange, issues } = props;
   const sections = document.source.call_variables?.sections ?? {};
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -32,7 +33,7 @@ export function VariablesPanel(props: InspectorProps) {
   const modal = { ...props, returnFocus: () => (trigger.current?.isConnected ? trigger.current : addTrigger.current)?.focus(), onClose: () => { setEditing(null); setDismissedRequest(request?.id); } };
   return <div className="space-y-3">
     <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Call variables</h3><Button ref={addTrigger} variant="outline" size="sm" disabled={document.readOnly} onClick={(event) => { trigger.current = event.currentTarget; setEditing({ kind: "section" }); }}><Plus />Add section</Button></div>
-    <p className="text-xs text-muted-foreground">This is the information your agents collect. Configure access in each agent’s Variables tab.</p>
+    <p className="text-xs text-muted-foreground">{agentKey ? "Sections and fields are shared across this call. Set this agent’s access below." : "This is the information your agents collect. Configure access in each agent’s Variables tab."}</p>
     {!Object.keys(sections).length && <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">Add a section to define the information agents can collect and share.</p>}
     {Object.entries(sections).map(([key, section]) => <section key={key} aria-label={`Section ${key}`} className="min-w-0 rounded-md border border-border bg-card">
       <IssueAnchor path={["call_variables", "sections", key]} issues={issues} className="rounded-t-md border-b border-border bg-muted/70 px-2 py-1">
@@ -55,8 +56,9 @@ export function VariablesPanel(props: InspectorProps) {
       {!Object.keys(section.schema.properties ?? {}).length && <p className="py-2 pr-2 pl-7 text-sm text-muted-foreground">No variables yet. Add the first variable to this section.</p>}
       <div className="border-t border-border py-1 pr-2 pl-7"><Button variant="outline" size="sm" disabled={document.readOnly} className="h-7 text-xs" aria-label={`Add variable to ${key}`} onClick={(event) => { trigger.current = event.currentTarget; setEditing({ kind: "variable", section: key }); }}><Plus />Add variable</Button></div>
     </section>)}
+    {agentKey && <SectionPermissionMatrix {...props} agentKey={agentKey} />}
     {selected?.kind === "variable" && <VariableModal key={`${selected.section}:${selected.name ?? "new"}:${request?.id ?? "manual"}`} {...modal} sectionKey={selected.section} previousName={selected.name} />}
-    {selected?.kind === "section" && <VariableSectionModal key={`${selected.name ?? "new"}:${request?.id ?? "manual"}`} {...modal} previousName={selected.name} />}
+    {selected?.kind === "section" && <VariableSectionModal key={`${selected.name ?? "new"}:${request?.id ?? "manual"}`} {...modal} agentKey={agentKey} previousName={selected.name} />}
   </div>;
 }
 

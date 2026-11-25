@@ -39,6 +39,11 @@ sentence in the tool argument once. The call plays it in the current voice and
 ignores caller interruptions until playback drains. Omitting the argument requests
 immediate action. Native speech-to-speech agents use their existing tool schemas.
 
+Every transfer to an agent starts a fresh conversation, including a return to an
+earlier agent. The destination receives its own instructions and the Call Variables
+sections it can read. This also applies to older publications and prepared plans.
+Transfers to humans use the private briefing reason and configured transfer notice.
+
 Transfer and variable tools are derived from their respective permissions. A
 prompt cannot grant access to an unselected tool or destination.
 

@@ -25,7 +25,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     IdleWait,
     OutputHistory,
     SpeechToSpeech,
-    SpokenHistory,
     State,
     TextCapability,
     ToolCalls,
@@ -425,10 +424,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   defp complete_spoken_segment(request, connection, state) do
     archive_recorder = ArchiveRecorder.delivered_output(state.archive_recorder, request)
 
-    spoken_history =
-      SpokenHistory.played_assistant(state.spoken_history, request)
-
-    state = %{state | archive_recorder: archive_recorder, spoken_history: spoken_history}
+    state = %{state | archive_recorder: archive_recorder}
     state = OutputHistory.confirm(state, request, request.output_id, request.text)
     settle_speech_segment(request, connection, state)
   end
