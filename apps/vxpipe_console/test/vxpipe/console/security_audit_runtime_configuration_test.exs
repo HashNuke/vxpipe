@@ -1,6 +1,6 @@
 defmodule Vxpipe.Console.SecurityAuditRuntimeConfigurationTest do
   # Regression tests for findings from the 2026-10-14 security audit.
-  # See labnotes/milestones/security-audit-remediation.md.
+  # See ~/notes/vxpipe/milestones/security-audit-remediation.md.
   use ExUnit.Case, async: false
 
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)

@@ -1,7 +1,7 @@
 defmodule Vxpipe.Providers.Telnyx.WebhookDecoderReviewTest do
   @moduledoc """
   Reproduction from the 2026-10-06 outgoing-call review
-  (labnotes/milestones/outgoing-call-review-fixes.md). It failed when written.
+  (~/notes/vxpipe/milestones/outgoing-call-review-fixes.md). It failed when written.
   """
 
   use ExUnit.Case, async: true

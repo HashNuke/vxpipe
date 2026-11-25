@@ -9,8 +9,7 @@ bin/deploy-qa
 ```
 
 The release is built from the checkout's files on disk, so `bin/deploy-qa`
-refuses to start while any build input is uncommitted (untracked `labnotes/`
-are allowed), and refuses to install if the tree or `HEAD` changed during the
+refuses to start while any build input is uncommitted, and refuses to install if the tree or `HEAD` changed during the
 build. It builds the workspace packages, applies the native dependency patches,
 compiles production assets and the release, then runs
 `scripts/qa/install-services`. The image records the deployed commit:

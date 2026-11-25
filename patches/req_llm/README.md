@@ -74,7 +74,7 @@ assistant messages. ReqLLM 1.29.0 strips it even though Fireworks documents its
 use for interleaved thinking. Other rejected fields remain stripped. The direct
 DeepSeek/Fireworks wire regression demonstrates the lost field and its restoration
 in buffered and streamed tool continuations. See the
-[transport investigation](../../docs/design/universal-replies-chat-replay.md).
+[transport investigation](https://github.com/HashNuke/notes/blob/main/vxpipe/docs/design/universal-replies-chat-replay.md).
 The historical patch filenames remain stable; the manifest now covers Fireworks
 as well as Google and upgrades all four previously prepared source states.
 

@@ -17,4 +17,4 @@ Migration preserves the known current publication's existing number and date. Pr
 
 The UI uses `v6 Published` or `v6 · Unpublished changes`, and `Draft` before the first publication. The badge opens a reference-only history of at most three publications, plus the latest saved changes and save date if they differ from live. History contains no source, credentials or editing controls. Existing revision APIs remain the source-retrieval interface.
 
-Implementation and verification evidence lives in the [milestone](../../../labnotes/milestones/call-spec-drafts-and-publications.md).
+Implementation and verification evidence lives in the [milestone](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/call-spec-drafts-and-publications.md).

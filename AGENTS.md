@@ -36,8 +36,8 @@ dependency. Test project-owned contracts, integration boundaries, supervision
 decisions, failure handling, and protocols.
 
 For substantial research or architecture changes, add a focused document under
-`docs/` that records the decision, rejected alternatives, implications, and
-verification evidence. Do not create decision documents for simple status checks
+`~/notes/vxpipe/docs/` that records the decision, rejected alternatives,
+implications, and verification evidence. Do not create decision documents for simple status checks
 or routine mechanical edits.
 
 Never read or modify `~/.config/vxpipe/live_providers.env` file
@@ -59,24 +59,32 @@ Never read or modify `~/.config/vxpipe/live_providers.env` file
 
 - For research and implementation tasks, create a labnotes file with
   `bin/create-labnotes` and a two-to-four-word hyphenated task name.
-- Use the resulting file under `labnotes/` as checkpoint labnotes. Update it as
-  work progresses with what worked, what did not, barriers encountered,
+- Use the resulting file under `~/notes/vxpipe/labnotes/` as checkpoint labnotes.
+  Update it as work progresses with what worked, what did not, barriers encountered,
   workarounds, decisions and their rationale, and relevant test evidence.
 - Keep labnotes factual and useful to the next person resuming the task. They do
-  not replace durable architecture or user-facing documentation under `docs/`.
+  not replace internal documentation under `~/notes/vxpipe/docs/` or user-facing
+  documentation under the project repository’s `docs/`.
 - Do not create labnotes for simple status checks, read-only inspection, or a
   request that only runs an existing command or script.
-- Commit labnotes with the implementation or research work they document.
-- `labnotes/` also holds planning records that are not user-facing documentation:
-  implementation milestones in `labnotes/milestones/` and deferred issues in
-  `labnotes/issues/`. `bin/create-labnotes` files stay at the top level of
-  `labnotes/`.
+- When commits are requested, commit labnotes in the notes repository and code
+  in the project repository; reference the implementation commit when useful.
+- `~/notes/vxpipe/` also holds planning records that are not user-facing documentation:
+  implementation milestones in `~/notes/vxpipe/milestones/` and deferred issues in
+  `~/notes/vxpipe/issues/`. `bin/create-labnotes` files stay at the top level of
+  `~/notes/vxpipe/labnotes/`.
+
+Internal design, architecture, and research documents belong in
+`~/notes/vxpipe/docs/`. Reserve this repository’s `docs/` for user-facing
+documentation. Design documents live in `~/notes/vxpipe/docs/design/`. Project
+records are shared across worktrees through `~/notes/vxpipe`, not copied into
+each checkout.
 
 ### Implementation milestones
 
 - Implementation specifications and progress checklists live in
-  `labnotes/milestones/`. Start with
-  [the milestones index](labnotes/milestones/index.md), whose Markdown checklist
+  `~/notes/vxpipe/milestones/`. Start with
+  [the milestones index](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/index.md), whose Markdown checklist
   gives the intended implementation order.
 - Milestone filenames and titles are descriptive and unnumbered. Only the index
   owns implementation order; reordering or inserting a milestone must not require
@@ -88,8 +96,8 @@ Never read or modify `~/.config/vxpipe/live_providers.env` file
   verification. A written or reviewed specification is not an implemented milestone;
   leave the index entry unchecked until the milestone's acceptance gates pass.
 - Keep the milestone checklist, evidence, and index synchronized with implementation
-  commits. Record blockers or approved scope changes rather than checking off partial
-  work. Deferred issues in `labnotes/issues/` do not become requirements merely
+  work across the notes and project repositories. Record blockers or approved
+  scope changes rather than checking off partial work. Deferred issues in `~/notes/vxpipe/issues/` do not become requirements merely
   by being linked.
 - Review each new or materially changed milestone for missing contracts and dependency
   order. Record that design review separately from implementation progress.

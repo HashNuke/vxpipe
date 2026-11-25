@@ -1,7 +1,7 @@
 defmodule Vxpipe.Gateway.HTTP.OutgoingCallsReviewTest do
   @moduledoc """
   Reproductions from the 2026-10-06 outgoing-call review
-  (labnotes/milestones/outgoing-call-review-fixes.md). Each test states the
+  (~/notes/vxpipe/milestones/outgoing-call-review-fixes.md). Each test states the
   specified behavior and failed when written.
   """
 

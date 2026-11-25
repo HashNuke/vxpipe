@@ -98,8 +98,8 @@ lifecycle tests, and a configured live conversation before reporting acceptance.
 The registry coverage guard must fail when an installed LLM is missing. Live
 failures and unavailable credentials remain explicit evidence; a successful save
 or a native-schema capability flag is not a successful conversation. See the
-[reply design](../../design/universal-agent-replies.md) and
-[acceptance milestone](../../../labnotes/milestones/universal-agent-replies.md)
+[reply design](https://github.com/HashNuke/notes/blob/main/vxpipe/docs/design/universal-agent-replies.md) and
+[acceptance milestone](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/universal-agent-replies.md)
 for the current implementation and outstanding gates.
 
 ## Speech adapter checklist

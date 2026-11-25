@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.VoiceCatalog.NamedVoices do
   @moduledoc "Documented named voices for installed speech adapters; no remote discovery or synthesis."
   alias Vxpipe.CallEngine.VoiceCatalog.Query
 
-  # Sources and model restrictions: docs/design/provider-voice-picker.md.
+  # Sources and model restrictions: ~/notes/vxpipe/docs/design/provider-voice-picker.md.
   @google ~w(Zephyr Puck Charon Kore Fenrir Leda Orus Aoede Callirrhoe Autonoe Enceladus Iapetus Umbriel Algieba Despina Erinome Algenib Rasalgethi Laomedeia Achernar Alnilam Schedar Gacrux Pulcherrima Achird Zubenelgenubi Vindemiatrix Sadachbia Sadaltager Sulafat)
   @openai ~w(alloy ash ballad beacon bossa brise calandria cedar cinder compas coral delta destello echo flitz gleam halo harema hornero juni luciernaga marin meridian nira noeul nuri pearl quartz ripple sage shida shimmer sillage stone tempo verse vesper willow)
   @flux ~w(hannah kit alexis cliff sienna cole brooke colin gemma haley heather miles sean bree brittany bruce conor donovan drew elise jack kai kelsey maeve marcelo marcus meena meghan naveen paige priya rufus sharon tanner wade wes)

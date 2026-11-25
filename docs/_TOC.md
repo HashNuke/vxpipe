@@ -6,7 +6,7 @@ root, 11 further usage guides and nine development guides. Architecture belongs 
 
 Website import copies the localized pages and `assets/` into `vxpipe-web`.
 This file is repository navigation and is not a published page. Publication and
-acceptance progress live in the [handbook milestone](../labnotes/milestones/consolidated-handbook-and-publication.md).
+acceptance progress live in the [handbook milestone](https://github.com/HashNuke/notes/blob/main/vxpipe/milestones/consolidated-handbook-and-publication.md).
 
 ## Usage
 
@@ -38,7 +38,7 @@ acceptance progress live in the [handbook milestone](../labnotes/milestones/cons
 ## Reference assets and history
 
 Directory API schemas/examples live in `assets/integrations/` and are linked from
-the provider guide. The historical Boruta probe lives in `labnotes/experiments/`;
+the provider guide. The historical Boruta probe lives in `~/notes/vxpipe/labnotes/experiments/`;
 it is not run or published by the documentation build.
 
 The [original inventory](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/_TOC.md)

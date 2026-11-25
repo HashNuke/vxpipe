@@ -450,7 +450,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     [{room_pid, _}] = Registry.lookup(CallEngine.RoomRegistry, {room.tenant_id, room.room_id})
 
     # This case starts with an admitted hold and injects its deadline explicitly.
-    # Admission racing silent acknowledgment is tracked separately in labnotes/issues.
+    # Admission racing silent acknowledgment is tracked separately in ~/notes/vxpipe/issues.
     :erlang.trace(room_pid, true, [:receive])
     {acknowledgment, _request} = invoke_idle(300)
     assert_receive {:trace, ^room_pid, :receive, {:"$gen_call", _, {:idle, _}}}
