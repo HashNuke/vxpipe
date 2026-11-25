@@ -90,14 +90,19 @@ response/profile acceptance belongs to C, independently of the future voice poli
 
 ### Validated profile activation
 
-New saved call-spec revisions capture an agent_protocol bundle in their existing
-compiled_metadata. It contains version mode_message_v1 and the shared, llm_dialogue
-and conversation_summary prompt text/revisions. Revisions hash the normalized
-instruction text; source edits affect later revisions. Preparation validates and
-copies the bundle into ResolvedCallPlan before its digest is calculated. Native
-publication serialization stores that plan, including the bundle. Transfers and
-activation restart receive the same plan/options. No model files, new public
-call-spec field, database column or blanket backfill is introduced.
+New saved call-spec revisions capture the dialogue and summary instructions and
+their checksums in the `agent_protocol` bundle. The bundle marks the shared
+prompt source as `runtime`. The call engine loads the release's shared policy
+once when it creates an agent activation. It then adds the applicable dialogue
+format and the participant's authored instructions. The active session keeps
+those instructions for its lifetime.
+
+Earlier three-prompt bundles retain their original bytes and validation.
+The runtime supplies the current shared policy to those agents as well. This
+avoids a call-spec rewrite each time the platform policy changes. In a rolling
+deployment, upgrade every reader before saving revisions in the new format.
+A release with the older validator can use earlier call-spec revisions during
+rollback. It cannot read a revision saved with the runtime-source marker.
 
 Historical revisions and stored plans without the bundle remain explicitly legacy;
 preparing another call from an old publication does not adopt the new decoder.
@@ -106,7 +111,7 @@ default. Republish through a newly saved revision to opt into the current protoc
 Unknown or malformed bundles fail configuration rather than selecting a fallback.
 Existing sample installers explicitly create legacy bundles using a trusted host
 creation option, agent_protocol_version: :legacy. This preserves their existing
-provider/credential examples while pinning shared/summary sources; legacy bundles
+provider/credential examples while pinning the summary instructions; legacy bundles
 do not apply the LLM dialogue overlay. Normal saves still default to mode_message_v1.
 This option is outside public source/request parameters and never relabels an
 existing revision at publication, preparation or resumption. No failed modern

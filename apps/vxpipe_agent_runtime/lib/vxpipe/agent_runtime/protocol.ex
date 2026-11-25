@@ -1,9 +1,9 @@
 defmodule Vxpipe.AgentRuntime.Protocol do
-  @moduledoc "Serializable protocol instructions captured once for an immutable publication."
+  @moduledoc "Combines publication-specific protocol instructions with shared policy at activation."
 
   alias Vxpipe.AgentRuntime.Prompt
 
-  @names [:shared, :llm_dialogue, :conversation_summary]
+  @pinned_names [:llm_dialogue, :conversation_summary]
 
   @spec capture(Path.t(), :legacy | :mode_message_v1) :: {:ok, map()} | {:error, atom()}
   def capture(
@@ -12,7 +12,7 @@ defmodule Vxpipe.AgentRuntime.Protocol do
       )
 
   def capture(directory, version) when version in [:legacy, :mode_message_v1] do
-    Enum.reduce_while(@names, {:ok, %{}}, fn name, {:ok, prompts} ->
+    Enum.reduce_while(@pinned_names, {:ok, %{}}, fn name, {:ok, prompts} ->
       case Prompt.load(name, directory) do
         {:ok, prompt} ->
           value = %{"text" => prompt.text, "revision" => prompt.revision}
@@ -23,8 +23,16 @@ defmodule Vxpipe.AgentRuntime.Protocol do
       end
     end)
     |> case do
-      {:ok, prompts} -> {:ok, %{"version" => Atom.to_string(version), "prompts" => prompts}}
-      error -> error
+      {:ok, prompts} ->
+        {:ok,
+         %{
+           "version" => Atom.to_string(version),
+           "prompts" => prompts,
+           "shared_source" => "runtime"
+         }}
+
+      error ->
+        error
     end
   end
 
@@ -33,15 +41,26 @@ defmodule Vxpipe.AgentRuntime.Protocol do
   @spec validate(term()) :: :ok | {:error, :invalid_protocol}
   def validate(nil), do: :ok
 
+  def validate(
+        %{"version" => version, "prompts" => prompts, "shared_source" => "runtime"} = snapshot
+      )
+      when version in ["legacy", "mode_message_v1"] and map_size(snapshot) == 3 and
+             is_map(prompts),
+      do: validate_prompts(snapshot, prompts, @pinned_names)
+
   def validate(%{"version" => version, "prompts" => prompts} = snapshot)
       when version in ["legacy", "mode_message_v1"] and map_size(snapshot) == 2 and
-             is_map(prompts) and map_size(prompts) == 3 do
-    if Enum.all?(@names, &match?({:ok, _}, prompt(snapshot, &1))),
-      do: :ok,
-      else: {:error, :invalid_protocol}
-  end
+             is_map(prompts),
+      do: validate_prompts(snapshot, prompts, [:shared | @pinned_names])
 
   def validate(_snapshot), do: {:error, :invalid_protocol}
+
+  defp validate_prompts(snapshot, prompts, names) do
+    if map_size(prompts) == length(names) and
+         Enum.all?(names, &match?({:ok, _}, prompt(snapshot, &1))),
+       do: :ok,
+       else: {:error, :invalid_protocol}
+  end
 
   @spec reply_protocol(map() | nil) ::
           {:ok, :legacy | :mode_message_v1} | {:error, :invalid_protocol}
@@ -56,13 +75,11 @@ defmodule Vxpipe.AgentRuntime.Protocol do
   end
 
   @spec instructions(map() | nil, String.t(), :llm | :speech_to_speech) ::
-          {:ok, String.t()} | {:error, :invalid_protocol}
-  def instructions(nil, authored, _kind) when is_binary(authored), do: {:ok, authored}
-
+          {:ok, String.t()} | {:error, :invalid_protocol | :prompt_unavailable}
   def instructions(snapshot, authored, kind)
       when is_binary(authored) and kind in [:llm, :speech_to_speech] do
     with :ok <- validate(snapshot),
-         {:ok, shared} <- prompt(snapshot, :shared),
+         {:ok, shared} <- Prompt.load(:shared),
          {:ok, overlay} <- overlay(snapshot, kind) do
       {:ok, Enum.join([shared.text] ++ overlay ++ [authored], "\n\n")}
     end

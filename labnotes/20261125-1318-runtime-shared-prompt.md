@@ -1,0 +1,11 @@
+# Runtime shared prompt
+
+The demo's published revision 13 contained receptionist-specific wording and generic intake, grounding and hangup rules. Its protocol metadata also stored an earlier copy of the platform instructions. The operator requested a single platform policy supplied at runtime and a receptionist prompt limited to its business role.
+
+The first two regression tests failed because capturing a publication required agent-system.md and historical publications used their stored shared instructions. A third failure showed that silently accepting two-prompt bundles would also accept a truncated historical publication. New saves now explicitly identify the shared source as runtime and capture only the dialogue and summary prompts. The activation uses the deployed policy for both LLM and native speech, including historical three-prompt and legacy nil snapshots. Each session keeps its policy through child restarts. A subsequent activation reads the current file.
+
+Astra xhigh checked historical, new and nil inputs, ElevenLabs private configuration, stored plan compatibility, transfer and session restart. Its 28 focused tests passed. Old readers reject the new metadata marker, so QA must run the new release before saving a new demo revision. The rollback path and rollout order are in the structured-agent-messages design.
+
+The publication/activation suites passed 71 tests. Two full-suite assertions expected authored-only text on direct activation and Google session resumption. Updated them to assert the exact runtime composition; the two affected files passed 79 tests. The additional activation lifecycle test verifies separate activations see updated policy and a missing packaged policy causes an explicit failure.
+
+The final umbrella run passed the agent runtime (568), call engine (2,960) and calls (468) suites before QA rollout. Formatting, warning-free compilation, strict Credo, unused dependencies and diff checks passed. A read-only inspection confirmed that QA revision 13 has the historical three-prompt bundle. The revised receptionist source preserves the identity, tone, business-specific reference caveat, preferred fallback wording and industry reference.

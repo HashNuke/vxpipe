@@ -19,7 +19,7 @@ defmodule Vxpipe.Calls.CallSpecsTest do
     assert %{"version" => "mode_message_v1", "prompts" => prompts} =
              revision.compiled_metadata["agent_protocol"]
 
-    assert Enum.sort(Map.keys(prompts)) == ["conversation_summary", "llm_dialogue", "shared"]
+    assert Enum.sort(Map.keys(prompts)) == ["conversation_summary", "llm_dialogue"]
     assert {:ok, prepared} = Vxpipe.Calls.PreparedCallFactory.build(revision, %{}, :web, options)
     assert prepared.plan.agent_protocol == revision.compiled_metadata["agent_protocol"]
 
@@ -53,9 +53,9 @@ defmodule Vxpipe.Calls.CallSpecsTest do
 
     for invalid <- [
           put_in(snapshot, ["prompts", "llm_dialogue", "revision"], String.duplicate("0", 64)),
-          update_in(snapshot, ["prompts"], &Map.delete(&1, "shared")),
+          update_in(snapshot, ["prompts"], &Map.delete(&1, "llm_dialogue")),
           Map.put(snapshot, "unrecognized", true),
-          put_in(snapshot, ["prompts", "shared", "unexpected"], "value")
+          put_in(snapshot, ["prompts", "shared"], %{"unexpected" => "value"})
         ] do
       malformed = %{
         revision

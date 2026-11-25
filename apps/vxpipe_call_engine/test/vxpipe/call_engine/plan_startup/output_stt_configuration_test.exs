@@ -131,8 +131,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert public[:model] == "gemini-3.5-transcribe-live"
     refute Keyword.has_key?(public, :api_key)
 
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+
     assert Keyword.fetch!(runtime.provider_private, :activation).system_prompt ==
-             "Reply privately."
+             shared.text <> "\n\nReply privately."
 
     refute inspect(startup) =~ "synthetic-output-stt-private"
     refute inspect(runtime) =~ "synthetic-output-stt-private"

@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   @moduledoc false
 
-  alias Vxpipe.AgentRuntime.{Prompt, Protocol, Session}
+  alias Vxpipe.AgentRuntime.{Protocol, Session}
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.RemoteMCP.Activation, as: RemoteActivation
@@ -192,27 +192,15 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   defp instructions(options) do
     authored = Keyword.fetch!(options, :system_prompt)
 
-    case Keyword.get(options, :agent_protocol) do
-      nil ->
-        legacy_instructions(authored, options)
+    snapshot = Keyword.get(options, :agent_protocol)
 
-      snapshot ->
-        with {:ok, instructions} <- Protocol.instructions(snapshot, authored, :llm) do
-          if snapshot["version"] == "mode_message_v1" do
-            identity = JSON.encode!(Keyword.fetch!(options, :agent_participant_id))
-            {:ok, instructions <> "\n\nCurrent agent participant_id: " <> identity <> "."}
-          else
-            {:ok, instructions}
-          end
-        end
-    end
-  end
-
-  defp legacy_instructions(authored, options) do
-    if Keyword.get(options, :history_mode, :generated) == :host_settled do
-      with {:ok, shared} <- Prompt.load(:shared), do: {:ok, shared.text <> "\n\n" <> authored}
-    else
-      {:ok, authored}
+    with {:ok, instructions} <- Protocol.instructions(snapshot, authored, :llm) do
+      if match?(%{"version" => "mode_message_v1"}, snapshot) do
+        identity = JSON.encode!(Keyword.fetch!(options, :agent_participant_id))
+        {:ok, instructions <> "\n\nCurrent agent participant_id: " <> identity <> "."}
+      else
+        {:ok, instructions}
+      end
     end
   end
 

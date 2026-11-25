@@ -55,9 +55,11 @@ configured hangup tool in that turn. The same instruction applies when the
 caller confirms they are finished. Configure a platform hangup binding for
 agents that should end calls themselves.
 
-Each saved call-spec revision captures the shared instructions available at save
-time. To apply updated instructions to an existing line, save a new revision on
-the updated release and publish it.
+At agent activation, Vxpipe loads the deployed shared instructions and combines
+them with the agent prompt from the call spec. This also applies to previously
+published revisions. Keep business-specific facts, tone and workflows in the
+agent prompt. The dialogue format and conversation-summary instructions remain
+part of the saved protocol revision.
 
 ## Select MCP tools
 

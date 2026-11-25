@@ -70,7 +70,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
 
       config = Keyword.fetch!(startup.speech_to_speech.provider_private, :config)
       assert config.api_key == "elevenlabs-tenant-marker"
-      assert config.system_prompt == "Answer briefly."
+      assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+      assert config.system_prompt == shared.text <> "\n\nAnswer briefly."
       assert config.tools == []
       refute inspect(startup) =~ "tenant-marker"
 
@@ -156,7 +157,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     assert startup.agent_activation == nil
     config = Keyword.fetch!(startup.speech_to_speech.provider_private, :config)
     assert config.api_key == "google-tenant-marker"
-    assert config.system_prompt == "Answer briefly."
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert config.system_prompt == shared.text <> "\n\nAnswer briefly."
     refute inspect(startup) =~ "tenant-marker"
 
     disabled =
@@ -213,8 +215,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     refute inspect(startup) =~ "private-marker"
     refute inspect(startup) =~ "Answer briefly."
 
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+
     assert Keyword.fetch!(startup.speech_to_speech.provider_private, :activation).system_prompt ==
-             "Answer briefly."
+             shared.text <> "\n\nAnswer briefly."
   end
 
   test "STS without output transcription resolves its agent output STT" do

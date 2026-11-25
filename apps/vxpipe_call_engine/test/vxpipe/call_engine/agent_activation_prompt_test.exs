@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.AgentActivationPromptTest do
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
-  test "an activation restart retains both pinned shared and compactor instructions" do
+  test "each activation reads current shared policy and keeps it through child restarts" do
     original_ebin = Application.app_dir(:vxpipe_agent_runtime, "ebin")
 
     directory =
@@ -56,6 +56,7 @@ defmodule Vxpipe.CallEngine.AgentActivationPromptTest do
     activation = start_supervised!({AgentActivationSupervisor, options})
     first = AgentActivationSupervisor.children(activation)
     initial = :sys.get_state(first.session).configuration
+    assert initial.instructions == "Original shared instructions\n\nAuthored instructions"
     {_, initial_compactor} = initial.context_preparation.compactor
     assert initial_compactor.summary_prompt.text == "Original summary instructions"
 
@@ -75,5 +76,22 @@ defmodule Vxpipe.CallEngine.AgentActivationPromptTest do
     assert restarted.instructions == initial.instructions
     {_, restarted_compactor} = restarted.context_preparation.compactor
     assert restarted_compactor.summary_prompt.text == initial_compactor.summary_prompt.text
+
+    next_options = Keyword.update!(options, :activation_id, &(&1 <> "-next"))
+
+    next =
+      start_supervised!(
+        Supervisor.child_spec({AgentActivationSupervisor, next_options}, id: :next_activation)
+      )
+
+    next_session = AgentActivationSupervisor.children(next).session
+
+    assert :sys.get_state(next_session).configuration.instructions ==
+             "Edited shared instructions\n\nAuthored instructions"
+
+    File.rm!(shared)
+
+    assert {:error, :prompt_unavailable} =
+             Vxpipe.AgentRuntime.Protocol.instructions(nil, "Authored instructions", :llm)
   end
 end

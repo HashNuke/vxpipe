@@ -122,7 +122,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     assert_receive {:test_agent_runtime_stream, provider, request}
     assert request.reply_protocol == :mode_message_v1
     system = List.first(request.messages).content
-    assert system =~ protocol["prompts"]["shared"]["text"]
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert system =~ shared.text
     assert system =~ protocol["prompts"]["llm_dialogue"]["text"]
     assert system =~ "Use the available tool."
     send(provider, {:test_agent_runtime_delta, "Tool protocol prose must not be spoken."})

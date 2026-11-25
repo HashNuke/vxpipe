@@ -56,9 +56,9 @@ defmodule Vxpipe.CallEngine.AgentActivationProtocolTest do
 
     for invalid <- [
           put_in(snapshot, ["prompts", "llm_dialogue", "revision"], String.duplicate("0", 64)),
-          update_in(snapshot, ["prompts"], &Map.delete(&1, "shared")),
+          update_in(snapshot, ["prompts"], &Map.delete(&1, "llm_dialogue")),
           Map.put(snapshot, "unrecognized", true),
-          put_in(snapshot, ["prompts", "shared", "unexpected"], "value")
+          put_in(snapshot, ["prompts", "shared"], %{"unexpected" => "value"})
         ] do
       assert {:error, :invalid_configuration} =
                RuntimeGraph.children(options(invalid, {ModelContextCompactor, state}))
@@ -82,7 +82,8 @@ defmodule Vxpipe.CallEngine.AgentActivationProtocolTest do
     %{session: session} = Vxpipe.CallEngine.AgentActivationSupervisor.children(activation)
     config = :sys.get_state(session).configuration
     assert config.reply_protocol == :legacy
-    assert config.instructions == protocol["prompts"]["shared"]["text"] <> "\n\nAuthored"
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert config.instructions == shared.text <> "\n\nAuthored"
   end
 
   test "direct activation cannot advertise native idle under a legacy protocol" do

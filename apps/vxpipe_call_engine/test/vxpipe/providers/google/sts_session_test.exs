@@ -666,7 +666,12 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
         {session, wire} = start_session(activation: activation)
         assert_receive {:test_google_sts_control, ^wire, initial}
         initial = JSON.decode!(initial)["setup"]
-        assert initial["systemInstruction"] == %{"parts" => [%{"text" => participant.prompt}]}
+        assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+
+        assert initial["systemInstruction"] == %{
+                 "parts" => [%{"text" => shared.text <> "\n\n" <> participant.prompt}]
+               }
+
         assert initial["tools"] == expected
         refute JSON.encode!(initial) =~ "synthetic-google-sts-key"
 

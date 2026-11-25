@@ -31,8 +31,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
     assert {:ok, activation, _registry} =
              SpeechToSpeechActivation.resolve(%{agent_protocol: protocol}, participant(), [])
 
-    assert activation.system_prompt ==
-             protocol["prompts"]["shared"]["text"] <> "\n\nprivate-prompt-marker"
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert activation.system_prompt == shared.text <> "\n\nprivate-prompt-marker"
 
     refute activation.system_prompt =~ protocol["prompts"]["llm_dialogue"]["text"]
 
@@ -130,7 +130,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
     assert descriptor.response_start?
     config = Keyword.fetch!(private, :config)
     assert config.api_key == "synthetic-elevenlabs-secret"
-    assert config.system_prompt == "private-prompt-marker"
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert config.system_prompt == shared.text <> "\n\nprivate-prompt-marker"
     assert config.tools == [declaration()]
 
     for visible <- [public, descriptor, activation, private, config] do
@@ -185,7 +186,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
     assert {:ok, _descriptor} = GPTLiveSession.configure(public)
     config = Keyword.fetch!(private, :config)
     start = GPTLive.start(config, [])
-    assert start["session"]["instructions"] == "private-prompt-marker"
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert start["session"]["instructions"] == shared.text <> "\n\nprivate-prompt-marker"
 
     assert [%{"type" => "function", "name" => "echo_context"}] =
              Enum.map(
@@ -228,7 +230,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
 
     config = Keyword.fetch!(private, :config)
     setup = STS.setup(config)["setup"]
-    assert setup["systemInstruction"] == %{"parts" => [%{"text" => participant.prompt}]}
+    assert setup["systemInstruction"] == %{"parts" => [%{"text" => activation.system_prompt}]}
     assert setup["tools"] == [%{"functionDeclarations" => [declaration()]}]
     assert {:ok, descriptor} = STSSession.configure(public)
 

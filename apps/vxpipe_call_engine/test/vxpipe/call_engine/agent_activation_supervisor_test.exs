@@ -62,7 +62,10 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
 
     assert_receive {:test_agent_runtime_stream, provider, request}
 
-    assert [%Message{role: :system, content: "Use only the selected action."} | _history] =
+    assert {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    expected = shared.text <> "\n\nUse only the selected action."
+
+    assert [%Message{role: :system, content: ^expected} | _history] =
              request.messages
 
     assert Enum.map(request.tools, & &1.name) == ["test_agent_tool"]
