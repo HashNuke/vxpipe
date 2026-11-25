@@ -90,6 +90,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
   function show(issue: SourceIssue) {
     const location = locateIssue(state.document.source, issue.path);
     if (!location) { setIssuesOpen(true); return; }
+    if (location.nodeId === "$source") { setIssuesOpen(false); setSourceOpen(true); return; }
     if (location.nodeId === "$header") { setIssuesOpen(false); setNameDraft(state.document.source.name ?? ""); return; }
     setSelectedNode(location.nodeId === "$settings" ? null : location.nodeId);
     setTab(location.tab); setIssuesOpen(false);
@@ -117,9 +118,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     const scope = Object.keys(jsonDrafts)[0];
     if (scope === "callSpec") setSourceOpen(true);
     else if (scope) {
-      const key = scope.slice("participant:".length);
-      const entry = document.source.incoming_call?.caller ?? document.source.outgoing_call?.callee;
-      selectNode(key === entry ? "$entry" : key);
+      selectNode(scope.slice("participant:".length));
       setInspectorRequest(++requestId.current);
     }
   }
@@ -138,10 +137,12 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     selectedNodeId={selectedNodeId} tab={tab} onTabChange={(tab) => { setTab(tab); setFocusRequest(undefined); }}
     onRenamed={selectNode} onRemoved={() => selectNode(null)} /></CredentialNamesContext>;
   return <JsonDraftContext value={{ drafts: jsonDrafts, setDrafts: setJsonDrafts }}><ActionFailureContext value={reportFailure}>
-    <FlowEditorLayout noticeAction={noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
+    <FlowEditorLayout noticeAction={document.canUpgradeEntry
+      ? <button type="button" className="underline" disabled={reloading || !!state.pending || state.feedback.authoringDisabled || state.feedback.sessionExpired} onClick={editor.upgradeEntry}>Upgrade draft</button>
+      : noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
       onSelectEdge={selectEdge} onAddNode={add}
       onConnect={(from, to) => { change((document) => setTransfer(document, from, to, true), "Couldn't connect these participants. Choose an agent and a transfer destination."); }}
-      inspector={inspector} inspectorTitle={selectedNodeId === "$entry" ? "Entry settings" : selectedNodeId ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}
+      inspector={inspector} inspectorTitle={selectedNodeId && selectedNodeId !== "$entry" ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}
       onBreadcrumbNavigate={href => depart({ kind: "leave", href })}
       backHref={backHref} onBack={() => depart({ kind: "leave", href: backHref })} revision={state.saved?.revision} publishedRevision={state.saved?.publishedRevision ?? undefined} publication={state.saved?.publication}
       dirty={dirty} issueCount={state.clientIssues.length} saving={state.pending?.action === "save"} publishing={state.pending?.action === "publish"} loading={reloading}

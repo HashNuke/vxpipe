@@ -13,6 +13,8 @@ export function issueCounts(source: CallSpecSource, issues: SourceIssue[]) {
     const location = locateIssue(source, issue.path);
     if (!location) continue;
     nodes.set(location.nodeId, (nodes.get(location.nodeId) ?? 0) + 1);
+    const entryConnection = location.nodeId === "$settings" && location.tab === "connection";
+    if (entryConnection || location.nodeId === "$source") nodes.set("$entry", (nodes.get("$entry") ?? 0) + 1);
     const counts = tabs.get(location.nodeId) ?? new Map<string, number>();
     counts.set(location.tab, (counts.get(location.tab) ?? 0) + 1);
     tabs.set(location.nodeId, counts);

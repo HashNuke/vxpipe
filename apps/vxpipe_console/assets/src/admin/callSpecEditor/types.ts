@@ -78,13 +78,13 @@ export type VariableSection = { schema: VariableSchema };
 export type WaitSoundSlot = "call_setup" | "transfer_to_agent" | "transfer_to_human" | "transfer_joining";
 export type WaitSounds = Partial<Record<WaitSoundSlot, string | null>> | null;
 export type OpeningAudio =
-  | { type: "text"; text: string; text_to_speech: CapabilitySelection }
+  | { type: "text"; text: string; text_to_speech?: CapabilitySelection }
   | { type: "file_url"; url: string };
 export type Visibility = "hidden" | "metadata" | "full";
 
 // Optional fields stay omitted until explicitly edited. Parsing never inserts defaults.
 export type CallSpecSource = {
-  schema_version: "20261004.01" | "20260915.01";
+  schema_version: "20261125.01" | "20261004.01" | "20260915.01";
   name?: string | null;
   incoming_call?: { caller: string; handled_by: string };
   outgoing_call?: { callee: string; handled_by: string; ring_timeout_ms?: number };
@@ -101,5 +101,5 @@ export type CallSpecSource = {
   tool_visibility_overrides?: Record<string, Record<string, Visibility>>;
   limits?: { max_duration_ms?: number };
 };
-export type SourceDocument = { source: CallSpecSource; readOnly: boolean; notice?: string };
+export type SourceDocument = { source: CallSpecSource; readOnly: boolean; notice?: string; canUpgradeEntry?: boolean };
 export type SourceIssue = { code: string; path: string[]; reason: string };

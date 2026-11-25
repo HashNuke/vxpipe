@@ -8,6 +8,7 @@ defmodule Vxpipe.Calls.CallSpecs do
   """
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, Error}
+  alias Vxpipe.CallEngine.CallSpec.OpeningAudio
 
   alias Vxpipe.Calls.{
     CallPlanCompiler,
@@ -130,8 +131,8 @@ defmodule Vxpipe.Calls.CallSpecs do
            Vxpipe.CallEngine.AgentProtocol.capture(
              Keyword.get(options, :agent_protocol_version, :mode_message_v1)
            ),
-         :ok <-
-           validate_support(
+         {:ok, validation_errors} <-
+           validate_draft(
              call_spec,
              tenant_key,
              Keyword.put(options, :agent_protocol, protocol)
@@ -147,7 +148,7 @@ defmodule Vxpipe.Calls.CallSpecs do
         source: source,
         source_digest: source_digest(source),
         compiled_metadata: Map.put(compiled_metadata(call_spec), "agent_protocol", protocol),
-        validation_errors: [],
+        validation_errors: validation_errors,
         routes: routes,
         telephony_routes: telephony_routes,
         published_at: nil,
@@ -195,6 +196,20 @@ defmodule Vxpipe.Calls.CallSpecs do
          )}
       end
     end
+  end
+
+  defp validate_draft(call_spec, tenant_key, options) do
+    {spec_for_validation, errors} =
+      case OpeningAudio.validate_defaults(call_spec.opening_audio, call_spec.default_capabilities) do
+        :ok ->
+          {call_spec, []}
+
+        {:error, %Error{} = error} ->
+          # Check every other runtime setting while preserving the author's opening in the draft.
+          {%{call_spec | opening_audio: nil}, [Error.to_public(error)]}
+      end
+
+    with :ok <- validate_support(spec_for_validation, tenant_key, options), do: {:ok, errors}
   end
 
   defp validate_support(call_spec, tenant_key, options) do

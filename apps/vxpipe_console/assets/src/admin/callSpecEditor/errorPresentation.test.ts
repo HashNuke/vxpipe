@@ -12,13 +12,17 @@ const locations = [
   [["participants", "assistant", "transfers", "0"], "assistant", "transfers", "Agent assistant › Transfer destinations"],
   [["participants", "assistant", "tools", "lookup", "integration"], "assistant", "tools", "Agent assistant › Tools"],
   [["participants", "support", "connection", "number"], "support", "connection", "Human support › Connection"],
-  [["participants", "caller", "connection", "number"], "$entry", "connection", "Caller › Connection"],
-  [["incoming_call", "handled_by"], "$entry", "connection", "Caller › Handled by"],
+  [["participants", "caller", "connection", "number"], "$settings", "connection", "Call settings › Connection"],
+  [["incoming_call", "handled_by"], "$settings", "connection", "Call settings › Handled by"],
   [["defaults", "capabilities", "model_inference", "provider"], "$settings", "defaults", "Call settings › Model inference"],
   [["call_variables", "sections", "contact", "schema", "properties", "phone", "type"], "$settings", "variables", "Call settings › Variables"],
-  [["wait_sounds", "call_setup"], "$settings", "wait", "Call settings › Wait sounds"],
+  [["wait_sounds", "call_setup"], "$settings", "media", "Call settings › Wait sounds"],
   [["media_policy", "record_audio"], "$settings", "media", "Call settings › Media"],
-  [["opening_audio", "url"], "$entry", "connection", "Caller › Opening audio"],
+  [["opening_audio", "url"], "$settings", "connection", "Call settings › Opening audio"],
+  [["participants", "caller", "capabilities", "speech_to_text"], "$source", "json", "Call spec JSON › Caller"],
+  [["participants", "caller", "while_present", "record_audio"], "$source", "json", "Call spec JSON › Caller"],
+  [["participants", "caller", "description"], "$source", "json", "Call spec JSON › Caller"],
+  [["participants", "caller", "transfer_notice"], "$source", "json", "Call spec JSON › Caller"],
   [["tool_visibility_overrides", "assistant", "lookup"], "$settings", "advanced", "Call settings › Tool visibility"],
 ] as const;
 for (const [path, nodeId, tab, label] of locations) test(`issue placement: ${path.join(".")}`, () => {
@@ -33,7 +37,7 @@ test("unknown fields and missing participants keep the backend reason and go to 
 });
 
 test("description issues stay in the issues list instead of targeting removed form fields", () => {
-  for (const key of ["assistant", "support", "caller"]) {
+  for (const key of ["assistant", "support"]) {
     expect(locateIssue(source, ["participants", key, "description"])).toBeNull();
   }
 });

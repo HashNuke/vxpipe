@@ -65,5 +65,5 @@ export function useEditor(snapshot: EditorSnapshot, execute: ExecuteEditorReques
   }, [dispatch]);
   const dismissToast = useCallback(() => { dispatch({ type: "dismiss-toast" }); }, [dispatch]);
   const reportFeedback = useCallback((feedback: ActionFeedback) => { dispatch({ type: "feedback", feedback }); }, [dispatch]);
-  return { state, dirty: isDirty(state), edit, save, publish, retry, load, dismissToast, reportFeedback };
+  return { state, dirty: isDirty(state), upgradeEntry: () => dispatch({type: "upgrade-entry"}), edit, save, publish, retry, load, dismissToast, reportFeedback };
 }

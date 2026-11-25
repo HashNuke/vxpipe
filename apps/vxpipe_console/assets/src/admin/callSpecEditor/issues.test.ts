@@ -7,8 +7,13 @@ const prompt: SourceIssue = { code: "invalid_call_spec", path: ["participants", 
 
 test("counts place entry, settings and participant issues on their node and tab", () => {
   const issues = [prompt, { ...prompt, path: ["participants", "caller", "connection", "service"] }, { ...prompt, path: ["defaults", "capabilities", "text_to_speech"] }, { ...prompt, path: ["future_field"] }];
-  expect(issueCounts(source, issues)).toEqual({ nodes: { intake: 1, $entry: 1, $settings: 1 }, tabs: { intake: { prompt: 1 }, $entry: { connection: 1 }, $settings: { defaults: 1 } } });
+  expect(issueCounts(source, issues)).toEqual({ nodes: { intake: 1, $entry: 1, $settings: 2 }, tabs: { intake: { prompt: 1 }, $settings: { connection: 1, defaults: 1 } } });
 });
+test("an entry error fixed in whole-call JSON also marks the Entry node", () => {
+  const issue = { ...prompt, path: ["participants", "caller", "description"] };
+  expect(issueCounts(source, [issue]).nodes.$entry).toBe(1);
+});
+
 test("a repeated backend issue appears once, while distinct reasons remain", () => {
   expect(mergeIssues([prompt], { reason: prompt.reason, path: prompt.path, code: prompt.code })).toEqual([prompt]);
   expect(mergeIssues([prompt], { ...prompt, reason: "Policy rejected this prompt" })).length(2);

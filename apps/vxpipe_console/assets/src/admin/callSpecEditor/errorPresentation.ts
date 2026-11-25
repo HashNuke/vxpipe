@@ -31,7 +31,7 @@ const participantFields: Record<string, [string, string]> = {
 const settingsFields: Record<string, [string, string]> = {
   schema_version: ["advanced", "Schema version"], participants: ["advanced", "Participants"],
   defaults: ["defaults", "Models"], call_variables: ["variables", "Variables"],
-  media_policy: ["media", "Media"], wait_sounds: ["wait", "Wait sounds"],
+  media_policy: ["media", "Media"], wait_sounds: ["media", "Wait sounds"],
   tool_visibility: ["advanced", "Tool visibility"], tool_visibility_overrides: ["advanced", "Tool visibility"],
   limits: ["advanced", "Call limits"], transfer_policy: ["advanced", "Transfer timeout"],
 };
@@ -46,20 +46,23 @@ export function locateIssue(source: CallSpecSource, path: string[]): IssueLocati
   if (root === "participants" && key) {
     if (!Object.hasOwn(source.participants, key)) return null;
     const participant = source.participants[key]!;
-    const nodeId = key === entry ? "$entry" : key;
-    const title = key === entry ? entryLabel : `${participant.type === "agent" ? "Agent" : "Human"} ${key}`;
-    if (!field) return location(nodeId, participant.type === "agent" ? "prompt" : "connection", `${title} › Key`);
+    if (key === entry) {
+      if (field === "connection") return location("$settings", "connection", "Call settings › Connection");
+      return location("$source", "json", `Call spec JSON › ${entryLabel}`);
+    }
+    const title = `${participant.type === "agent" ? "Agent" : "Human"} ${key}`;
+    if (!field) return location(key, participant.type === "agent" ? "prompt" : "connection", `${title} › Key`);
     if (!Object.hasOwn(participantFields, field)) return null;
     const [tab, label] = participantFields[field]!;
     if (field === "capabilities" && path[3] && !catalogCapabilities.some((kind) => kind === path[3])) return null;
-    return location(nodeId, participant.type === "human" && tab === "prompt" ? "connection" : tab, `${title} › ${field === "capabilities" && path[3] ? capabilityNames[path[3]] : label}`);
+    return location(key, participant.type === "human" && tab === "prompt" ? "connection" : tab, `${title} › ${field === "capabilities" && path[3] ? capabilityNames[path[3]] : label}`);
   }
   if (root === "incoming_call" || root === "outgoing_call") {
-    if (key === "ring_timeout_ms") return location("$entry", "connection", `${entryLabel} › Ring timeout`);
+    if (key === "ring_timeout_ms") return location("$settings", "connection", "Call settings › Ring timeout");
     if (key && !["caller", "callee", "handled_by"].includes(key)) return null;
-    return location("$entry", "connection", `${entryLabel} › ${key === "handled_by" ? "Handled by" : "Connection"}`);
+    return location("$settings", "connection", `Call settings › ${key === "handled_by" ? "Handled by" : "Connection"}`);
   }
-  if (root === "opening_audio") return location("$entry", "connection", `${entryLabel} › Opening audio`);
+  if (root === "opening_audio") return location("$settings", "connection", "Call settings › Opening audio");
   if (!Object.hasOwn(settingsFields, root)) return null;
   const [tab, label] = settingsFields[root]!;
   if (root === "defaults" && key === "capabilities" && field) {

@@ -87,10 +87,15 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
     message = "The call spec is invalid."
     path = ["participants", call_spec_key]
 
+    fields =
+      if Keyword.get(options, :inherit_entry_settings?),
+        do: @all_fields -- [:capabilities, :while_present],
+        else: @all_fields
+
     with {:ok, call_spec_key} <-
            CallSpecValidation.identifier(call_spec_key, code, message, path),
          {:ok, input} <-
-           CallSpecValidation.normalize_map(value, @all_fields, code, message, path),
+           CallSpecValidation.normalize_map(value, fields, code, message, path),
          {:ok, type_input} <- CallSpecValidation.fetch(input, :type, code, message, path),
          {:ok, kind} <-
            CallSpecValidation.enum(

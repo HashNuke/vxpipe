@@ -64,6 +64,20 @@ export const Default: Story = { play: async ({ canvasElement }) => {
   await expect(body.getByRole("heading", { name: "New Patient Appointment Intake" })).toBeInTheDocument();
   await expect(body.getByRole("button", { name: "More actions" })).toBeEnabled();
 } };
+export const PreviousSchemaUpgrade: Story = { args: { scenario: "entry-upgrade" }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await expect(canvas.getByRole("button", { name: "Upgrade draft" })).toBeEnabled();
+  await expect(canvas.getByText(/Upgrading removes Entry’s media overrides/)).toBeVisible();
+} };
+export const EntryOpensCallSettings: Story = { play: async ({ canvasElement }) => {
+  const body = within(canvasElement.ownerDocument.body);
+  const models = body.queryByRole("tab", { name: "Models" });
+  if (models) await userEvent.click(models);
+  await userEvent.click(await body.findByText("Entry", { exact: true }));
+  await expect(body.findByRole("tab", { name: "Connection" })).resolves.toHaveAttribute("aria-selected", "true");
+  await expect(body.getByRole("combobox", { name: "Handled by" })).toBeVisible();
+  await expect(body.queryByRole("button", { name: "Participant JSON" })).not.toBeInTheDocument();
+} };
 export const Loading: Story = { args: { pageStatus: "loading" } };
 export const LoadFailure: Story = { args: { pageStatus: "spec-error" } };
 export const CatalogFailure: Story = { args: { pageStatus: "catalog-error" } };

@@ -2,7 +2,7 @@ import { storyPhoneNumbers } from "./phone-number-fixtures";
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
-import { InboundInspector } from "./inbound-inspector";
+import { FlowLevelInspector } from "./flow-level-inspector";
 import { HumanInspector } from "./human-inspector";
 import { editorFixture } from "./editorFixtures";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
@@ -15,7 +15,7 @@ function Harness({ entry = false, initial = editorFixture }: { entry?: boolean; 
   const [document, onChange] = useState(initial);
   const [participantKey, onRenamed] = useState("specialist");
   const props = { document, onChange, issues: validateSource(document.source), catalog: modelCatalogFixture, lookups };
-  return <>{entry ? <InboundInspector {...props} /> : Object.hasOwn(document.source.participants, participantKey) && <HumanInspector {...props} participantKey={participantKey} onRenamed={onRenamed} />}
+  return <>{entry ? <FlowLevelInspector {...props} /> : Object.hasOwn(document.source.participants, participantKey) && <HumanInspector {...props} participantKey={participantKey} onRenamed={onRenamed} />}
     <output data-testid="source">{JSON.stringify(document.source)}</output></>;
 }
 const saved = () => JSON.parse(screen.getByTestId("source").textContent!);
@@ -62,12 +62,14 @@ test("outgoing entry offers request or fixed number, never variable or web, and 
   fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (seconds)" }), { target: { value: "" } });
   expect(saved().outgoing_call).not.toHaveProperty("ring_timeout_ms");
 });
-test("opening audio requires explicit speech selection and supports text, file and removal", async () => {
-  render(<Harness entry />);
+test("opening audio inherits the call default voice and supports text, file and removal", async () => {
+  const initial = structuredClone(editorFixture);
+  initial.source.defaults = { capabilities: { text_to_speech: { provider: "deepgram", model: "flux" } } };
+  render(<Harness entry initial={initial} />);
   fireEvent.click(screen.getByRole("switch", { name: "Opening audio" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Opening message" }), { target: { value: "Welcome to reception." } });
-  await choose("Provider", "Deepgram");
-  expect(saved().opening_audio).toEqual({ type: "text", text: "Welcome to reception.", text_to_speech: { provider: "deepgram", model: "flux", credential_name: "production", options: { voice: "hannah" } } });
+  expect(screen.queryByRole("combobox", { name: "Provider" })).not.toBeInTheDocument();
+  expect(saved().opening_audio).toEqual({ type: "text", text: "Welcome to reception." });
   await choose("Opening audio type", "Audio file URL");
   fireEvent.change(screen.getByRole("textbox", { name: "Audio file URL" }), { target: { value: "https://example.test/welcome.wav" } });
   expect(saved().opening_audio).toEqual({ type: "file_url", url: "https://example.test/welcome.wav" });
@@ -162,10 +164,12 @@ test("participant forms omit descriptions and preserve saved values when editing
 
 test("opening a saved document preserves nullable fields, omitted admission and explicit voice options", () => {
   const initial = outgoing();
+  initial.source.schema_version = "20261004.01";
+  initial.readOnly = true;
   initial.source.opening_audio = { type: "text", text: "Welcome", text_to_speech: { provider: "deepgram", model: "flux-haley-en", options: { encoding: "linear16" } } };
   initial.source.participants.caller!.description = null;
   const view = render(<Harness entry initial={initial} />);
-  expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent("flux-haley-en (saved)");
+  expect(screen.getByText(/Saved opening voice/)).toHaveTextContent("flux-haley-en");
   expect(saved()).toEqual(initial.source);
   view.unmount();
   initial.source.opening_audio = null;

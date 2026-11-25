@@ -4,6 +4,7 @@ import { IssueScope, UnplacedIssues } from "./issue-scope";
 import { TextField } from "./editor-fields";
 import type { SourceIssue } from "./types";
 afterEach(cleanup);
+const lookups = { telephonyServices: [] };
 const issue: SourceIssue = { code: "invalid_call_spec", path: ["participants", "intake", "prompt"], reason: "Prompt is required" };
 function Fields({ issues = [issue], request, showPrompt = true }: { showPrompt?: boolean; issues?: SourceIssue[]; request?: { id: number; path: string[] } }) {
   return <IssueScope issues={issues} request={request}><UnplacedIssues />{showPrompt && <TextField label="Prompt" path={issue.path} value="" onChange={vi.fn()} />}<TextField label="Other" path={["other"]} value="" onChange={vi.fn()} /></IssueScope>;
@@ -39,9 +40,10 @@ test("inspector badges count hidden-tab errors while inline messages follow the 
   const { editorFixture } = await import("./editorFixtures");
   const { modelCatalogFixture } = await import("../modelCatalogFixtures");
   const problems = [{ ...issue, path: ["incoming_call", "handled_by"], reason: "Choose a handler" }, { ...issue, path: ["limits", "max_duration_ms"], reason: "Duration too short" }];
-  render(<FlowLevelInspector document={editorFixture} onChange={vi.fn()} catalog={modelCatalogFixture} issues={problems} />);
+  render(<FlowLevelInspector lookups={lookups} document={editorFixture} onChange={vi.fn()} catalog={modelCatalogFixture} issues={problems} />);
   expect(screen.getByRole("tab", { name: "Advanced" })).toHaveAttribute("aria-description", "1 issue");
-  expect(screen.queryByText("Choose a handler")).not.toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Connection" })).toHaveAttribute("aria-description", "1 issue");
+  expect(screen.getByText("Choose a handler")).toBeVisible();
   expect(screen.queryByText("Duration too short")).not.toBeInTheDocument();
   fireEvent.mouseDown(screen.getByRole("tab", { name: "Advanced" }), { button: 0 });
   expect(screen.getByText("Duration too short")).toBeInTheDocument();
@@ -67,7 +69,7 @@ test("Show focuses hidden variable constraint errors with JSON editing guidance"
   const document = structuredClone(editorFixture);
   document.source.call_variables = { sections: { contact: { schema: { type: "object", properties: { name: { type: "string" } } } } } };
   const problem = { ...issue, path: ["call_variables", "sections", "contact", "schema", "properties", "name", "minLength"], reason: "Set a minimum length" };
-  render(<FlowLevelInspector document={document} onChange={vi.fn()} tab="variables" catalog={modelCatalogFixture} issues={[problem]} focusRequest={{ id: 1, path: problem.path }} />);
+  render(<FlowLevelInspector lookups={lookups} document={document} onChange={vi.fn()} tab="variables" catalog={modelCatalogFixture} issues={[problem]} focusRequest={{ id: 1, path: problem.path }} />);
   expect(await screen.findByText("Update this constraint in the JSON editor.")).toBeVisible();
   expect(screen.getByText("Set a minimum length").parentElement).toHaveFocus();
   expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
@@ -89,9 +91,9 @@ test("Show opens the section modal and focuses its constraint when variables are
   document.source.call_variables = { sections: { contact: { schema: { type: "object", additionalProperties: false, required: ["missing"] } } } };
   const problem = { ...issue, path: ["call_variables", "sections", "contact", "schema", "required"], reason: "Check required fields" };
   const props = { document, onChange: vi.fn(), tab: "variables" as const, catalog: modelCatalogFixture, issues: [problem] };
-  const view = render(<FlowLevelInspector {...props} />);
+  const view = render(<FlowLevelInspector lookups={lookups} {...props} />);
   expect(screen.queryByRole("textbox", { name: "contact undeclared required field 1" })).not.toBeInTheDocument();
-  view.rerender(<FlowLevelInspector {...props} focusRequest={{ id: 1, path: problem.path }} />);
+  view.rerender(<FlowLevelInspector lookups={lookups} {...props} focusRequest={{ id: 1, path: problem.path }} />);
   expect(await screen.findByRole("dialog", { name: "Edit section" })).toBeVisible();
   expect(screen.getByRole("textbox", { name: "contact undeclared required field 1" })).toHaveFocus();
 });

@@ -246,7 +246,7 @@ a `ResolvedCallPlan`. Variable schemas use the
 released closed subset and do not enforce `required` completeness. Plan startup now
 rejects valid-but-deferred features before it creates a room or provider process.
 
-Text opening audio has its own explicit inline TTS selection. A file opening uses
+In schema `20261125.01`, text opening audio resolves the call-wide TTS default into the prepared plan. Older revisions retain their explicit opening voice. A file opening uses
 the application-configured bounded HTTPS/WAV asset pipeline and a temporary room-supervised player,
 so it does not require TTS. Both forms keep caller text and audio closed until the attached output
 sink confirms actual playout completion; required playback failure ends the room.

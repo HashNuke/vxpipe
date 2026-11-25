@@ -4,7 +4,6 @@ import { afterEach, expect, test } from "vitest";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
 import { AgentInspector } from "./agent-inspector";
 import { HumanInspector } from "./human-inspector";
-import { InboundInspector } from "./inbound-inspector";
 import { editorFixture } from "./editorFixtures";
 import { parseSourceJson } from "./source-json";
 import { applyJson } from "./json-edits";
@@ -12,10 +11,10 @@ import { serializeSource } from "./source";
 import type { SourceDocument } from "./types";
 
 afterEach(cleanup);
-function Harness({ kind = "agent", initial = editorFixture }: { kind?: "agent" | "human" | "entry"; initial?: SourceDocument }) {
+function Harness({ kind = "agent", initial = editorFixture }: { kind?: "agent" | "human"; initial?: SourceDocument }) {
   const [document, onChange] = useState(() => structuredClone(initial));
   const props = { document, onChange, catalog: modelCatalogFixture, lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: [] } };
-  return <div style={{ height: 800 }}>{kind === "agent" ? <AgentInspector {...props} participantKey="intake" /> : kind === "human" ? <HumanInspector {...props} participantKey="specialist" /> : <InboundInspector {...props} />}<output data-testid="source">{serializeSource(document)}</output></div>;
+  return <div style={{ height: 800 }}>{kind === "agent" ? <AgentInspector {...props} participantKey="intake" /> : <HumanInspector {...props} participantKey="specialist" />}<output data-testid="source">{serializeSource(document)}</output></div>;
 }
 const click = (name: string) => fireEvent.click(screen.getByRole("button", { name }));
 const fill = (value: string) => fireEvent.change(screen.getByRole("textbox", { name: "Participant JSON" }), { target: { value } });
@@ -42,11 +41,11 @@ test("invalid JSON and invalid participant fields retain source and explain the 
   expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue(JSON.stringify(editorFixture.source.participants.intake, null, 2));
 });
 
-test.each(["human", "entry"] as const)("%s sidebar provides participant JSON and a Media tab", (kind) => {
-  render(<Harness kind={kind} />);
+test("human destination sidebar provides participant JSON and a Media tab", () => {
+  render(<Harness kind="human" />);
   expect(screen.getByRole("tab", { name: "Media" })).toBeInTheDocument();
   click("Participant JSON");
-  const key = kind === "human" ? "specialist" : "caller";
+  const key = "specialist";
   const next = { ...editorFixture.source.participants[key], description: "JSON description" };
   fill(JSON.stringify(next)); click("Apply JSON");
   expect(source().participants[key]).toEqual(next);

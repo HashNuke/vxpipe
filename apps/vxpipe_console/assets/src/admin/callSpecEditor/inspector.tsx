@@ -5,7 +5,6 @@ import { GenericNodeInspector } from "./generic-node-inspector";
 import { projectGraph } from "./graph";
 import { HumanInspector } from "./human-inspector";
 import type { HumanInspectorTab } from "./human-inspector-tabs";
-import { InboundInspector } from "./inbound-inspector";
 import type { EditorLookups, InspectorProps } from "./inspectorTypes";
 import { useJsonDrafts } from "./json-drafts";
 import { ParticipantSource } from "./participant-source";
@@ -24,13 +23,16 @@ type Props = InspectorProps & {
 export function Inspector({ selectedNodeId, tab, onRenamed, onRemoved, ...props }: Props) {
   const { drafts } = useJsonDrafts();
   const graph = projectGraph(props.document);
-  if (!selectedNodeId || selectedNodeId === "$settings") return <FlowLevelInspector {...props}
-    tab={member<CallSettingsTab>(tab, ["defaults", "variables", "media", "wait", "advanced"], "defaults")} />;
   const node = graph.nodes.find((candidate) => candidate.id === selectedNodeId);
-  if (!node) return drafts[`participant:${selectedNodeId}`]
-    ? <aside className="flex h-full min-h-0 flex-col"><ParticipantSource {...props} participantKey={selectedNodeId} heading="Participant removed"><GenericNodeInspector participantKey={selectedNodeId} /></ParticipantSource></aside>
-    : <GenericNodeInspector participantKey={selectedNodeId} />;
-  if (node.kind === "entry") return <InboundInspector {...props} tab={member<HumanInspectorTab>(tab, ["connection", "voice", "presence"], "connection")} />;
+  const selectedByEntryKey = selectedNodeId === graph.nodes.find((candidate) => candidate.kind === "entry")?.participantKey;
+  if (selectedNodeId && !node && drafts[`participant:${selectedNodeId}`]) {
+    return <aside className="flex h-full min-h-0 flex-col"><ParticipantSource {...props} participantKey={selectedNodeId} heading={selectedByEntryKey ? "Unapplied participant edit" : "Participant removed"}>
+      {selectedByEntryKey ? <p className="p-4 text-sm">This participant is now the call entry. Its connection is configured in Call settings.</p> : <GenericNodeInspector participantKey={selectedNodeId} />}
+    </ParticipantSource></aside>;
+  }
+  if (!selectedNodeId || selectedNodeId === "$settings" || node?.kind === "entry" || selectedByEntryKey) return <FlowLevelInspector {...props}
+    tab={member<CallSettingsTab>(tab, ["connection", "defaults", "variables", "media", "advanced"], "connection")} />;
+  if (!node) return <GenericNodeInspector participantKey={selectedNodeId} />;
   if (node.kind === "agent") return <AgentInspector {...props} participantKey={node.participantKey} onRenamed={onRenamed} onRemoved={onRemoved}
     tab={member<AgentInspectorTab>(tab, ["prompt", "voice", "variables", "transfers", "tools", "presence"], "prompt")} />;
   return <HumanInspector {...props} participantKey={node.participantKey} onRenamed={onRenamed} onRemoved={onRemoved}

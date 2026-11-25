@@ -103,7 +103,7 @@ test("Publish saves the clicked draft then publishes its returned revision, pres
   const save = deferred();
   const execute = vi.fn<ExecuteEditorRequest>().mockImplementationOnce(() => save.promise).mockResolvedValueOnce({ status: 200, revision: 4 });
   const { result } = renderHook(() => useEditor(snapshot, execute));
-  act(() => result.current.edit({ ...snapshot.document, source: { ...snapshot.document.source, opening_audio: { type: "text", text: "Welcome.", text_to_speech: { provider: "elevenlabs", model: "eleven_flash_v2_5", credential_name: "elevenlabs" } } } }));
+  act(() => result.current.edit({ ...snapshot.document, source: { ...snapshot.document.source, defaults: { capabilities: { ...snapshot.document.source.defaults?.capabilities, text_to_speech: { provider: "elevenlabs", model: "eleven_flash_v2_5", credential_name: "elevenlabs" } } }, opening_audio: { type: "text", text: "Welcome." } } }));
   act(() => { result.current.publish(); result.current.publish(); });
   expect(execute).toHaveBeenCalledTimes(1);
   expect(execute.mock.calls[0]![0]).toMatchObject({ action: "save", source: { opening_audio: { text: "Welcome." } } });
@@ -130,4 +130,19 @@ test("Publish on a new spec uses its assigned server identity", async () => {
   await act(async () => result.current.publish());
   expect(execute.mock.calls.map(([request]) => request.action)).toEqual(["save", "publish"]);
   expect(result.current.state.saved).toEqual({ callSpecId: "created", revision: 1, publishedRevision: 1 });
+});
+
+test("a spoken opening with speech-to-speech defaults can be saved but cannot be published", async () => {
+  const conflict = structuredClone(snapshot);
+  conflict.document.source.schema_version = "20261125.01";
+  conflict.document.source.defaults = { capabilities: { speech_to_speech: { provider: "google", model: "voice" } } };
+  conflict.document.source.opening_audio = { type: "text", text: "Welcome" };
+  const execute = vi.fn<ExecuteEditorRequest>().mockResolvedValue({status: 201, revision: 4});
+  const {result} = renderHook(() => useEditor(conflict, execute));
+  await act(async () => result.current.save());
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(execute.mock.calls[0]![0].source.opening_audio).toEqual({ type: "text", text: "Welcome" });
+  act(() => result.current.publish());
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(result.current.state.clientIssues).toContainEqual(expect.objectContaining({path: ["opening_audio", "type"]}));
 });

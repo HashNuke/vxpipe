@@ -44,7 +44,7 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
     with :ok <- matching_call_spec(call_spec, invocation),
          {:ok, host_tools} <- registry(registries, :host_tools),
          {:ok, opening_audio} <-
-           resolve_opening_audio(call_spec.opening_audio),
+           resolve_opening_audio(call_spec.opening_audio, call_spec.default_capabilities),
          {:ok, call_variables} <-
            resolve_call_variables(call_spec.call_variables, invocation.initial_variables),
          {:ok, base_participants} <-
@@ -93,16 +93,13 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
     end
   end
 
-  defp resolve_opening_audio(nil), do: {:ok, nil}
+  defp resolve_opening_audio(nil, _defaults), do: {:ok, nil}
 
-  defp resolve_opening_audio(%CallSpec.OpeningAudio{} = source) do
-    with {:ok, selection} <-
-           resolve_capability(
-             source.text_to_speech,
-             :text_to_speech,
-             ["opening_audio", "text_to_speech"],
-             :human
-           ) do
+  defp resolve_opening_audio(%CallSpec.OpeningAudio{} = source, defaults) do
+    {voice, path} = CallSpec.OpeningAudio.voice_requirement(source, defaults)
+
+    with :ok <- CallSpec.OpeningAudio.validate_defaults(source, defaults),
+         {:ok, selection} <- resolve_capability(voice, :text_to_speech, path, :human) do
       {:ok,
        %ResolvedCallPlan.OpeningAudio{
          type: source.type,

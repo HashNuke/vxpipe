@@ -70,6 +70,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
       |> Map.drop([:entry_caller, :entry_receiver])
       |> Map.put(:schema_version, CallSpec.schema_version())
       |> Map.put(:incoming_call, %{caller: "caller", handled_by: "receiver"})
+      |> update_in([:participants, "caller"], &Map.delete(&1, :capabilities))
 
     plan = compile_plan_from(room_id, source)
     assert plan.direction == :incoming

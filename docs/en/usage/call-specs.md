@@ -32,17 +32,28 @@ Existing installations may initially show only their known current publication.
 
 In the editor, **Publish** saves valid unsaved edits first, then publishes that
 saved revision. Use **Save as draft**
-in the actions menu to save without publishing. Both actions reject invalid call
-specs, including unsupported model/tool combinations. A failed save creates no
+in the actions menu to save without publishing. A draft can retain a written opening while its default voice is being configured.
+Publication requires that conflict to be resolved. Other validation errors,
+including unsupported model/tool combinations, still block saving. A failed save creates no
 revision and keeps your unsaved edits in the editor. Errors point to the relevant
 participant or setting.
 
 The editor's ellipsis menu opens the JSON source. Current new source uses
-`schema_version: "20261004.01"`. Use the
+`schema_version: "20261125.01"`. Use the
 [development example](../../../examples/call-specs/development.json) as a complete
 text-call starting point; supply the selected provider credential before saving.
 
 ## Direction and entry participant
+
+Select the Entry card to open **Call settings → Connection**. Set the handler,
+connection and opening here. For outgoing calls, this tab also sets the ring
+timeout. The caller or callee remains a human participant in the source.
+Its transcription uses the human model default and its media follows call policy.
+
+The latest draft using schema `20261004.01` offers **Upgrade draft**. Review
+the notice about any dedicated opening voice, entry transcription override or
+entry media restriction before upgrading. Saving creates a new revision.
+Previously published calls keep their pinned configuration.
 
 Exactly one of these direction blocks is present:
 
@@ -115,12 +126,15 @@ survive unrelated editor changes.
 ## Openings, waits and media policy
 
 Optional call-level `opening_audio` plays an announcement before conversation.
-Text openings need their own TTS selection, independent of the agent. File
-openings use HTTPS audio. Do not embed credentials or signed URLs in the spec.
+A text opening such as `{"type":"text","text":"Welcome."}` uses the voice in
+**Call settings → Models**. With speech-to-speech defaults, choose **Audio file
+URL** or turn opening audio off. If the model changes after a message has been
+written, the draft retains the text until you select a different opening type.
+File openings use HTTPS audio. Do not embed credentials or signed URLs in the spec.
 The caller cannot interrupt the protected opening before actual playback completes;
 opening output is private and the ordinary room recording path stays closed.
 
-Wait sounds cover setup, agent transfers, human transfers and joining. The editor
+In **Call settings → Media**, wait sounds cover setup, agent transfers, human transfers and joining. The editor
 offers built-ins, an audio URL and silence. Previewing a sound does not modify the
 call's runtime state.
 

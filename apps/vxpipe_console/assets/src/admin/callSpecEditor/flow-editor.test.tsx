@@ -177,12 +177,21 @@ test("after following an edge, tabs stay navigable and clicking the edge returns
   expect(screen.getByRole("tab", { name: "Transfers" })).toHaveAttribute("data-state", "active");
 });
 
-test("the call entry edge opens Entry connection settings", () => {
+test.each(["Select $entry-edge", "Select $entry", "Call settings"])("%s opens the call-wide Connection settings", (selection) => {
   render(<CallSpecEditor {...properties()} />);
-  click("Select $entry-edge");
-  expect(screen.getByRole("region", { name: "Entry settings" })).toBeVisible();
+  click("Select intake");
+  click(selection);
+  expect(screen.getByRole("region", { name: "Call settings" })).toBeVisible();
   expect(screen.getByRole("tab", { name: "Connection" })).toHaveAttribute("data-state", "active");
   expect(screen.queryByRole("button", { name: "Delete participant" })).not.toBeInTheDocument();
+});
+
+test("Show opens the whole-call JSON for an entry-specific override without a form control", async () => {
+  const props = properties();
+  props.execute.mockResolvedValue({ status: 422, error: { code: "invalid_call_spec", path: ["participants", "caller", "while_present"], reason: "Review the entry override" } });
+  render(<CallSpecEditor {...props} />); saveDraft();
+  await screen.findByText("Couldn't save: Call spec JSON › Caller Review the entry override"); click("Show");
+  expect(screen.getByRole("textbox", { name: "Call spec JSON" })).toBeVisible();
 });
 
 test("add, connect, rename and remove a transfer keep the portable source in sync", () => {
@@ -319,17 +328,22 @@ test("Review JSON edits reopens a hidden participant draft", () => {
   expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
 });
 
-test("a removed participant's JSON draft remains reviewable and discardable", () => {
+test.each(["removed", "made the call entry"])("a participant's JSON draft remains reviewable after it is %s", (change) => {
   render(<CallSpecEditor {...properties()} />); click("Select specialist"); click("Participant JSON");
   fill("Participant JSON", '{'); openJsonEditor();
   const next = structuredClone(snapshot.document.source);
-  delete next.participants.specialist;
+  if (change === "removed") delete next.participants.specialist;
+  else {
+    next.incoming_call!.caller = "specialist";
+    next.participants.specialist = next.participants.caller!;
+    delete next.participants.caller;
+  }
   if (next.participants.intake.type === "agent") delete next.participants.intake.transfers;
   fill("Call spec JSON", JSON.stringify(next)); fireEvent.click(within(screen.getByRole("dialog", { name: "Call spec source" })).getByRole("button", { name: "Apply JSON" })); click("Close");
   click("Review JSON edits");
   expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
   click("Discard JSON changes");
-  expect(screen.getByRole("button", { name: "More actions" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Review JSON edits" })).not.toBeInTheDocument();
 });
 
 test("retrying a failed save waits for unapplied JSON edits", async () => {
@@ -355,4 +369,39 @@ test("an invalid reply configuration error opens the participant Models tab, not
   expect(screen.getByText(reason)).toBeVisible();
   expect(screen.queryByRole("combobox", { name: "Default tool visibility" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Changed before rejection");
+});
+
+test("a written opening survives a switch to speech-to-speech and can be saved as a draft", async () => {
+  const props = properties();
+  const document = structuredClone(snapshot.document);
+  document.source.defaults!.capabilities!.text_to_speech = { provider: "deepgram", model: "flux" };
+  document.source.opening_audio = { type: "text", text: "Welcome back." };
+  render(<CallSpecEditor {...props} snapshot={{ ...snapshot, document }} />);
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }), { button: 0 });
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Model type" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "Speech-to-Speech" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Connection" }), { button: 0 });
+  expect(screen.getByRole("textbox", { name: "Opening message" })).toHaveValue("Welcome back.");
+  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Call settings → Models" }));
+  expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
+  saveDraft();
+  await waitFor(() => expect(props.execute).toHaveBeenCalledTimes(1));
+  expect(props.execute.mock.calls[0]![0]).toMatchObject({ action: "save", source: { opening_audio: document.source.opening_audio } });
+});
+
+test("the latest legacy draft upgrades locally without publishing or mutating saved history", () => {
+  const props = properties();
+  const document = structuredClone(snapshot.document);
+  document.source.schema_version = "20261004.01";
+  document.readOnly = true;
+  document.canUpgradeEntry = true;
+  document.notice = "Upgrade this draft to manage Entry in Call settings.";
+  render(<CallSpecEditor {...props} snapshot={{ ...snapshot, document }} />);
+  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+  click("Upgrade draft");
+  expect(screen.getByText("Unsaved changes")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Upgrade draft" })).not.toBeInTheDocument();
+  expect(props.execute).not.toHaveBeenCalled();
+  expect(document.source.schema_version).toBe("20261004.01");
 });

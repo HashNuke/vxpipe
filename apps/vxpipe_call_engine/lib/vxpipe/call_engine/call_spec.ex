@@ -17,8 +17,9 @@ defmodule Vxpipe.CallEngine.CallSpec do
 
   alias Vxpipe.CallEngine.CallSpecValidation
 
-  @schema_version "20261004.01"
-  @supported_schema_versions ["20260915.01", @schema_version]
+  @schema_version "20261125.01"
+  @explicit_entry_versions ["20260915.01", "20261004.01"]
+  @supported_schema_versions @explicit_entry_versions ++ [@schema_version]
   @fields [
     :schema_version,
     :name,
@@ -83,6 +84,10 @@ defmodule Vxpipe.CallEngine.CallSpec do
   @spec supported_schema_version?(term()) :: boolean()
   def supported_schema_version?(version), do: version in @supported_schema_versions
 
+  @spec inherits_entry_settings?(term()) :: boolean()
+  def inherits_entry_settings?(version),
+    do: version in @supported_schema_versions and version not in @explicit_entry_versions
+
   @spec new(map(), keyword()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
   def new(value, options) when is_list(options) do
     code = :invalid_call_spec
@@ -101,14 +106,19 @@ defmodule Vxpipe.CallEngine.CallSpec do
          {:ok, name} <- optional_name(input, code, message),
          {:ok, direction} <- Direction.new(input, schema_input),
          {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
-         {:ok, opening_audio} <- OpeningAudio.new(Map.get(input, :opening_audio)),
+         {:ok, opening_audio} <-
+           OpeningAudio.new(
+             Map.get(input, :opening_audio),
+             inherits_entry_settings?(schema_input)
+           ),
          {:ok, wait_sounds} <- WaitSounds.from_optional(Map.fetch(input, :wait_sounds)),
          {:ok, media_policy} <-
            MediaPolicy.from_optional(Map.fetch(input, :media_policy), ["media_policy"]),
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
            CallSpecValidation.fetch(input, :participants, code, message, []),
-         {:ok, participants} <- participants(participants_input, direction, code, message),
+         {:ok, participants} <-
+           participants(participants_input, direction, inherits_entry_settings?(schema_input)),
          :ok <- Direction.validate(direction, participants),
          :ok <- validate_transfers(participants, code, message),
          :ok <- validate_media_policies(media_policy, participants),
@@ -192,31 +202,26 @@ defmodule Vxpipe.CallEngine.CallSpec do
     end
   end
 
-  defp participants(value, direction, code, message) when is_map(value) and map_size(value) > 0 do
+  defp participants(value, direction, inherit_entry_settings?)
+       when is_map(value) and map_size(value) > 0 do
     Enum.reduce_while(value, {:ok, %{}}, fn
       {key, participant_input}, {:ok, participants} when is_binary(key) ->
         case Participant.new(
                key,
                participant_input,
-               Direction.participant_options(direction, key)
+               Direction.participant_options(direction, key, inherit_entry_settings?)
              ) do
           {:ok, participant} -> {:cont, {:ok, Map.put(participants, key, participant)}}
           {:error, _error} = error -> {:halt, error}
         end
 
       {_key, _participant_input}, _acc ->
-        {:halt,
-         CallSpecValidation.invalid(
-           code,
-           message,
-           ["participants", "<invalid-key>"],
-           "participant names must be strings"
-         )}
+        {:halt, invalid(["participants", "<invalid-key>"], "participant names must be strings")}
     end)
   end
 
-  defp participants(_value, _direction, code, message) do
-    CallSpecValidation.invalid(code, message, ["participants"], "must be a non-empty object")
+  defp participants(_value, _direction, _inherit_entry_settings?) do
+    invalid(["participants"], "must be a non-empty object")
   end
 
   defp limits(value, code, message) do

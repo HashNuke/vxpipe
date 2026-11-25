@@ -4,6 +4,58 @@ defmodule Vxpipe.Calls.CallSpecsTest do
   alias Vxpipe.Calls.{Administration, CallSpecs}
   alias Vxpipe.Calls.TestMemoryRepository
 
+  test "opening conflicts survive a server draft reload and block publication and preparation until resolved",
+       %{tenant: tenant, options: options} do
+    for capabilities <- [
+          %{model_inference: %{provider: "fixture", model: "test"}},
+          %{speech_to_speech: %{provider: "morse", model: "morse"}}
+        ] do
+      source =
+        call_spec_input()
+        |> Map.drop([:entry_caller, :entry_receiver])
+        |> Map.merge(%{
+          schema_version: "20261125.01",
+          incoming_call: %{caller: "caller", handled_by: "assistant"},
+          opening_audio: %{type: "text", text: "Keep this announcement."},
+          wait_sounds: nil
+        })
+        |> put_in([:defaults, :capabilities], capabilities)
+
+      assert {:ok, draft} = CallSpecs.save(tenant.key, source, options)
+      assert {:ok, stored} = CallSpecs.fetch(tenant.key, draft.call_spec_id, 1, options)
+
+      assert stored.source["opening_audio"] == %{
+               "type" => "text",
+               "text" => "Keep this announcement."
+             }
+
+      assert [%{"details" => %{"path" => ["opening_audio", "type"]}}] = stored.validation_errors
+
+      assert {:error, {:call_spec_not_publishable, _}} =
+               CallSpecs.publish(tenant.key, draft.call_spec_id, 1, options)
+
+      assert {:error, _} = Vxpipe.Calls.PreparedCallFactory.build(stored, %{}, :web, options)
+
+      update_options = Keyword.put(options, :call_spec_id, draft.call_spec_id)
+
+      invalid =
+        put_in(source, [:participants, "assistant", :tools], %{
+          "invalid_tool" => %{type: "host", tool: "unknown"}
+        })
+
+      assert {:error, _} = CallSpecs.save(tenant.key, invalid, update_options)
+      assert {:error, :not_found} = CallSpecs.fetch(tenant.key, draft.call_spec_id, 2, options)
+
+      assert {:ok, clean} =
+               CallSpecs.save(tenant.key, Map.delete(source, :opening_audio), update_options)
+
+      assert clean.validation_errors == []
+
+      assert {:ok, _published} =
+               CallSpecs.publish(tenant.key, draft.call_spec_id, clean.revision, options)
+    end
+  end
+
   test "rejects application-wide carrier routing before repository lookup" do
     assert {:error, :invalid_telephony_route} =
              CallSpecs.resolve_telephony_route(:application, "phone", "+15550001000", [])

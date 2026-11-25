@@ -37,8 +37,9 @@ defmodule Vxpipe.CallEngine.CallSpec.Direction do
     end
   end
 
-  def participant_options(direction, key) do
+  def participant_options(direction, key, inherit_entry_settings?) do
     [
+      inherit_entry_settings?: inherit_entry_settings? and key == direction.caller,
       outgoing_callee?: direction.kind == :outgoing and key == direction.caller,
       first_message_default:
         if(direction.kind == :outgoing and key == direction.handled_by,

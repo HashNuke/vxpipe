@@ -111,3 +111,22 @@ test("reads and writes publication metadata independently from immutable revisio
   expect(result.revision).toBe(9);
   expect(result.publication).toEqual(snapshot.saved?.publication);
 });
+
+test("only the latest directional draft offers the Entry upgrade", async () => {
+  const source = { ...editorFixture.source, schema_version: "20261004.01" };
+  const api = createEditorApi("tenant", "csrf", () => reply({ call_spec: { ...stored, latest_revision: stored.revision, source } }));
+  const signal = new AbortController().signal;
+  expect((await api.read("hello", signal)).document).toMatchObject({ readOnly: true, canUpgradeEntry: true, source });
+  const history = await api.read("hello", signal, stored.revision);
+  expect(history.document.readOnly).toBe(true);
+  expect(history.document.canUpgradeEntry).toBeUndefined();
+});
+
+test("historical revisions with Entry overrides direct the reader to the full call spec JSON", async () => {
+  const source = structuredClone(editorFixture.source);
+  source.schema_version = "20261004.01";
+  source.participants.caller!.while_present = { record_audio: false };
+  const api = createEditorApi("tenant", "csrf", () => reply({ call_spec: { ...stored, source } }));
+  const snapshot = await api.read("hello", new AbortController().signal, stored.revision);
+  expect(snapshot.document.notice).toContain("View the saved Entry overrides in the call spec JSON");
+});

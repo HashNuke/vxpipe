@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.CallSpec.ConnectionIntent
+  alias Vxpipe.CallEngine.CallSpec.OpeningAudio, as: OpeningSource
   alias Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
@@ -285,23 +286,25 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          :ok <- EntryConnection.caller(plan, caller),
          :ok <- supported_receiver(receiver),
          :ok <- supported_tools(plan),
-         :ok <- supported_opening(plan.opening_audio) do
+         :ok <- supported_opening(plan) do
       :ok
     end
   end
 
-  defp supported_opening(nil), do: :ok
-  defp supported_opening(%OpeningAudio{type: :file_url}), do: :ok
+  defp supported_opening(%{opening_audio: nil}), do: :ok
+  defp supported_opening(%{opening_audio: %OpeningAudio{type: :file_url}}), do: :ok
 
-  defp supported_opening(%OpeningAudio{type: :text, text_to_speech: %CapabilitySelection{}}),
-    do: :ok
+  defp supported_opening(%{
+         opening_audio: %OpeningAudio{type: :text, text_to_speech: %CapabilitySelection{}}
+       }),
+       do: :ok
 
-  defp supported_opening(_invalid),
-    do:
-      unsupported(
-        ["opening_audio", "text_to_speech"],
-        "requires its own inline text-to-speech selection"
-      )
+  defp supported_opening(plan), do: missing_opening_voice(plan)
+
+  defp missing_opening_voice(plan) do
+    path = OpeningSource.voice_path(plan.schema_version)
+    unsupported(path, "must select a text-to-speech voice for the opening audio")
+  end
 
   defp supported_receiver(%ResolvedCallPlan.Participant{kind: :agent} = receiver) do
     supported_first_message(receiver)
@@ -631,7 +634,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          caller,
          options
        ) do
-    text_to_speech_runtime(plan, selection, caller, options, ["opening_audio", "text_to_speech"])
+    path = OpeningSource.voice_path(plan.schema_version)
+    text_to_speech_runtime(plan, selection, caller, options, path)
   end
 
   defp opening_text_to_speech_runtime(
@@ -645,12 +649,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp opening_text_to_speech_runtime(_plan, _caller, _options) do
-    unsupported(
-      ["opening_audio", "text_to_speech"],
-      "requires its own inline text-to-speech selection"
-    )
-  end
+  defp opening_text_to_speech_runtime(plan, _caller, _options), do: missing_opening_voice(plan)
 
   @doc false
   def participant_text_to_speech(%ResolvedCallPlan{} = plan, receiver, options) do
@@ -756,7 +755,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     opening =
       case plan.opening_audio do
         %{type: :text, text_to_speech: selection} ->
-          [{selection, :text_to_speech, ["opening_audio", "text_to_speech"]}]
+          [{selection, :text_to_speech, OpeningSource.voice_path(plan.schema_version)}]
 
         _none ->
           []

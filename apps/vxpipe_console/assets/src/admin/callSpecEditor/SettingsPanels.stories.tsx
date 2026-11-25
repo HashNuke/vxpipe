@@ -21,7 +21,7 @@ function SettingsPanelStory({ panel, theme, initial = editorFixture, catalog = m
   const [document, onChange] = useState(initial);
   const props = { document, onChange, issues: validateSource(document.source) };
   return <EditorTheme theme={theme}><main className="min-h-screen bg-muted p-0 sm:p-6"><div className="mx-auto h-dvh min-h-[32rem] w-full sm:h-[calc(100dvh-3rem)] max-w-[34rem] overflow-hidden border border-border bg-background sm:rounded-md">
-    <InspectorShell title={panel === "direction" ? "Entry" : "Call settings"} subtitle={titles[panel]}>
+    <InspectorShell title="Call settings" subtitle={titles[panel]}>
       {panel === "direction" ? <EntryHandlerField {...props} />
         : panel === "defaults" ? <DefaultsPanel {...props} catalog={catalog} />
         : panel === "media" ? <MediaPolicyFields {...props} participantKey={null} />

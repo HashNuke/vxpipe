@@ -1005,18 +1005,28 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   test "rejects a missing resolved opening voice without falling back to the agent" do
     configure_speech_runtime()
     plan = compile_plan(agent_text_to_speech: true)
-    no_tts_plan = %{plan | opening_audio: %{plan.opening_audio | text_to_speech: nil}}
 
-    assert {:error,
-            %Error{
-              code: :unsupported_call_plan,
-              details: %{"path" => ["opening_audio", "text_to_speech"]}
-            }} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(no_tts_plan)
+    for {version, path} <- [
+          {"20260915.01", ["opening_audio", "text_to_speech"]},
+          {"20261004.01", ["opening_audio", "text_to_speech"]},
+          {"20261125.01", ["defaults", "capabilities", "text_to_speech"]}
+        ] do
+      no_tts_plan = %{
+        plan
+        | schema_version: version,
+          opening_audio: %{plan.opening_audio | text_to_speech: nil}
+      }
 
-    assert Registry.lookup(
-             Vxpipe.CallEngine.RoomRegistry,
-             {no_tts_plan.tenant_id, no_tts_plan.room_id}
-           ) == []
+      for result <- [
+            Vxpipe.CallEngine.TestCallStartup.start_call_raw(no_tts_plan),
+            Vxpipe.CallEngine.PlanStartup.opening_runtime(no_tts_plan, [])
+          ] do
+        assert {:error, %Error{code: :unsupported_call_plan, details: %{"path" => ^path}}} =
+                 result
+      end
+
+      assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) == []
+    end
   end
 
   for opening_mode <- ["fixed", "generated"],

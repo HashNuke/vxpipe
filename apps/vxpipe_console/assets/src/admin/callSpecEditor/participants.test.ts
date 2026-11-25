@@ -3,7 +3,7 @@ import { parseSource } from "./source";
 import { addParticipant, removeParticipant, renameParticipant, setTransfer } from "./participants";
 
 function document() {
-  return parseSource(JSON.stringify({schema_version: "20261004.01", incoming_call: {caller: "caller", handled_by: "assistant"}, participants: {
+  return parseSource(JSON.stringify({schema_version: "20261125.01", incoming_call: {caller: "caller", handled_by: "assistant"}, participants: {
     caller: {type: "human", connection: {service: "web", mode: "receive", admission: "start_call"}},
     assistant: {type: "agent", prompt: "Keep assistant in this literal prompt.", transfers: ["human"], while_present: {audio_routes: {assistant: ["caller"]}}},
     human: {type: "human", connection: {service: "web", mode: "receive", admission: "transfer"}},

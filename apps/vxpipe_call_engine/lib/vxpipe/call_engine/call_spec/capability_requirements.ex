@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilityRequirements do
   @moduledoc "Effective capability selections and their source paths, including transfer destinations."
 
   alias Vxpipe.CallEngine.{CallSpec, CapabilityCatalog}
-  alias Vxpipe.CallEngine.CallSpec.Capabilities
+  alias Vxpipe.CallEngine.CallSpec.{Capabilities, OpeningAudio}
 
   def all(%CallSpec{} = call_spec) do
     participants =
@@ -13,15 +13,9 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilityRequirements do
       end)
 
     opening =
-      case call_spec.opening_audio do
-        %{type: :text, text_to_speech: selection} ->
-          [{selection, ["opening_audio", "text_to_speech"]}]
+      OpeningAudio.voice_requirement(call_spec.opening_audio, call_spec.default_capabilities)
 
-        _none ->
-          []
-      end
-
-    Enum.reject(participants ++ opening, fn {selection, _path} -> is_nil(selection) end)
+    Enum.reject(participants ++ [opening], fn {selection, _path} -> is_nil(selection) end)
   end
 
   def credentials(%CallSpec{} = call_spec) do

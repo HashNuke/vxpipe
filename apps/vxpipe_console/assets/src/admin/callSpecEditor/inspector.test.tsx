@@ -8,11 +8,13 @@ afterEach(cleanup);
 const props = { document: editorFixture, onChange: vi.fn(), catalog: modelCatalogFixture,
   lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: [] }, onTabChange: vi.fn(), onRenamed: vi.fn(), onRemoved: vi.fn() };
 
-test("selection routes to call settings, entry, agent and human inspectors", () => {
+test("entry and Call settings open the same Connection panel while destinations keep their own inspectors", () => {
   const view = render(<Inspector {...props} />);
-  expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("data-state", "active");
+  expect(screen.getByRole("tab", { name: "Connection" })).toHaveAttribute("data-state", "active");
   view.rerender(<Inspector {...props} selectedNodeId="$entry" />);
-  expect(screen.getByText("Entry · Caller")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Call settings" })).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Handled by" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Participant JSON" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Delete participant" })).not.toBeInTheDocument();
   view.rerender(<Inspector {...props} selectedNodeId="intake" />);
   expect(screen.getByRole("textbox", { name: "Prompt" })).toBeInTheDocument();

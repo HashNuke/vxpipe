@@ -16,7 +16,7 @@ export function validatePolicies(fields: Fields, source: ObjectValue, participan
     const sounds = fields.object(source.wait_sounds, ["wait_sounds"], ["call_setup", "transfer_to_agent", "transfer_to_human", "transfer_joining"]);
     for (const [slot, value] of Object.entries(sounds)) if (value !== null) audioUrl(fields, value, ["wait_sounds", slot], false);
   }
-  opening(fields, source.opening_audio);
+  opening(fields, source);
   visibility(fields, source, participants);
 }
 
@@ -76,7 +76,8 @@ function audioUrl(fields: Fields, value: unknown, path: string[], httpsOnly: boo
   } catch { fields.issue(path, reason); }
 }
 
-function opening(fields: Fields, value: unknown): void {
+function opening(fields: Fields, source: ObjectValue): void {
+  const value = source.opening_audio;
   if (value === undefined || value === null) return;
   const path = ["opening_audio"];
   const item = fields.object(value, path, ["type", "url", "text", "text_to_speech"]);
@@ -84,7 +85,13 @@ function opening(fields: Fields, value: unknown): void {
   if (item.type === "text") {
     if (Object.hasOwn(item, "url")) fields.issue([...path, "url"], "is not supported for this opening audio type");
     fields.text(item.text, [...path, "text"], 4096);
-    capability(fields, item.text_to_speech, [...path, "text_to_speech"]);
+    if (source.schema_version === "20261125.01") {
+      if (Object.hasOwn(item, "text_to_speech")) fields.issue([...path, "text_to_speech"], "set the opening voice in Call settings → Models");
+      const defaults = record(source.defaults) && record(source.defaults.capabilities) ? source.defaults.capabilities : {};
+      if (defaults.speech_to_speech || !defaults.text_to_speech) fields.issues.push({
+        code: "opening_model_conflict", path: [...path, "type"], reason: "Spoken text requires a call-wide text-to-speech model before publication.",
+      });
+    } else capability(fields, item.text_to_speech, [...path, "text_to_speech"]);
   } else if (item.type === "file_url") {
     for (const name of ["text", "text_to_speech"]) if (Object.hasOwn(item, name)) fields.issue([...path, name], "is not supported for this opening audio type");
     audioUrl(fields, item.url, [...path, "url"], true);

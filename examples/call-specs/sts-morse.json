@@ -1,5 +1,5 @@
 {
-  "schema_version": "20261004.01",
+  "schema_version": "20261125.01",
   "name": "Morse speech-to-speech example (local only)",
   "incoming_call": {
     "caller": "caller",

@@ -3,6 +3,154 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudioCompilerTest do
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, Error}
   alias Vxpipe.CallEngine.CallSpec.OpeningAudio
+  alias Vxpipe.CallEngine.CallSpec.CapabilityRequirements
+
+  test "current text openings pin the call's default TTS and credential even for human handlers" do
+    voice = %{
+      provider: "deepgram",
+      model: "flux-haley-en",
+      credential_name: "opening-voice",
+      options: %{encoding: "linear16", sample_rate: 24_000}
+    }
+
+    input =
+      current_input()
+      |> put_in([:defaults, :capabilities], %{text_to_speech: voice})
+      |> put_in([:participants, "reception"], %{
+        type: "human",
+        connection: %{service: "web", mode: "receive", admission: "start_call"}
+      })
+
+    assert {:ok, spec} = CallSpec.new(input, resource_id: "support", revision: 7)
+
+    assert [{selection, ["defaults", "capabilities", "text_to_speech"]}] =
+             CapabilityRequirements.credentials(spec)
+
+    assert selection.credential_name == "opening-voice"
+    assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation(), registries())
+    assert plan.opening_audio.text_to_speech == selection
+    assert plan.opening_audio.text == "Notice"
+    assert plan.participants["caller"].capabilities.text_to_speech == nil
+
+    invalid = put_in(input, [:opening_audio, :text_to_speech], voice)
+
+    assert {:error, %Error{details: %{"path" => ["opening_audio", "text_to_speech"]}}} =
+             CallSpec.new(invalid, resource_id: "support", revision: 7)
+
+    legacy = Map.put(input, :schema_version, "20261004.01")
+
+    assert {:error, %Error{details: %{"path" => ["opening_audio", "text_to_speech"]}}} =
+             CallSpec.new(legacy, resource_id: "support", revision: 7)
+
+    explicit_voice = %{provider: "morse", model: "morse"}
+
+    assert {:ok, spec} =
+             CallSpec.new(put_in(legacy, [:opening_audio, :text_to_speech], explicit_voice),
+               resource_id: "support",
+               revision: 7
+             )
+
+    assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation(), registries())
+    assert plan.opening_audio.text_to_speech.provider == "morse"
+  end
+
+  test "an STS call default prevents text openings even with a default TTS and only human participants" do
+    speech = %{provider: "morse", model: "morse"}
+
+    source =
+      current_input()
+      |> put_in([:defaults, :capabilities], %{speech_to_speech: speech, text_to_speech: speech})
+      |> put_in([:participants, "reception"], current_input().participants["caller"])
+
+    assert {:ok, spec} = CallSpec.new(source, resource_id: "support", revision: 7)
+
+    assert {:error, %Error{details: %{"path" => ["opening_audio", "type"], "reason" => reason}}} =
+             CallSpecCompiler.compile(spec, invocation(), registries())
+
+    assert reason =~ "speech-to-speech"
+  end
+
+  test "current text opening drafts accept missing TTS and STS defaults but cannot execute" do
+    for capabilities <- [
+          %{model_inference: %{provider: "fixture", model: "test"}},
+          %{speech_to_speech: %{provider: "morse", model: "morse"}}
+        ] do
+      input = put_in(current_input(), [:defaults, :capabilities], capabilities)
+      assert {:ok, spec} = CallSpec.new(input, resource_id: "support", revision: 7)
+
+      assert {:error, %Error{details: %{"path" => ["opening_audio", "type"]}}} =
+               CallSpecCompiler.compile(spec, invocation(), registries())
+
+      for opening <- [nil, %{type: "file_url", url: "https://assets.example.test/notice.wav"}] do
+        assert {:ok, spec} =
+                 CallSpec.new(Map.put(input, :opening_audio, opening),
+                   resource_id: "support",
+                   revision: 7
+                 )
+
+        assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation(), registries())
+        assert (plan.opening_audio && plan.opening_audio.type) == (opening && :file_url)
+      end
+    end
+  end
+
+  test "current incoming and outgoing entry humans inherit call settings while other humans retain overrides" do
+    speech = %{provider: "morse", model: "morse"}
+
+    incoming =
+      current_input()
+      |> Map.delete(:opening_audio)
+      |> put_in([:defaults, :capabilities, :speech_to_text], speech)
+
+    outgoing =
+      incoming
+      |> Map.delete(:incoming_call)
+      |> Map.put(:outgoing_call, %{callee: "caller", handled_by: "reception"})
+      |> put_in([:participants, "caller", :connection], %{service: "phone", mode: "dial"})
+
+    for input <- [incoming, outgoing] do
+      human = %{
+        type: "human",
+        connection: %{service: "web", mode: "receive", admission: "transfer"},
+        capabilities: %{speech_to_text: speech},
+        while_present: %{record_audio: false}
+      }
+
+      input = put_in(input, [:participants, "support-human"], human)
+      assert {:ok, spec} = CallSpec.new(input, resource_id: "support", revision: 7)
+      assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation(), registries())
+
+      assert plan.participants["caller"].capabilities.speech_to_text ==
+               spec.default_capabilities.speech_to_text
+
+      assert plan.participants["caller"].while_present.record_audio == :inherit
+      assert plan.participants["support-human"].while_present.record_audio == false
+
+      for field <- [:capabilities, :while_present] do
+        source = put_in(input, [:participants, "caller", field], %{})
+        path = ["participants", "caller", Atom.to_string(field)]
+
+        assert {:error, %Error{details: %{"path" => ^path}}} =
+                 CallSpec.new(source, resource_id: "support", revision: 7)
+
+        assert {:ok, _spec} =
+                 CallSpec.new(Map.put(source, :schema_version, "20261004.01"),
+                   resource_id: "support",
+                   revision: 7
+                 )
+      end
+    end
+  end
+
+  defp current_input do
+    call_spec_input()
+    |> Map.drop([:entry_caller, :entry_receiver])
+    |> Map.merge(%{
+      schema_version: "20261125.01",
+      incoming_call: %{caller: "caller", handled_by: "reception"},
+      opening_audio: %{type: "text", text: "Notice"}
+    })
+  end
 
   test "resolves the opening's explicit TTS selection with a human initial receiver" do
     input =
@@ -56,7 +204,7 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudioCompilerTest do
   end
 
   test "pins supported text and HTTPS file sources into the resolved plan" do
-    assert CallSpec.schema_version() == "20261004.01"
+    assert CallSpec.schema_version() == "20261125.01"
 
     for {input, expected} <- [
           {%{

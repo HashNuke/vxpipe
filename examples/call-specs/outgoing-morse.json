@@ -1,12 +1,12 @@
 {
-  "schema_version": "20261004.01",
+  "schema_version": "20261125.01",
   "name": "Outgoing phone test with Morse speech",
   "outgoing_call": {
     "callee": "callee",
     "handled_by": "assistant",
     "ring_timeout_ms": 15000
   },
-  "defaults": {"capabilities": {}},
+  "defaults": {"capabilities": {"speech_to_text": {"provider": "morse", "model": "morse", "options": {}}}},
   "participants": {
     "callee": {
       "type": "human",
@@ -14,9 +14,6 @@
         "service": "test-phone",
         "mode": "dial",
         "number": "+15550001000"
-      },
-      "capabilities": {
-        "speech_to_text": {"provider": "morse", "model": "morse", "options": {}}
       }
     },
     "assistant": {

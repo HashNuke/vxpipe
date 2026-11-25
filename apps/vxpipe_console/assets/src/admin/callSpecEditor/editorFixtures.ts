@@ -3,7 +3,7 @@ import type { SourceDocument } from "./types";
 export const editorFixture: SourceDocument = {
   readOnly: false,
   source: {
-    schema_version: "20261004.01",
+    schema_version: "20261125.01",
     name: "New Patient Appointment Intake",
     incoming_call: { caller: "caller", handled_by: "intake" },
     participants: {

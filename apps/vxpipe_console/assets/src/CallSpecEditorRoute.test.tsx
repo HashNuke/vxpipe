@@ -238,10 +238,10 @@ test("outgoing creation explains missing phone services and can be cancelled", a
 
 
 test.each([
-  { site: "opening", tenant: false, sts: false },
+  { site: "entry", tenant: false, sts: false },
   { site: "defaults", tenant: false, sts: false },
   { site: "participant", tenant: false, sts: false },
-  { site: "opening", tenant: true, sts: false },
+  { site: "entry", tenant: true, sts: false },
   { site: "defaults", tenant: true, sts: true },
   { site: "participant", tenant: true, sts: true },
 ])("production voice client round-trips $site (tenant=$tenant, sts=$sts) through dirty Publish and reload", async ({ site, tenant, sts }) => {
@@ -254,7 +254,7 @@ test.each([
     delete initial.defaults!.capabilities!.text_to_speech;
     initial.defaults!.capabilities!.speech_to_speech = selection;
   } else initial.defaults!.capabilities!.text_to_speech = selection;
-  if (!sts) initial.opening_audio = { type: "text", text: "Welcome", text_to_speech: selection };
+  if (!sts) initial.opening_audio = { type: "text", text: "Welcome" };
   let persisted = { ...stored, source: initial };
   const fetch = transport(); const good = fetch.getMockImplementation()!;
   fetch.mockImplementation((input, init) => {
@@ -281,8 +281,14 @@ test.each([
   });
   const navigateSite = async () => {
     await screen.findByRole("button", { name: "Edit call spec name" });
-    if (site === "opening") fireEvent.click(screen.getByRole("button", { name: "Select entry" }));
-    if (site === "participant") { fireEvent.click(screen.getByRole("button", { name: "Select assistant" })); fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }), { button: 0, ctrlKey: false }); }
+    if (site === "entry") {
+      fireEvent.click(screen.getByRole("button", { name: "Select entry" }));
+      expect(screen.getByRole("tab", { name: "Connection" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("textbox", { name: "Opening message" })).toHaveValue("Welcome");
+      expect(screen.queryByRole("button", { name: /^Voice:/ })).not.toBeInTheDocument();
+    }
+    if (site === "participant") fireEvent.click(screen.getByRole("button", { name: "Select assistant" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }), { button: 0, ctrlKey: false });
   };
   const view = render(<App csrfToken="csrf" fetchImpl={fetch} />); await navigateSite();
   expect(fetch.mock.calls.some(([path]) => /\/voices\?/.test(String(path)))).toBe(false);
@@ -293,7 +299,8 @@ test.each([
   const catalogsBeforePublish = fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path))).length;
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await screen.findByText("Published");
-  const selected = site === "opening" && persisted.source.opening_audio?.type === "text" ? persisted.source.opening_audio.text_to_speech : site === "participant" ? persisted.source.participants.assistant!.capabilities![capability] : persisted.source.defaults!.capabilities![capability];
+  if (!sts) expect(persisted.source.opening_audio).toEqual({ type: "text", text: "Welcome" });
+  const selected = site === "participant" ? persisted.source.participants.assistant!.capabilities![capability] : persisted.source.defaults!.capabilities![capability];
   expect(selected).toEqual({ ...selection, options: { ...selection.options, voice: "chosen-voice" } });
   expect(fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path)))).toHaveLength(catalogsBeforePublish);
   view.unmount(); render(<App csrfToken="csrf" fetchImpl={fetch} />); await navigateSite();

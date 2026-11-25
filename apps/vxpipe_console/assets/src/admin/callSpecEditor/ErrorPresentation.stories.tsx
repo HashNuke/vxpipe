@@ -41,6 +41,7 @@ function ErrorPresentationStory({ theme, initial, result, drawer = false, source
   function show(issue: SourceIssue) {
     const location = locateIssue(document.source, issue.path);
     if (!location) { setIssuesOpen(true); return; }
+    if (location.nodeId === "$source") { setIssuesOpen(false); setJsonOpen(true); return; }
     setSettings(location.nodeId === "$settings"); setTab(location.tab); setRequest((previous) => ({ id: (previous?.id ?? 0) + 1, path: issue.path })); setIssuesOpen(false);
   }
   const props = { document, onChange: change, issues, focusRequest: request, catalog: modelCatalogFixture, lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: ["calendar"] } };

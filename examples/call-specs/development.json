@@ -1,5 +1,5 @@
 {
-  "schema_version": "20261004.01",
+  "schema_version": "20261125.01",
   "name": "Development database example",
   "incoming_call": {
     "caller": "caller",

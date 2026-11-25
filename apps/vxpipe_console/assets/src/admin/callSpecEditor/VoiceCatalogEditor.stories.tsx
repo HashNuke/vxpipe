@@ -22,7 +22,7 @@ function createPreviewFetch(): EditorFetch {
   if (source.participants.assistant?.type === "agent") source.participants.assistant.prompt = "Help callers book an appointment.";
   const selection = { provider: "elevenlabs", model: "eleven_flash_v2_5", credential_name: "office", options: { voice: "saved-private-voice" } };
   source.defaults!.capabilities!.text_to_speech = selection;
-  source.opening_audio = { type: "text", text: "Welcome to our office", text_to_speech: selection };
+  source.opening_audio = { type: "text", text: "Welcome to our office" };
   let saved = { source, call_spec_id: "reception", revision: 1, latest_revision: 1, published_revision: 1 };
   const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   const fetch: EditorFetch = async (input, init) => {

@@ -17,18 +17,21 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudio do
             type: :text,
             text: String.t(),
             url: nil,
-            text_to_speech: CapabilitySelection.t()
+            text_to_speech: nil | CapabilitySelection.t()
           }
           | %__MODULE__{type: :file_url, text: nil, url: String.t(), text_to_speech: nil}
 
   @code :invalid_call_spec
   @message "The call spec is invalid."
   @path ["opening_audio"]
+  @inline_voice_path @path ++ ["text_to_speech"]
+  @default_voice_path ["defaults", "capabilities", "text_to_speech"]
 
-  @spec new(nil | map()) :: {:ok, nil | t()} | {:error, Vxpipe.CallEngine.Error.t()}
-  def new(nil), do: {:ok, nil}
+  @spec new(nil | map(), boolean()) :: {:ok, nil | t()} | {:error, Vxpipe.CallEngine.Error.t()}
+  def new(value, inherit_voice? \\ false)
+  def new(nil, _inherit_voice?), do: {:ok, nil}
 
-  def new(value) do
+  def new(value, inherit_voice?) do
     with {:ok, input} <-
            CallSpecValidation.normalize_map(
              value,
@@ -47,11 +50,11 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudio do
              @message,
              @path ++ ["type"]
            ) do
-      build(type, input)
+      build(type, input, inherit_voice?)
     end
   end
 
-  defp build(:text, input) do
+  defp build(:text, input, inherit_voice?) do
     with :ok <- reject_present(input, :url),
          {:ok, text_input} <-
            CallSpecValidation.fetch(input, :text, @code, @message, @path),
@@ -63,15 +66,12 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudio do
              @path ++ ["text"],
              maximum: 4_096
            ),
-         {:ok, selection_input} <-
-           CallSpecValidation.fetch(input, :text_to_speech, @code, @message, @path),
-         {:ok, selection} <-
-           CapabilitySelection.new(selection_input, :text_to_speech, @path ++ ["text_to_speech"]) do
+         {:ok, selection} <- voice(input, inherit_voice?) do
       {:ok, %__MODULE__{type: :text, text: text, url: nil, text_to_speech: selection}}
     end
   end
 
-  defp build(:file_url, input) do
+  defp build(:file_url, input, _inherit_voice?) do
     with :ok <- reject_present(input, :text),
          :ok <- reject_present(input, :text_to_speech),
          {:ok, url_input} <-
@@ -79,6 +79,51 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudio do
          {:ok, url} <- valid_https_url(url_input) do
       {:ok, %__MODULE__{type: :file_url, text: nil, url: url}}
     end
+  end
+
+  defp voice(input, true) do
+    with :ok <- reject_present(input, :text_to_speech), do: {:ok, nil}
+  end
+
+  defp voice(input, false) do
+    with {:ok, value} <- CallSpecValidation.fetch(input, :text_to_speech, @code, @message, @path),
+         do: CapabilitySelection.new(value, :text_to_speech, @path ++ ["text_to_speech"])
+  end
+
+  def validate_defaults(%__MODULE__{type: :text, text_to_speech: nil}, defaults) do
+    cond do
+      defaults.speech_to_speech ->
+        invalid(
+          ["type"],
+          "Text opening audio is unavailable with speech-to-speech call defaults. Choose None or an HTTPS audio file."
+        )
+
+      is_nil(defaults.text_to_speech) ->
+        invalid(
+          ["type"],
+          "Text opening audio requires text-to-speech in the call defaults. Choose a default voice, None or an HTTPS audio file."
+        )
+
+      true ->
+        :ok
+    end
+  end
+
+  def validate_defaults(_source, _defaults), do: :ok
+
+  def voice_requirement(%__MODULE__{type: :text, text_to_speech: nil}, defaults),
+    do: {defaults.text_to_speech, @default_voice_path}
+
+  def voice_requirement(%__MODULE__{type: :text, text_to_speech: selection}, _defaults),
+    do: {selection, @inline_voice_path}
+
+  def voice_requirement(_source, _defaults), do: {nil, ["opening_audio"]}
+
+  @doc "Locates the authored voice setting for errors in an already resolved plan."
+  def voice_path(schema_version) do
+    if Vxpipe.CallEngine.CallSpec.inherits_entry_settings?(schema_version),
+      do: @default_voice_path,
+      else: @inline_voice_path
   end
 
   defp reject_present(input, key) do

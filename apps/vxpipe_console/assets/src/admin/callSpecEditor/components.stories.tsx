@@ -94,7 +94,7 @@ function CanvasShellStory({ issues }: { issues?: Record<string, number> } = {}) 
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(document.source.name ?? "");
   const [dirty, setDirty] = useState(false);
-  const title = edge ? "Selected transfer" : selected === "$entry" ? "Entry" : selected ?? "Call settings";
+  const title = edge ? "Selected transfer" : !selected || selected === "$entry" ? "Call settings" : selected;
   return <EditorTheme><FlowEditorLayout {...header} document={document} selectedNodeId={selected} issues={issues}
     onSelectNode={(id) => { setSelected(id); setEdge(null); }} onSelectEdge={(id) => { setEdge(id); setSelected(null); }}
     onConnect={(source, target) => { setDocument((current) => setTransfer(current, source, target, true)); setDirty(true); }}
@@ -105,7 +105,7 @@ function CanvasShellStory({ issues }: { issues?: Record<string, number> } = {}) 
       setDocument((current) => addParticipant(current, key, kind)); setSelected(key); setEdge(null); setDirty(true);
     }}
     onEditFlowName={() => { setName(document.source.name ?? ""); setEditingName(true); }} dirty={dirty}
-    inspectorTitle={title} inspector={<div className="space-y-3 p-6"><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-muted-foreground">{edge ? "Transfer between participants" : selected ? "Participant settings" : "Direction, defaults and call settings"}</p></div>} />
+    inspectorTitle={title} inspector={<div className="space-y-3 p-6"><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-muted-foreground">{edge ? "Transfer between participants" : selected && selected !== "$entry" ? "Participant settings" : "Call connection and settings"}</p></div>} />
     <FlowNameDialog open={editingName} value={name} onValueChange={setName} onCancel={() => setEditingName(false)}
       onSubmit={(event) => { event.preventDefault(); setDocument((current) => ({ ...current, source: { ...current.source, name } })); setDirty(true); setEditingName(false); }} />
   </EditorTheme>;

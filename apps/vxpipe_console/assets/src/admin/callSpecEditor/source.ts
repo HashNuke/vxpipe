@@ -6,14 +6,14 @@ export function parseSource(json: string): SourceDocument {
   if (!record(source) || !record(source.participants)) {
     throw new Error("The call spec must be an object with participants.");
   }
-  if (source.schema_version !== "20261004.01" && source.schema_version !== "20260915.01") {
+  if (source.schema_version !== "20261125.01" && source.schema_version !== "20261004.01" && source.schema_version !== "20260915.01") {
     throw new Error("This call spec schema version is not supported by the editor.");
   }
-  const readOnly = source.schema_version === "20260915.01";
+  const readOnly = source.schema_version !== "20261125.01";
   return {
     source: source as CallSpecSource,
     readOnly,
-    ...(readOnly ? { notice: "Schema 20260915.01 opens read-only. Its source is preserved without migration." } : {}),
+    ...(readOnly ? { notice: `Schema ${source.schema_version} opens read-only. Its source is preserved.` } : {}),
   };
 }
 

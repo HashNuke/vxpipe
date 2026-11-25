@@ -3,7 +3,7 @@ import { parseSource } from "./source";
 import { addSection, removeSection, renameSection, setSectionSchema, setSectionPermission, setVariableField, renameVariableField, removeVariableField } from "./variables";
 
 function document() {
-  return parseSource(JSON.stringify({ schema_version: "20261004.01", incoming_call: { caller: "caller", handled_by: "assistant" }, participants: {
+  return parseSource(JSON.stringify({ schema_version: "20261125.01", incoming_call: { caller: "caller", handled_by: "assistant" }, participants: {
     caller: { type: "human", connection: { service: "web", mode: "receive", admission: "start_call" } },
     assistant: { type: "agent", prompt: "Keep contact.phone literally.", variable_permissions: { contact: ["read", "write"] } },
     support: { type: "human", connection: { service: "office", mode: "dial", number_from_variable: { section: "contact", variable: "phone" } } },
