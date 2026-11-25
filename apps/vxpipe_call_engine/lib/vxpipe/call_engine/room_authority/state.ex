@@ -30,6 +30,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 participant_transfer_runtime: nil,
                 activated_agent_participant_ids: MapSet.new(),
                 pending_participant_transfer: nil,
+                action_announcement: nil,
                 agent_turns: %{},
                 idle_wait: nil,
                 background_tool_calls: %{},
@@ -74,6 +75,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           media_policy_authority: nil | pid(),
           media_policy_monitor: nil | reference(),
           agent_turns: map(),
+          action_announcement: nil | Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement.t(),
           background_tool_calls: map(),
           next_sequence: pos_integer(),
           opening_audio: OpeningAudio.t(),
@@ -152,4 +154,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
       text_capability_required?: true
     }
   end
+
+  def conversation_held?(%{action_announcement: pending}, _participant_id)
+      when not is_nil(pending),
+      do: true
+
+  def conversation_held?(state, participant_id),
+    do: MapSet.member?(state.held_participant_ids, participant_id)
 end

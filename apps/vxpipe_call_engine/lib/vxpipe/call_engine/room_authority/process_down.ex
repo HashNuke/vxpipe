@@ -17,6 +17,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
   def handle(
         monitor,
         _reason,
+        %{action_announcement: %{worker_monitor: worker, connection_monitor: connection}} = state
+      )
+      when monitor == worker or monitor == connection,
+      do: Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement.cancel(state)
+
+  def handle(
+        monitor,
+        _reason,
         %{outgoing_admission: %{status: :pending, monitor: monitor}} = state
       )
       when is_reference(monitor),
@@ -36,6 +44,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
       )
       when startup != nil,
       do: StartupReadiness.reply({:error, :text_to_speech_unavailable}, state)
+
+  def handle(
+        monitor,
+        _reason,
+        %{
+          text_to_speech_capability: %{monitor: monitor, pid: capability},
+          action_announcement: %{capability: capability}
+        } = state
+      ),
+      do: Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement.renderer_unavailable(state)
 
   def handle(monitor, _reason, %{text_to_speech_capability: %{monitor: monitor}} = state) do
     ConnectionLifecycle.notify(state.connections, :agent_unavailable)

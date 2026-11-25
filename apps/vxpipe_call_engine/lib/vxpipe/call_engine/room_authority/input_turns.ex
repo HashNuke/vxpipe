@@ -37,7 +37,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   def accept_text(command, caller, %State{} = state) do
     case ConnectionLifecycle.authorize_text(command, caller, state) do
       {:ok, capability} ->
-        if MapSet.member?(state.held_participant_ids, command.participant_id) do
+        if State.conversation_held?(state, command.participant_id) do
           {:reply,
            {:error, Error.new(:conversation_held, "Conversation is paused during transfer.")},
            state}
@@ -162,7 +162,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     do: state
 
   defp begin_audio_turn(signal, connection_id, connection, state, observation) do
-    if not MapSet.member?(state.held_participant_ids, connection.participant_id) and
+    if not State.conversation_held?(state, connection.participant_id) and
          new_policy_session?(connection.speech_to_text.turn, signal) and is_binary(signal.text) do
       state = CallerIdle.activity(state)
 
@@ -348,7 +348,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     content = String.trim(text)
 
     result =
-      if content == "" or MapSet.member?(state.held_participant_ids, connection.participant_id) do
+      if content == "" or State.conversation_held?(state, connection.participant_id) do
         :empty
       else
         SendText.new(

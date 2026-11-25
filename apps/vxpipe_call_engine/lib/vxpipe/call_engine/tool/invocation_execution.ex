@@ -105,7 +105,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
          {:ok, %PlatformResult{effect: effect, result: result} = platform_result},
          maximum_result_bytes
        )
-       when effect in [:hangup, :participant_transfer_committed] do
+       when effect in [:hangup, :announced_hangup, :participant_transfer_committed] do
     case normalize({:ok, result}, maximum_result_bytes) do
       {:ok, _result} -> {:ok, platform_result}
       {:error, reason} -> {:error, reason}

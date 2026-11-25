@@ -79,6 +79,247 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     :ok
   end
 
+  for action <- ["end_call", "transfer"] do
+    @action action
+    @tag :protected_announcement
+    test "#{action} protects caller playback through sink drain" do
+      {plan, room, caller, transport, sink, monitor} = start_announced_action(@action)
+      finish_private_briefing(transport, sink, "One moment.")
+      assert_receive {:test_audio_output_drain, ^sink}, 2_000
+
+      assert {:error, %{code: :conversation_held}} =
+               Vxpipe.CallEngine.TestTransferConnection.send_text(
+                 send_command(plan, room, caller, "Wait!")
+               )
+
+      refute_received {:test_tts_transport_started, _, _}
+      refute_received {:test_archive_fact, %Fact{kind: :agent_output_delivered}}
+      refute_receive {:test_agent_runtime_stream, _, _}, 80
+      refute_received {:vxpipe_event, %ToolCallCompleted{tool_call_id: "action-one"}}
+
+      assert :ok = GenServer.call(sink, :complete_drain)
+
+      assert_receive {:test_archive_fact,
+                      %Fact{kind: :agent_output_delivered, payload: %{"text" => "One moment."}}},
+                     2_000
+
+      case @action do
+        "transfer" ->
+          assert_receive {:test_tts_transport_started, _, _}, 2_000
+
+        "end_call" ->
+          assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :agent_hangup}}, 2_000
+      end
+    end
+  end
+
+  @tag :protected_announcement
+  test "loss of the TTS capability executes accepted hangup without waiting for the speech deadline" do
+    {plan, _room, _caller, transport, _sink, monitor} = start_announced_action("end_call")
+    assert_receive {:test_tts_control, ^transport, _speak}, 2_000
+    tts = :sys.get_state(room_authority(plan)).text_to_speech_capability.pid
+    Process.exit(tts, :kill)
+    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :agent_hangup}}, 2_000
+  end
+
+  @tag :protected_announcement
+  test "renderer loss after local playback preserves the carrier drain" do
+    {plan, _room, _caller, transport, sink, monitor} = start_announced_action("end_call")
+    finish_private_briefing(transport, sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    authority = room_authority(plan)
+    tts = :sys.get_state(authority).text_to_speech_capability.pid
+    send(authority, {:vxpipe_tts_unavailable, tts, :unavailable})
+    assert %{action_announcement: %{phase: :draining}} = :sys.get_state(authority)
+    assert :ok = GenServer.call(sink, :complete_drain)
+    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :agent_hangup}}, 2_000
+  end
+
+  @tag :protected_announcement
+  test "stale deadline and duplicate playback cannot trigger a second transfer" do
+    {plan, room, caller, transport, sink, _monitor} = start_announced_action("transfer")
+    finish_private_briefing(transport, sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    authority = room_authority(plan)
+    pending = :sys.get_state(authority).action_announcement
+    send(authority, {:announcement_deadline, "stale"})
+    send(authority, {:vxpipe_tts_playback, pending.capability, pending.request, :completed})
+
+    assert {:error, %{code: :conversation_held}} =
+             TestTransferConnection.send_text(send_command(plan, room, caller, "Wait."))
+
+    send(authority, {:announcement_deadline, pending.request.output_id})
+    assert_receive {:test_tts_transport_started, _, _}, 2_000
+    send(authority, {:announcement_deadline, pending.request.output_id})
+    assert :ok = GenServer.call(sink, :complete_drain)
+
+    assert %{action_announcement: nil, pending_participant_transfer: %{attempt_id: id}} =
+             :sys.get_state(authority)
+
+    assert is_binary(id)
+    refute_received {:test_tts_transport_started, _, _}
+  end
+
+  @tag :protected_announcement
+  test "hangup settlement cannot end a replacement caller output" do
+    {:ok, sibling} = ToolCall.new(id: "sibling", name: "clock", arguments: %{})
+
+    {plan, _room, _caller, transport, sink, monitor} =
+      start_announced_action("end_call", [sibling])
+
+    finish_private_briefing(transport, sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    authority = room_authority(plan)
+    activation = :sys.get_state(authority).text_capability.activation_id
+
+    registry =
+      Vxpipe.CallEngine.AgentActivationSupervisor.whereis_child(activation, :invocation_registry)
+
+    assert :ok = :sys.suspend(registry)
+
+    try do
+      assert :ok = GenServer.call(sink, :complete_drain)
+      assert_receive {:test_archive_fact, %Fact{kind: :agent_output_delivered}}, 2_000
+
+      :sys.replace_state(authority, fn state ->
+        update_in(
+          state.connections["caller-connection"],
+          &Map.update(&1, :output_generation, 1, fn gen -> gen + 1 end)
+        )
+      end)
+    after
+      :sys.resume(registry)
+    end
+
+    assert_receive {:test_agent_runtime_stream, _, _}, 2_000
+    refute_receive {:DOWN, ^monitor, :process, _, {:shutdown, :agent_hangup}}, 1_200
+    assert %{action_announcement: nil} = :sys.get_state(authority)
+  end
+
+  @tag :protected_announcement
+  test "API hangup takes priority while the announcement drains" do
+    {plan, room, _caller, transport, sink, monitor} = start_announced_action("transfer")
+    finish_private_briefing(transport, sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    assert :ok = Vxpipe.CallEngine.hangup_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :api_hangup}}, 2_000
+    refute_received {:test_tts_transport_started, _, _}
+  end
+
+  @tag :protected_announcement
+  test "a completed sibling tool cannot resume the model during announced hangup" do
+    {:ok, sibling} = ToolCall.new(id: "sibling", name: "clock", arguments: %{})
+    {:ok, competing} = ToolCall.new(id: "competing", name: "end_call", arguments: %{})
+
+    {_plan, _room, _caller, transport, sink, monitor} =
+      start_announced_action("end_call", [sibling, competing])
+
+    finish_private_briefing(transport, sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "sibling"}}, 2_000
+    refute_receive {:test_agent_runtime_stream, _, _}, 100
+
+    assert :ok = GenServer.call(sink, :complete_drain)
+    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :agent_hangup}}, 2_000
+    refute_received {:test_agent_runtime_stream, _, _}
+
+    refute_received {:vxpipe_event,
+                     %Vxpipe.CallEngine.Event.ToolCallStarted{tool_call_id: "competing"}}
+
+    refute_received {:vxpipe_event, %ToolCallCompleted{tool_call_id: "competing"}}
+  end
+
+  @tag :protected_announcement
+  test "losing an accepted hangup worker cannot resume the model during carrier drain" do
+    {plan, _room, _caller, voice, sink, monitor} = start_announced_action("end_call")
+    finish_private_briefing(voice, sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    authority = room_authority(plan)
+    activation = :sys.get_state(authority).text_capability.activation_id
+    registry = AgentActivationSupervisor.whereis_child(activation, :invocation_registry)
+
+    assert {:ok, execution} =
+             Vxpipe.CallEngine.Tool.InvocationRegistry.running_execution(registry, "action-one")
+
+    Process.exit(execution.worker, :kill)
+    assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "action-one"}}, 2_000
+    refute_receive {:test_agent_runtime_stream, _, _}, 150
+    assert :ok = GenServer.call(sink, :complete_drain)
+    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :agent_hangup}}, 2_000
+  end
+
+  @tag :protected_announcement
+  test "a failed announced transfer resumes model completions" do
+    {:ok, sibling} = ToolCall.new(id: "sibling", name: "clock", arguments: %{})
+
+    {plan, _room, _caller, transport, sink, _monitor} =
+      start_announced_action("transfer", [sibling])
+
+    finish_private_briefing(transport, sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "sibling"}}, 2_000
+    refute_receive {:test_agent_runtime_stream, _, _}, 100
+
+    assert :ok = GenServer.call(sink, :complete_drain)
+    assert_receive {:test_tts_transport_started, _, _}, 2_000
+    authority = room_authority(plan)
+    pending = :sys.get_state(authority).pending_participant_transfer
+    send(authority, {:vxpipe_participant_transfer_deadline, pending.task.ref})
+    assert_receive {:test_audio_output_drain, ^sink}, 2_000
+    assert :ok = GenServer.call(sink, :complete_drain)
+    assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "action-one"}}, 2_000
+    assert_receive {:test_agent_runtime_stream, _, _}, 2_000
+  end
+
+  defp start_announced_action(action, siblings \\ []) do
+    plan =
+      compile_plan(
+        wait_sounds: nil,
+        tools: %{
+          "end_call" => %{type: "platform", tool: "hangup"},
+          "clock" => %{type: "platform", tool: "get_current_time"}
+        }
+      )
+
+    caller = plan.participants["caller"]
+
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
+    assert_receive {:test_tts_transport_started, transport, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    assert {:ok, _attachment} = attach_ready(plan, room, caller, "caller-connection", sink)
+    assert :ok = GenServer.call(sink, {:defer_drain, true})
+    monitor = Process.monitor(room_authority(plan))
+    command = send_command(plan, room, caller, "Proceed.")
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
+    assert_receive {:test_agent_runtime_stream, provider, request}, 2_000
+    tool = Enum.find(request.tools, &(&1.name == action))
+    assert Map.has_key?(tool.input_schema["properties"], "announcement")
+
+    args =
+      if action == "transfer",
+        do: %{"destination" => "human-support", "reason" => "Support"},
+        else: %{}
+
+    {:ok, call} =
+      ToolCall.new(
+        id: "action-one",
+        name: action,
+        arguments: Map.put(args, "announcement", "One moment.")
+      )
+
+    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call | siblings])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    {plan, room, caller, transport, sink, monitor}
+  end
+
   for available? <- [true, false] do
     @briefing_credential_available available?
     test "private briefing rechecks its source credential when available=#{@briefing_credential_available}" do
@@ -2308,7 +2549,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                          }
                        }
                      },
-                     tools: %{},
+                     tools: Keyword.get(options, :tools, %{}),
                      transfers: ["human-support"]
                    },
                    "human-support" => support,
@@ -2487,8 +2728,9 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     authority
   end
 
-  defp finish_private_briefing(briefing_tts, support_sink) do
-    assert_receive {:test_tts_control, ^briefing_tts, _speak}, 2_000
+  defp finish_private_briefing(briefing_tts, support_sink, expected_text \\ nil) do
+    assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
+    if expected_text, do: assert(JSON.decode!(speak)["text"] == expected_text)
     assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
 
     TestTextToSpeechTransport.deliver_control(

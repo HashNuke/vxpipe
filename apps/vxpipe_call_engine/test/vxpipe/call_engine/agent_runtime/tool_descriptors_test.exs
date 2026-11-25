@@ -44,6 +44,24 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
     refute inspected =~ "TestSubmittedHostTool"
   end
 
+  @tag :protected_announcement
+  test "native hangup projection omits the dedicated TTS announcement argument" do
+    binding = %ToolBinding{
+      name: "end_call",
+      type: :platform,
+      conversation_mode: :blocking,
+      action: Vxpipe.CallEngine.Tool.Hangup
+    }
+
+    bindings = %{"end_call" => binding}
+
+    assert {:ok, [native]} = ToolDescriptors.project(bindings, nil)
+    assert {:ok, [executable]} = ToolDescriptors.compile(bindings, nil, nil)
+    assert native.input_schema == executable.input_schema
+    assert native.input_schema["properties"] == %{}
+    assert native.input_schema["additionalProperties"] == false
+  end
+
   test "rejects a resolved binding stored under a different tool name" do
     binding = host_binding("test_agent_tool", TestAgentTool, :blocking)
 

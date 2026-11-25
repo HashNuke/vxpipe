@@ -108,15 +108,26 @@ defmodule Vxpipe.CallEngine.CallVariables do
   def handle_call({:read, command}, _from, state) do
     result =
       with :ok <- authorize_identity(command, state),
-           :ok <- authorize_read(command, state),
+           {:ok, names} <- authorized_sections(command, state),
            :ok <- ensure_current(command.deadline) do
         sections =
-          Map.new(command.sections, fn name ->
+          Map.new(names, fn name ->
             section = Map.fetch!(state.sections, name)
             {name, %{"revision" => section.revision, "value" => section.value}}
           end)
 
-        {:ok, %{"global_revision" => state.global_revision, "sections" => sections}}
+        collection_schemas =
+          for name <- names,
+              state.grants[command.participant_id][name] == :read_write,
+              into: %{},
+              do: {name, Map.fetch!(state.sections, name).schema}
+
+        {:ok,
+         %{
+           "global_revision" => state.global_revision,
+           "sections" => sections,
+           "collection_schemas" => collection_schemas
+         }}
       end
 
     {:reply, result, state}
@@ -174,14 +185,19 @@ defmodule Vxpipe.CallEngine.CallVariables do
     end
   end
 
-  defp authorize_read(command, state) do
+  defp authorized_sections(%ReadCallVariables{sections: :all_permitted} = command, state) do
+    grants = Map.fetch!(state.grants, command.participant_id)
+    {:ok, for({name, mode} <- grants, mode in [:read, :read_write], do: name)}
+  end
+
+  defp authorized_sections(command, state) do
     grants = Map.fetch!(state.grants, command.participant_id)
 
     case Enum.find(command.sections, fn section ->
            Map.get(grants, section) not in [:read, :read_write] or
              not Map.has_key?(state.sections, section)
          end) do
-      nil -> :ok
+      nil -> {:ok, command.sections}
       section -> forbidden_section(section)
     end
   end

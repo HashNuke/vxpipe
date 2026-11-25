@@ -47,7 +47,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
     if TurnState.active?(state, command) and TurnState.output_eligible?(state, command) and
          IdleWait.output_allowed?(state, capability, command) and
-         not MapSet.member?(state.held_participant_ids, command.participant_id) and
+         not State.conversation_held?(state, command.participant_id) and
          TextCapability.current?(state, capability) and
          connection != nil and
          connection.participant_id == command.participant_id do

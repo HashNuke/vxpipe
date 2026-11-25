@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Playback do
   alias Vxpipe.CallEngine.{Error, RoomMixer}
 
   alias Vxpipe.CallEngine.RoomAuthority.{
+    ActionAnnouncement,
     AgentOutput,
     ParticipantTransfer,
     OpeningAudio,
@@ -11,6 +12,48 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Playback do
     ConnectionLifecycle,
     StartupReadiness
   }
+
+  def unavailable(
+        capability,
+        %{startup: startup, startup_ready?: false, text_to_speech_capability: %{pid: capability}} =
+          state
+      )
+      when startup != nil,
+      do: StartupReadiness.reply({:error, :text_to_speech_unavailable}, state)
+
+  def unavailable(
+        capability,
+        %{
+          action_announcement: %{capability: capability},
+          text_to_speech_capability: %{pid: capability}
+        } = state
+      ),
+      do: ActionAnnouncement.renderer_unavailable(state)
+
+  def unavailable(capability, state) do
+    case ParticipantTransfer.text_to_speech_unavailable(capability, state) do
+      {:handled, reply} ->
+        reply
+
+      :unhandled ->
+        if OpeningAudio.capability?(state.opening_audio, capability) do
+          OpeningAudio.failed(state.opening_audio)
+          StartupReadiness.failed(state, :opening_audio_unavailable)
+          {:stop, :opening_audio_unavailable, state}
+        else
+          state = AgentOutput.unavailable(capability, state)
+          {:noreply, CallerIdle.reconcile(state)}
+        end
+    end
+  end
+
+  def handle_text_to_speech_playback(
+        capability,
+        %{purpose: :action_announcement} = request,
+        status,
+        state
+      ),
+      do: ActionAnnouncement.playback(capability, request, status, state)
 
   def handle_text_to_speech_playback(capability, request, status, state) do
     case ParticipantTransfer.playback(capability, request, status, state) do

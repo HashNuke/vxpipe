@@ -34,7 +34,8 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
            ToolDescriptors.compile(
              Keyword.fetch!(options, :tools),
              Keyword.get(options, :variable_binding),
-             remote_mcp_owner
+             remote_mcp_owner,
+             Keyword.get(options, :tool_announcements, false)
            ) do
       {:ok,
        [request_supervisor_child(request_supervisor)] ++

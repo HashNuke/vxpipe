@@ -23,7 +23,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
     :destination_participant_id,
     :reason
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [announcement: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -40,12 +40,14 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
           tool_call_id: String.t(),
           destination_call_spec_key: String.t(),
           destination_participant_id: String.t(),
+          announcement: nil | String.t(),
           reason: nil | String.t()
         }
 
   @spec new(Binding.t(), map(), Context.t()) :: {:ok, t()} | {:error, :rejected}
   def new(%Binding{} = binding, arguments, %Context{} = context) when is_map(arguments) do
-    with {:ok, destination} <- destination(arguments),
+    with {:ok, announcement, arguments} <- Vxpipe.CallEngine.Tool.Announcement.extract(arguments),
+         {:ok, destination} <- destination(arguments),
          true <- context.agent_participant_id == binding.source_participant_id,
          tool_call_id when is_binary(tool_call_id) <- context.tool_call_id,
          {:ok, target} <- Map.fetch(binding.targets, destination),
@@ -68,6 +70,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
          tool_call_id: tool_call_id,
          destination_call_spec_key: target.call_spec_key,
          destination_participant_id: target.participant_id,
+         announcement: announcement,
          reason: reason
        }}
     else

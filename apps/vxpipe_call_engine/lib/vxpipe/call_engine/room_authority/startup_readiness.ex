@@ -19,6 +19,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   alias Vxpipe.CallEngine.Media.OutputSink
   alias Vxpipe.CallEngine.WaitSounds.Player
 
+  def begin_connection_startup(command, %{startup: startup, startup_ready?: false} = state)
+      when startup != nil,
+      do: connection_attached(command, state)
+
+  def begin_connection_startup(command, state) do
+    connection = Map.fetch!(state.connections, command.connection_id)
+
+    with {:ok, opening_audio} <-
+           OpeningAudio.start(
+             state.opening_audio,
+             command,
+             connection,
+             state.snapshot,
+             self()
+           ),
+         {:ok, state} <-
+           connection_attached(
+             command,
+             %{state | opening_audio: opening_audio}
+           ) do
+      {:ok, state}
+    end
+  end
+
   def preparation_result(ref, result, state) do
     Process.demonitor(ref, [:flush])
 

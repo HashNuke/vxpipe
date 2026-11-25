@@ -12,6 +12,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EndCall do
       else: {:noreply, state}
   end
 
+  def tool_hangup(_capability, _context, %{action_announcement: pending} = state)
+      when not is_nil(pending), do: {:noreply, state}
+
   def tool_hangup(capability, context, state) do
     case authorize(capability, context, state) do
       :ok -> {:stop, {:shutdown, :agent_hangup}, state}

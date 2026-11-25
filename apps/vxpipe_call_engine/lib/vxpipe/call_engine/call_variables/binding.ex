@@ -103,7 +103,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     with {:ok, command} <-
            ReadCallVariables.new(
              options ++
-               [sections: binding.read_sections, deadline: deadline(timeout_ms)]
+               [sections: :all_permitted, deadline: deadline(timeout_ms)]
            ),
          {:ok, projection} <- CallVariables.read(binding.server, command, timeout_ms) do
       {:ok, projection}
@@ -140,6 +140,10 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     else
       {:error, :tool_failed}
     end
+  end
+
+  defp command(binding, "read_variables", arguments, context) when map_size(arguments) == 0 do
+    command(binding, "read_variables", %{sections: :all_permitted}, context)
   end
 
   defp command(binding, "read_variables", arguments, _context) do

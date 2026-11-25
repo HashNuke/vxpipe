@@ -50,5 +50,16 @@ defmodule Vxpipe.CallEngine.Tool.InvocationConfig do
     end
   end
 
+  def for_invocation(
+        %InvocationSubmission{
+          binding: %InvocationBinding{handler: handler},
+          arguments: %{"announcement" => _}
+        },
+        configured_timeout_ms
+      )
+      when handler == {:platform, Vxpipe.CallEngine.Tool.Hangup} or
+             elem(handler, 0) == :participant_transfer,
+      do: configured_timeout_ms + Vxpipe.CallEngine.Tool.Announcement.budget_ms()
+
   def for_invocation(%InvocationSubmission{}, configured_timeout_ms), do: configured_timeout_ms
 end

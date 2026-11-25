@@ -489,7 +489,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert :ok =
              SpeechToSpeech.push_text(
                context.capability,
-               ~s(TOOL read_variables {"sections":["intake"]})
+               "TOOL read_variables {}"
              )
 
     assert_receive {:vxpipe_event,

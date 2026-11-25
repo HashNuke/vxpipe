@@ -1274,6 +1274,9 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     assert read_request.model_context == %{
              "call_variables" => %{
+               "collection_schemas" => %{
+                 "intake" => plan.call_variables.sections["intake"].schema
+               },
                "global_revision" => 0,
                "sections" => %{
                  "intake" => %{"revision" => 0, "value" => nil},
@@ -1359,6 +1362,9 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     assert completion_request.model_context == %{
              "call_variables" => %{
+               "collection_schemas" => %{
+                 "intake" => plan.call_variables.sections["intake"].schema
+               },
                "global_revision" => 1,
                "sections" => %{
                  "intake" => %{

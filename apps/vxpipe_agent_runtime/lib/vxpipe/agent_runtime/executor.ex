@@ -1,7 +1,7 @@
 defmodule Vxpipe.AgentRuntime.Executor do
   @moduledoc "The private submit-only tool boundary implemented by a runtime host."
 
-  @type conversation_mode :: :blocking | :non_blocking
+  @type conversation_mode :: :blocking | :non_blocking | :await_completion
   @type submission_error :: :rejected | :saturated | :unavailable
 
   @callback submit(
@@ -18,7 +18,7 @@ defmodule Vxpipe.AgentRuntime.Executor do
              is_binary(invocation_id) do
     try do
       case executor.submit(binding, arguments, context, invocation_id) do
-        {:accepted, mode} when mode in [:blocking, :non_blocking] -> {:accepted, mode}
+        {:accepted, mode} when mode in [:blocking, :non_blocking, :await_completion] -> {:accepted, mode}
         {:error, reason} when reason in [:rejected, :saturated, :unavailable] -> {:error, reason}
         _invalid -> {:error, :unavailable}
       end

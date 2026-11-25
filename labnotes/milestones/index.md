@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 69 active milestone specifications: 54 complete and 15 incomplete. Milestone 17, Telnyx calls and
+Status: 70 active milestone specifications: 55 complete and 15 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -198,8 +198,9 @@ progress without claiming the entire milestone is complete.
 65. [x] [Passive call latency diagnostics and readable timelines](passive-call-latency-diagnostics.md) — Each eligible human STT input reuses participant-local Silero or has its own room-service observer. Live Scribe/browser calls in both modes verified speech-end-to-STT and barge-in-to-playback-stop timings through storage, API and the admin UI. Each new call snapshots the persisted setting.
 66. [ ] [Caller recovery after speech recognition or room audio failure](caller-speech-recovery.md) — Recover a stalled caller turn or use carrier playback and a bounded transfer or disconnect.
 67. [ ] [Voice agent turns, listening cues and spoken transcripts](voice-agent-turns-and-listening.md) — One combined milestone: A/B deliver ElevenLabs/Rime interrupted transcript and next-LLM history; C consumes the shared message protocol for semantic interruption and modes; D adds bounded CPU filtering; E and cue-specific C/F work are deferred by user request on 2026-11-17, including the listening experiment; F verifies non-cue telephone/language/resource coverage and the one-second target without waiting for E. A–D and non-cue F remain active and open; completed Scribe wait removal is retained as baseline evidence.
-68. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
-69. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+68. [x] [Protected announcements before hangup and transfer](protected-action-announcements.md)
+69. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
+70. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The 2026-11-19 [passive diagnostics milestone](passive-call-latency-diagnostics.md)
 precedes pending voice features because it depends only on completed inspection,

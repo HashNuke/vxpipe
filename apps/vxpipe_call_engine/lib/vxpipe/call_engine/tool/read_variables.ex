@@ -11,7 +11,6 @@ defmodule Vxpipe.CallEngine.Tool.ReadVariables do
         "maxItems" => 32
       }
     },
-    "required" => ["sections"],
     "additionalProperties" => false
   }
 
@@ -23,7 +22,8 @@ defmodule Vxpipe.CallEngine.Tool.ReadVariables do
   def definition do
     %Definition{
       name: "read_variables",
-      description: "Read selected Call Variables sections that this agent may access.",
+      description:
+        "Read permitted Call Variables and writable form schemas. Omit sections to read all permitted sections.",
       parameters: @parameters
     }
   end

@@ -133,25 +133,32 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     else
       with {:ok, next_output} <-
              tool_output(response.text, output, config),
-           {:ok, submissions, blocking?} <- submit_calls(response.tool_calls, request, config),
+           {:ok, submissions, mode} <- submit_calls(response.tool_calls, request, config),
            conversation <-
              commit_tool_exchange(response, submissions, conversation, staged_messages, request),
            :ok <- config.commit.(conversation) do
-        generate(
+        if mode == :await_completion do
+          {:ok, silent_output(config.reply_protocol), conversation}
+        else
+          generate(
           conversation,
           [],
           next_output,
           round + 1,
-          config.reply_protocol == :mode_message_v1 or not blocking?,
+          config.reply_protocol == :mode_message_v1 or mode != :blocking,
           request,
           config
         )
+        end
       else
         {:error, reason} when is_atom(reason) -> {:error, reason}
         _invalid -> {:error, :commit_failed}
       end
     end
   end
+
+  defp silent_output(:mode_message_v1), do: %Dialogue{agent_mode: :listener, message: nil}
+  defp silent_output(_protocol), do: ""
 
   defp submit_calls(calls, request, config) do
     with :ok <- validate_call_count(calls, config.maximum_tool_calls_per_round),
@@ -190,8 +197,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   end
 
   defp submit_resolved_calls(resolved_calls, request, config) do
-    {submissions, blocking?} =
-      Enum.reduce(resolved_calls, {[], false}, fn {call, descriptor}, {submissions, blocking?} ->
+    {submissions, disposition} =
+      Enum.reduce(resolved_calls, {[], :non_blocking}, fn {call, descriptor}, {submissions, disposition} ->
         case Executor.submit(
                config.executor,
                descriptor.binding,
@@ -200,15 +207,20 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
                call.id
              ) do
           {:accepted, mode} ->
-            {[{call, running_result(call)} | submissions], blocking? or mode == :blocking}
+            {[{call, running_result(call)} | submissions], submission_disposition(disposition, mode)}
 
           {:error, reason} ->
-            {[{call, rejected_result(reason)} | submissions], blocking?}
+            {[{call, rejected_result(reason)} | submissions], disposition}
         end
       end)
 
-    {:ok, Enum.reverse(submissions), blocking?}
+    {:ok, Enum.reverse(submissions), disposition}
   end
+
+  defp submission_disposition(:await_completion, _mode), do: :await_completion
+  defp submission_disposition(_previous, :await_completion), do: :await_completion
+  defp submission_disposition(:blocking, _mode), do: :blocking
+  defp submission_disposition(_previous, mode), do: mode
 
   defp commit_tool_exchange(response, submissions, conversation, staged_messages, request) do
     result_messages = Enum.map(submissions, fn {call, result} -> Message.tool(call, result) end)

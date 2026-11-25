@@ -46,6 +46,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
 
   @spec begin(Request.t(), GenServer.from(), State.t()) ::
           {:noreply, State.t()} | {:reply, {:error, :rejected | :unavailable}, State.t()}
+  def begin(%Request{}, _from, %State{action_announcement: pending} = state)
+      when not is_nil(pending), do: {:reply, {:error, :rejected}, state}
+
+  def begin(%Request{announcement: text} = request, from, state) when is_binary(text),
+    do: Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement.transfer(request, from, state)
+
   def begin(%Request{} = request, from, %State{pending_participant_transfer: nil} = state) do
     with :ok <- Authorizer.authorize(request, state) do
       timeout_ms = state.participant_transfer_runtime.plan.transfer_policy.attempt_timeout_ms

@@ -515,6 +515,81 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     send(destination, {:test_agent_runtime_response, {:ok, response}})
   end
 
+  for outcome <- [:drained, :expired] do
+    @announcement_outcome outcome
+    @tag :protected_announcement
+    test "the destination's all_spoken history reflects #{@announcement_outcome} announcement playback" do
+      configure_text_to_speech(ready_on_start: true)
+      plan = compile_plan(transfer_history: %{mode: "all_spoken"}, text_to_speech: true)
+      caller = Map.fetch!(plan.participants, "caller")
+      reception = Map.fetch!(plan.participants, "reception")
+      {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+      assert_receive {:test_tts_transport_started, voice, _}
+      sink = start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+
+      {:ok, attachment} =
+        AttachConnection.new(
+          tenant_id: plan.tenant_id,
+          actor_id: plan.actor_id,
+          room_id: plan.room_id,
+          incarnation_id: room.incarnation_id,
+          participant_id: caller.participant_id,
+          connection_id: "connection-transfer",
+          deadline: future_deadline()
+        )
+
+      assert {:ok, _} = CallEngine.TestTransferConnection.attach(attachment, sink)
+      CallEngine.TestCallStartup.await_ready(room.room_id)
+      assert :ok = GenServer.call(sink, {:defer_drain, true})
+      command = send_command(plan, room, caller, "Please transfer me.")
+      assert :ok = CallEngine.TestTransferConnection.send_text(command)
+      {source, _} = receive_request_for_prompt(reception.prompt)
+      announcement = "I’ll connect you to billing."
+
+      {:ok, call} =
+        ToolCall.new(
+          id: "announce-transfer",
+          name: "transfer",
+          arguments: %{"destination" => "billing", "announcement" => announcement}
+        )
+
+      {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+      send(source, {:test_agent_runtime_response, {:ok, response}})
+      assert_receive {:test_tts_control, ^voice, speak}
+      assert JSON.decode!(speak)["text"] == announcement
+      authority = room_authority(plan)
+      request = :sys.get_state(authority).action_announcement.request
+      complete_spoken_response(voice, sink, "transfer-announcement", request.correlation_id)
+      assert_receive {:test_audio_output_drain, ^sink}, 1_000
+      assert :ok = GenServer.call(sink, {:defer_drain, false})
+
+      if @announcement_outcome == :expired do
+        send(authority, {:announcement_deadline, request.output_id})
+        _ = :sys.get_state(authority)
+      end
+
+      assert :ok = GenServer.call(sink, :complete_drain)
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "announce-transfer"}}, 2_000
+      command = send_command(plan, room, caller, "Can you help?")
+      assert :ok = CallEngine.TestTransferConnection.send_text(command)
+      {_provider, request} = receive_request_for_prompt("Handle billing requests.")
+
+      spoken =
+        for message <- request.messages,
+            message.role == :assistant,
+            do: JSON.decode!(message.content)
+
+      expected = %{
+        "type" => "participant_message",
+        "participant_id" => reception.participant_id,
+        "agent_mode" => "speaker",
+        "message" => announcement
+      }
+
+      assert spoken == if(@announcement_outcome == :drained, do: [expected], else: [])
+    end
+  end
+
   test "selected history requires and privately retains a bounded transfer reason" do
     plan = compile_plan(transfer_history: %{mode: "selected"})
     caller = Map.fetch!(plan.participants, "caller")
@@ -609,6 +684,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert destination_request.model_context == %{
              "call_variables" => %{
+               "collection_schemas" => %{},
                "global_revision" => 0,
                "sections" => %{
                  "order" => %{

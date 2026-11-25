@@ -13,13 +13,18 @@ defmodule Vxpipe.CallEngine.AgentRuntime.InvocationExecutor do
         %Correlation{} = correlation,
         invocation_id
       ) do
-    InvocationRegistry.submit(
-      correlation.invocation_registry,
-      binding,
-      arguments,
-      correlation.tool_context,
-      invocation_id
-    )
+    result =
+      InvocationRegistry.submit(
+        correlation.invocation_registry,
+        binding,
+        arguments,
+        correlation.tool_context,
+        invocation_id
+      )
+
+    if match?({:accepted, _}, result) and InvocationBinding.announced_action?(binding, arguments),
+      do: {:accepted, :await_completion},
+      else: result
   end
 
   def submit(_binding, _arguments, _correlation, _invocation_id), do: {:error, :rejected}

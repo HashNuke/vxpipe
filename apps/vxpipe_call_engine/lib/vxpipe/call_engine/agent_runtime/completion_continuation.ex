@@ -17,9 +17,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CompletionContinuation do
         }
 
   @spec lease_next(GenServer.server(), String.t()) ::
-          {:ok, t()} | {:error, :empty | :unavailable}
+          {:ok, t()} | {:error, :empty | :held | :unavailable}
   def lease_next(invocation_registry, consumer_id) do
-    case InvocationRegistry.lease_next(invocation_registry, consumer_id) do
+    case InvocationRegistry.lease_for_model(invocation_registry, consumer_id) do
       {:ok, %CompletionLease{} = lease} ->
         command = ContinueAgent.new(lease.completion)
 
@@ -38,7 +38,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CompletionContinuation do
            lease: lease
          }}
 
-      {:error, reason} when reason in [:empty, :unavailable] ->
+      {:error, reason} when reason in [:empty, :held, :unavailable] ->
         {:error, reason}
 
       _invalid ->

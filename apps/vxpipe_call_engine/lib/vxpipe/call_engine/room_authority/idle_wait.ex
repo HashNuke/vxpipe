@@ -135,7 +135,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.IdleWait do
          true <-
            state.startup_ready? and
              MapSet.member?(state.participant_ids, context.source_participant_id) and
-             not MapSet.member?(state.held_participant_ids, context.source_participant_id),
+             not State.conversation_held?(state, context.source_participant_id),
          %{plan: plan} <- state.participant_transfer_runtime,
          %{"version" => "mode_message_v1"} <- ResolvedCallPlan.agent_protocol(plan),
          true <-
@@ -172,7 +172,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.IdleWait do
     TextCapability.current?(state, wait.coordinator) and
       state.text_capability.activation_id == wait.activation_id and
       MapSet.member?(state.participant_ids, wait.context.source_participant_id) and
-      not MapSet.member?(state.held_participant_ids, wait.context.source_participant_id) and
+      not State.conversation_held?(state, wait.context.source_participant_id) and
       Map.has_key?(state.connections, wait.context.connection_id)
   end
 

@@ -31,8 +31,33 @@ entries belong inside an agent's `tools` map:
 }
 ```
 
+Agents with a dedicated TTS voice can give the caller a short announcement before
+hangup or transfer. For example, an agent can invoke `end_call` with
+`{"announcement":"Thanks for calling. Goodbye."}`. A transfer takes the same
+optional argument alongside its destination and any required reason. Put the
+sentence in the tool argument once. The call plays it in the current voice and
+ignores caller interruptions until playback drains. Omitting the argument requests
+immediate action. Native speech-to-speech agents use their existing tool schemas.
+
 Transfer and variable tools are derived from their respective permissions. A
 prompt cannot grant access to an unselected tool or destination.
+
+The shared agent instructions limit caller intake to named fields in writable
+Call Variables sections. Agents can answer service questions without a form.
+For a configured form, the agent can see the writable schemas and current
+values, ask for missing fields, and save answers through the variable tools.
+Calling `read_variables` with no arguments reads the agent's permitted sections.
+Passing `sections` limits the result to the requested sections.
+
+When the agent determines that the caller's purpose is outside its remit and
+there is no applicable handoff, the shared instructions direct it to invoke the
+configured hangup tool in that turn. The same instruction applies when the
+caller confirms they are finished. Configure a platform hangup binding for
+agents that should end calls themselves.
+
+Each saved call-spec revision captures the shared instructions available at save
+time. To apply updated instructions to an existing line, save a new revision on
+the updated release and publish it.
 
 ## Select MCP tools
 

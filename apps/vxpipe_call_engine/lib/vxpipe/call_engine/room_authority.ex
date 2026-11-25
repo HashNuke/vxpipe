@@ -32,6 +32,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.Room.Snapshot
 
   alias Vxpipe.CallEngine.RoomAuthority.{
+    ActionAnnouncement,
     AgentOutput,
     ParticipantTransfer,
     CallerIdle,
@@ -117,7 +118,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     GenServer.call(
       via(request.tenant_id, request.room_id),
       {:transfer_participant, request},
-      @transfer_timeout
+      @transfer_timeout +
+        if(request.announcement, do: Vxpipe.CallEngine.Tool.Announcement.budget_ms(), else: 0)
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec announce_hangup(ToolContext.t(), String.t()) :: :ok | {:error, :rejected | :unavailable}
+  def announce_hangup(context, text) do
+    GenServer.call(
+      via(context.tenant_id, context.room_id),
+      {:announce_hangup, context, text},
+      Vxpipe.CallEngine.Tool.Announcement.budget_ms() + @call_timeout
     )
   catch
     :exit, _reason -> {:error, :unavailable}
@@ -284,7 +297,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
                state
              ) do
           {:reply, {:ok, _role, _runtime, :main, _input_mode, _output_mode, nil} = reply, state} ->
-            case begin_connection_startup(command, state) do
+            case StartupReadiness.begin_connection_startup(command, state) do
               {:ok, state} ->
                 {:reply, reply, CallerIdle.reconcile(state)}
 
@@ -362,6 +375,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  def handle_call({:announce_hangup, context, text}, from, state),
+    do: ActionAnnouncement.hangup(context, text, from, state)
+
   def handle_call({:idle, %IdleRequest{} = request}, from, state) do
     case IdleWait.begin(request, from, state) do
       {:noreply, state} -> {:noreply, CallerIdle.reconcile(state)}
@@ -370,6 +386,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   @impl true
+  def handle_info({:announcement_deadline, id}, state), do: ActionAnnouncement.deadline(id, state)
+
+  def handle_info(
+        {[:alias | id], _} = message,
+        %{action_announcement: %{request_id: id}} = state
+      ),
+      do: ActionAnnouncement.response(message, state)
+
+  def handle_info(
+        {:DOWN, id, :process, _, _} = message,
+        %{action_announcement: %{request_id: id}} = state
+      ),
+      do: ActionAnnouncement.response(message, state)
+
   def handle_info({:vxpipe_idle_wait_deadline, token, phase}, state) do
     state = IdleWait.deadline(token, phase, state)
     {:noreply, CallerIdle.reconcile(state)}
@@ -558,6 +588,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({:vxpipe_sts_platform_effect, capability, scope, :hangup}, state),
     do: EndCall.sts_tool_hangup(capability, scope, state)
 
+  def handle_info({:vxpipe_platform_effect, capability, context, :announced_hangup}, state),
+    do: ActionAnnouncement.settle_hangup(capability, context, state)
+
   def handle_info({:vxpipe_platform_effect, capability, context, :hangup}, state),
     do: EndCall.tool_hangup(capability, context, state)
 
@@ -671,30 +704,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
-  def handle_info(
-        {:vxpipe_tts_unavailable, capability, _reason},
-        %{startup: startup, startup_ready?: false, text_to_speech_capability: %{pid: capability}} =
-          state
-      )
-      when startup != nil,
-      do: StartupReadiness.reply({:error, :text_to_speech_unavailable}, state)
-
-  def handle_info({:vxpipe_tts_unavailable, capability, _reason}, state) do
-    case ParticipantTransfer.text_to_speech_unavailable(capability, state) do
-      {:handled, reply} ->
-        reply
-
-      :unhandled ->
-        if OpeningAudio.capability?(state.opening_audio, capability) do
-          OpeningAudio.failed(state.opening_audio)
-          StartupReadiness.failed(state, :opening_audio_unavailable)
-          {:stop, :opening_audio_unavailable, state}
-        else
-          state = AgentOutput.unavailable(capability, state)
-          {:noreply, CallerIdle.reconcile(state)}
-        end
-    end
-  end
+  def handle_info({:vxpipe_tts_unavailable, capability, _reason}, state),
+    do: Vxpipe.CallEngine.RoomAuthority.Playback.unavailable(capability, state)
 
   def handle_info(
         {:vxpipe_stt_signal, capability, identity, %Signal{} = signal, observation},
@@ -761,30 +772,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp initial_speech_to_text_runtime(%CreateRoom{}), do: %{}
   defp initial_speech_to_text_runtime(%ResolvedCallPlan{}), do: %{}
-
-  defp begin_connection_startup(command, %{startup: startup, startup_ready?: false} = state)
-       when startup != nil,
-       do: StartupReadiness.connection_attached(command, state)
-
-  defp begin_connection_startup(command, state) do
-    connection = Map.fetch!(state.connections, command.connection_id)
-
-    with {:ok, opening_audio} <-
-           OpeningAudio.start(
-             state.opening_audio,
-             command,
-             connection,
-             state.snapshot,
-             self()
-           ),
-         {:ok, state} <-
-           StartupReadiness.connection_attached(
-             command,
-             %{state | opening_audio: opening_audio}
-           ) do
-      {:ok, state}
-    end
-  end
 
   defp room_identity(options) do
     source = room_source(options)

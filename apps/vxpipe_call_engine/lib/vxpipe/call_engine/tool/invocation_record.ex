@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
 
   alias Vxpipe.CallEngine.Tool.{
     CompletionLease,
+    InvocationBinding,
     InvocationCompletion,
     InvocationStatus,
     InvocationSubmission
@@ -22,7 +23,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
     :started_at,
     :status
   ]
-  defstruct @enforce_keys ++ [completion: nil, lease: nil, usage_attempt: nil]
+  defstruct @enforce_keys ++ [completion: nil, lease: nil, usage_attempt: nil, model_hold: nil]
 
   @type t :: %__MODULE__{}
 
@@ -47,6 +48,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
       fingerprint: submission.fingerprint,
       submission: submission,
       worker: worker,
+      model_hold:
+        if(InvocationBinding.announced_action?(submission.binding, submission.arguments),
+          do: :announcement
+        ),
       monitor: monitor,
       deadline_ms: deadline_ms,
       started_at: System.monotonic_time(),
@@ -159,11 +164,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
     %InvocationStatus{
       invocation_id: record.invocation_id,
       tool_name: record.tool_name,
-      conversation_mode: record.conversation_mode,
+      conversation_mode: if(model_held?(record), do: :blocking, else: record.conversation_mode),
       source_turn_id: record.source_turn_id,
       status: record.status
     }
   end
+
+  @spec model_held?(t()) :: boolean()
+  def model_held?(record), do: record.model_hold in [:announcement, :room_hangup]
 
   defp matching_completion?(record, completion) do
     completion.invocation_id == record.invocation_id and

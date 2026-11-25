@@ -33,6 +33,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnsPolicyRevisionTest do
     assert turn.policy_revision == 1
   end
 
+  @tag :protected_announcement
+  test "a caller speech onset and endpoint cannot begin a turn during protected playback" do
+    capability = self()
+
+    state = %{
+      state(capability)
+      | action_announcement: %Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement{phase: :playing}
+    }
+
+    onset = turn_started(0)
+    endpoint = %{onset | kind: :turn_ended, text: "Wait a moment."}
+
+    state = InputTurns.speech_to_text(capability, @identity, onset, state)
+    state = InputTurns.speech_to_text(capability, @identity, endpoint, state)
+
+    assert state.connections[@identity.connection_id].speech_to_text.turn == nil
+    refute_received {:vxpipe_event, %ParticipantTurnStarted{}}
+  end
+
   defp state(capability) do
     recorder = %Recorder{port: nil, participant_activations: %{}}
 

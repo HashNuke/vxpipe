@@ -8,7 +8,18 @@ defmodule Vxpipe.AgentRuntime.PromptTest do
     assert prompt.text =~ "raw JSON"
     assert prompt.text =~ "code fences"
     assert prompt.text =~ "matching the participant envelope used in history"
-    assert prompt.text =~ ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
+
+    assert prompt.text =~
+             ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
+  end
+
+  test "shared instructions limit form collection and close a clearly out-of-scope call" do
+    assert {:ok, prompt} = Prompt.load(:shared)
+    assert prompt.text =~ "collection_schemas"
+    assert prompt.text =~ "do not offer to collect"
+    assert prompt.text =~ "business facts only from your instructions or an authorized knowledge tool"
+    assert prompt.text =~ "invoke the supplied hangup tool in this turn"
+    assert prompt.text =~ "put the caller-facing sentence in the announcement argument"
   end
 
   test "explicit built-in compactors pin the same source while custom callback state stays owned" do

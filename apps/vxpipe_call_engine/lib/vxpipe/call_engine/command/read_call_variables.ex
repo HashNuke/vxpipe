@@ -35,7 +35,7 @@ defmodule Vxpipe.CallEngine.Command.ReadCallVariables do
           room_id: String.t(),
           incarnation_id: String.t(),
           participant_id: String.t(),
-          sections: [String.t()],
+          sections: [String.t()] | :all_permitted,
           deadline: DateTime.t()
         }
 
@@ -70,6 +70,8 @@ defmodule Vxpipe.CallEngine.Command.ReadCallVariables do
       field -> invalid(field, "is required")
     end
   end
+
+  defp validate_sections(:all_permitted), do: {:ok, :all_permitted}
 
   defp validate_sections(sections)
        when is_list(sections) and sections != [] and length(sections) <= @max_sections do

@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Tool.{InvocationRecord, InvocationSubmission}
+  alias Vxpipe.CallEngine.Tool.{Hangup, InvocationRecord, InvocationSubmission}
 
   @derive {Inspect, only: [:maximum_invocations, :maximum_consumed_invocations]}
   @enforce_keys [
@@ -61,6 +61,40 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
     %{state | records: Map.put(state.records, record.invocation_id, record)}
   end
 
+  @spec model_held?(t()) :: boolean()
+  def model_held?(state),
+    do: Enum.any?(state.records, fn {_id, record} -> InvocationRecord.model_held?(record) end)
+
+  # Successful terminal actions retire the source activation. Their completions
+  # cannot start a new model request while the room is applying the effect.
+  @spec finish(t(), InvocationRecord.t()) :: t()
+  def finish(state, %InvocationRecord{model_hold: :invalidated} = record),
+    do: consume(state, record)
+
+  def finish(
+        state,
+        %InvocationRecord{model_hold: :announcement, completion: %{outcome: {:error, _reason}}} =
+          record
+      ),
+      do: replace(state, %{record | model_hold: nil})
+
+  def finish(state, record), do: replace(state, record)
+
+  @spec resume_after_announcement(t(), String.t()) :: t()
+  def resume_after_announcement(state, id) do
+    case fetch(state, id) do
+      {:ok, %{model_hold: :room_hangup, status: :running} = record} ->
+        # The invalidation can precede delivery of the tool worker's result.
+        replace(state, %{record | model_hold: :invalidated})
+
+      {:ok, %{model_hold: :room_hangup} = record} ->
+        consume(state, record)
+
+      _unrelated ->
+        state
+    end
+  end
+
   @spec statuses(t()) :: [Vxpipe.CallEngine.Tool.InvocationStatus.t()]
   def statuses(%__MODULE__{} = state) do
     Enum.map(state.order, fn invocation_id ->
@@ -117,6 +151,9 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
         else
           {:error, :rejected}
         end
+
+      match?({:platform, Hangup}, submission.binding.handler) and model_held?(state) ->
+        {:error, :rejected}
 
       true ->
         {:error, :unavailable}

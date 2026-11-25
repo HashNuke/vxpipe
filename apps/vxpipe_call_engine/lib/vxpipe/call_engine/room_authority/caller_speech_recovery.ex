@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.RoomAuthority.State
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Archive.Recorder
   alias Vxpipe.CallEngine.Id
@@ -256,7 +257,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerSpeechRecovery do
   defp maybe_repeat(state, id, episode), do: set(state, id, episode)
 
   defp available?(state, id, connection) do
-    not MapSet.member?(state.held_participant_ids, connection.participant_id) and
+    not State.conversation_held?(state, connection.participant_id) and
       not STSSourceCutover.private_input_held?(state, id)
   end
 

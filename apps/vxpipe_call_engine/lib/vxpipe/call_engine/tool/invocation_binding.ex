@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.Tool.{Idle, PlatformCatalog}
+  alias Vxpipe.CallEngine.Tool.{Hangup, Idle, PlatformCatalog}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding, as: TransferBinding
 
   @derive {Inspect, only: [:name, :conversation_mode]}
@@ -23,6 +23,15 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
           handler: handler(),
           usage_integration_id: String.t() | nil
         }
+
+  @spec announced_action?(t(), map()) :: boolean()
+  def announced_action?(%__MODULE__{handler: {:platform, Hangup}}, %{"announcement" => _}),
+    do: true
+
+  def announced_action?(%__MODULE__{handler: {:participant_transfer, _}}, %{"announcement" => _}),
+    do: true
+
+  def announced_action?(%__MODULE__{}, _arguments), do: false
 
   @spec from_resolved(ToolBinding.t()) :: {:ok, t()} | {:error, :invalid_binding}
   def from_resolved(%ToolBinding{

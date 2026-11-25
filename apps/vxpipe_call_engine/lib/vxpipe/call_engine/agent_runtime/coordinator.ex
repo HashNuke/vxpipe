@@ -51,7 +51,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   defdelegate readiness(coordinator), to: Readiness
 
   @spec respond(GenServer.server(), SendText.t()) ::
-          :ok | {:error, :queue_full | :unavailable}
+          :ok | {:error, :busy | :queue_full | :unavailable}
   def respond(coordinator, %SendText{} = command) do
     GenServer.call(coordinator, {:respond, command}, @call_timeout)
   catch
@@ -148,6 +148,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     case start_completion(state) do
       {:ok, state} ->
         respond_while_current(command, state)
+
+      {:held, state} ->
+        {:reply, {:error, :busy}, state}
 
       {:empty, state} ->
         case admit(command, state) do
@@ -383,6 +386,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   defp start_next(%State{} = state) do
     case start_completion(state) do
       {:ok, state} -> state
+      {:held, state} -> state
       {:empty, state} -> start_after_completions(state)
       {:error, :unavailable} -> exit(:completion_lease_unavailable)
     end
@@ -447,6 +451,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
       {:error, :empty} ->
         {:empty, state}
+
+      {:error, :held} ->
+        {:held, state}
 
       {:error, :unavailable} = error ->
         error

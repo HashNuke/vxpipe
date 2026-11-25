@@ -23,13 +23,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
           nil | VariablesBinding.t(),
           nil | GenServer.server()
         ) :: {:ok, [ToolDescriptor.t()]} | {:error, :invalid_tool_binding}
-  def compile(bindings, variable_binding, remote_owner)
+  def compile(bindings, variable_binding, remote_owner),
+    do: compile(bindings, variable_binding, remote_owner, false)
+
+  def compile(bindings, variable_binding, remote_owner, announcements?)
       when is_map(bindings) and
              (is_nil(variable_binding) or is_struct(variable_binding, VariablesBinding)) do
-    descriptors(bindings, variable_binding, &descriptor(&1, remote_owner))
+    descriptors(bindings, variable_binding, &descriptor(&1, remote_owner, announcements?))
   end
 
-  def compile(_bindings, _variable_binding, _remote_owner), do: {:error, :invalid_tool_binding}
+  def compile(_bindings, _variable_binding, _remote_owner, _announcements?),
+    do: {:error, :invalid_tool_binding}
 
   @doc "Validates provider-safe schemas without constructing an executable MCP binding."
   def project(bindings, variable_binding \\ nil)
@@ -80,9 +84,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   defp compile_binding(_entry, _build_descriptor, {:ok, _descriptors}),
     do: {:halt, {:error, :invalid_tool_binding}}
 
-  defp descriptor(%ToolBinding{name: name, type: :host, action: action} = resolved, _remote_owner) do
+  defp descriptor(
+         %ToolBinding{name: name, type: :host, action: action} = resolved,
+         _remote_owner,
+         _announcements?
+       ) do
     with {:ok, binding} <- InvocationBinding.from_resolved(resolved),
-         {:ok, descriptor} <- descriptor(action, name, binding) do
+         {:ok, descriptor} <- action_descriptor(action, name, binding) do
       {:ok, descriptor}
     else
       _invalid -> {:error, :invalid_tool_binding}
@@ -93,7 +101,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
 
   defp descriptor(
          %ToolBinding{name: name, type: :platform, action: action} = resolved,
-         _remote_owner
+         _remote_owner,
+         announcements?
        ) do
     with true <- PlatformCatalog.action?(action),
          {:ok, binding} <- InvocationBinding.from_resolved(resolved),
@@ -102,7 +111,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
            ToolDescriptor.new(
              name: name,
              description: description,
-             input_schema: parameters,
+             input_schema:
+               Vxpipe.CallEngine.Tool.Announcement.parameters(
+                 parameters,
+                 announcements? and action == Vxpipe.CallEngine.Tool.Hangup
+               ),
              binding: binding
            ) do
       {:ok, descriptor}
@@ -115,7 +128,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
 
   defp descriptor(
          %ToolBinding{type: :mcp, remote: %ResolvedTool{}} = resolved,
-         remote_owner
+         remote_owner,
+         _announcements?
        ) do
     with {:ok, binding} <- InvocationBinding.from_remote(resolved, remote_owner),
          {:ok, descriptor} <- remote_descriptor(resolved, binding) do
@@ -133,7 +147,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
            type: :participant_transfer,
            transfer: %TransferBinding{} = transfer
          } = resolved,
-         _remote_owner
+         _remote_owner,
+         announcements?
        ) do
     with {:ok, binding} <- InvocationBinding.from_participant_transfer(resolved),
          %Definition{description: description, parameters: parameters} <-
@@ -142,7 +157,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
            ToolDescriptor.new(
              name: "transfer",
              description: description,
-             input_schema: parameters,
+             input_schema:
+               Vxpipe.CallEngine.Tool.Announcement.parameters(parameters, announcements?),
              binding: binding
            ) do
       {:ok, descriptor}
@@ -153,7 +169,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
     _exception -> {:error, :invalid_tool_binding}
   end
 
-  defp descriptor(%ToolBinding{}, _remote_owner), do: {:error, :invalid_tool_binding}
+  defp descriptor(%ToolBinding{}, _remote_owner, _announcements?),
+    do: {:error, :invalid_tool_binding}
 
   defp projection_descriptor(%ToolBinding{
          name: name,
@@ -167,7 +184,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
     )
   end
 
-  defp projection_descriptor(resolved), do: descriptor(resolved, nil)
+  defp projection_descriptor(resolved), do: descriptor(resolved, nil, false)
 
   defp remote_descriptor(%ToolBinding{name: name, remote: remote}, binding) do
     ToolDescriptor.new(
@@ -203,7 +220,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   defp variable_descriptor(action, variable_binding) do
     with %Definition{name: name} <- action.definition(),
          {:ok, binding} <- InvocationBinding.from_call_variables(name, variable_binding),
-         {:ok, descriptor} <- descriptor(action, name, binding) do
+         {:ok, descriptor} <- action_descriptor(action, name, binding) do
       {:ok, descriptor}
     else
       _invalid -> {:error, :invalid_tool_binding}
@@ -212,7 +229,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
     _exception -> {:error, :invalid_tool_binding}
   end
 
-  defp descriptor(action, name, binding) do
+  defp action_descriptor(action, name, binding) do
     with %Definition{name: ^name, description: description, parameters: parameters} <-
            action.definition() do
       ToolDescriptor.new(

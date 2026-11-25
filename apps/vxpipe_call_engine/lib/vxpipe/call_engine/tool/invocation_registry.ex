@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   alias Vxpipe.CallEngine.Tool.{
     Context,
+    Hangup,
     InvocationBinding,
     InvocationCompletion,
     InvocationConfig,
@@ -89,6 +90,33 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   def lease_next(_registry, _consumer_id), do: {:error, :unavailable}
 
+  @spec lease_for_model(GenServer.server(), String.t()) ::
+          {:ok, Vxpipe.CallEngine.Tool.CompletionLease.t()}
+          | {:error, :empty | :held | :unavailable}
+  def lease_for_model(registry, consumer_id) when is_binary(consumer_id) and consumer_id != "" do
+    safe_call(registry, {:lease_for_model, consumer_id})
+  end
+
+  def lease_for_model(_registry, _consumer_id), do: {:error, :unavailable}
+
+  @spec hold_accepted_hangup(GenServer.server(), String.t(), pid()) ::
+          :ok | {:error, :unavailable}
+  def hold_accepted_hangup(registry, invocation_id, worker) do
+    case safe_call(registry, {:hold_accepted_hangup, invocation_id, worker}) do
+      :ok ->
+        :ok
+
+      {:error, :unavailable} = error ->
+        # The registry can receive the reservation after the bounded call times out.
+        resume_after_announcement(registry, invocation_id)
+        error
+    end
+  end
+
+  @spec resume_after_announcement(GenServer.server(), String.t()) :: :ok
+  def resume_after_announcement(registry, invocation_id),
+    do: GenServer.cast(registry, {:resume_after_announcement, invocation_id})
+
   @spec release_completion(GenServer.server(), String.t(), reference()) ::
           :ok | {:error, :unavailable}
   def release_completion(registry, invocation_id, lease_id)
@@ -115,6 +143,13 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     else
       _invalid -> {:stop, :invalid_configuration}
     end
+  end
+
+  @impl true
+  def handle_cast({:resume_after_announcement, id}, state) do
+    resumed = State.resume_after_announcement(state, id)
+    if resumed != state, do: notify_completion(resumed, id)
+    {:noreply, resumed}
   end
 
   @impl true
@@ -179,17 +214,25 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     {:reply, if(known?, do: {:error, :rejected}, else: :ok), state}
   end
 
-  def handle_call({:lease_next, consumer_id}, _from, state) do
-    case State.next_terminal(state) do
-      {:ok, record} ->
-        lease_id = make_ref()
-        {:ok, record, lease} = InvocationRecord.lease(record, consumer_id, lease_id)
-        {:reply, {:ok, lease}, State.replace(state, record)}
-
-      :empty ->
-        {:reply, {:error, :empty}, state}
+  def handle_call({:hold_accepted_hangup, invocation_id, worker}, _from, state) do
+    with {:ok, %{worker: ^worker, model_hold: :announcement} = record} <-
+           State.fetch(state, invocation_id),
+         {:ok, %{binding: %{handler: {:platform, Hangup}}}} <-
+           InvocationRecord.running_execution(record, state.completion_target) do
+      {:reply, :ok, State.replace(state, %{record | model_hold: :room_hangup})}
+    else
+      _stale -> {:reply, {:error, :unavailable}, state}
     end
   end
+
+  def handle_call({:lease_for_model, consumer_id}, _from, state) do
+    if State.model_held?(state),
+      do: {:reply, {:error, :held}, state},
+      else: lease_available(state, consumer_id)
+  end
+
+  def handle_call({:lease_next, consumer_id}, _from, state),
+    do: lease_available(state, consumer_id)
 
   def handle_call({:release_completion, invocation_id, lease_id}, _from, state) do
     with {:ok, record} <- State.fetch(state, invocation_id),
@@ -238,7 +281,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
         case InvocationRecord.finish(record, completion) do
           {:ok, record} ->
-            state = State.replace(state, record)
+            state = State.finish(state, record)
 
             InvocationTelemetry.settled(record)
 
@@ -277,7 +320,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
       {:ok, record} ->
         completion = InvocationRecord.failed_completion(record)
         {:ok, record} = InvocationRecord.finish(record, completion)
-        state = State.replace(state, record)
+        state = State.finish(state, record)
         InvocationTelemetry.terminated(record)
 
         InvocationTelemetry.handoff(
@@ -297,6 +340,18 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   end
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp lease_available(state, consumer_id) do
+    case State.next_terminal(state) do
+      {:ok, record} ->
+        lease_id = make_ref()
+        {:ok, record, lease} = InvocationRecord.lease(record, consumer_id, lease_id)
+        {:reply, {:ok, lease}, State.replace(state, record)}
+
+      :empty ->
+        {:reply, {:error, :empty}, state}
+    end
+  end
 
   defp start_invocation(submission, state, admission_deadline) do
     if State.full?(state) do

@@ -76,6 +76,63 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
     refute inspect(error) =~ "Exampleville"
   end
 
+  test "collection schemas expose only requested writable form fields even before collection" do
+    %{plan: plan, server: server, identity: identity} = start_variables()
+
+    assert {:ok, command} =
+             ReadCallVariables.new(
+               identity ++ [sections: ["customer", "intake"], deadline: deadline()]
+             )
+
+    expected = plan.call_variables.sections["intake"].schema
+    assert {:ok, %{"collection_schemas" => schemas}} = CallVariables.read(server, command)
+    assert schemas == %{"intake" => expected}
+  end
+
+  test "discovery reads all permitted sections when a form has more than 32 sections" do
+    input = call_spec_input()
+    names = for index <- 1..33, do: "intake_#{index}"
+    sections = Map.new(names, &{&1, input.call_variables.sections["intake"]})
+    grants = Map.new(names, &{&1, ["read", "write"]})
+    input = update_in(input.call_variables.sections, &Map.merge(&1, sections))
+    input = put_in(input.participants["reception"].variable_permissions, grants)
+    plan = resolved_plan(input)
+    agent = plan.participants["reception"]
+
+    server =
+      start_supervised!({CallVariables, plan: plan, incarnation_id: "rinc-test", register: false},
+        significant: false
+      )
+
+    binding = CallVariables.Binding.new(server, plan, agent, "rinc-test")
+
+    context = %Vxpipe.CallEngine.Tool.Context{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: "rinc-test",
+      agent_participant_id: agent.participant_id,
+      source_participant_id: "part-caller",
+      connection_id: "connection",
+      command_id: "cmd",
+      correlation_id: "corr"
+    }
+
+    assert {:ok, %{"sections" => values, "collection_schemas" => schemas} = projection} =
+             CallVariables.Binding.execute(binding, "read_variables", %{}, context)
+
+    assert Enum.sort(Map.keys(values)) == Enum.sort(names)
+    assert Enum.sort(Map.keys(schemas)) == Enum.sort(names)
+    assert {:ok, ^projection} = CallVariables.Binding.projection(binding)
+
+    assert {:ok, %{"error" => %{"code" => "invalid_command"}}} =
+             CallVariables.Binding.execute(
+               binding,
+               "read_variables",
+               %{"sections" => names},
+               context
+             )
+  end
+
   test "authorizes the pinned tenant, room, incarnation, and participant identity" do
     %{server: server, identity: identity} = start_variables()
 
@@ -479,9 +536,9 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
     )
   end
 
-  defp resolved_plan do
+  defp resolved_plan(input \\ call_spec_input()) do
     assert {:ok, call_spec} =
-             CallSpec.new(call_spec_input(), resource_id: "support", revision: 1)
+             CallSpec.new(input, resource_id: "support", revision: 1)
 
     invocation_input = %{
       call_spec: %{id: "support", revision: 1},
