@@ -6,9 +6,9 @@ export function SectionPermissionMatrix({ document, onChange, issues, agentKey }
   const declared = document.source.call_variables?.sections ?? {};
   const agents = Object.entries(document.source.participants).filter(([key, value]) => value.type === "agent" && (!agentKey || key === agentKey));
   const sections = [...new Set([...Object.keys(declared), ...agents.flatMap(([, value]) => value.type === "agent" ? Object.keys(value.variable_permissions ?? {}) : [])])];
-  if (!sections.length || !agents.length) return null;
+  if (!sections.length) return <p className="text-sm text-muted-foreground">Sections and variables are defined in Call settings → Variables. Once a section exists, its access can be configured here for this participant.</p>;
   return <section className="space-y-3" aria-label="Section permissions"><h3 className="text-sm font-semibold">Section permissions</h3>
-    <p className="text-xs text-muted-foreground">Agents can read a section, or read and write it.</p>
+    <p className="text-xs text-muted-foreground">Sections and variables are defined in Call settings → Variables. This tab controls which sections this participant can read or write.</p>
     <Table><TableHeader><TableRow><TableHead>Section</TableHead>{agents.map(([key]) => <TableHead key={key}>{key}</TableHead>)}</TableRow></TableHeader><TableBody>
       {sections.map((section) => <TableRow key={section}><TableCell className="align-middle font-medium">{section}{!Object.hasOwn(declared, section) && <span className="block text-xs text-destructive">Missing section</span>}</TableCell>{agents.map(([key, participant]) => {
         if (participant.type !== "agent") return null;

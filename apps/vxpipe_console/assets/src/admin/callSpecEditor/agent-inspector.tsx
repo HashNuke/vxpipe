@@ -16,7 +16,7 @@ import type { EditorLookups, InspectorProps } from "./inspectorTypes";
 import { MediaPolicyFields } from "./media-policy-fields";
 import { removeParticipant, renameParticipant } from "./participants";
 import { RenameField } from "./rename-field";
-import { VariablesPanel } from "./variables-panel";
+import { SectionPermissionMatrix } from "./section-permission-matrix";
 
 const tabs = [
   { id: "prompt", label: "Prompt" }, { id: "voice", label: "Models" },
@@ -42,7 +42,7 @@ export function AgentInspector({ catalog, lookups, participantKey, onRenamed, on
       {tabs.map(({ id }) => <TabsContent key={id} value={id} className="m-0 min-h-0 flex-1 overflow-auto p-4">
         <UnplacedIssues />{id === "prompt" ? <AgentPromptPanel {...props} participantKey={participantKey} />
           : id === "voice" ? <AgentModelsPanel {...props} participantKey={participantKey} catalog={catalog} />
-          : id === "variables" ? <VariablesPanel key={participantKey} {...props} agentKey={participantKey} />
+          : id === "variables" ? <SectionPermissionMatrix key={participantKey} {...props} agentKey={participantKey} />
           : id === "transfers" ? <AgentTransfersPanel {...props} participantKey={participantKey} />
           : id === "tools" ? <AgentToolsPanel {...props} participantKey={participantKey} integrations={lookups.mcpIntegrations} catalog={lookups.toolCatalog} />
           : <MediaPolicyFields {...props} participantKey={participantKey} />}

@@ -180,23 +180,32 @@ test("transfer settings show destinations without exposing historical transcript
   expect(screen.queryByRole("spinbutton", { name: "Spoken turns" })).not.toBeInTheDocument();
 });
 
-test("an agent can create its first section and variable from the Variables tab", () => {
+test("participant variables expose section access without schema editing controls", () => {
+  render(<Harness initialTab="variables" />);
+  expect(screen.getByRole("combobox", { name: "appointment access for intake" })).toBeEnabled();
+  expect(screen.getByText("Sections and variables are defined in Call settings → Variables. This tab controls which sections this participant can read or write.")).toBeVisible();
+  expect(screen.queryAllByRole("button", { name: /^(Add|Edit|Remove) (section|variable)/i })).toHaveLength(0);
+});
+
+test("empty participant variables point to Call Settings", () => {
   const initial = structuredClone(editorFixture);
   delete initial.source.call_variables;
   initial.source.participants.intake = { type: "agent", prompt: "Collect intake." };
-  initial.source.participants.reviewer = { type: "agent", prompt: "Review." };
   render(<Harness initial={initial} initialTab="variables" />);
-  fireEvent.click(screen.getByRole("button", { name: "Add section" }));
-  fill("Section name", "contact");
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add section" }));
-  fireEvent.click(screen.getByRole("button", { name: "Add variable to contact" }));
-  fill("Name", "email");
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add variable" }));
-  expect(saved().call_variables.sections.contact.schema.properties.email.type).toBe("string");
-  expect(saved().participants.intake.variable_permissions).toEqual({ contact: ["read", "write"] });
-  expect(saved().participants.reviewer).toEqual(initial.source.participants.reviewer);
-  switchTab("Prompt"); switchTab("Variables");
-  expect(screen.getByText("email")).toBeVisible();
+  expect(screen.getByText("Sections and variables are defined in Call settings → Variables. Once a section exists, its access can be configured here for this participant.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Add section" })).not.toBeInTheDocument();
+});
+
+test.each([true, false])("read-only variable guidance describes the settings when sections exist: %s", (hasSections) => {
+  const initial = structuredClone(editorFixture);
+  initial.readOnly = true;
+  if (!hasSections) {
+    delete initial.source.call_variables;
+    initial.source.participants.intake = { type: "agent", prompt: "Collect intake." };
+  }
+  render(<Harness initial={initial} initialTab="variables" />);
+  expect(screen.getByText(/Sections and variables are defined in Call settings → Variables/)).toBeVisible();
+  if (hasSections) expect(screen.getByRole("combobox", { name: "appointment access for intake" })).toBeDisabled();
 });
 
 test("MCP tools are picked with individual modes and integration-qualified names", () => {

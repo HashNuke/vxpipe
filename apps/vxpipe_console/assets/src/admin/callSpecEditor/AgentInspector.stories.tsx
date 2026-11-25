@@ -59,7 +59,7 @@ export const AgentInspectorDefault: Story = { play: async ({ canvasElement }) =>
 export const AgentVariables: Story = { args: { initialTab: "variables" }, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   await expect(canvas.findByRole("combobox", { name: "appointment access for intake" })).resolves.toHaveTextContent("Read and write");
-  await expect(canvas.getByRole("button", { name: "Add variable to appointment" })).toBeEnabled();
+  await expect(canvas.queryByRole("button", { name: "Add section" })).not.toBeInTheDocument();
 } };
 export const EmptyAgentVariables: Story = { args: { initialTab: "variables", initial: emptyVariables } };
 export const ReadOnlyAgentVariables: Story = { args: { initialTab: "variables", initial: { ...initial, readOnly: true } } };
