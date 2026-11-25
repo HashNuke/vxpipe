@@ -1,15 +1,12 @@
 import { useRef, useState } from "react";
 import { Eye, List, Pencil, Plus, Trash2 } from "lucide-react";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { VariableModal } from "./variable-modal";
 import { VariableSectionModal } from "./variable-section-modal";
 import { IssueAnchor } from "./issue-anchor";
 import { useIssueRequest } from "./issue-context";
 import { removeSection, removeVariableField } from "./variables";
-import { stringifySourceJson } from "./source-json";
 import type { InspectorProps } from "./inspectorTypes";
-import type { VariableSchema } from "./types";
 
 type Editing = { kind: "section"; name?: string } | { kind: "variable"; section: string; name?: string };
 
@@ -36,7 +33,7 @@ export function VariablesPanel(props: InspectorProps) {
     {!Object.keys(sections).length && <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">Add a section to define the information agents can collect and share.</p>}
     {Object.entries(sections).map(([key, section]) => <section key={key} aria-label={`Section ${key}`} className="min-w-0 rounded-md border border-border bg-card">
       <IssueAnchor path={["call_variables", "sections", key]} issues={issues} className="rounded-t-md border-b border-border bg-muted/70 px-2 py-1">
-        <div className="flex items-center gap-2"><List aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1"><h4 className="wrap-anywhere text-sm font-semibold">{key}</h4><SectionConstraintTags schema={section.schema} /></div>
+        <div className="flex items-center gap-2"><List aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><h4 className="min-w-0 flex-1 wrap-anywhere text-sm font-semibold">{key}</h4>
           <Button variant="ghost" size="icon" className="size-7" disabled={document.readOnly} aria-label={`Add variable to section ${key}`} title="Add variable" onClick={(event) => { trigger.current = event.currentTarget; setEditing({ kind: "variable", section: key }); }}><Plus /></Button>
           <Button variant="ghost" size="icon" className="size-7" aria-label={`${document.readOnly ? "View" : "Edit"} section ${key}`} onClick={(event) => { trigger.current = event.currentTarget; setEditing({ kind: "section", name: key }); }}>{document.readOnly ? <Eye /> : <Pencil />}</Button>
           <Button variant="ghost" size="icon" className="size-7" disabled={document.readOnly} aria-label={`Remove section ${key}`} onClick={() => onChange(removeSection(document, key))}><Trash2 /></Button></div>
@@ -58,10 +55,4 @@ export function VariablesPanel(props: InspectorProps) {
     {selected?.kind === "variable" && <VariableModal key={`${selected.section}:${selected.name ?? "new"}:${request?.id ?? "manual"}`} {...modal} sectionKey={selected.section} previousName={selected.name} />}
     {selected?.kind === "section" && <VariableSectionModal key={`${selected.name ?? "new"}:${request?.id ?? "manual"}`} {...modal} previousName={selected.name} />}
   </div>;
-}
-
-function SectionConstraintTags({ schema }: { schema: VariableSchema }) {
-  const constraints = Object.entries(schema).filter(([key, value]) => !["type", "properties", "additionalProperties"].includes(key) && value !== undefined && !(Array.isArray(value) && !value.length));
-  if (!constraints.length) return null;
-  return <div className="flex min-w-0 flex-wrap gap-1">{constraints.map(([key, value]) => <Badge key={key} variant="secondary" className="max-w-full rounded-md whitespace-normal wrap-anywhere text-left">{key}: {stringifySourceJson(value)}</Badge>)}</div>;
 }

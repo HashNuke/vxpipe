@@ -80,11 +80,13 @@ test("add and remove sections and fields preserve unrelated data and reject name
   expect(saved().call_variables.sections.preferences).toBeDefined();
 });
 
-test("section names and constraint tags replace inline fields, and cancelled edits leave source intact", () => {
+test("required status appears on variable rows and cancelled section edits preserve the schema", () => {
   render(<Harness />);
   const section = within(screen.getByRole("region", { name: "Section contact" }));
   expect(section.getByRole("heading", { name: "contact" })).toBeVisible();
-  expect(section.getByText('required: ["phone"]')).toHaveAttribute("data-slot", "badge");
+  expect(section.queryByText(/^required:/)).not.toBeInTheDocument();
+  expect(section.getByText("string · Required")).toBeVisible();
+  expect(section.getByText("array · Optional")).toBeVisible();
   expect(section.queryByRole("textbox")).not.toBeInTheDocument();
   expect(section.queryByRole("combobox")).not.toBeInTheDocument();
   expect(screen.queryByText("Section constraints")).not.toBeInTheDocument();
