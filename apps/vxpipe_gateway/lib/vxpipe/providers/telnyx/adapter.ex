@@ -99,8 +99,9 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
 
   @impl true
   def play_recovery_prompt(options, control_id, command_id, kind)
-      when kind in [:callback, :transfer] do
-    file = Application.app_dir(:vxpipe_gateway, "priv/telephony/#{kind}.wav")
+      when kind in [:callback, :transfer, :wait] do
+    name = if kind == :wait, do: "transfer-wait", else: Atom.to_string(kind)
+    file = Application.app_dir(:vxpipe_gateway, "priv/telephony/#{name}.wav")
 
     with {:ok, audio} <- File.read(file) do
       payload = %{
@@ -111,6 +112,8 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
         "playback_content" => Base.encode64(audio)
       }
 
+      payload = if kind == :callback, do: Map.put(payload, "stop", "all"), else: payload
+      payload = if kind == :wait, do: Map.put(payload, "loop", 3), else: payload
       VoiceClient.start_playback(options, control_id, payload) |> submission(control_id)
     end
   end
@@ -124,6 +127,10 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
       |> submission(request.leg.provider_call_control_id)
     end
   end
+
+  @impl true
+  def stop_recovery_wait(options, control, id),
+    do: VoiceClient.stop_playback(options, control, %{"command_id" => id}) |> submission(control)
 
   @impl true
   def send_media(_options, %SendMedia{}), do: {:error, :telnyx_media_not_attached}

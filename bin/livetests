@@ -34,6 +34,7 @@ Commands:
                             Preview or move active QA numbers to this machine's
                             existing test application (QA defaults to vxpipe-<machine>-qa).
   telnyx:numbers restore    Return only the numbers saved by the last borrow.
+  telnyx:inventory          Count account numbers and show their test eligibility and application.
   telephony:status          Show this machine's carrier resources (read-only).
   telephony:hangup [--all-calls]
                             End this machine's calls on configured carriers.
@@ -643,6 +644,12 @@ case "$command" in
   tools:down) tools_down ;;
   tools:status) tools_status ;;
   telephony:provision) telephony_provision "$@" ;;
+  telnyx:inventory)
+    load_credentials
+    telnyx_number_inventory | jq -e --arg machine "$telnyx_machine_tag" --arg test "$telnyx_test_tag" '
+      {total: length, numbers: map({status, application: .connection_name, ending: .phone_number[-4:], area_code: .phone_number[2:5], region: .country_iso_alpha2,
+        eligible: ((.tags // []) | contains([$machine, $test])), assigned: ((.connection_id // "") != "")})}'
+    ;;
   telnyx:numbers)
     source "$repo_root/bin/lib/livetests-telnyx-switch.sh"
     switch_telnyx_numbers "$@"

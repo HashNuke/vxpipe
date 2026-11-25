@@ -19,7 +19,7 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   alias Vxpipe.Providers.LiveModels
 
   @derive {Inspect, only: [:tenant]}
-  defstruct [:tenant, :principal, :key, :settings, :options]
+  defstruct [:tenant, :principal, :key, :settings, options: []]
 
   def new_handset(options, settings) do
     %{"telnyx" => caller, "telnyx-b" => receiver} = settings.numbers
@@ -177,6 +177,35 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   end
 
   def publish_handset_recovery(fixture, scribe_key) do
+    recovery_reception(fixture, scribe_key, "telnyx", "telnyx-b")
+  end
+
+  def publish_automated_recovery(fixture, scribe_key) do
+    %{
+      outgoing: probe_endpoint(fixture, :outgoing, "telnyx"),
+      to: Map.fetch!(fixture.settings.numbers, "telnyx"),
+      incoming: recovery_reception(fixture, scribe_key, "telnyx", "telnyx-b"),
+      destination: probe_endpoint(fixture, :incoming, "telnyx-b")
+    }
+  end
+
+  # The test sends both probes through the carrier. Each machine endpoint
+  # transcribes the other side without starting competing speech playback.
+  defp probe_endpoint(fixture, direction, number) do
+    spec = source(fixture, direction, "telnyx", number)
+    spec = update_in(spec, [:participants, "assistant"], &Map.delete(&1, :first_message))
+
+    spec =
+      update_in(
+        spec,
+        [:participants, "assistant", :capabilities],
+        &Map.delete(&1, :text_to_speech)
+      )
+
+    publish_source(fixture, %{spec | limits: %{max_duration_ms: 90_000}})
+  end
+
+  defp recovery_reception(fixture, scribe_key, receiver, destination) do
     provision(
       :platform,
       "elevenlabs",
@@ -186,7 +215,7 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       fixture.options
     )
 
-    receiving = source(fixture, :incoming, "telnyx", "telnyx")
+    receiving = source(fixture, :incoming, "telnyx", receiver)
 
     support = %{
       type: "human",
@@ -194,7 +223,7 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       connection: %{
         mode: "dial",
         service: "live-telnyx",
-        number: Map.fetch!(fixture.settings.numbers, "telnyx-b")
+        number: Map.fetch!(fixture.settings.numbers, destination)
       }
     }
 
@@ -208,7 +237,12 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
     |> put_in([:participants, "assistant", :transfers], ["support"])
     |> put_in(
       [:participants, "assistant", :prompt],
-      "Say only that you heard the caller. Do not invoke tools."
+      """
+      When the caller says transfer test, read the following acknowledgment in full:
+      I heard you say transfer test. You can interrupt me now. I will keep speaking for a few more seconds so that you have time to ask your next question. If you are still listening, this is the end of that acknowledgment.
+
+      For other caller questions, give one brief answer. Do not invoke tools.
+      """
     )
     |> put_in([:participants, "assistant", :first_message], %{
       mode: "fixed",
@@ -221,7 +255,11 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   end
 
   def publish_handset_destination(fixture) do
-    source(fixture, :incoming, "telnyx-b", "telnyx-b")
+    recovery_destination(fixture, "telnyx-b")
+  end
+
+  defp recovery_destination(fixture, number) do
+    source(fixture, :incoming, "telnyx", number)
     |> put_in([:participants, "assistant", :first_message], %{
       mode: "fixed",
       text: "You have reached the test destination."
@@ -536,8 +574,10 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       schema_version: "20261004.01",
       name: "Live #{service} #{direction}",
       defaults: %{capabilities: %{}},
-      wait_sounds: nil,
-      media_policy: %{save_transcripts: true, record_audio: false},
+      media_policy: %{
+        save_transcripts: true,
+        record_audio: Keyword.has_key?(fixture.options, :recording)
+      },
       limits: %{max_duration_ms: 45_000},
       participants: %{
         "human" => %{

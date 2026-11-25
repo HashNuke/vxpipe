@@ -144,6 +144,25 @@ and webhook delivery still work.
 
 The `live_telephony_recovery_elevenlabs` selection exercises a real Scribe
 socket failure and listens for the repeat prompt on the other Telnyx leg.
+It runs with machine-owned numbers. The coordinated handset procedure below
+is an optional listening check for prompt wording, timing, and audibility.
+
+For an unattended answered fallback transfer, borrow the machine-tagged Telnyx
+numbers with the restoration trap above and select
+`--only live_telephony_automated_recovery_transfer` on the same file. This test
+uses the first pool number as both the machine caller ID and the inbound
+number. The second pool number receives the transfer. It injects room-media loss,
+checks reciprocal speech after bridge, and waits for terminal usage and cleanup.
+`bin/livetests telnyx:inventory` shows account counts and pool eligibility.
+
+Both transfer lanes retain local WAV recordings in
+`tmp/live-telephony/<run>/<call>/<incarnation>/room.wav`. The runner prints the
+run directory. Each file contains the room mix from its first accepted sample,
+including silence across internal gaps. Earlier runs remain available after a
+failed test. The checkout already ignores `tmp/`. The original room's recording
+ends when that room shuts down. In an automated transfer the machine caller
+can continue recording carrier playback and the bridged conversation.
+
 For a coordinated handset transfer window, set `VXPIPE_LIVE_HANDSET_WINDOW=1`
 and select `--only live_telephony_handset_recovery_transfer` on the same file.
 The handset lane receives calls on the test pool's designated receiver and uses the other number as its transfer destination. The test prints the inbound number's last four digits. An operator calls from
@@ -159,8 +178,9 @@ destination attempt and an answered bridge expects a successful one.
 
 After ring-out has passed, set `VXPIPE_LIVE_HANDSET_WINDOW=repeat_and_transfer`
 with the same test selector to exercise recognition recovery and the answered
-transfer on a single call. Say “transfer test” after the greeting, then ask
-“Do you service commercial properties?” during the agent's acknowledgement.
+transfer on a single call. Say “transfer test” once after the greeting. As soon
+as the agent says “You can interrupt me now,” speak over the rest of the
+acknowledgment and ask “Do you service commercial properties?”
 The runner closes the recognizer on that next open turn. Repeat the question
 when prompted. Say “transfer now” after hearing one answer, then say “bridge
 test” after the destination greeting. The runner checks the recovered turn,

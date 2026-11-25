@@ -170,8 +170,11 @@ recognizer delivered a final turn.
 If the agent loses speech output on an eligible main Telnyx connection, the
 phone media process asks the surviving carrier leg to play the announcement
 before it stops. Confirmed agent unavailability takes the same path. A
-configured transfer destination lets Telnyx connect the caller to a human;
-without one, it plays the callback recording and ends the call. The English recordings apply to
+configured destination gets the announcement “Please hold while I connect you.”
+The carrier plays the bundled café-bossa music to the caller while the destination
+rings. The gateway requests a playback stop when the carrier confirms the bridge.
+With no eligible destination, the carrier plays the callback recording and ends
+the call. The English recordings apply to
 an English or unspecified recognition language.
 
 Inspect the leg's `caller_recovery` field in call details. An announcement request

@@ -91,6 +91,22 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
 
   @impl true
   def handle_cast(:dial, %{phase: :prepared, ending?: false} = state) do
+    adapter = state.service.adapter
+    options = state.service.adapter_options
+    caller = state.caller.provider_call_control_id
+
+    case submit_wait(state, :wait_audio, fn ->
+           adapter.play_recovery_prompt(options, caller, "wait-" <> state.id, :wait)
+         end) do
+      {:ok, state} -> {:noreply, %{state | phase: :starting_wait}}
+      :error -> {:noreply, start_dial(state)}
+    end
+  end
+
+  def handle_cast(:dial, state), do: {:noreply, state}
+  def handle_cast(:abandon, state), do: finish(abandon_leg(state))
+
+  defp start_dial(state) do
     command = %{
       id: state.id,
       from: state.service.outbound_number,
@@ -105,13 +121,10 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
     case submit(state, :dial, fn ->
            state.service.adapter.dial_recovery_peer(state.service.adapter_options, command)
          end) do
-      {:ok, state} -> {:noreply, state}
-      :error -> finish(rejected(state))
+      {:ok, state} -> state
+      :error -> rejected(state)
     end
   end
-
-  def handle_cast(:dial, state), do: {:noreply, state}
-  def handle_cast(:abandon, state), do: finish(abandon_leg(state))
 
   @impl true
   def handle_call({:event, %Event{} = event}, _from, state) do
@@ -159,6 +172,11 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
             do: %{state | end_retry: EndCommandRetry.schedule(state.end_retry)},
             else: state
 
+        state =
+          if kind == :wait_audio and state.phase == :starting_wait and !state.ending?,
+            do: start_dial(state),
+            else: state
+
         finish(state)
 
       nil ->
@@ -174,6 +192,12 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
 
   defp worker_down(_msg, _workers), do: nil
 
+  defp submit_wait(state, kind, effect) do
+    if function_exported?(state.service.adapter, :stop_recovery_wait, 3),
+      do: submit(state, kind, effect),
+      else: :error
+  end
+
   defp submit(state, kind, effect) do
     case IncomingSubmission.start(self(), kind, effect) do
       {:ok, pid, ref} -> {:ok, %{state | workers: Map.put(state.workers, kind, {pid, ref})}}
@@ -182,6 +206,11 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
   end
 
   defp result(%{terminal: terminal} = state, _, _) when not is_nil(terminal), do: state
+
+  defp result(%{phase: :starting_wait, ending?: false} = state, :wait_audio, _),
+    do: start_dial(state)
+
+  defp result(state, kind, _) when kind in [:wait_audio, :stop_wait], do: state
 
   defp result(state, :end, result),
     do: %{state | end_accepted?: EndCommandRetry.accepted?(result)}
@@ -208,7 +237,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
     %{state | terminal: :not_submitted, usage: LegUsage.fail(state.usage, :failed)}
   end
 
-  defp accept_event(%{phase: :prepared}, _), do: :mismatch
+  defp accept_event(%{phase: phase}, _) when phase in [:prepared, :starting_wait], do: :mismatch
 
   defp accept_event(state, event) do
     with true <- event.provider_connection_id == state.caller.provider_connection_id,
@@ -263,15 +292,26 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecoveryPeer do
     }
   end
 
-  defp apply_event(%{ending?: false} = state, %Event{kind: :bridged} = event) do
+  defp apply_event(%{ending?: false, phase: :submitted} = state, %Event{kind: :bridged} = event) do
     send(state.parent, {:recovery_peer, self(), :bridged})
-    %{state | phase: :bridged, usage: LegUsage.observe(state.usage, event)}
+    state = %{state | phase: :bridged, usage: LegUsage.observe(state.usage, event)}
+
+    case submit_wait(state, :stop_wait, fn ->
+           state.service.adapter.stop_recovery_wait(
+             state.service.adapter_options,
+             state.caller.provider_call_control_id,
+             "stop-wait-" <> state.id
+           )
+         end) do
+      {:ok, state} -> state
+      :error -> state
+    end
   end
 
   defp apply_event(state, event),
     do: maybe_end(%{state | usage: LegUsage.observe(state.usage, event)})
 
-  defp abandon_leg(%{phase: :prepared} = state),
+  defp abandon_leg(%{phase: phase} = state) when phase in [:prepared, :starting_wait],
     do: %{
       state
       | ending?: true,

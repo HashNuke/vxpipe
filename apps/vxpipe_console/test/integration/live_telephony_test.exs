@@ -384,6 +384,94 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     end
   end
 
+  @tag :live_providers
+  @tag :live_telephony_automated_recovery_transfer
+  @tag timeout: 150_000
+  test "machine caller and destination exchange speech across a recovered carrier bridge",
+       context do
+    start_supervised!({Registry, keys: :unique, name: LiveTelephonyPeerSocket.Registry})
+    fixture = live_fixture(context, LiveTelephonyPeerSocket)
+
+    pair =
+      ConfiguredTelephonyFixture.publish_automated_recovery(
+        fixture,
+        System.fetch_env!("ELEVENLABS_API_KEY")
+      )
+
+    caller = submit(fixture, pair.outgoing, pair.to)
+    incoming = await_incoming_call(fixture, pair.incoming)
+    binding = await_peer_binding(fixture, incoming, "human")
+
+    await("caller hears original greeting", 20_000, fn ->
+      remote_phrase?(fixture, caller, "ready for the test")
+    end)
+
+    [{media, _}] =
+      Registry.lookup(
+        Vxpipe.Gateway.Media.Registry,
+        {:telephony_media_session, binding.client_state_leg_id}
+      )
+
+    Process.exit(media, :kill)
+
+    await("carrier confirms linked bridge", 26_000, fn ->
+      handset_leg_evidence(incoming, "transfer_bridged")
+    end)
+
+    destination = await_incoming_call(fixture, pair.destination)
+
+    caller_binding = await_peer_binding(fixture, caller, "human")
+    destination_binding = await_peer_binding(fixture, destination, "human")
+    {:ok, machine_caller} = LiveTelephonyPeer.new(fixture, caller, caller_binding)
+    {:ok, machine_destination} = LiveTelephonyPeer.new(fixture, destination, destination_binding)
+
+    try do
+      assert :ok = LiveTelephonyPeer.play_probe(machine_caller, :transfer)
+
+      await("destination hears caller's probe", 15_000, fn ->
+        remote_phrase?(fixture, destination, "connect you")
+      end)
+
+      assert :ok = LiveTelephonyPeer.play_probe(machine_destination, :callback)
+
+      await("caller hears destination's probe", 15_000, fn ->
+        remote_phrase?(fixture, caller, "call back")
+      end)
+    after
+      print_heard(fixture, caller, "machine caller")
+      print_heard(fixture, destination, "recovery destination")
+    end
+
+    assert :ok = LiveTelephonyPeer.hangup(machine_caller)
+
+    try do
+      await("both carrier attempts settle", 20_000, fn ->
+        transfer_settled?(incoming, binding, :answered)
+      end)
+    after
+      alias Vxpipe.Persistence.Schema.{Call, TelephonyLeg, UsageObservation}
+      call = Repo.get_by!(Call, public_id: incoming.id)
+      legs = Repo.all_by(TelephonyLeg, call_id: call.id)
+      usage = Repo.all_by(UsageObservation, call_id: call.id, capability: :telephony)
+
+      IO.inspect(
+        %{
+          state: call.state,
+          managed: call.gateway_cleanup_required,
+          cleanup_complete: not is_nil(call.gateway_cleanup_completed_at),
+          legs: Enum.map(legs, &{&1.state, Map.keys(&1.recovery || %{})}),
+          usage:
+            Enum.map(
+              usage,
+              &{&1.attempt_id == binding.client_state_leg_id, &1.outcome,
+               &1.provider["session_id"] == binding.provider_call_session_id}
+            )
+        },
+        label: "Automated transfer terminal evidence"
+      )
+    end
+  end
+
   # Run only in a coordinated handset window. The ordinary provider suite
   # must never wait for a person to place a call.
   @tag :integration
@@ -542,6 +630,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
           fact.kind == :participant_transcription_final and fact.participant_id == caller,
           into: MapSet.new(),
           do: fact.correlation_id
+
+    IO.puts("Transfer-test phrase recognized. Waiting for the caller to interrupt.")
 
     connection =
       await("caller starts the next question", 20_000, fn ->
@@ -1158,6 +1248,11 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     fixture = ConfiguredTelephonyFixture.new_handset(context.options, settings)
     reception = ConfiguredTelephonyFixture.publish_handset_recovery(fixture, "synthetic-scribe")
     destination = ConfiguredTelephonyFixture.publish_handset_destination(fixture)
+
+    for publication <- [reception, destination] do
+      refute Map.has_key?(publication.source, "wait_sounds")
+    end
+
     assert reception.source["transfer_policy"]["recovery_destination"] == "support"
 
     assert reception.source["participants"]["human"]["connection"]["number"] ==
@@ -1168,6 +1263,42 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
     assert destination.source["participants"]["human"]["connection"]["number"] ==
              settings.numbers["telnyx"]
+  end
+
+  test "automated recovery uses two machine numbers and a distinct transfer destination",
+       context do
+    settings = synthetic_settings()
+    numbers = settings.numbers
+    fixture = ConfiguredTelephonyFixture.new(context.options, %{settings | numbers: numbers})
+    pair = ConfiguredTelephonyFixture.publish_automated_recovery(fixture, "synthetic-scribe")
+
+    for publication <- [pair.outgoing, pair.destination] do
+      refute Map.has_key?(
+               publication.source["participants"]["assistant"]["capabilities"],
+               "text_to_speech"
+             )
+    end
+
+    assert pair.to == numbers["telnyx"]
+    assert pair.incoming.source["participants"]["human"]["connection"]["number"] == pair.to
+
+    assert pair.incoming.source["participants"]["support"]["connection"]["number"] ==
+             numbers["telnyx-b"]
+
+    assert pair.destination.source["participants"]["human"]["connection"]["number"] ==
+             numbers["telnyx-b"]
+  end
+
+  test "handset recovery gives the caller a spoken cue with time to interrupt", context do
+    fixture = ConfiguredTelephonyFixture.new_handset(context.options, synthetic_settings())
+    reception = ConfiguredTelephonyFixture.publish_handset_recovery(fixture, "synthetic-scribe")
+    prompt = reception.source["participants"]["assistant"]["prompt"]
+
+    assert prompt =~
+             "When the caller says transfer test, read the following acknowledgment in full:"
+
+    assert prompt =~
+             "I heard you say transfer test. You can interrupt me now. I will keep speaking for a few more seconds so that you have time to ask your next question. If you are still listening, this is the end of that acknowledgment."
   end
 
   test "encrypted carrier bindings publish opposing routes without dialing", context do
@@ -1523,10 +1654,24 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
     Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, configured)
 
+    managed? =
+      context[:live_telephony_handset_recovery_transfer] == true or
+        context[:live_telephony_automated_recovery_transfer] == true
+
+    options =
+      if managed?,
+        do:
+          Keyword.put(
+            context.options,
+            :recording,
+            Vxpipe.Console.Test.LocalRecordingStore.settings()
+          ),
+        else: context.options
+
     fixture =
       if context[:live_telephony_handset_recovery_transfer],
-        do: ConfiguredTelephonyFixture.new_handset(context.options, settings),
-        else: ConfiguredTelephonyFixture.new(context.options, settings)
+        do: ConfiguredTelephonyFixture.new_handset(options, settings),
+        else: ConfiguredTelephonyFixture.new(options, settings)
 
     on_exit(fn -> cleanup(fixture.tenant.key) end)
     port = System.fetch_env!("TELEPHONY_TEST_PORT") |> String.to_integer()
@@ -1542,6 +1687,12 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
           twilio_media_socket: media_socket,
           media_socket: media_socket
         )
+      )
+
+    endpoint_options =
+      Vxpipe.Gateway.Application.http_options(
+        http: endpoint_options,
+        managed_cleanup: [enabled: managed?]
       )
 
     start_supervised!(

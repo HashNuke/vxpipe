@@ -41,6 +41,21 @@ defmodule Vxpipe.Console.Test.LiveTelephonyPeer do
 
   def hangup(%__MODULE__{} = peer, options \\ []), do: command(peer, "hangup", %{}, options)
 
+  def play_probe(%__MODULE__{} = peer, clip) when clip in [:transfer, :callback] do
+    wav = File.read!(Application.app_dir(:vxpipe_gateway, "priv/telephony/#{clip}.wav"))
+
+    command(
+      peer,
+      "playback_start",
+      %{
+        audio_type: "wav",
+        playback_content: Base.encode64(wav),
+        target_legs: "self"
+      },
+      []
+    )
+  end
+
   defp command(peer, action, payload, options) do
     control_id = URI.encode(peer.control_id, &URI.char_unreserved?/1)
     command_id = "vxp-peer-" <> Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)

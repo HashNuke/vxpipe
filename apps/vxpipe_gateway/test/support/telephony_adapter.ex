@@ -99,8 +99,19 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
     {:ok, %Submission{status: :accepted, provider_call_control_id: control_id}}
   end
 
+  def play_recovery_prompt(options, control, id, :wait) do
+    send(observer(options), {:test_wait_music, control, id})
+    {:ok, %Submission{status: :accepted, provider_call_control_id: control}}
+  end
+
   def play_recovery_prompt(options, control_id, command_id, :callback),
     do: play_recovery_prompt(options, control_id, command_id)
+
+  @impl true
+  def stop_recovery_wait(options, control, id) do
+    send(observer(options), {:test_stop_wait, control, id})
+    {:ok, %Submission{status: :accepted, provider_call_control_id: control}}
+  end
 
   @impl true
   def dial_recovery_peer(options, request) do

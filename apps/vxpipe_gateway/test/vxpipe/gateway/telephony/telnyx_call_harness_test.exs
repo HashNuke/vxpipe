@@ -754,6 +754,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
              }).status == 200
     end
 
+    assert_receive {:test_wait_music, "inbound-call-control", _}, 2_000
     assert_receive {:test_linked_dial, request}, 2_000
     assert request.to == "+15550001002"
     assert request.caller == "inbound-call-control"
@@ -793,6 +794,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     assert_receive {:test_linked_dial, request}, 2_000
     assert peer_event(context, request.id, "call.bridged").status == 200
+    assert_receive {:test_stop_wait, "inbound-call-control", _}, 2_000
     stop_transfer_room!(context.plan)
     assert :sys.get_state(caller).recovery.phase == :bridged
     refute_received {:test_telephony_end_leg, _}

@@ -208,7 +208,7 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
 
     for {name, source} <- sources do
       assert {:ok, _spec} = CallSpec.new(source, resource_id: "live-#{name}", revision: 1)
-      assert source.wait_sounds == nil
+      refute Map.has_key?(source, :wait_sounds)
       assert source.media_policy == %{save_transcripts: true, record_audio: false}
       assert source.limits.max_duration_ms == 90_000
 

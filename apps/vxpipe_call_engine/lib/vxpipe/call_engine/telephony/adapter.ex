@@ -26,10 +26,14 @@ defmodule Vxpipe.CallEngine.Telephony.Adapter do
   @callback answer(config(), Answer.t()) :: submission_result()
   @callback send_media(config(), SendMedia.t()) :: :ok | {:error, error_reason()}
   @callback play_recovery_prompt(config(), String.t(), String.t()) :: submission_result()
-  @callback play_recovery_prompt(config(), String.t(), String.t(), :callback | :transfer) ::
+  @callback play_recovery_prompt(config(), String.t(), String.t(), :callback | :transfer | :wait) ::
               submission_result()
   @callback dial_recovery_peer(config(), map()) :: submission_result()
-  @optional_callbacks play_recovery_prompt: 3, play_recovery_prompt: 4, dial_recovery_peer: 2
+  @callback stop_recovery_wait(config(), String.t(), String.t()) :: submission_result()
+  @optional_callbacks stop_recovery_wait: 3,
+                      play_recovery_prompt: 3,
+                      play_recovery_prompt: 4,
+                      dial_recovery_peer: 2
   @callback end_leg(config(), EndLeg.t()) :: submission_result()
   @callback verify_webhook(config(), Webhook.t()) :: :ok | {:error, error_reason()}
   @callback decode_webhook(config(), Webhook.t()) :: event_result()

@@ -1,6 +1,6 @@
 # Caller recovery after speech recognition or room audio failure
 
-**Status:** The configured harness exercises recognizer replacement, carrier disconnect and transfer. Live ElevenLabs recognizer replacement and the isolated release and call-spec rollback passed. The live unanswered transfer preserved the caller leg for the callback recording. A confirmed answered handset bridge and a repeated question receiving one audible answer remain open. See the [implementation evidence](../20261124-0822-implement-caller-recovery.md). The user approved bounded in-room recovery and a carrier-controlled exit. The timings and configuration below are proposed implementation choices. Track design review in the [planning record](../20261124-0807-caller-recovery-milestone.md).
+**Status:** The configured harness exercises recognizer replacement, carrier disconnect and transfer. Live ElevenLabs recognizer replacement and the isolated release and call-spec rollback passed. The live unanswered transfer preserved the caller leg for the callback recording. A later handset trial reached the destination after recognizer recovery and one correlated answer. An unattended answered transfer verified reciprocal audio, both terminal usage observations and managed cleanup. Caller abandonment during ringing still needs live acceptance. See the [implementation evidence](../20261124-0822-implement-caller-recovery.md). The user approved bounded in-room recovery and a carrier-controlled exit. The timings and configuration below are proposed implementation choices. Track design review in the [planning record](../20261124-0807-caller-recovery-milestone.md).
 
 ## Runnable outcome and dependencies
 
@@ -57,7 +57,7 @@ On a separate QA handset call, the caller heard the complete callback recording.
 - [x] Add a separate transfer announcement and a carrier-native transfer command using the original caller leg. Correlate the resulting leg and terminal events to this single attempt. Track answered/bridged, busy, rejected, unanswered, ambiguous and caller-abandoned outcomes. The gateway owns carrier effects even after room teardown.
 - [x] Bound ringing (initial QA budget 20 s). On confirmed failure, if the caller leg remains controllable, play the callback recording then hang up. On ambiguous status reconcile before issuing conflicting commands. Establish through provider testing whether the original leg survives an unanswered transfer; if it does not, select a carrier-supported dial/bridge flow preserving the caller before enabling the option.
 - [x] Register both carrier legs with their owning cleanup lifecycle before declaring a successful handoff. Keep the carrier owner through human conversation. Track terminal webhook and usage evidence separately for each leg. A bridge event ends recovery timers, while caller abandonment or explicit platform hangup tears down outstanding dialing/bridged legs. Exercise room death during the announcement, ringing and an established bridge, including a concurrent platform hangup.
-- [ ] Gate: one transfer for duplicate callbacks and retries. A successful human conversation survives AI room cleanup. Exercise no answer and caller hangup during ringing on test numbers. Check announcement ordering, call finalization, carrier cleanup and usage for both legs.
+- [ ] Gate: one transfer for duplicate callbacks and retries. A successful human conversation survives AI room cleanup. Exercise answered, unanswered and caller-abandoned cases using automated test endpoints. Check announcement ordering, call finalization, carrier cleanup and usage for both legs.
 
 The managed signed-webhook case observes both carrier owners registered before
 the dial. After the signed bridge event, stopping the AI room leaves the bridge
@@ -142,8 +142,8 @@ remains part of checkpoint D.
 
 - [x] Record source generation, trigger, classified failure or unknown cause, cue request/playout, readiness, repeat, carrier command and terminal evidence with turn/leg correlation and monotonic timings. Keep transcripts, credentials, phone numbers and audio out of diagnostic labels. Distinguish server playback evidence, carrier acknowledgement and handset listening. Make the sequence inspectable with existing call details.
 - [x] Add scoped QA fault injection via test dependencies/harness: drop STT after barge-in, delay a final on a healthy stream, fail replacement readiness and suppress a playback completion. Keep injection unavailable to ordinary callers. Use synthetic equivalents of the gardening/commercial questions and a short acknowledgment as a healthy control.
-- [ ] On a real QA handset run healthy, recovered, announced-disconnect, successful transfer and unanswered-transfer cases. Record perceived silence, exact prompt heard, whether the repeat was captured, number of agent answers and confirmed final disposition. Measure fault-to-first-audible-cue and total time to recovery/exit against the checkpoint budgets. Verify no competing voices or silent active leg after a recoverable carrier outcome. Redact sensitive data from evidence.
-- [x] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Gate broader rollout on handset evidence and an exercised rollback to the prior call spec/compatible release.
+- [ ] Use automated test endpoints to verify healthy, recovered, announced-disconnect, successful transfer and unanswered-transfer cases. Capture audio and terminal evidence to measure fault-to-first-cue and total recovery or exit time against the checkpoint budgets. Verify one answer to the repeated question, no competing speech, and no silent active leg after a terminal carrier outcome.
+- [x] Run focused suites, umbrella formatting, warnings-as-errors compilation, strict Credo, tests, unused dependency check and Lean state-machine verification. Update operator troubleshooting and the evidence ledger. Deploy only through the normal authorized QA flow. Verify rollback to the prior call spec/compatible release.
 
 Call details expose the original carrier owner's monotonic phase offsets under
 each leg's `caller_recovery`. Queued journal retries retain the first offset.
@@ -162,17 +162,31 @@ umbrella applications with zero failures (435 excluded). The live handset
 gates are excluded from that count. The QA container still served the verified
 runtime revision when this run finished.
 
-The remaining handset repeat and answered-transfer checks can use one
-coordinated call to the pool receiver. The test waits for spoken consent and
-uses an authenticated carrier bridge event and destination-side transcription.
-The operator records audibility and perceived delays. [Handset procedure](../../docs/en/development/testing.md)
+The handset check is optional listening evidence for perceived silence, prompt
+wording, and audio overlap. Automated acceptance must run with machine-owned
+endpoints. The automated transfer fixture originates a call to its own caller ID and
+reserves the other pool number for the recovery destination. [Handset procedure](../../docs/en/development/testing.md)
+
+The 2026-11-25 coordinated call passed the repeat-completed and single-answer
+assertions. Telnyx confirmed the bridge and the destination room admitted the
+call, but its transcript did not confirm “bridge test” before the deadline.
+The caller heard the loss announcement and destination greeting, said
+“bridge test,” heard “Bravo,” then hung up. The destination replies “Bravo”
+to any speech. The automated follow-up below supplies the reciprocal audio and cleanup evidence.
+[Handset trial](../20261125-0523-handset-barge-in-cue.md)
+
+The [unattended two-number trial](../20261125-0554-automated-fallback-transfer.md)
+passed the answered recovery transfer through managed cleanup. The caller
+transcribed the neutral transfer announcement. After the bridge, both endpoints
+received a speech probe and the original and linked legs each stored successful
+terminal usage.
 
 The QA release at `4f1283be` returned HTTP 200 on its public health endpoint. The
 umbrella suite reported 6,571 tests and zero failures. Formatting,
 warnings-as-errors compilation, strict Credo, unused-dependency checks and
 the Lean verification lane passed. The later single-call test runner change
-(`9fab161e`) passed the Console suite with 679 tests. The handset gate above
-still controls broader rollout. [Operator troubleshooting](../../docs/en/development/call-runtime.md#diagnosing-a-caller-left-in-silence)
+(`9fab161e`) passed the Console suite with 679 tests. The automated transfer
+gate above remains open. [Operator troubleshooting](../../docs/en/development/call-runtime.md#diagnosing-a-caller-left-in-silence)
 
 The release rollback rehearsal used a disposable database. Release `9e320582`
 published the original inbound spec. Release `615f6975` enabled a recovery

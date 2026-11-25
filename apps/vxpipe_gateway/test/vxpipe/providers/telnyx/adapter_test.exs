@@ -121,6 +121,10 @@ defmodule Vxpipe.Providers.Telnyx.AdapterTest do
       clip = Base.decode64!(body["playback_content"])
       assert <<"RIFF", _::32-little, "WAVE", _::binary>> = clip
 
+      # Carrier transfer recording: “Please hold while I connect you.”
+      assert Base.encode16(:crypto.hash(:sha256, clip), case: :lower) ==
+               "86565143038f7bf25b4fd531211ba05e0ce06ddf120dcbafbdd50eddb96e2afe"
+
       refute clip ==
                File.read!(Application.app_dir(:vxpipe_gateway, "priv/telephony/callback.wav"))
 
@@ -134,6 +138,34 @@ defmodule Vxpipe.Providers.Telnyx.AdapterTest do
                "recovery-transfer-leg",
                :transfer
              )
+  end
+
+  test "caller waiting music is bounded and stops on the original carrier leg" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.request_path == "/v2/calls/original/actions/playback_start"
+      body = JSON.decode!(Req.Test.raw_body(conn))
+      assert body["loop"] == 3
+      assert body["target_legs"] == "self"
+
+      assert Base.decode64!(body["playback_content"]) ==
+               File.read!(
+                 Application.app_dir(:vxpipe_gateway, "priv/telephony/transfer-wait.wav")
+               )
+
+      Req.Test.json(conn, %{data: %{result: "ok"}})
+    end)
+
+    assert {:ok, %Submission{status: :accepted}} =
+             TelnyxAdapter.play_recovery_prompt(config(), "original", "wait-peer", :wait)
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.request_path == "/v2/calls/original/actions/playback_stop"
+      assert JSON.decode!(Req.Test.raw_body(conn)) == %{"command_id" => "stop-wait-peer"}
+      Req.Test.json(conn, %{data: %{result: "ok"}})
+    end)
+
+    assert {:ok, %Submission{status: :accepted}} =
+             TelnyxAdapter.stop_recovery_wait(config(), "original", "stop-wait-peer")
   end
 
   test "recovery dials a single carrier-linked leg with bounded ringing" do

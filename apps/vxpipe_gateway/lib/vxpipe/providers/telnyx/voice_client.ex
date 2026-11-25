@@ -17,6 +17,9 @@ defmodule Vxpipe.Providers.Telnyx.VoiceClient do
     request(options, "/calls/#{path_segment(call_control_id)}/actions/playback_start", payload)
   end
 
+  def stop_playback(options, control, payload),
+    do: request(options, "/calls/#{path_segment(control)}/actions/playback_stop", payload)
+
   @spec hangup(keyword(), String.t(), map()) :: outcome()
   def hangup(options, call_control_id, payload) do
     request(options, "/calls/#{path_segment(call_control_id)}/actions/hangup", payload)

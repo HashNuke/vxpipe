@@ -407,7 +407,7 @@ defmodule Vxpipe.Gateway.Telephony.CallerRecovery do
     %{state | recovery: %{r | peer: nil, peer_ref: nil}}
   end
 
-  defp clip_budget(:transfer), do: 6_460
+  defp clip_budget(:transfer), do: 4_140
   defp clip_budget(:callback), do: @clip_budget_ms
 
   def journal(state, phase),

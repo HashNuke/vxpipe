@@ -44,6 +44,9 @@ defmodule Vxpipe.Console.Test.LiveTelephonyAdapter do
     to: Vxpipe.Providers.Telnyx.Adapter
 
   @impl true
+  defdelegate stop_recovery_wait(options, control, id), to: Vxpipe.Providers.Telnyx.Adapter
+
+  @impl true
   def dial_recovery_peer(options, request),
     do: LiveTelephonyCallCleanup.command(provider(options), :dial_recovery_peer, options, request)
 
