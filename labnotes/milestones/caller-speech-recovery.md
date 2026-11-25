@@ -192,3 +192,9 @@ The release rollback rehearsal used a disposable database. Release `9e320582`
 published the original inbound spec. Release `615f6975` enabled a recovery
 destination, then the previous release republished the original source.
 Inbound route resolution selected the expected revision at each step.
+
+On the November 25 QA handset trial, interrupting the spoken cue exposed a
+final-frame playback accounting error before recognizer recovery or transfer.
+The [automated playback regression](../20261125-0845-handset-cue-disconnect.md)
+reproduces the interruption and checks that the next utterance completes on
+the same speech session.

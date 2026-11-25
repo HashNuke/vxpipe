@@ -515,7 +515,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     )
 
     case result do
-      {:ok, played_ms, _receipt} -> {:ok, played_ms, state}
+      {:ok, played_ms, _receipt} -> {:ok, speech_played_ms(state, played_ms), state}
       {:error, :wrong_turn} -> {:ok, 0, state}
       {:error, _reason} -> {:error, :audio_output_failed, state}
     end
@@ -523,11 +523,23 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   defp interrupt_output(current, state) do
     case Output.interrupt(state.output, current.handle.ref, current.request, self()) do
-      {:ok, played_ms} -> {:ok, played_ms, state}
+      {:ok, played_ms} -> {:ok, speech_played_ms(state, played_ms), state}
       {:error, :wrong_turn} -> {:ok, 0, state}
       {:error, _reason} -> {:error, :audio_output_failed, state}
     end
   end
+
+  # Sinks pace the final packet as a full 20 ms frame. Only its source PCM
+  # counts toward provider playback, even if a clear drains the padded packet.
+  defp speech_played_ms(%{current: %{phase: phase} = current} = state, played_ms)
+       when phase in [:finishing, :draining] do
+    rate = state.descriptor.format.sample_rate
+    padded_ms = div(current.input_samples * 1_000 + rate * 20 - 1, rate * 20) * 20
+
+    if played_ms == padded_ms, do: div(current.input_samples * 1_000, rate), else: played_ms
+  end
+
+  defp speech_played_ms(_state, played_ms), do: played_ms
 
   defp discard_obsolete_output(state) do
     current = state.current
@@ -577,7 +589,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     request = state.current.request
     handle = state.current.handle
 
-    case Session.settle_output(state.session, handle, total_ms) do
+    case Session.settle_output(state.session, handle, speech_played_ms(state, total_ms)) do
       :ok ->
         _current = Usage.finish(state.current, :succeeded, state.owner)
         send(state.owner, {:vxpipe_tts_playback, self(), request, :completed})

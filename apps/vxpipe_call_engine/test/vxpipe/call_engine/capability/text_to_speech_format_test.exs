@@ -50,6 +50,34 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechFormatTest do
     end
   end
 
+  test "interrupting a padded final frame preserves the session for the next turn" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    {capability, wire} = start_capability(48_000)
+    first = request(sink)
+    assert :ok = TextToSpeech.synthesize(capability, first)
+    context = assert_open(wire)
+
+    # One sample short of a 20 ms playout frame.
+    pcm = :binary.copy(<<100::little-signed-16>>, 959)
+    credit = TestTextToSpeechTransport.deliver_audio_with_result(wire, {context, pcm})
+    assert_receive {:test_tts_audio_result, ^credit, :ok}, 1_000
+    TestTextToSpeechTransport.deliver_control(wire, {:final, context})
+    assert_receive {:test_audio_output_finish, ^sink, "turn-format"}, 1_000
+    assert :ok = TestAudioOutputSink.playback_progress(sink, 20, 20)
+
+    assert {:ok, [{^first, 19}]} = TextToSpeech.interrupt(capability)
+
+    next = %{first | correlation_id: "next-turn", output_id: "next-output"}
+    assert :ok = TextToSpeech.synthesize(capability, next)
+    next_context = assert_open(wire)
+    credit = TestTextToSpeechTransport.deliver_audio_with_result(wire, {next_context, pcm})
+    assert_receive {:test_tts_audio_result, ^credit, :ok}, 1_000
+    TestTextToSpeechTransport.deliver_control(wire, {:final, next_context})
+    assert_receive {:test_audio_output_finish, ^sink, "next-turn"}, 1_000
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^next, :completed}, 1_000
+  end
+
   defp assert_playout(frame, sample, request) do
     assert frame.sample_rate == 48_000
     assert frame.codec == :linear16
