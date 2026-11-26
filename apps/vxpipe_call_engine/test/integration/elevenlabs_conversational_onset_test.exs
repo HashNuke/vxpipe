@@ -20,7 +20,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
         stream(session, File.read!(LiveFixture.pcm_path()) <> :binary.copy(<<0>>, 64_000), [])
 
       first = drain(session, first)
-      assert_turns(first, ["telescope"])
+      assert_turns(first, ["telescope"], @vad)
       assert stream(session, :binary.copy(<<0>>, 96_000), []) == []
 
       second =
@@ -31,7 +31,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
         )
 
       second = drain(session, second)
-      assert_turns(second, ["yes"])
+      assert_turns(second, ["yes"], @vad)
       assert List.first(first).turn_ref != List.first(second).turn_ref
       assert stream(session, :binary.copy(<<0>>, 96_000), []) == []
 
@@ -43,7 +43,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
         )
         |> then(&drain(session, &1))
 
-      assert_turns(repeated, ["yes"])
+      assert_turns(repeated, ["yes"], @vad)
       assert List.first(second).turn_ref != List.first(repeated).turn_ref
       assert stream(session, :binary.copy(<<0>>, 96_000), []) == []
       assert :ok = Session.close(session)
@@ -59,7 +59,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
         |> background_noise()
 
       events = stream(session, audio, []) |> then(&drain(session, &1))
-      assert_turns(events, ["telescope"])
+      assert_turns(events, ["telescope"], @vad)
       assert stream(session, background_noise(:binary.copy(<<0>>, 96_000)), []) == []
       assert :ok = Session.close(session)
       IO.puts("Scribe conversational background-noise acceptance: vad=#{@vad}")
@@ -73,7 +73,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
       assert tail == :binary.copy(<<0>>, 64_000)
       audio = :binary.copy(phrase, 19) <> :binary.copy(<<0>>, 128_000)
       events = stream(session, audio, []) |> then(&drain(session, &1))
-      assert_turns(events, ["telescope"])
+      assert_turns(events, ["telescope"], @vad)
       assert :ok = Session.close(session)
 
       IO.puts(
@@ -187,7 +187,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
     end
   end
 
-  defp assert_turns(events, expected_words) do
+  defp assert_turns(events, expected_words, vad) do
     starts = Enum.filter(events, &(&1.kind == :speech_started))
     ends = Enum.filter(events, &(&1.kind == :turn_ended))
     assert length(starts) == length(expected_words)
@@ -198,7 +198,8 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
 
     for {ended, word} <- Enum.zip(ends, expected_words) do
       assert String.downcase(ended.text) =~ word
-      assert ended.endpointing == :provider_gap
+      # Local VAD owns turn end; otherwise Scribe's provider silence does.
+      assert ended.endpointing == if(vad, do: :local_gap, else: :provider_gap)
       assert Enum.any?(events, &(&1.kind == :transcript and &1.turn_ref == ended.turn_ref))
     end
   end

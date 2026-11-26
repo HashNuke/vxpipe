@@ -58,6 +58,9 @@ defmodule Vxpipe.CallEngine.Speech.STSInput do
   def supported?(%{kind: :sts} = descriptor, %{operation: {:input_activity, _}}),
     do: descriptor.turn_control != "provider"
 
+  def supported?(%{kind: :stt, turn_finalize?: true}, %{operation: {:input_activity, :ended}}),
+    do: true
+
   def supported?(%{kind: :stt, frame_input?: true}, %{operation: {:stt_frame, _frame}}),
     do: true
 

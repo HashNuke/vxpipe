@@ -7,6 +7,9 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   This is provider-gap evidence, not semantic completion. A stable draft after a
   committed segment requests one explicit flush while upstream remains in VAD mode.
   Committed text is required before settlement; missing responses fail within a bounded deadline.
+  With local VAD, `input_activity(:ended)` finalizes on request: one explicit commit,
+  then settlement on its committed response, keeping the latest text when that
+  response is blank. Without an open turn it sends nothing.
   The stream lives inside one permission allocation.
   """
   use GenServer
@@ -31,6 +34,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
       Descriptor.new(
         kind: :stt,
         frame_input?: true,
+        turn_finalize?: true,
         settings: public,
         format: %{
           encoding: :linear16,
@@ -63,6 +67,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   def push_frame(pid, frame), do: GenServer.call(pid, {:push_frame, frame}, 5_000)
   @impl true
   def close(pid), do: GenServer.stop(pid, :normal, 5_000)
+  @impl true
+  def input_activity(pid, :ended), do: GenServer.call(pid, {:input_activity, :ended}, 5_000)
 
   @impl true
   def init(options) do
@@ -111,6 +117,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
          commit_watchdog: nil,
          commit_timeout: commit_timeout,
          flush: nil,
+         finalizing?: false,
          flush_timeout: flush_timeout,
          gap: gap
        }, {:continue, :connect}}
@@ -153,6 +160,29 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
 
   def handle_call({:push_frame, _frame}, _from, state),
     do: {:reply, {:error, :session_failed}, state}
+
+  def handle_call({:input_activity, :ended}, _from, %{ready?: false} = state),
+    do: {:reply, {:error, :session_failed}, state}
+
+  def handle_call({:input_activity, :ended}, _from, %{turn: nil} = state),
+    do: {:reply, :ok, state}
+
+  def handle_call({:input_activity, :ended}, _from, %{flush: {:commit, _, _}} = state),
+    do: {:reply, :ok, %{state | finalizing?: true}}
+
+  def handle_call({:input_activity, :ended}, _from, state) do
+    state = cancel_flush(state)
+
+    case request_commit(state) do
+      :ok ->
+        token = make_ref()
+        timer = Process.send_after(self(), {:flush_expired, token}, state.flush_timeout)
+        {:reply, :ok, %{state | flush: {:commit, timer, token}, finalizing?: true}}
+
+      _failure ->
+        {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
 
   @impl true
   def handle_info(
@@ -294,6 +324,15 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     end
   end
 
+  defp recognition(%{finalizing?: true} = state, :segment, text, receipt) do
+    state =
+      if String.trim(text) == "",
+        do: {:ok, state},
+        else: recognition(%{state | finalizing?: false}, :segment, text, receipt)
+
+    with {:ok, state} <- state, do: settle(state, receipt)
+  end
+
   defp recognition(state, :segment, text, receipt) do
     if String.trim(text) == "" do
       {:ok, state}
@@ -400,8 +439,11 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
 
         {:ok,
          %{
-           cancel_commit_watchdog(state)
+           (state
+            |> cancel_commit_watchdog()
+            |> cancel_flush())
            | turn: nil,
+             finalizing?: false,
              committed: "",
              partial: "",
              last_text: "",

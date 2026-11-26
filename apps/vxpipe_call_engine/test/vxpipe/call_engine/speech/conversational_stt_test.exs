@@ -49,7 +49,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
     assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}
   end
 
-  test "optional detector starts before words and is correlated to the recognizer's turn" do
+  test "optional detector starts before words and owns the turn while speech continues" do
     observer = self()
 
     classify = fn _model, stream, audio ->
@@ -82,7 +82,9 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
                endpointing: :provider_gap
              )
 
-    assert event(session, :turn_ended).turn_ref == start.turn_ref
+    # Local speech is still confirmed, so the recognizer end is only a segment.
+    _ = :sys.get_state(Session.provider(session))
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}
   end
 
@@ -314,6 +316,116 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
       assert :ok = Session.close(session)
     end
   end
+
+  describe "local VAD turn end" do
+    test "silence finalizes the recognizer and its final text ends the turn as a local gap" do
+      session = start_local_session(finalize: true)
+      assert_receive {:recognizer, recognizer, _inner}
+      _ = event(session, :ready)
+      assert {:ok, descriptor} = Session.describe(session)
+      assert descriptor.endpointing == :local_gap
+      refute descriptor.eager_end?
+
+      assert :ok = Session.push_audio(session, voice())
+      start = event(session, :speech_started)
+      native = make_ref()
+      assert :ok = emit(recognizer, :transcript, turn_ref: native, text: "book a table")
+      assert event(session, :transcript).text == "book a table"
+
+      assert :ok = Session.push_audio(session, silence())
+      assert_receive {:finalize_requested, ^recognizer}, 1_000
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
+
+      assert :ok =
+               emit(recognizer, :turn_ended,
+                 turn_ref: native,
+                 text: "book a table for two",
+                 endpointing: :provider_gap
+               )
+
+      assert event(session, :transcript).text == "book a table for two"
+      ended = event(session, :turn_ended)
+      assert ended.turn_ref == start.turn_ref
+      assert ended.text == "book a table for two"
+      assert ended.endpointing == :local_gap
+    end
+
+    test "a provider turn end while the caller still speaks does not end the turn" do
+      session = start_local_session(finalize: true)
+      assert_receive {:recognizer, recognizer, _inner}
+      _ = event(session, :ready)
+      assert :ok = Session.push_audio(session, voice())
+      start = event(session, :speech_started)
+      first = make_ref()
+
+      assert :ok =
+               emit(recognizer, :turn_ended,
+                 turn_ref: first,
+                 text: "I want",
+                 endpointing: :provider_gap
+               )
+
+      assert event(session, :transcript).text == "I want"
+      assert :ok = Session.push_audio(session, voice())
+      assert :ok = emit(recognizer, :transcript, turn_ref: make_ref(), text: "a table")
+      transcript = event(session, :transcript)
+      assert transcript.text == "I want a table"
+      assert transcript.turn_ref == start.turn_ref
+      _ = :sys.get_state(Session.provider(session))
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
+    end
+
+    test "a recognizer without finalization ends with its latest text after a bounded wait" do
+      session = start_local_session(finalize: false)
+      assert_receive {:recognizer, recognizer, _inner}
+      _ = event(session, :ready)
+      assert :ok = Session.push_audio(session, voice())
+      start = event(session, :speech_started)
+      assert :ok = emit(recognizer, :transcript, turn_ref: make_ref(), text: "hello there")
+      _ = event(session, :transcript)
+      assert :ok = Session.push_audio(session, silence())
+      ended = event(session, :turn_ended)
+      assert ended.turn_ref == start.turn_ref
+      assert ended.text == "hello there"
+      assert ended.endpointing == :local_gap
+      refute_received {:finalize_requested, _}
+    end
+
+    test "speech resuming inside the resume window keeps the turn open" do
+      session = start_local_session([finalize: true], endpoint_hangover_ms: 200)
+      assert_receive {:recognizer, recognizer, _inner}
+      _ = event(session, :ready)
+      assert :ok = Session.push_audio(session, voice())
+      start = event(session, :speech_started)
+      assert :ok = emit(recognizer, :transcript, turn_ref: make_ref(), text: "wait")
+      _ = event(session, :transcript)
+      assert :ok = Session.push_audio(session, silence())
+      assert_receive {:vxpipe_acoustic_activity, ^session, _turn, :speech_ended, _}, 1_000
+      assert :ok = Session.push_audio(session, voice())
+      assert_receive {:vxpipe_acoustic_activity, ^session, turn, :speech_started, _}, 1_000
+      assert turn == start.turn_ref
+      refute_receive {:finalize_requested, _}, 300
+    end
+  end
+
+  defp start_local_session(provider_options, private \\ []) do
+    classify = fn _model, stream, <<sample::little-16, _::binary>> = audio ->
+      frames = div(byte_size(audio), 1_024)
+      probability = if sample > 0, do: 0.9, else: 0.0
+      {:ok, stream, List.duplicate(probability, frames)}
+    end
+
+    start_session(
+      true,
+      [load: fn -> {:ok, :model} end, classify: classify],
+      [sample_rate: 16_000] ++ provider_options,
+      [],
+      Keyword.merge([endpoint_hangover_ms: 20, final_wait_ms: 100], private)
+    )
+  end
+
+  defp voice, do: :binary.copy(<<1, 0>>, 2_048)
+  defp silence, do: :binary.copy(<<0, 0>>, 8_192)
 
   defp start_session(
          vad,

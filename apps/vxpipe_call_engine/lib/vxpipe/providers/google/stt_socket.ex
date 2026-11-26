@@ -25,7 +25,7 @@ defmodule Vxpipe.Providers.Google.STTSocket do
   end
 
   def close(socket),
-    do: Socket.close(socket, ~s({"realtimeInput":{"audioStreamEnd":true}}))
+    do: Socket.close(socket, STT.audio_stream_end())
 
   @impl true
   def handle_frame({:text, message}, state), do: forward(message, state)

@@ -51,5 +51,17 @@ defmodule Vxpipe.CallEngine.Speech.STTProvider do
   """
   @callback finish_input(pid()) :: :ok | {:error, atom()}
 
-  @optional_callbacks finish_input: 1, push_frame: 2
+  @doc """
+  Conversational finalization requested by local VAD after caller silence.
+
+  Providers declaring `turn_finalize?: true` accept `:ended` through the same
+  ordered input slot as audio. They ask upstream recognition to finalize the
+  audio accepted so far and then emit `:turn_ended` for the current native turn
+  promptly, carrying its final text, or nothing when no turn is open. `:ok`
+  proves acceptance only. This is not finite-input termination; later audio
+  continues the same recognition stream.
+  """
+  @callback input_activity(pid(), :ended) :: :ok | {:error, atom()}
+
+  @optional_callbacks finish_input: 1, push_frame: 2, input_activity: 2
 end

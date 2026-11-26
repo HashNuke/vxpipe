@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
                 input_format: nil,
                 finite_input?: false,
                 frame_input?: false,
+                turn_finalize?: false,
                 speech_start?: false,
                 speech_start_evidence: nil,
                 response_start?: false,
@@ -34,6 +35,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
               :input_format,
               :finite_input?,
               :frame_input?,
+              :turn_finalize?,
               :speech_start?,
               :speech_start_evidence,
               :response_start?,
@@ -62,6 +64,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           input_format: map() | nil,
           finite_input?: boolean(),
           frame_input?: boolean(),
+          turn_finalize?: boolean(),
           usage_identity: map(),
           readiness: :initialized | :provider_acknowledged,
           endpointing:
@@ -112,6 +115,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          (not descriptor.response_start? or descriptor.kind == :sts) and
          is_boolean(descriptor.resume?) and
          valid_input_capabilities?(descriptor) and
+         valid_turn_finalize?(descriptor) and
          (not descriptor.eager_end? or
             descriptor.endpointing in [:provider_semantic, :provider_gap]) and
          valid_kind?(descriptor) do
@@ -145,6 +149,11 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   end
 
   def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
+
+  # Conversational finalization on request is an STT recognizer capability.
+  defp valid_turn_finalize?(%{turn_finalize?: false}), do: true
+  defp valid_turn_finalize?(%{kind: :stt, turn_finalize?: true}), do: true
+  defp valid_turn_finalize?(_descriptor), do: false
 
   defp valid_input_capabilities?(%{kind: :stt} = descriptor),
     do: is_boolean(descriptor.frame_input?) and is_boolean(descriptor.finite_input?)

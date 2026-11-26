@@ -212,6 +212,58 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
   end
 
+  describe "local VAD finalization" do
+    test "a finalize request commits and settles on the committed segment" do
+      {session, wire} = start_session()
+      assert {:ok, descriptor} = Session.describe(session)
+      assert descriptor.turn_finalize?
+      Wire.deliver(wire, {:partial, "book a table"})
+      started = event(session, :speech_started)
+      _ = event(session, :transcript)
+
+      assert :ok = Session.input_activity(session, :ended)
+      assert_receive {:scribe_commit, ^wire}, 1_000
+      Wire.deliver(wire, {:segment, "book a table for two"})
+      assert event(session, :transcript).text == "book a table for two"
+      ended = event(session, :turn_ended)
+      assert ended.turn_ref == started.turn_ref
+      assert ended.text == "book a table for two"
+    end
+
+    test "an empty committed response settles the turn with its latest text" do
+      {session, wire} = start_session()
+      Wire.deliver(wire, {:partial, "hi"})
+      _ = event(session, :speech_started)
+      _ = event(session, :transcript)
+      assert :ok = Session.input_activity(session, :ended)
+      assert_receive {:scribe_commit, ^wire}, 1_000
+      Wire.deliver(wire, {:segment, ""})
+      assert event(session, :turn_ended).text == "hi"
+    end
+
+    test "a finalize request without an open turn sends no commit" do
+      {session, wire} = start_session()
+      assert :ok = Session.input_activity(session, :ended)
+      refute_receive {:scribe_commit, ^wire}, 200
+      refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
+    end
+
+    test "a pending draft flush is reused rather than committed twice" do
+      {session, wire} = start_session()
+      Wire.deliver(wire, {:segment, "first"})
+      _ = event(session, :speech_started)
+      _ = event(session, :transcript)
+      Wire.deliver(wire, {:partial, "second"})
+      _ = event(session, :transcript)
+      assert_receive {:scribe_commit, ^wire}, 1_000
+      assert :ok = Session.input_activity(session, :ended)
+      refute_receive {:scribe_commit, ^wire}, 200
+      Wire.deliver(wire, {:segment, "second"})
+      # The commit repeats the draft, so only the settlement is new.
+      assert event(session, :turn_ended).text == "first second"
+    end
+  end
+
   defp start_session(extra_private \\ []) do
     tree = start_supervised!({CapabilityTree, owner: self()})
     assert {:ok, config} = Scribe.new(api_key: "synthetic", commit_strategy: :vad)

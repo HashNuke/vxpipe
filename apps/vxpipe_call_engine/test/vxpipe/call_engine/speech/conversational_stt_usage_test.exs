@@ -408,32 +408,35 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTUsageTest do
     }
 
     capability =
-      start_supervised!(
-        {SpeechToText,
-         identity ++
-           [
-             owner: self(),
-             speech_scope: CapabilityTree.scope(tree),
-             initial_policy: policy,
-             provider:
-               {ConversationalSTT, [provider: SpeechOnsetProbe, options: options, vad: vad]},
-             provider_private: [
-               recognizer: SpeechOnsetProbe,
-               recognizer_options: options,
-               recognizer_private: [observer: self()],
-               activity_options: [
-                 load: fn -> {:ok, :model} end,
-                 classify: fn _model, stream, _pcm -> {:ok, stream, []} end
-               ]
-             ],
-             usage: [
-               call_id: "call",
-               participant_id: "p",
-               activation_id: nil,
-               provider: provider
+      start_supervised!({SpeechToText,
+       identity ++
+         [
+           owner: self(),
+           speech_scope: CapabilityTree.scope(tree),
+           initial_policy: policy,
+           provider:
+             {ConversationalSTT, [provider: SpeechOnsetProbe, options: options, vad: vad]},
+           # With VAD the turn ends locally: a 1 ms resume window enters the
+           # bounded final wait at once, and its 10 s limit keeps the turn
+           # open until each test's recognizer final settles it.
+           provider_private: [
+             endpoint_hangover_ms: 1,
+             final_wait_ms: 10_000,
+             recognizer: SpeechOnsetProbe,
+             recognizer_options: options,
+             recognizer_private: [observer: self()],
+             activity_options: [
+               load: fn -> {:ok, :model} end,
+               classify: fn _model, stream, _pcm -> {:ok, stream, []} end
              ]
-           ]}
-      )
+           ],
+           usage: [
+             call_id: "call",
+             participant_id: "p",
+             activation_id: nil,
+             provider: provider
+           ]
+         ]})
 
     assert_receive {:recognizer, recognizer, inner}
     assert_receive {:vxpipe_stt_signal, ^capability, _, %{kind: :connected}}, 1_000

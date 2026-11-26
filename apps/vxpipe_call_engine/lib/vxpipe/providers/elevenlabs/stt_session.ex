@@ -113,6 +113,10 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
   @impl true
   def push_frame(pid, frame), do: GenServer.call(pid, {:push_frame, frame}, 5_000)
+  # Only continuous (VAD commit) sessions declare `turn_finalize?`, so the input
+  # slot never routes this to a manual-commit session.
+  @impl true
+  def input_activity(pid, :ended), do: GenServer.call(pid, {:input_activity, :ended}, 5_000)
   @impl true
   def close(pid) do
     GenServer.call(pid, :close, 5_000)

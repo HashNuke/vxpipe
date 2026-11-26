@@ -40,6 +40,7 @@ defmodule Vxpipe.Providers.Deepgram.STTSession do
         },
         readiness: :provider_acknowledged,
         endpointing: :provider_semantic,
+        turn_finalize?: true,
         speech_start?: true,
         eager_end?: true,
         resume?: true
@@ -55,6 +56,11 @@ defmodule Vxpipe.Providers.Deepgram.STTSession do
 
   @impl true
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
+
+  # Local VAD finalization: Flux `ForceEndTurn` ends the open turn with the
+  # audio sent so far; its `EndOfTurn` then settles the turn as usual.
+  @impl true
+  def input_activity(pid, :ended), do: GenServer.call(pid, :force_end_turn, 5_000)
 
   @impl true
   def close(pid) do
@@ -99,6 +105,22 @@ defmodule Vxpipe.Providers.Deepgram.STTSession do
     case state.wire_module.send_audio(state.wire, audio) do
       :ok -> {:reply, :ok, state}
       {:error, _reason} -> fail_call(state)
+    end
+  catch
+    :exit, _reason -> fail_call(state)
+  end
+
+  def handle_call(:force_end_turn, _from, %{turns: turns} = state) when map_size(turns) == 0,
+    do: {:reply, :ok, state}
+
+  def handle_call(:force_end_turn, _from, state) do
+    if function_exported?(state.wire_module, :force_end_turn, 1) do
+      case state.wire_module.force_end_turn(state.wire) do
+        :ok -> {:reply, :ok, state}
+        {:error, _reason} -> fail_call(state)
+      end
+    else
+      {:reply, {:error, :unsupported_operation}, state}
     end
   catch
     :exit, _reason -> fail_call(state)

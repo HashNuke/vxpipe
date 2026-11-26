@@ -135,6 +135,32 @@ defmodule Vxpipe.Providers.Google.STTSessionTest do
     assert_receive {:test_google_stt_audio, ^first_wire, <<1, 0>>}
   end
 
+  describe "local VAD finalization" do
+    test "a finalize request during speech flushes the utterance with audio stream end" do
+      {session, wire} = start_session()
+      assert_control(wire, %{"setup" => %{"model" => "models/gemini-3.5-transcribe-live"}})
+      TestGoogleSTTTransport.deliver(wire, ~s({"setupComplete":{}}))
+      assert %Event{kind: :ready} = next_event(session)
+      assert {:ok, descriptor} = Session.describe(session)
+      assert descriptor.turn_finalize?
+
+      TestGoogleSTTTransport.deliver(wire, ~s({"voiceActivity":{"type":"ACTIVITY_START"}}))
+      assert %Event{kind: :speech_started} = next_event(session)
+      assert :ok = Session.input_activity(session, :ended)
+      assert_receive {:test_google_stt_control, ^wire, control}
+      assert JSON.decode!(control) == %{"realtimeInput" => %{"audioStreamEnd" => true}}
+    end
+
+    test "a finalize request without an active utterance sends nothing" do
+      {session, wire} = start_session()
+      assert_control(wire, %{"setup" => %{"model" => "models/gemini-3.5-transcribe-live"}})
+      TestGoogleSTTTransport.deliver(wire, ~s({"setupComplete":{}}))
+      assert %Event{kind: :ready} = next_event(session)
+      assert :ok = Session.input_activity(session, :ended)
+      refute_receive {:test_google_stt_control, ^wire, _control}, 100
+    end
+  end
+
   defp start_session do
     tree = start_supervised!({CapabilityTree, owner: self()})
     assert {:ok, config} = STT.new(api_key: "synthetic-key")

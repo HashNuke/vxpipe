@@ -2,7 +2,10 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   @moduledoc """
   Allocation-owned human STT composition. Native recognition events are
   acknowledged before translation to one canonical turn stream. Transcript
-  onset is the default; optional Silero observes the same accepted input.
+  onset is the default, with turn ends from the recognizer. With `vad: true`,
+  Silero observes the same accepted input and owns both turn start and turn end
+  through `LocalTurnEnd`; recognizer turns become segments, and recognizers
+  declaring `turn_finalize?` are asked to finalize after caller silence.
   Output transcription uses the original provider directly.
   """
   use GenServer
@@ -18,6 +21,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     Channel,
     Descriptor,
     Event,
+    LocalTurnEnd,
     Session,
     SessionTree,
     Silero,
@@ -28,6 +32,9 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   @maximum_pcm_bytes 96_000
   @chunk_bytes 32_000
   @orphan_timeout_ms 60_000
+  @endpoint_hangover_ms 300
+  @final_wait_ms 1_000
+  @max_pending_links 4
 
   @impl true
   def models, do: []
@@ -48,14 +55,21 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          | settings: Map.put(descriptor.settings, :vad, vad),
            finite_input?: false,
            frame_input?: true,
+           turn_finalize?: false,
            speech_start_evidence: if(vad, do: :local_acoustic, else: :transcript)
-       }}
+       }
+       |> local_endpointing(vad)}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   rescue
     _error -> {:error, :invalid_configuration}
   end
+
+  defp local_endpointing(descriptor, false), do: descriptor
+
+  defp local_endpointing(descriptor, true),
+    do: %{descriptor | endpointing: :local_gap, eager_end?: false, resume?: false}
 
   @impl true
   def start_link(options), do: STTProvider.start_link(__MODULE__, options)
@@ -77,6 +91,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     private = Keyword.fetch!(options, :private)
     channel = Keyword.fetch!(options, :channel)
     boundary_timeout = Keyword.get(private, :boundary_timeout_ms, @orphan_timeout_ms)
+    hangover = Keyword.get(private, :endpoint_hangover_ms, @endpoint_hangover_ms)
+    final_wait = Keyword.get(private, :final_wait_ms, @final_wait_ms)
     recognizer = Keyword.fetch!(private, :recognizer)
 
     with {:ok, expected} <-
@@ -89,6 +105,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          {:ok, inner_descriptor} <-
            recognizer.configure(Keyword.fetch!(private, :recognizer_options)),
          true <- is_integer(boundary_timeout) and boundary_timeout in 1..@orphan_timeout_ms,
+         true <- is_integer(hangover) and hangover in 1..5_000,
+         true <- is_integer(final_wait) and final_wait in 1..10_000,
          :ok <- Channel.bind(channel) do
       {:ok,
        %{
@@ -123,7 +141,15 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          orphan: nil,
          boundary_timeout: boundary_timeout,
          ignored_refs: MapSet.new(),
-         turns: STTTurnStart.new(descriptor.settings.vad)
+         turns: STTTurnStart.new(),
+         local:
+           if(descriptor.settings.vad,
+             do: LocalTurnEnd.new(finalize?: inner_descriptor.turn_finalize?)
+           ),
+         endpoint_timer: nil,
+         pending_links: [],
+         endpoint_hangover: hangover,
+         final_wait: final_wait
        }, {:continue, :prepare}}
     else
       _invalid -> {:stop, :initialization_failed}
@@ -293,6 +319,18 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   def handle_info({:orphan, token}, %{orphan: {_timer, token}} = state), do: fail(state)
 
+  def handle_info({:local_endpoint, phase, token}, %{endpoint_timer: {_timer, token}} = state) do
+    elapsed =
+      if phase == :hangover,
+        do: LocalTurnEnd.hangover_elapsed(state.local),
+        else: LocalTurnEnd.final_wait_elapsed(state.local)
+
+    case local_result(%{state | endpoint_timer: nil}, elapsed) do
+      {:ok, state} -> {:noreply, state}
+      _failure -> fail(state)
+    end
+  end
+
   def handle_info({:DOWN, reference, :process, _pid, _reason}, state)
       when reference == state.inner_monitor or reference == state.runtime_monitor,
       do: fail(state)
@@ -369,34 +407,118 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   defp ignore_unadmitted(state, _reference), do: {:ok, state}
 
-  defp admitted_recognition(state, event) do
+  defp admitted_recognition(%{local: nil} = state, event) do
     with {:ok, turns, emissions} <- STTTurnStart.native(state.turns, event),
          :ok <- publish(state.channel, emissions) do
-      settled? = Enum.any?(emissions, fn {kind, _fields} -> kind == :turn_ended end)
       state = diagnostic_links(%{state | turns: turns}, emissions)
+      {:ok, state |> settle_detector(emissions) |> update_orphan(emissions)}
+    end
+  end
 
-      state =
-        if settled? do
-          %{
-            state
-            | recognition_epoch: state.recognition_epoch + 1,
-              acoustic_origin_ms: nil,
-              diagnostic_tap:
-                InferenceTap.reset(
-                  state.diagnostic_tap,
-                  state.recognition_epoch + 1,
-                  state.odd_pcm == ""
-                ),
-              pending_pcm: "",
-              pending_epoch: nil,
-              stream: if(state.runtime, do: Silero.new(), else: nil),
-              boundary: if(state.runtime, do: ActivityBoundary.new(), else: nil)
-          }
-        else
-          state
-        end
+  defp admitted_recognition(state, event) do
+    with {:ok, state} <- local_result(state, LocalTurnEnd.native(state.local, event)),
+         do: {:ok, local_link(state, event.turn_ref)}
+  end
 
-      {:ok, update_orphan(state, emissions)}
+  # Applies one LocalTurnEnd result: publish emissions in order, then run the
+  # owner actions it requested.
+  defp local_result(state, {:ok, local, emissions, actions}) do
+    with :ok <- publish(state.channel, emissions) do
+      state = %{state | local: local}
+      state = Enum.reduce(emissions, state, &local_link(&2, &1))
+      Enum.reduce_while(actions, {:ok, settle_detector(state, emissions)}, &local_action/2)
+    end
+  end
+
+  defp local_result(_state, _failure), do: {:error, :session_failed}
+
+  defp local_action(:arm_hangover, {:ok, state}),
+    do: {:cont, {:ok, arm_endpoint(state, :hangover, state.endpoint_hangover)}}
+
+  defp local_action(:arm_final_wait, {:ok, state}),
+    do: {:cont, {:ok, arm_endpoint(state, :final_wait, state.final_wait)}}
+
+  defp local_action(:cancel_timers, {:ok, state}), do: {:cont, {:ok, cancel_endpoint(state)}}
+
+  defp local_action(:finalize, {:ok, state}) do
+    case Session.input_activity(state.inner, :ended) do
+      :ok -> {:cont, {:ok, state}}
+      {:error, :unsupported_operation} -> {:cont, {:ok, state}}
+      _failure -> {:halt, {:error, :session_failed}}
+    end
+  end
+
+  defp arm_endpoint(state, phase, timeout) do
+    state = cancel_endpoint(state)
+    token = make_ref()
+    timer = Process.send_after(self(), {:local_endpoint, phase, token}, timeout)
+    %{state | endpoint_timer: {timer, token}}
+  end
+
+  defp cancel_endpoint(%{endpoint_timer: nil} = state), do: state
+
+  defp cancel_endpoint(%{endpoint_timer: {timer, _token}} = state) do
+    Process.cancel_timer(timer)
+    %{state | endpoint_timer: nil}
+  end
+
+  # Provider hints seen before a local turn opens are linked once it opens.
+  defp local_link(state, {:speech_started, _fields}) do
+    {pending, state} = {Enum.reverse(state.pending_links), %{state | pending_links: []}}
+    Enum.reduce(pending, state, &local_link(&2, &1))
+  end
+
+  defp local_link(state, {_kind, _fields}), do: state
+
+  defp local_link(%{diagnostic_handoff: nil} = state, _native), do: state
+
+  defp local_link(state, native) when is_reference(native) do
+    case LocalTurnEnd.active(state.local) do
+      nil ->
+        pending =
+          Enum.take([native | List.delete(state.pending_links, native)], @max_pending_links)
+
+        %{state | pending_links: pending}
+
+      canonical ->
+        offer_link(state, native, canonical)
+    end
+  end
+
+  defp local_link(state, _native), do: state
+
+  defp offer_link(state, native, canonical) do
+    with packet =
+           {:turn_link, state.inner.generation, native, state.allocation.generation, canonical},
+         false <- packet == state.diagnostic_last_link,
+         :ok <- CaptureHandoff.offer(state.diagnostic_handoff, packet) do
+      %{state | diagnostic_last_link: packet}
+    else
+      _ -> state
+    end
+  end
+
+  # A settled turn starts a new recognition epoch: in-flight detector work for
+  # earlier audio cannot start or extend the next turn.
+  defp settle_detector(state, emissions) do
+    if Enum.any?(emissions, fn {kind, _fields} -> kind == :turn_ended end) do
+      %{
+        state
+        | recognition_epoch: state.recognition_epoch + 1,
+          acoustic_origin_ms: nil,
+          diagnostic_tap:
+            InferenceTap.reset(
+              state.diagnostic_tap,
+              state.recognition_epoch + 1,
+              state.odd_pcm == ""
+            ),
+          pending_pcm: "",
+          pending_epoch: nil,
+          stream: if(state.runtime, do: Silero.new(), else: nil),
+          boundary: if(state.runtime, do: ActivityBoundary.new(), else: nil)
+      }
+    else
+      state
     end
   end
 
@@ -582,25 +704,35 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   end
 
   defp acoustic(state, events) do
-    Enum.reduce_while(events, {:ok, state}, fn
-      {:speech_started, sample}, {:ok, current} ->
-        with {:ok, turns, emissions} <- STTTurnStart.activity_started(current.turns),
-             :ok <- publish(current.channel, emissions) do
-          current = diagnostic_links(%{current | turns: turns}, emissions)
-          current = notify_activity(current, :speech_started, sample)
-          {:cont, {:ok, update_orphan(current, emissions)}}
-        else
-          _failure -> {:halt, {:error, :session_failed}}
-        end
+    Enum.reduce_while(events, {:ok, state}, fn {kind, sample}, {:ok, current} ->
+      result =
+        if kind == :speech_started,
+          do: LocalTurnEnd.acoustic_started(current.local),
+          else: LocalTurnEnd.acoustic_ended(current.local)
 
-      {:speech_ended, sample}, {:ok, current} ->
-        current = notify_activity(current, :speech_ended, sample)
-        {:cont, {:ok, arm_orphan(current)}}
+      # Speech start publishes before its activity evidence; speech end reports
+      # evidence for the turn before any later settlement.
+      current =
+        if kind == :speech_ended, do: notify_activity(current, kind, sample), else: current
+
+      case local_result(current, result) do
+        {:ok, next} ->
+          next = if kind == :speech_started, do: notify_activity(next, kind, sample), else: next
+          {:cont, {:ok, next}}
+
+        _failure ->
+          {:halt, {:error, :session_failed}}
+      end
     end)
   end
 
+  defp active_turn(%{local: nil} = state), do: state.turns.active
+  defp active_turn(state), do: LocalTurnEnd.active(state.local)
+
   defp notify_activity(state, kind, sample) do
-    if is_reference(state.turns.active) and Channel.input_active?(state.channel) do
+    active = active_turn(state)
+
+    if is_reference(active) and Channel.input_active?(state.channel) do
       sequence = state.acoustic_sequence + 1
 
       evidence = %{
@@ -615,7 +747,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
       send(state.allocation.consumer, {
         :vxpipe_acoustic_activity,
         state.allocation,
-        state.turns.active,
+        active,
         kind,
         evidence
       })

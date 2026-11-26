@@ -58,6 +58,7 @@ defmodule Vxpipe.Providers.Google.STTSession do
         },
         readiness: :provider_acknowledged,
         endpointing: :provider_semantic,
+        turn_finalize?: true,
         speech_start?: true
       )
     end
@@ -68,6 +69,11 @@ defmodule Vxpipe.Providers.Google.STTSession do
 
   @impl true
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
+
+  # Local VAD finalization: `audioStreamEnd` flushes the current utterance while
+  # model activity detection stays on; the next audio chunk resumes the stream.
+  @impl true
+  def input_activity(pid, :ended), do: GenServer.call(pid, :end_audio_stream, 5_000)
 
   @impl true
   def close(pid) do
@@ -133,6 +139,19 @@ defmodule Vxpipe.Providers.Google.STTSession do
   end
 
   def handle_call({:push_audio, _audio}, _from, state),
+    do: {:reply, {:error, :session_failed}, state}
+
+  def handle_call(:end_audio_stream, _from, %{ready?: true, active: active} = state)
+      when active != nil do
+    case state.wire_module.send_control(state.wire, STT.audio_stream_end()) do
+      :ok -> {:reply, :ok, state}
+      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
+
+  def handle_call(:end_audio_stream, _from, %{ready?: true} = state), do: {:reply, :ok, state}
+
+  def handle_call(:end_audio_stream, _from, state),
     do: {:reply, {:error, :session_failed}, state}
 
   def handle_call(:close, _from, state) do

@@ -14,6 +14,9 @@ defmodule Vxpipe.CallEngine.TestSpeechToTextTransport do
 
   def send_audio(transport, audio), do: GenServer.call(transport, {:send_audio, audio})
 
+  def force_end_turn(transport),
+    do: GenServer.call(transport, {:control, JSON.encode!(%{"type" => "ForceEndTurn"})})
+
   def close(transport), do: GenServer.call(transport, :close)
 
   def deliver(transport, payload), do: GenServer.cast(transport, {:deliver, payload})
@@ -53,6 +56,11 @@ defmodule Vxpipe.CallEngine.TestSpeechToTextTransport do
 
   def handle_call({:send_audio, audio}, _from, state) do
     send(state.observer, {:test_stt_audio, self(), audio})
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:control, payload}, _from, state) do
+    send(state.observer, {:test_stt_control, self(), payload})
     {:reply, :ok, state}
   end
 

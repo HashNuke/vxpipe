@@ -324,12 +324,31 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
       ~s({"serverContent":{"inputTranscription":{"text":"hello there"}}})
     )
 
+    # Local VAD ends the turn only after the caller's continuing stream is silent.
+    assert :ok =
+             Vxpipe.CallEngine.push_audio(attachment, %AudioFrame{
+               tenant_id: "tenant-demo",
+               room_id: room.room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: participant.participant_id,
+               connection_id: "conn-audio",
+               track_id: "embedded",
+               codec: :linear16,
+               sample_rate: 16_000,
+               channels: 1,
+               sequence_number: 1,
+               timestamp: 16_000,
+               payload: :binary.copy(<<0, 0>>, 16_000),
+               received_at: System.monotonic_time(:millisecond)
+             })
+
     assert_receive {:vxpipe_event,
                     %ParticipantTranscription{
                       correlation_id: ^turn,
                       final: true,
                       text: "hello there"
-                    }}
+                    }},
+                   3_000
 
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{correlation_id: ^turn}}
     assert_receive {:vxpipe_event, %TextOutput{correlation_id: ^turn}}

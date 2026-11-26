@@ -24,7 +24,8 @@ defmodule Vxpipe.CallEngine.SpeechToTextOnsetRuntimeTest do
       assert Keyword.get(composed_private, :recognizer) == MorseSession
       assert {:ok, descriptor} = ConversationalSTT.configure(options)
       assert descriptor.usage_identity.provider == :morse_code
-      assert descriptor.endpointing == :provider_gap
+      # Local VAD owns turn end; otherwise the recognizer's own endpoint does.
+      assert descriptor.endpointing == if(vad, do: :local_gap, else: :provider_gap)
       assert descriptor.settings.vad == vad
       refute descriptor.finite_input?
       historical = Map.delete(selection, :vad)

@@ -138,10 +138,21 @@ An Allow choice does not override a call-wide denial or grant another participan
 access to private media. Tools have separate [visibility and conversation
 behavior](agents-and-tools.md#conversation-behavior).
 
-Human STT starts on its first nonempty transcript by default. JSON authors can
-set `speech_to_text.vad: true` beside the provider/model fields for earlier local
-speech detection. It changes onset only; the recognizer still owns the turn's
-endpoint. There is no Console VAD toggle, and the setting does not apply to native
+Human STT starts on its first nonempty transcript by default, and the
+recognizer decides when the caller's turn ends. JSON authors can set
+`speech_to_text.vad: true` beside the provider/model fields to let local voice
+activity detection decide both instead. The turn starts when local speech is
+detected. It ends after about 0.8 seconds of local silence. If the caller speaks
+again within that window, the same turn continues.
+
+When the turn ends, Vxpipe asks the recognizer to finalize its text. ElevenLabs
+Scribe, Deepgram Flux and Gemini Transcribe Live support this. Cartesia Ink 2 and
+Morse have no finalize command, so Vxpipe waits a short, bounded time for their
+final text and otherwise ends the turn with the latest text it received. Pauses
+shorter than the silence window stay in one turn, even when the recognizer
+splits them into segments.
+
+There is no Console VAD toggle, and the setting does not apply to native
 speech-to-speech models.
 
 ### ElevenLabs Scribe models

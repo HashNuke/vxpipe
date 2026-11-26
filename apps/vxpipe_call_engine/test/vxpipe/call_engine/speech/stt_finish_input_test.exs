@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.Speech.STTFinishInputTest do
 
   test "finish_input is advertised as an optional agent-output STT operation" do
     callbacks = Vxpipe.CallEngine.Speech.STTProvider.behaviour_info(:optional_callbacks)
-    assert [finish_input: 1, push_frame: 2] == Enum.sort(callbacks)
+    assert [finish_input: 1, input_activity: 2, push_frame: 2] == Enum.sort(callbacks)
   end
 
   test "Morse emits all segments including a flushed tail before one terminal marker" do
