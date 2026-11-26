@@ -93,7 +93,11 @@ defmodule Vxpipe.Artifacts.Writer do
   end
 
   defp readiness_resource(spec, options) do
-    scope = if spec.kind == :full_mix, do: :room, else: {:participant, spec.participant_id}
+    scope =
+      if spec.kind in [:room_track, :full_mix],
+        do: :room,
+        else: {:participant, spec.participant_id}
+
     Resource.new(:recording_writer, scope, __MODULE__, options, binding: spec.artifact_id)
   end
 

@@ -10,7 +10,9 @@ defmodule Vxpipe.Persistence.Schema.CallArtifact do
     field(:public_id, :string)
     field(:room_id, Ecto.UUID)
     field(:incarnation_id, :string)
-    field(:kind, Ecto.Enum, values: [:full_mix, :participant_track])
+    field(:kind, Ecto.Enum, values: [:full_mix, :room_track, :participant_track])
+    field(:participant_key, :string)
+    field(:reconnection, :integer, default: 0)
     field(:participant_id, :string)
     field(:connection_id, :string)
     field(:track_id, :string)
@@ -41,6 +43,8 @@ defmodule Vxpipe.Persistence.Schema.CallArtifact do
       :room_id,
       :incarnation_id,
       :kind,
+      :participant_key,
+      :reconnection,
       :participant_id,
       :connection_id,
       :track_id,

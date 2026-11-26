@@ -7,9 +7,11 @@ defmodule Vxpipe.Persistence.CallDetailsArtifactProjection do
   def project(artifacts) when is_list(artifacts), do: Enum.map(artifacts, &artifact/1)
 
   defp artifact(%CallArtifact{} = artifact) do
-    compact(%{
+    %{
       "id" => artifact.id,
       "kind" => Atom.to_string(artifact.kind),
+      "track_name" => CallArtifact.track_name(artifact),
+      "reconnection" => artifact.reconnection,
       "participant_id" => artifact.participant_id,
       "connection_id" => artifact.connection_id,
       "track_id" => artifact.track_id,
@@ -26,7 +28,9 @@ defmodule Vxpipe.Persistence.CallDetailsArtifactProjection do
       "gaps" => artifact.gaps,
       "status" => Atom.to_string(artifact.status),
       "terminal_reason" => artifact.terminal_reason
-    })
+    }
+    |> compact()
+    |> Map.put("participant_key", artifact.participant_key)
   end
 
   defp compact(map), do: Map.reject(map, fn {_key, value} -> is_nil(value) end)

@@ -514,6 +514,14 @@ defmodule Vxpipe.CallEngine.CallSpec.CompilerTest do
     end
   end
 
+  test "reserves the room recording track name in the participant namespace" do
+    input = call_spec_input()
+    input = put_in(input, [:participants, "room"], input.participants["caller"])
+
+    assert {:error, %{details: %{"path" => ["participants", "room"]}}} =
+             CallSpec.new(input, resource_id: "support", revision: 1)
+  end
+
   defp call_spec_input do
     %{
       schema_version: @schema_version,

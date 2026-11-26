@@ -761,6 +761,55 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert {:discard, :call_room_mismatch} = EctoStorage.write(context.options, invalid_room)
   end
 
+  test "persists track names from room and participant writer manifests", context do
+    {call, incarnation_id} = running_call(context)
+
+    for {id, kind, participant, key, reconnect, name} <- [
+          {"r", :room_track, nil, nil, 0, "room"},
+          {"c", :participant_track, "p", "caller", 0, "caller"},
+          {"d", :participant_track, "p", "caller", 1, "caller-1"},
+          {"l", :participant_track, "legacy", nil, 0, "legacy"}
+        ] do
+      assert {:ok, spec} =
+               Vxpipe.Artifacts.ArtifactSpec.new(%{
+                 tenant_id: call.tenant_key,
+                 call_id: call.id,
+                 room_id: call.room_id,
+                 incarnation_id: incarnation_id,
+                 artifact_id: id,
+                 object_key: "recordings/" <> id,
+                 kind: kind,
+                 participant_id: participant,
+                 participant_key: key,
+                 reconnection: reconnect,
+                 connection_id: participant && id,
+                 track_id: participant && "audio",
+                 sample_rate: 48_000,
+                 channels: 1,
+                 sample_format: :s16le
+               })
+
+      progress = %{
+        failed_chunks: 0,
+        gaps: [],
+        started_offset_samples: 0,
+        ended_offset_samples: 960,
+        sample_count: 960,
+        accepted_chunks: 1
+      }
+
+      manifest = Manifest.build(spec, progress, 0, :normal)
+      result = %Result{manifest: manifest, artifact: %{object_key: spec.object_key}}
+      assert :ok = EctoStorage.store_metadata(context.options, result)
+
+      assert {:ok, artifact} =
+               Calls.fetch_call_artifact(context.principal, call.id, id, context.options)
+
+      assert [%{"track_name" => ^name, "reconnection" => ^reconnect, "participant_key" => ^key}] =
+               Vxpipe.Persistence.CallDetailsArtifactProjection.project([artifact])
+    end
+  end
+
   test "EctoStorage stores idempotent terminal recording metadata for one call", context do
     {call, incarnation_id} = running_call(context)
 

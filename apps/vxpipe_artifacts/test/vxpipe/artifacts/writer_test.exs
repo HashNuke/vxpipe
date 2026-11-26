@@ -10,6 +10,34 @@ defmodule Vxpipe.Artifacts.WriterTest do
     Writers
   }
 
+  test "reports the room audio writer as a room readiness resource" do
+    spec = %{
+      tenant_id: "tenant-test",
+      call_id: "call-test",
+      room_id: "room-test",
+      incarnation_id: "incarnation-test",
+      artifact_id: "room-audio",
+      object_key: "recordings/room.s16le",
+      kind: :room_track,
+      sample_rate: 48_000,
+      channels: 1,
+      sample_format: :s16le
+    }
+
+    assert {:ok, writer} =
+             Writers.start_writer(
+               source: self(),
+               spec: spec,
+               object_store: TestObjectStore,
+               object_store_options: [observer: self()],
+               maximum_pending_chunks: 2,
+               drain_timeout_ms: 1_000
+             )
+
+    assert_receive {:test_object_store_opened, _task, _spec}
+    assert {:ok, %{scope: :room}, :ready} = Writer.readiness(writer)
+  end
+
   test "a supervised bounded writer drains accepted chunks after its source exits" do
     source = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
 

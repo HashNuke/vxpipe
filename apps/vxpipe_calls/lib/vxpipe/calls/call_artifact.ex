@@ -22,14 +22,14 @@ defmodule Vxpipe.Calls.CallArtifact do
     :status,
     :terminal_reason
   ]
-  @optional_fields [:participant_id, :connection_id, :track_id]
+  @optional_fields [:participant_id, :connection_id, :track_id, :participant_key, :reconnection]
   @identity_fields [:id, :tenant_key, :call_id, :room_id, :incarnation_id]
 
   @derive {Inspect, except: [:object_reference]}
   @enforce_keys @required_fields
-  defstruct @required_fields ++ @optional_fields
+  defstruct @required_fields ++ List.delete(@optional_fields, :reconnection) ++ [reconnection: 0]
 
-  @type kind :: :full_mix | :participant_track
+  @type kind :: :full_mix | :room_track | :participant_track
   @type status :: :complete | :incomplete
   @type t :: %__MODULE__{}
 
@@ -50,6 +50,15 @@ defmodule Vxpipe.Calls.CallArtifact do
   end
 
   def new(_attributes), do: {:error, :invalid_call_artifact}
+
+  @spec track_name(t()) :: String.t()
+  def track_name(%__MODULE__{kind: :room_track}), do: "room"
+  def track_name(%__MODULE__{kind: :full_mix}), do: "full_mix"
+
+  def track_name(%__MODULE__{} = artifact) do
+    key = artifact.participant_key || artifact.participant_id
+    if artifact.reconnection > 0, do: "#{key}-#{artifact.reconnection}", else: key
+  end
 
   defp required(attributes) do
     if Enum.all?(@required_fields, &Keyword.has_key?(attributes, &1)),
@@ -83,13 +92,18 @@ defmodule Vxpipe.Calls.CallArtifact do
     connection_id = Keyword.get(attributes, :connection_id)
     track_id = Keyword.get(attributes, :track_id)
 
+    key = Keyword.get(attributes, :participant_key)
+    reconnect = Keyword.get(attributes, :reconnection, 0)
+
     valid? =
       case Keyword.fetch!(attributes, :kind) do
-        :full_mix ->
-          Enum.all?([participant_id, connection_id, track_id], &is_nil/1)
+        kind when kind in [:full_mix, :room_track] ->
+          is_nil(key) and reconnect === 0 and
+            Enum.all?([participant_id, connection_id, track_id], &is_nil/1)
 
         :participant_track ->
-          Enum.all?([participant_id, connection_id, track_id], &valid_string?(&1, 256))
+          (is_nil(key) or valid_string?(key, 255)) and nonnegative?(reconnect) and
+            Enum.all?([participant_id, connection_id, track_id], &valid_string?(&1, 256))
 
         _invalid ->
           false

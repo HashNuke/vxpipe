@@ -23,7 +23,14 @@ defmodule Vxpipe.Artifacts.Manifest do
     :status,
     :terminal_reason
   ]
-  defstruct @enforce_keys ++ [participant_id: nil, connection_id: nil, track_id: nil]
+  defstruct @enforce_keys ++
+              [
+                participant_key: nil,
+                reconnection: 0,
+                participant_id: nil,
+                connection_id: nil,
+                track_id: nil
+              ]
 
   @type status :: :complete | :incomplete
   @type t :: %__MODULE__{}
@@ -42,6 +49,8 @@ defmodule Vxpipe.Artifacts.Manifest do
       kind: spec.kind,
       object_key: spec.object_key,
       participant_id: spec.participant_id,
+      participant_key: spec.participant_key,
+      reconnection: spec.reconnection,
       connection_id: spec.connection_id,
       track_id: spec.track_id,
       sample_rate: spec.sample_rate,

@@ -10,6 +10,8 @@ defmodule Vxpipe.Artifacts.ArtifactSpec do
     :object_key,
     :kind,
     :participant_id,
+    :participant_key,
+    :reconnection,
     :connection_id,
     :track_id,
     :sample_rate,
@@ -29,9 +31,16 @@ defmodule Vxpipe.Artifacts.ArtifactSpec do
     :channels,
     :sample_format
   ]
-  defstruct @enforce_keys ++ [participant_id: nil, connection_id: nil, track_id: nil]
+  defstruct @enforce_keys ++
+              [
+                participant_key: nil,
+                reconnection: 0,
+                participant_id: nil,
+                connection_id: nil,
+                track_id: nil
+              ]
 
-  @type kind :: :full_mix | :participant_track
+  @type kind :: :full_mix | :room_track | :participant_track
   @type t :: %__MODULE__{
           tenant_id: String.t(),
           call_id: String.t(),
@@ -41,6 +50,8 @@ defmodule Vxpipe.Artifacts.ArtifactSpec do
           object_key: String.t(),
           kind: kind(),
           participant_id: nil | String.t(),
+          participant_key: nil | String.t(),
+          reconnection: non_neg_integer(),
           connection_id: nil | String.t(),
           track_id: nil | String.t(),
           sample_rate: pos_integer(),
@@ -85,12 +96,15 @@ defmodule Vxpipe.Artifacts.ArtifactSpec do
       spec.sample_format == :s16le
   end
 
-  defp kind_identity?(%__MODULE__{kind: :full_mix} = spec) do
-    is_nil(spec.participant_id) and is_nil(spec.connection_id) and is_nil(spec.track_id)
+  defp kind_identity?(%__MODULE__{kind: kind} = spec) when kind in [:room_track, :full_mix] do
+    is_nil(spec.participant_key) and spec.reconnection === 0 and
+      is_nil(spec.participant_id) and is_nil(spec.connection_id) and is_nil(spec.track_id)
   end
 
   defp kind_identity?(%__MODULE__{kind: :participant_track} = spec) do
-    valid_string?(spec.participant_id, 128) and valid_string?(spec.connection_id, 128) and
+    (is_nil(spec.participant_key) or valid_string?(spec.participant_key, 255)) and
+      is_integer(spec.reconnection) and spec.reconnection >= 0 and
+      valid_string?(spec.participant_id, 128) and valid_string?(spec.connection_id, 128) and
       valid_string?(spec.track_id, 128)
   end
 

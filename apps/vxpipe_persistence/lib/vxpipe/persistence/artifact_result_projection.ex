@@ -15,6 +15,8 @@ defmodule Vxpipe.Persistence.ArtifactResultProjection do
         incarnation_id: manifest.incarnation_id,
         kind: manifest.kind,
         participant_id: manifest.participant_id,
+        participant_key: manifest.participant_key,
+        reconnection: manifest.reconnection,
         connection_id: manifest.connection_id,
         track_id: manifest.track_id,
         object_key: manifest.object_key,

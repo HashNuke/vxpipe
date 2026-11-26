@@ -82,7 +82,18 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
           variable_permissions: VariablePermissions.t()
         }
 
-  def new(call_spec_key, value, options \\ []) do
+  def new(call_spec_key, value, options \\ [])
+
+  def new("room", _value, _options) do
+    CallSpecValidation.invalid(
+      :invalid_call_spec,
+      "The call spec is invalid.",
+      ["participants", "room"],
+      "is reserved for room audio"
+    )
+  end
+
+  def new(call_spec_key, value, options) do
     code = :invalid_call_spec
     message = "The call spec is invalid."
     path = ["participants", call_spec_key]
