@@ -1,5 +1,12 @@
 defmodule Vxpipe.Calls.CallArtifact do
-  @moduledoc "Terminal metadata and storage reference for one call recording artifact."
+  @moduledoc """
+  Terminal metadata and storage reference for one call recording artifact.
+
+  `duplicate_frames` is the exact count of folded duplicate frames.
+  `selected_connection_ids` is only a bounded sample (up to 64 distinct
+  duplicate choices): singleton delivery persists no sample id, and the
+  counter stays exact when the sample is capped.
+  """
 
   @required_fields [
     :id,
@@ -22,12 +29,29 @@ defmodule Vxpipe.Calls.CallArtifact do
     :status,
     :terminal_reason
   ]
-  @optional_fields [:participant_id, :connection_id, :track_id, :participant_key, :reconnection]
+  @optional_fields [
+    :participant_id,
+    :connection_id,
+    :track_id,
+    :participant_key,
+    :reconnection,
+    :duplicate_frames,
+    :selected_connection_ids
+  ]
   @identity_fields [:id, :tenant_key, :call_id, :room_id, :incarnation_id]
 
   @derive {Inspect, except: [:object_reference]}
   @enforce_keys @required_fields
-  defstruct @required_fields ++ List.delete(@optional_fields, :reconnection) ++ [reconnection: 0]
+  defstruct @required_fields ++
+              [
+                participant_id: nil,
+                connection_id: nil,
+                track_id: nil,
+                participant_key: nil,
+                reconnection: 0,
+                duplicate_frames: 0,
+                selected_connection_ids: []
+              ]
 
   @type kind :: :full_mix | :room_track | :participant_track
   @type status :: :complete | :incomplete
@@ -132,10 +156,13 @@ defmodule Vxpipe.Calls.CallArtifact do
     started = Keyword.fetch!(attributes, :started_offset_samples)
     ended = Keyword.fetch!(attributes, :ended_offset_samples)
     gaps = Keyword.fetch!(attributes, :gaps)
+    duplicate_frames = Keyword.get(attributes, :duplicate_frames, 0)
+    selected_ids = Keyword.get(attributes, :selected_connection_ids, [])
 
     valid? =
       nonnegative?(sample_count) and nonnegative?(accepted_chunks) and
-        nonnegative?(rejected_chunks) and offsets?(sample_count, started, ended) and gaps?(gaps)
+        nonnegative?(rejected_chunks) and offsets?(sample_count, started, ended) and gaps?(gaps) and
+        nonnegative?(duplicate_frames) and selected_ids?(selected_ids)
 
     if valid?, do: :ok, else: {:error, :invalid_progress}
   end
@@ -185,6 +212,13 @@ defmodule Vxpipe.Calls.CallArtifact do
 
   defp optional_string?(nil, _maximum), do: true
   defp optional_string?(value, maximum), do: valid_string?(value, maximum)
+
+  defp selected_ids?(ids) when is_list(ids) do
+    length(ids) <= 64 and Enum.all?(ids, &valid_string?(&1, 128)) and
+      length(ids) == length(Enum.uniq(ids))
+  end
+
+  defp selected_ids?(_other), do: false
 
   defp valid_string?(value, maximum),
     do: is_binary(value) and value != "" and byte_size(value) <= maximum

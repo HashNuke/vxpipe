@@ -29,6 +29,8 @@ defmodule Vxpipe.Persistence.Schema.CallArtifact do
     field(:gaps, :map)
     field(:status, Ecto.Enum, values: [:complete, :incomplete])
     field(:terminal_reason, :string)
+    field(:duplicate_frames, :integer, default: 0)
+    field(:selected_connection_ids, {:array, :string}, default: [])
 
     belongs_to(:call, Call)
 
@@ -60,7 +62,9 @@ defmodule Vxpipe.Persistence.Schema.CallArtifact do
       :rejected_chunks,
       :gaps,
       :status,
-      :terminal_reason
+      :terminal_reason,
+      :duplicate_frames,
+      :selected_connection_ids
     ])
     |> validate_required([
       :public_id,

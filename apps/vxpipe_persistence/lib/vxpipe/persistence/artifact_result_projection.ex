@@ -31,7 +31,9 @@ defmodule Vxpipe.Persistence.ArtifactResultProjection do
         rejected_chunks: manifest.rejected_chunks,
         gaps: Enum.map(manifest.gaps, &gap/1),
         status: manifest.status,
-        terminal_reason: terminal_reason(manifest.terminal_reason)
+        terminal_reason: terminal_reason(manifest.terminal_reason),
+        duplicate_frames: Map.get(manifest, :duplicate_frames, 0) || 0,
+        selected_connection_ids: Map.get(manifest, :selected_connection_ids, []) || []
       )
     end
   end

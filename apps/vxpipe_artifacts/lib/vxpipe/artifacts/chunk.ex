@@ -12,7 +12,8 @@ defmodule Vxpipe.Artifacts.Chunk do
     :source_participant_ids,
     :payload
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [recording_duplicate_frames: 0, recording_selected_connection_id: nil]
 
   @type t :: %__MODULE__{
           sequence: non_neg_integer(),

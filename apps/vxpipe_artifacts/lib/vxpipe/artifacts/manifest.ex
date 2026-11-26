@@ -1,5 +1,12 @@
 defmodule Vxpipe.Artifacts.Manifest do
-  @moduledoc "Terminal evidence for one attempted streamed artifact."
+  @moduledoc """
+  Terminal evidence for one attempted streamed artifact.
+
+  `duplicate_frames` is the exact count of folded duplicate frames.
+  `selected_connection_ids` is only a bounded sample (first 64 distinct
+  duplicate choices, sorted): singleton delivery persists no sample id, and
+  the counter stays exact when the sample is capped.
+  """
 
   alias Vxpipe.Artifacts.ArtifactSpec
 
@@ -29,7 +36,9 @@ defmodule Vxpipe.Artifacts.Manifest do
                 reconnection: 0,
                 participant_id: nil,
                 connection_id: nil,
-                track_id: nil
+                track_id: nil,
+                duplicate_frames: 0,
+                selected_connection_ids: []
               ]
 
   @type status :: :complete | :incomplete
@@ -63,9 +72,18 @@ defmodule Vxpipe.Artifacts.Manifest do
       rejected_chunks: rejected,
       gaps: Enum.reverse(progress.gaps),
       status: status,
-      terminal_reason: terminal_reason
+      terminal_reason: terminal_reason,
+      duplicate_frames: Map.get(progress, :duplicate_frames, 0) || 0,
+      selected_connection_ids:
+        progress
+        |> Map.get(:selected_connection_ids, [])
+        |> normalize_selected_ids()
     }
   end
+
+  defp normalize_selected_ids(%MapSet{} = set), do: set |> MapSet.to_list() |> Enum.sort()
+  defp normalize_selected_ids(list) when is_list(list), do: list |> Enum.uniq() |> Enum.sort()
+  defp normalize_selected_ids(_other), do: []
 
   defp status(0, [], reason) when reason in [:normal, :shutdown], do: :complete
   defp status(_rejected, _gaps, _reason), do: :incomplete

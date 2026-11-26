@@ -150,7 +150,9 @@ defmodule Vxpipe.Persistence.ArtifactStore do
       rejected_chunks: artifact.rejected_chunks,
       gaps: %{"intervals" => artifact.gaps},
       status: artifact.status,
-      terminal_reason: artifact.terminal_reason
+      terminal_reason: artifact.terminal_reason,
+      duplicate_frames: Map.get(artifact, :duplicate_frames, 0) || 0,
+      selected_connection_ids: Map.get(artifact, :selected_connection_ids, []) || []
     })
   end
 
@@ -179,7 +181,9 @@ defmodule Vxpipe.Persistence.ArtifactStore do
       rejected_chunks: stored.rejected_chunks,
       gaps: Map.get(stored.gaps, "intervals", []),
       status: stored.status,
-      terminal_reason: stored.terminal_reason
+      terminal_reason: stored.terminal_reason,
+      duplicate_frames: Map.get(stored, :duplicate_frames, 0) || 0,
+      selected_connection_ids: Map.get(stored, :selected_connection_ids, []) || []
     )
   end
 

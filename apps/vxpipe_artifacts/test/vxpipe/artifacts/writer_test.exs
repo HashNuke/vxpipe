@@ -10,6 +10,40 @@ defmodule Vxpipe.Artifacts.WriterTest do
     Writers
   }
 
+  test "long calls retain bounded listener evidence and count all duplicates" do
+    alias Vxpipe.Artifacts.Writer.Progress
+
+    progress =
+      Enum.reduce(1..70, Progress.new(), fn n, progress ->
+        frame = %{
+          chunk(n, n * 960)
+          | recording_selected_connection_id: "listener-#{n}",
+            recording_duplicate_frames: 1
+        }
+
+        Progress.accept(progress, frame)
+      end)
+
+    assert progress.duplicate_frames == 70
+    assert MapSet.size(progress.selected_connection_ids) == 64
+    assert MapSet.member?(progress.selected_connection_ids, "listener-1")
+  end
+
+  test "singleton delivery without duplicates persists no listener sample" do
+    alias Vxpipe.Artifacts.Writer.Progress
+
+    progress =
+      Progress.new()
+      |> Progress.accept(%{
+        chunk(0, 0)
+        | recording_selected_connection_id: "listener-single",
+          recording_duplicate_frames: 0
+      })
+
+    assert progress.duplicate_frames == 0
+    assert MapSet.size(progress.selected_connection_ids) == 0
+  end
+
   test "reports the room audio writer as a room readiness resource" do
     spec = %{
       tenant_id: "tenant-test",
