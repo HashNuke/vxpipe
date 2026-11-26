@@ -50,11 +50,6 @@ connection and opening here. For outgoing calls, this tab also sets the ring
 timeout. The caller or callee remains a human participant in the source.
 Its transcription uses the human model default and its media follows call policy.
 
-The latest draft using schema `20261004.01` offers **Upgrade draft**. Review
-the notice about any dedicated opening voice, entry transcription override or
-entry media restriction before upgrading. Saving creates a new revision.
-Previously published calls keep their pinned configuration.
-
 Exactly one of these direction blocks is present:
 
 ```json

@@ -2,10 +2,8 @@ import { modelCatalogFixture } from "../modelCatalogFixtures";
 import { editorStoryFixture as editorFixture } from "./editorFixtures";
 import type { EditorSnapshot } from "./editor-state";
 import { newCallSpec } from "./seed";
-import { entryUpgradeNotice } from "./entry-schema-upgrade";
-import { parseSource } from "./source";
 
-export type EditorScenario = "default" | "new" | "invalid" | "published" | "outgoing" | "historical" | "entry-upgrade" | "long" | "large-integers";
+export type EditorScenario = "default" | "new" | "invalid" | "published" | "outgoing" | "historical" | "long" | "large-integers";
 export function pageSnapshot(scenario: EditorScenario): EditorSnapshot {
   if (scenario === "new") return { document: newCallSpec(modelCatalogFixture, { direction: "incoming" }) };
   const document = structuredClone(editorFixture);
@@ -27,19 +25,10 @@ export function pageSnapshot(scenario: EditorScenario): EditorSnapshot {
       id: { type: "integer", enum: [9007199254740992n, 9007199254740993n], minimum: -9007199254740993n },
     } } };
   }
-  if (scenario === "entry-upgrade") {
-    document.source.schema_version = "20261004.01";
-    document.source.participants.caller!.while_present = { record_audio: false };
-    document.source.opening_audio = { type: "text", text: "Welcome.", text_to_speech: { provider: "deepgram", model: "flux" } };
-    document.readOnly = true;
-    document.canUpgradeEntry = true;
-    document.notice = entryUpgradeNotice(document.source);
-  }
   if (scenario === "historical") {
-    document.source.schema_version = "20260915.01";
-    document.source.entry_caller = "caller"; document.source.entry_receiver = "intake";
-    delete document.source.incoming_call;
-    return { document: parseSource(JSON.stringify(document.source)), saved: { callSpecId: "appointments", revision: 1, publishedRevision: 1 } };
+    document.readOnly = true;
+    document.notice = "Viewing revision 1. This saved revision is read-only.";
+    return { document, saved: { callSpecId: "appointments", revision: 1, publishedRevision: 1 } };
   }
   return { document, saved: { callSpecId: "appointments", revision: 3, publishedRevision: scenario === "published" ? 3 : null } };
 }

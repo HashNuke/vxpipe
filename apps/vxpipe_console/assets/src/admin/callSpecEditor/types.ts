@@ -101,5 +101,5 @@ export type CallSpecSource = {
   tool_visibility_overrides?: Record<string, Record<string, Visibility>>;
   limits?: { max_duration_ms?: number };
 };
-export type SourceDocument = { source: CallSpecSource; readOnly: boolean; notice?: string; canUpgradeEntry?: boolean };
+export type SourceDocument = { source: CallSpecSource; readOnly: boolean; notice?: string };
 export type SourceIssue = { code: string; path: string[]; reason: string };

@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 import { expect, test } from "vitest";
 import { parseSource, serializeSource } from "./source";
-import { entryUpgradeNotice, upgradeEntrySettings } from "./entry-schema-upgrade";
 import { projectGraph } from "./graph";
 
 const examples = import.meta.glob<string>("../../../../../../examples/call-specs/*.json", {
@@ -52,20 +51,4 @@ test("unknown versions and non-document JSON do not get silently normalized", ()
   for (const value of ["null", "[]", '{"schema_version":"future","participants":{}}']) {
     expect(() => parseSource(value)).toThrow();
   }
-});
-
-test("upgrading a directional draft requires an explicit action and preserves the original revision", () => {
-  const previous = parseSource(JSON.stringify({schema_version: "20261004.01", incoming_call: { caller: "caller", handled_by: "assistant" }, participants: {
-    caller: {type: "human", connection: {service:"web",mode:"receive",admission:"start_call"}, while_present:{record_audio:false}, capabilities:{speech_to_text:{provider:"morse",model:"morse"}}},
-    assistant: {type:"agent",prompt:"Help."}}, opening_audio:{type:"text",text:"Hi",text_to_speech:{provider:"morse",model:"morse"}}}));
-  const notice = entryUpgradeNotice(previous.source);
-  expect(notice).toMatch(/media/i);
-  expect(notice).toMatch(/transcription/i);
-  expect(notice).toMatch(/voice/i);
-  const next = upgradeEntrySettings(previous.source);
-  expect(next.source.participants.caller).not.toHaveProperty("while_present");
-  expect(next.source.participants.caller).not.toHaveProperty("capabilities");
-  expect(next.source.opening_audio).toEqual({type:"text",text:"Hi"});
-  expect(next.source.schema_version).toBe("20261125.01");
-  expect(previous.source.participants.caller?.while_present).toEqual({record_audio:false});
 });

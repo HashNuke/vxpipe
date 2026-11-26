@@ -389,19 +389,3 @@ test("a written opening survives a switch to speech-to-speech and can be saved a
   await waitFor(() => expect(props.execute).toHaveBeenCalledTimes(1));
   expect(props.execute.mock.calls[0]![0]).toMatchObject({ action: "save", source: { opening_audio: document.source.opening_audio } });
 });
-
-test("the latest legacy draft upgrades locally without publishing or mutating saved history", () => {
-  const props = properties();
-  const document = structuredClone(snapshot.document);
-  document.source.schema_version = "20261004.01";
-  document.readOnly = true;
-  document.canUpgradeEntry = true;
-  document.notice = "Upgrade this draft to manage Entry in Call settings.";
-  render(<CallSpecEditor {...props} snapshot={{ ...snapshot, document }} />);
-  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
-  click("Upgrade draft");
-  expect(screen.getByText("Unsaved changes")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Upgrade draft" })).not.toBeInTheDocument();
-  expect(props.execute).not.toHaveBeenCalled();
-  expect(document.source.schema_version).toBe("20261004.01");
-});

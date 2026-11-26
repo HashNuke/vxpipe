@@ -4,7 +4,6 @@ import { catalogCapabilities, parseModelCatalog, type ModelCatalog } from "../mo
 import type { EditorSnapshot } from "./editor-state";
 import type { AuthoringError } from "./errorPresentation";
 import type { AvailableTool, EditorLookups, PhoneNumberPage } from "./inspectorTypes";
-import { entryUpgradeNotice } from "./entry-schema-upgrade";
 import { parseSource } from "./source";
 import type { ExecuteEditorRequest } from "./use-editor";
 import { record } from "./validationFields";
@@ -40,13 +39,6 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     if (requestedRevision !== undefined) {
       document.readOnly = true;
       document.notice = `Viewing revision ${saved.revision}. This saved revision is read-only.`;
-      if (document.source.schema_version !== "20261125.01") {
-        document.notice += " View the saved Entry overrides in the call spec JSON under More actions.";
-      }
-    }
-    if (requestedRevision === undefined && saved.revision === saved.latest_revision && document.source.schema_version === "20261004.01") {
-      document.canUpgradeEntry = true;
-      document.notice = entryUpgradeNotice(document.source);
     }
     const publication = parseCallSpecPublication(saved.publication);
     return { document, saved: { callSpecId: id, revision: saved.revision, publishedRevision: saved.published_revision, ...(publication ? { publication } : {}) } };

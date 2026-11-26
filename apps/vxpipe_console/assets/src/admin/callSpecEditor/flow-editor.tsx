@@ -137,9 +137,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     selectedNodeId={selectedNodeId} tab={tab} onTabChange={(tab) => { setTab(tab); setFocusRequest(undefined); }}
     onRenamed={selectNode} onRemoved={() => selectNode(null)} /></CredentialNamesContext>;
   return <JsonDraftContext value={{ drafts: jsonDrafts, setDrafts: setJsonDrafts }}><ActionFailureContext value={reportFailure}>
-    <FlowEditorLayout noticeAction={document.canUpgradeEntry
-      ? <button type="button" className="underline" disabled={reloading || !!state.pending || state.feedback.authoringDisabled || state.feedback.sessionExpired} onClick={editor.upgradeEntry}>Upgrade draft</button>
-      : noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
+    <FlowEditorLayout noticeAction={noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
       onSelectEdge={selectEdge} onAddNode={add}
       onConnect={(from, to) => { change((document) => setTransfer(document, from, to, true), "Couldn't connect these participants. Choose an agent and a transfer destination."); }}
       inspector={inspector} inspectorTitle={selectedNodeId && selectedNodeId !== "$entry" ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}

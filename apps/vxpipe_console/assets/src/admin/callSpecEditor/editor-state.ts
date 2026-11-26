@@ -3,7 +3,6 @@ import { stringifySourceJson } from "./source-json";
 import { applyActionResult, emptyActionFeedback, feedbackAfterEdit, type EditorActionFeedback } from "./action-feedback";
 import type { ActionFeedback, ActionResult } from "./errorPresentation";
 import type { CallSpecSource, SourceDocument, SourceIssue } from "./types";
-import { upgradeEntrySettings } from "./entry-schema-upgrade";
 import { validateSource } from "./validation";
 
 export type SavedRevision = { callSpecId: string; revision: number; publishedRevision: number | null; publication?: CallSpecPublication };
@@ -25,7 +24,6 @@ export type EditorState = EditorSnapshot & {
 };
 export type EditorResult = ActionResult & { callSpecId?: string };
 export type EditorEvent =
-  | { type: "upgrade-entry" }
   | { type: "edit"; document: SourceDocument }
   | { type: "start"; action: "save" | "publish" }
   | { type: "complete"; id: number; result: EditorResult }
@@ -48,11 +46,6 @@ export function editorReducer(state: EditorState, event: EditorEvent): EditorSta
     case "load":
       // A confirmed reload invalidates pending work without recycling its ID.
       return { ...createEditorState(event.snapshot), nextRequestId: state.nextRequestId };
-    case "upgrade-entry": {
-      if (!state.document.canUpgradeEntry || state.pending || state.feedback.authoringDisabled || state.feedback.sessionExpired) return state;
-      const document = upgradeEntrySettings(state.document.source);
-      return { ...state, document, clientIssues: validateSource(document.source), feedback: emptyActionFeedback() };
-    }
     case "edit":
       if (state.document.readOnly) return state;
       return { ...state, document: event.document, clientIssues: validateSource(event.document.source),

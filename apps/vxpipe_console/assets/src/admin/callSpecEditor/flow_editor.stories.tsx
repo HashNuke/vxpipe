@@ -64,11 +64,6 @@ export const Default: Story = { play: async ({ canvasElement }) => {
   await expect(body.getByRole("heading", { name: "New Patient Appointment Intake" })).toBeInTheDocument();
   await expect(body.getByRole("button", { name: "More actions" })).toBeEnabled();
 } };
-export const PreviousSchemaUpgrade: Story = { args: { scenario: "entry-upgrade" }, play: async ({ canvasElement }) => {
-  const canvas = within(canvasElement);
-  await expect(canvas.getByRole("button", { name: "Upgrade draft" })).toBeEnabled();
-  await expect(canvas.getByText(/Upgrading removes Entry’s media overrides/)).toBeVisible();
-} };
 export const EntryOpensCallSettings: Story = { play: async ({ canvasElement }) => {
   const body = within(canvasElement.ownerDocument.body);
   const models = body.queryByRole("tab", { name: "Models" });
@@ -106,7 +101,11 @@ export const Unavailable: Story = actionStory({ status: 503, error: { code: "cal
 export const NetworkFailure: Story = actionStory({}, "Couldn't save. Try again");
 export const PublishedRevision: Story = { args: { scenario: "published" } };
 export const OutgoingCall: Story = { args: { scenario: "outgoing" } };
-export const HistoricalSchema: Story = { args: { scenario: "historical" } };
+export const HistoricalRevision: Story = { args: { scenario: "historical" }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await expect(canvas.getByText("Viewing revision 1. This saved revision is read-only.")).toBeVisible();
+  await expect(canvas.getByRole("button", { name: "Publish" })).toBeDisabled();
+} };
 export const NarrowViewport: Story = { globals: { viewport: { value: "mobile1", isRotated: false } } };
 export const LargeIntegers: Story = { args: { scenario: "large-integers" } };
 export const LongContent: Story = { args: { scenario: "long" } };
