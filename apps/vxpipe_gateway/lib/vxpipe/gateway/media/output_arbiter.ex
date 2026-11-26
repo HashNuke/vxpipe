@@ -200,6 +200,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
           byte_order: :little,
           payload: frame.payload,
           audio_scope: :mixed,
+          origin: :room,
           output_generation: frame.output_generation,
           reply_to: self()
         }

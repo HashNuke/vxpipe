@@ -63,6 +63,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_transfer_readiness_waiting, ^connection}, 1_000
     assert_receive {:test_audio_output, ^sink, waiting}, 1_000
     assert waiting.audio_scope == :private
+    assert waiting.origin == :room
     assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
     refute_receive {:test_call_ready, _}, 100
     assert :ok = GenServer.call(connection, :complete_readiness)

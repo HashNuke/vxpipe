@@ -628,6 +628,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
         byte_order: format.byte_order,
         payload: normalized,
         audio_scope: audio_scope(request.purpose),
+        origin: output_origin(request.purpose),
         output_generation: request.output_generation,
         reply_to: self()
       })
@@ -674,6 +675,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   defp audio_scope(:transfer_briefing), do: :private
   defp audio_scope(_purpose), do: :conversation
+
+  # Opening audio is produced by the room, not the caller it greets. Tagging
+  # it as room origin keeps it off the caller's track.
+  defp output_origin(:opening_audio), do: :room
+  defp output_origin(_purpose), do: :participant
 
   defp stop_unavailable(reason, state) do
     _current = Usage.finish(state.current, :failed, state.owner)

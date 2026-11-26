@@ -129,6 +129,8 @@ defmodule Vxpipe.CallEngine.OpeningAudio.Player do
       channels: asset.channels,
       byte_order: asset.byte_order,
       payload: payload,
+      audio_scope: :conversation,
+      origin: :room,
       reply_to: self()
     }
   end

@@ -17,7 +17,7 @@ defmodule Vxpipe.CallEngine.Media.EgressAcceptedFrame do
     :channels,
     :payload
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [origin: :participant]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -27,6 +27,7 @@ defmodule Vxpipe.CallEngine.Media.EgressAcceptedFrame do
           connection_id: String.t(),
           sample_rate: pos_integer(),
           channels: pos_integer(),
+          origin: :participant | :room,
           payload: binary()
         }
 end

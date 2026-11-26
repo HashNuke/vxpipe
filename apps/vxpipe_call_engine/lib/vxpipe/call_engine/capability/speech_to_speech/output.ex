@@ -756,6 +756,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         byte_order: format.byte_order,
         payload: payload,
         audio_scope: :conversation,
+        origin: :participant,
         output_generation: state.output_generation,
         reply_to: self()
       })

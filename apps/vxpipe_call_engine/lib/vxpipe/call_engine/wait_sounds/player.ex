@@ -406,6 +406,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       byte_order: :little,
       payload: payload,
       audio_scope: if(state.phase == :caller_recovery, do: :conversation, else: :private),
+      origin: :room,
       output_generation: state.output_generation,
       reply_to: self()
     }
