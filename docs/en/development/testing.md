@@ -155,10 +155,10 @@ number. The second pool number receives the transfer. It injects room-media loss
 checks reciprocal speech after bridge, and waits for terminal usage and cleanup.
 `bin/livetests telnyx:inventory` shows account counts and pool eligibility.
 
-Both transfer lanes retain local WAV recordings in
-`tmp/live-telephony/<run>/<call>/<incarnation>/room.wav`. The runner prints the
-run directory. Each file contains the room mix from its first accepted sample,
-including silence across internal gaps. Earlier runs remain available after a
+Both transfer lanes opt in to recording and retain a WAV for each named track in
+`tmp/live-telephony/<run>/<call>/<incarnation>/<track>-<artifact>.wav`. The runner prints the
+run directory. Each file starts at the track’s first accepted sample and includes
+silence across internal gaps. Earlier runs remain available after a
 failed test. The checkout already ignores `tmp/`. The original room's recording
 ends when that room shuts down. In an automated transfer the machine caller
 can continue recording carrier playback and the bridged conversation.

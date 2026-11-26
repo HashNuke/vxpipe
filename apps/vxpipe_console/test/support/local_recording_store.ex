@@ -1,5 +1,5 @@
 defmodule Vxpipe.Console.Test.LocalRecordingStore do
-  @moduledoc "Retains full room mixes as ordinary WAV files during live transfer tests."
+  @moduledoc "Retains named room and participant tracks as ordinary WAV files during live transfer tests."
   @behaviour Vxpipe.Artifacts.ObjectStore
   @root Path.expand("../../../../tmp/live-telephony", __DIR__)
 
@@ -17,7 +17,7 @@ defmodule Vxpipe.Console.Test.LocalRecordingStore do
 
     [
       enabled: true,
-      targets: [:full_mix],
+      targets: [:room_track, :individual_tracks],
       maximum_egress_frames: 100,
       maximum_pull_frames: 16,
       writer:
@@ -32,16 +32,18 @@ defmodule Vxpipe.Console.Test.LocalRecordingStore do
   end
 
   @impl true
-  def open(%{kind: :full_mix} = spec, options) do
+  def open(spec, options) do
+    name = Vxpipe.Calls.CallArtifact.track_name(spec)
+
     with true <-
            Enum.all?(
-             [spec.call_id, spec.incarnation_id],
+             [spec.call_id, spec.incarnation_id, spec.artifact_id, name],
              &String.match?(&1, ~r/\A[a-zA-Z0-9_-]+\z/)
            ),
          directory =
            Path.join([Keyword.fetch!(options, :directory), spec.call_id, spec.incarnation_id]),
          :ok <- File.mkdir_p(directory),
-         path = Path.join(directory, "room.wav"),
+         path = Path.join(directory, "#{name}-#{spec.artifact_id}.wav"),
          :ok <- File.write(path, header(spec, 0), [:exclusive]) do
       {:ok, %{path: path, spec: spec, bytes: 0, origin: nil}}
     else

@@ -51,13 +51,14 @@ defmodule Vxpipe.Calls.CallArtifact do
 
   def new(_attributes), do: {:error, :invalid_call_artifact}
 
-  @spec track_name(t()) :: String.t()
-  def track_name(%__MODULE__{kind: :room_track}), do: "room"
-  def track_name(%__MODULE__{kind: :full_mix}), do: "full_mix"
+  @spec track_name(map()) :: String.t()
+  def track_name(%{kind: :room_track}), do: "room"
+  def track_name(%{kind: :full_mix}), do: "full_mix"
 
-  def track_name(%__MODULE__{} = artifact) do
-    key = artifact.participant_key || artifact.participant_id
-    if artifact.reconnection > 0, do: "#{key}-#{artifact.reconnection}", else: key
+  def track_name(%{kind: :participant_track} = artifact) do
+    key = Map.get(artifact, :participant_key) || artifact.participant_id
+    reconnect = Map.get(artifact, :reconnection, 0)
+    if reconnect > 0, do: "#{key}-#{reconnect}", else: key
   end
 
   defp required(attributes) do
