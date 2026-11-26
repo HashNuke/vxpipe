@@ -444,6 +444,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       archive_source_policy: archive.source_policy,
       call_lifecycle: call_lifecycle_options(runtime_options),
       live_inspection: live_inspection_options(),
+      recording_configured:
+        Keyword.get(Keyword.get(runtime_options, :recording, []), :enabled, false),
       recording: recording_options(plan, runtime_options),
       room_mixer: room_mixer_options(),
       transcript_router: transcript_router_options(),

@@ -86,7 +86,11 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
       occurred_at: DateTime.utc_now(:millisecond),
       payload: %{
         "created_by_actor_id" => snapshot.created_by_actor_id,
-        "lifecycle" => snapshot.lifecycle
+        "lifecycle" => snapshot.lifecycle,
+        "recording" => %{
+          "requested" => snapshot.record_audio_requested,
+          "configured" => snapshot.recording_configured
+        }
       }
     )
   end

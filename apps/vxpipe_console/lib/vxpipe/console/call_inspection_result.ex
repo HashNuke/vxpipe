@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.CallInspectionResult do
   alias Vxpipe.Calls.{CallHistory, CallSummary, PreparedCall, UsageReport}
 
   @enforce_keys [:call, :prepared_call, :history, :usage]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [artifacts: []]
 
   @type availability(value) :: {:available, value} | {:unavailable, term()}
 
@@ -12,6 +12,7 @@ defmodule Vxpipe.Console.CallInspectionResult do
           call: CallSummary.t(),
           prepared_call: PreparedCall.t(),
           history: CallHistory.t(),
-          usage: availability(UsageReport.t())
+          usage: availability(UsageReport.t()),
+          artifacts: [Vxpipe.Calls.CallArtifact.t()]
         }
 end

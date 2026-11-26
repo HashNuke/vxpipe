@@ -231,7 +231,8 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
              "started_at" => "2026-09-16T09:00:01.000Z",
              "ended_at" => "2026-09-16T09:01:31.000Z",
              "terminal_reason" => "completed",
-             "duration_ms" => 90_000
+             "duration_ms" => 90_000,
+             "recording" => "not_requested"
            }
 
     assert response["incarnation"] == %{

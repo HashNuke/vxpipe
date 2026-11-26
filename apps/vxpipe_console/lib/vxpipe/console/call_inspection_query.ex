@@ -43,13 +43,16 @@ defmodule Vxpipe.Console.CallInspectionQuery do
            ),
          :ok <- validate_plan(prepared_call, persisted.call),
          {:ok, history} <-
-           CallInspection.fetch_call_history(authority, call_id, backend_option(backend)) do
+           CallInspection.fetch_call_history(authority, call_id, backend_option(backend)),
+         {:ok, artifacts} <-
+           CallInspection.fetch_call_artifacts(authority, call_id, backend_option(backend)) do
       {:ok,
        %CallInspectionResult{
          call: persisted.call,
          prepared_call: prepared_call,
          history: history,
-         usage: load_usage(authority, call_id, backend)
+         usage: load_usage(authority, call_id, backend),
+         artifacts: artifacts
        }}
     end
   end

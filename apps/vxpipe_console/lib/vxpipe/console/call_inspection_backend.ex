@@ -29,4 +29,9 @@ defmodule Vxpipe.Console.CallInspectionBackend do
 
   @callback fetch_prepared_call(term(), String.t(), String.t(), keyword()) ::
               {:ok, PreparedCall.t()} | {:error, term()}
+
+  @callback fetch_call_artifacts(term(), CallReadAccess.authority(), String.t(), keyword()) ::
+              {:ok, [Vxpipe.Calls.CallArtifact.t()]} | {:error, term()}
+
+  @optional_callbacks fetch_call_artifacts: 4
 end

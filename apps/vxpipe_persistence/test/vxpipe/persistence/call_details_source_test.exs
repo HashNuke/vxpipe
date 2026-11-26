@@ -619,6 +619,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
       name: "Support call",
       entry_caller: "caller",
       entry_receiver: "assistant",
+      media_policy: %{record_audio: true},
       defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
       call_variables: %{
         sections: %{

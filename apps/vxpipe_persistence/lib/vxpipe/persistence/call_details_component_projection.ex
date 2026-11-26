@@ -2,8 +2,14 @@ defmodule Vxpipe.Persistence.CallDetailsComponentProjection do
   @moduledoc false
 
   alias Vxpipe.CallEngine.ResolvedCallPlan
-  alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy
-  alias Vxpipe.Calls.{ArchiveStatus, PublicationComponent, VariableSnapshotHistory}
+
+  alias Vxpipe.Calls.{
+    ArchiveStatus,
+    CallRecordingStatus,
+    PublicationComponent,
+    VariableSnapshotHistory
+  }
+
   alias Vxpipe.Persistence.CallDetailsSourceRead
 
   @spec project(CallDetailsSourceRead.t(), :configured | :unconfigured) ::
@@ -12,7 +18,7 @@ defmodule Vxpipe.Persistence.CallDetailsComponentProjection do
     with {:ok, history} <- history(read.facts),
          {:ok, variables} <- variables(read.call.plan, read.variable_snapshots),
          {:ok, usage} <- usage(read.usage_observations, read.usage_amounts),
-         {:ok, recording} <- recording(read.call.plan, read.artifacts, recording) do
+         {:ok, recording} <- recording(read.facts, read.call.plan, read.artifacts, recording) do
       {:ok, [history, variables, usage, recording]}
     end
   end
@@ -70,32 +76,14 @@ defmodule Vxpipe.Persistence.CallDetailsComponentProjection do
     end
   end
 
-  defp recording(
-         %ResolvedCallPlan{media_policy: %MediaPolicy{record_audio: false}},
-         artifacts,
-         _configured
-       ) do
-    if Enum.any?(artifacts, &(&1.sample_count > 0)) do
-      component("recording", :failed, %{"reason" => "prohibited_audio_present"})
-    else
-      component("recording", :prohibited, %{"policy" => "record_audio_disabled"})
-    end
-  end
+  defp recording(facts, plan, artifacts, configured) do
+    {status, details} =
+      CallRecordingStatus.component_decision(facts, artifacts,
+        fallback_requested: CallRecordingStatus.plan_recording(plan),
+        fallback_configured: configured == :configured
+      )
 
-  defp recording(_plan, [], :configured), do: component("recording", :pending)
-  defp recording(_plan, [], :unconfigured), do: component("recording", :unconfigured)
-
-  defp recording(_plan, artifacts, _configured) do
-    incomplete = Enum.count(artifacts, &(&1.status == :incomplete))
-
-    if incomplete == 0 do
-      component("recording", :complete, %{"artifact_count" => length(artifacts)})
-    else
-      component("recording", :failed, %{
-        "artifact_count" => length(artifacts),
-        "incomplete_artifact_count" => incomplete
-      })
-    end
+    component("recording", status, details)
   end
 
   defp contiguous?([]), do: false

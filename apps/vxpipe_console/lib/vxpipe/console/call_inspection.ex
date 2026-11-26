@@ -77,6 +77,21 @@ defmodule Vxpipe.Console.CallInspection do
     |> validate_response(PreparedCall)
   end
 
+  @spec fetch_call_artifacts(CallReadAccess.authority(), String.t(), keyword()) ::
+          {:ok, [Vxpipe.Calls.CallArtifact.t()]} | {:error, term()}
+  def fetch_call_artifacts(authority, call_id, options \\ [])
+      when is_binary(call_id) and is_list(options) do
+    {module, backend_options, request_options} = backend(options)
+
+    if Code.ensure_loaded?(module) and function_exported?(module, :fetch_call_artifacts, 4) do
+      module
+      |> apply(:fetch_call_artifacts, [backend_options, authority, call_id, request_options])
+      |> validate_artifacts()
+    else
+      {:ok, []}
+    end
+  end
+
   defp backend(options) do
     {backend, request_options} = Keyword.pop(options, :backend)
 
@@ -94,4 +109,13 @@ defmodule Vxpipe.Console.CallInspection do
 
   defp validate_response({:error, _reason} = error, _expected_module), do: error
   defp validate_response(_value, _expected_module), do: {:error, :invalid_inspection_response}
+
+  defp validate_artifacts({:ok, artifacts}) when is_list(artifacts) do
+    if Enum.all?(artifacts, &is_struct(&1, Vxpipe.Calls.CallArtifact)),
+      do: {:ok, artifacts},
+      else: {:error, :invalid_inspection_response}
+  end
+
+  defp validate_artifacts({:error, _reason} = error), do: error
+  defp validate_artifacts(_value), do: {:error, :invalid_inspection_response}
 end

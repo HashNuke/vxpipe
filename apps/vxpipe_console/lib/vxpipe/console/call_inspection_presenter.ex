@@ -36,7 +36,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
 
     %{
       "schema_version" => 1,
-      "call" => call(result.call, result.prepared_call.plan.direction),
+      "call" => call(result.call, result.prepared_call, recording(result)),
       "incarnation" => incarnation(result.prepared_call),
       "participants" => participants,
       "timeline" => timeline(result.history, participants),
@@ -47,7 +47,20 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     }
   end
 
-  defp call(%CallSummary{} = call, direction) do
+  defp recording(%CallInspectionResult{} = result) do
+    artifacts = Map.get(result, :artifacts, []) || []
+    facts = result.history.facts
+
+    Vxpipe.Calls.CallRecordingStatus.status(facts, artifacts,
+      fallback_requested:
+        Vxpipe.Calls.CallRecordingStatus.plan_recording(result.prepared_call.plan),
+      fallback_configured: Vxpipe.Calls.CallRecordingStatus.configured_available?()
+    )
+  end
+
+  defp call(%CallSummary{} = call, prepared_call, recording) do
+    direction = recording_direction(prepared_call)
+
     value = %{
       "id" => call.id,
       "revision" => lifecycle_revision(call.state),
@@ -56,7 +69,8 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
       "started_at" => optional_instant(call.started_at),
       "ended_at" => optional_instant(call.ended_at),
       "terminal_reason" => optional_atom(call.terminal_reason),
-      "duration_ms" => duration_ms(call)
+      "duration_ms" => duration_ms(call),
+      "recording" => recording
     }
 
     if direction == :outgoing do
@@ -70,6 +84,9 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
       value
     end
   end
+
+  defp recording_direction(%PreparedCall{plan: %{direction: :outgoing}}), do: :outgoing
+  defp recording_direction(_prepared), do: :incoming
 
   defp lifecycle_revision(:prepared), do: 1
   defp lifecycle_revision(:admitting), do: 2

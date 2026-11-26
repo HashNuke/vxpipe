@@ -1,9 +1,7 @@
 defmodule Vxpipe.Persistence.CallDetailsSourceProjection do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.ResolvedCallPlan
-  alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy
-  alias Vxpipe.Calls.{CallDetailsAssessment, CallDetailsSource, PreparedCall}
+  alias Vxpipe.Calls.{CallDetailsAssessment, CallDetailsSource, CallRecordingStatus}
 
   alias Vxpipe.Persistence.{
     CallDetailsArtifactProjection,
@@ -20,13 +18,14 @@ defmodule Vxpipe.Persistence.CallDetailsSourceProjection do
   def project(%CallDetailsSourceRead{} = read, recording) do
     fact_sections = CallDetailsFactProjection.sections(read.facts)
     artifacts = permitted_artifacts(read)
+    call_map = call_with_recording(read, recording)
 
     with {:ok, usage} <-
            CallDetailsUsageProjection.project(read.usage_observations, read.usage_amounts),
          {:ok, components} <- CallDetailsComponentProjection.project(read, recording),
          {:ok, source} <-
            CallDetailsSource.new(
-             call: CallDetailsCallProjection.call(read.call),
+             call: call_map,
              participants: CallDetailsCallProjection.participants(read),
              transcript: fact_sections.transcript,
              tools: fact_sections.tools,
@@ -39,12 +38,23 @@ defmodule Vxpipe.Persistence.CallDetailsSourceProjection do
     end
   end
 
-  defp permitted_artifacts(%CallDetailsSourceRead{
-         call: %PreparedCall{
-           plan: %ResolvedCallPlan{media_policy: %MediaPolicy{record_audio: false}}
-         }
-       }),
-       do: []
+  defp call_with_recording(%CallDetailsSourceRead{} = read, recording) do
+    base = CallDetailsCallProjection.call(read.call)
 
-  defp permitted_artifacts(read), do: read.artifacts
+    status =
+      CallRecordingStatus.status(read.facts, read.artifacts,
+        fallback_requested: CallRecordingStatus.plan_recording(read.call.plan),
+        fallback_configured: recording == :configured
+      )
+
+    Map.put(base, "recording", status)
+  end
+
+  defp permitted_artifacts(%CallDetailsSourceRead{} = read) do
+    CallRecordingStatus.permitted_artifacts(
+      read.facts,
+      CallRecordingStatus.plan_recording(read.call.plan),
+      read.artifacts
+    )
+  end
 end

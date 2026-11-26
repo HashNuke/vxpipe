@@ -34,4 +34,9 @@ defmodule Vxpipe.Console.CallsInspectionBackend do
   def fetch_prepared_call(options, tenant_key, call_id, request_options) do
     Calls.fetch_call(tenant_key, call_id, Keyword.merge(request_options, options))
   end
+
+  @impl true
+  def fetch_call_artifacts(options, authority, call_id, request_options) do
+    Calls.fetch_call_artifacts(authority, call_id, Keyword.merge(request_options, options))
+  end
 end

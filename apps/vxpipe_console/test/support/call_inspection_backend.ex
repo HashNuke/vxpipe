@@ -40,4 +40,10 @@ defmodule Vxpipe.Console.TestCallInspectionBackend do
     send(observer, {:fetch_prepared_call, tenant_key, call_id, options})
     Map.fetch!(responses, :fetch_prepared_call)
   end
+
+  @impl true
+  def fetch_call_artifacts({observer, responses}, authority, call_id, options) do
+    send(observer, {:fetch_call_artifacts, authority, call_id, options})
+    Map.get(responses, :fetch_call_artifacts, {:ok, []})
+  end
 end
