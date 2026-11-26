@@ -177,7 +177,7 @@ MCP grant:
 | Phone picker | `GET T/telephony-services/:service/numbers`; `search`, opaque provider `page`, optional `call_spec_id`. |
 | MCP connections | `GET/POST T/mcp-connections`, `GET/PATCH/DELETE .../:id`, `POST .../:id/reconnect`, `POST T/mcp-discovery`. |
 | Call inspection | `GET T/calls`, `/calls/spec-options`, `/calls/:call_id`, `/calls/:call_id/inspection`. |
-| Call artifacts | `GET T/calls/:call_id/details/:publication_id`, `/recordings/:artifact_id`. |
+| Call artifacts | `GET T/calls/:call_id/details/:publication_id`, `GET T/calls/:call_id/recordings/:artifact_id`, `GET T/calls/:call_id/recording.mka`. |
 | Role administration | `/api/roles` and its role-specific operations. |
 | Password reset | `POST /api/users/:id/reset-password`. |
 | Connected external MCP clients | `GET /api/account/connections`, `DELETE /api/account/connections/:id`. |
@@ -189,9 +189,13 @@ observed generation; refresh uses `{generation,refresh_tools:true}`. See
 [Integrations](integrations.md) for reconnect and readiness semantics.
 
 Call inspection is PostgreSQL-backed and reports archive completeness honestly.
-Recording downloads support HTTP byte ranges. These reads do not grant control
-over a live participant. The source of truth for exact fields and authorization
-is the [Console router](../../../apps/vxpipe_console/lib/vxpipe/console/router.ex)
+The call-level `GET T/calls/:call_id/recording.mka` download requires a Console
+session with call read access (the same session scope as inspection; it has no
+API-key grant) and streams `audio/x-matroska` as an attachment named
+`call-<id>.mka`. It supports single-`Range` requests with `Accept-Ranges: bytes`,
+`206` partial or `200` full responses, and `416` for unsatisfiable ranges. These
+reads do not grant control over a live participant. The source of truth for exact
+fields and authorization is the [Console router](../../../apps/vxpipe_console/lib/vxpipe/console/router.ex)
 and [Gateway HTTP adapters](../../../apps/vxpipe_gateway/lib/vxpipe/gateway/http).
 
 ## Connect an external MCP client

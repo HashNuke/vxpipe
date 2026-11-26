@@ -59,15 +59,20 @@ defmodule Vxpipe.Persistence.ArtifactStore do
   end
 
   defp fetch_call(repo, tenant_key, call_id, lock \\ nil) do
-    query =
-      from(call in Call,
-        join: tenant in Tenant,
-        on: tenant.id == call.tenant_id,
-        where: tenant.key == ^tenant_key and call.public_id == ^call_id,
-        select: call
-      )
+    case Ecto.UUID.cast(call_id) do
+      {:ok, uuid} ->
+        from(call in Call,
+          join: tenant in Tenant,
+          on: tenant.id == call.tenant_id,
+          where: tenant.key == ^tenant_key and call.public_id == ^uuid,
+          select: call
+        )
+        |> with_lock(lock)
+        |> repo.one()
 
-    repo.one(with_lock(query, lock))
+      :error ->
+        nil
+    end
   end
 
   defp with_lock(query, nil), do: query

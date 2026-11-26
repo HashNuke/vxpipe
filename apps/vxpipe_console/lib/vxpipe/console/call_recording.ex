@@ -36,6 +36,21 @@ defmodule Vxpipe.Console.CallRecording do
   def open(_principal, _call_id, _artifact_id, _options),
     do: {:error, :invalid_recording_request}
 
+  @spec open_all(CallReadAccess.authority(), String.t(), keyword()) ::
+          {:ok, [Source.t()]} | {:error, term()}
+  def open_all(principal, call_id, options \\ [])
+
+  def open_all(authority, call_id, options)
+      when is_binary(call_id) and call_id != "" and is_list(options) do
+    {backend, backend_options} = backend(options)
+
+    backend
+    |> apply(:open_all, [backend_options, authority, call_id])
+    |> validate_open_all_response()
+  end
+
+  def open_all(_principal, _call_id, _options), do: {:error, :invalid_recording_request}
+
   defp backend(options) do
     Keyword.get_lazy(options, :backend, fn ->
       Application.fetch_env!(:vxpipe_console, :call_recording_backend)
@@ -54,4 +69,13 @@ defmodule Vxpipe.Console.CallRecording do
   defp validate_response({:ok, %Source{} = source}), do: {:ok, source}
   defp validate_response({:error, _reason} = error), do: error
   defp validate_response(_response), do: {:error, :invalid_recording_response}
+
+  defp validate_open_all_response({:ok, sources}) when is_list(sources) do
+    if Enum.all?(sources, &match?(%Source{}, &1)),
+      do: {:ok, sources},
+      else: {:error, :invalid_recording_response}
+  end
+
+  defp validate_open_all_response({:error, _reason} = error), do: error
+  defp validate_open_all_response(_response), do: {:error, :invalid_recording_response}
 end

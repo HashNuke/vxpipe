@@ -258,6 +258,9 @@ defmodule Vxpipe.Console.Router do
 
     get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show,
       metadata: %{console_product_api: true}
+
+    get "/:call_id/recording.mka", Vxpipe.Console.CallRecordingController, :download,
+      metadata: %{console_product_api: true}
   end
 
   scope "/admin/api" do
@@ -607,6 +610,12 @@ defmodule Vxpipe.Console.Router do
 
     get "/:call_id/details/:publication_id", Vxpipe.Console.CallDetailsController, :show
     get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show
+  end
+
+  scope "/tenants/:tenant_key/calls" do
+    pipe_through [:session_product_artifact, :user_call_access]
+
+    get "/:call_id/recording.mka", Vxpipe.Console.CallRecordingController, :download
   end
 
   scope "/tenants/:tenant_key/calls" do

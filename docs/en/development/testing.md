@@ -215,6 +215,32 @@ Check both dial directions, ringing timeout, reciprocal audio, private acceptanc
 selective destination hangup and natural archive closure. Controlled decoded media
 does not establish what a person heard on a phone.
 
+## Call recording media
+
+The Matroska endpoint contract (`GET .../calls/:call_id/recording.mka`) is
+covered at two levels. The endpoint test uses real tenant-scoped persistence:
+two bootstrapped tenants, artifacts stored under one call, and the same call
+id requested under the other tenant must return the generic 404. The S3 test
+downloads through the production `S3ObjectReader` against a loopback
+S3-compatible server and verifies an HTTP range straddling an audio block
+boundary byte-for-byte.
+
+The S3 test needs a local moto server and is excluded from the default suite:
+
+```shell
+moto_server s3 -p 18764
+VXPIPE_TEST_S3_ENDPOINT_URL=http://127.0.0.1:18764 mix test \
+  test/integration/recording_matroska_s3_test.exs --include integration --only s3
+```
+
+`VXPIPE_TEST_S3_ENDPOINT_URL` defaults to `http://127.0.0.1:18764`, so the
+first command alone suffices for a server on the default loopback port. Each
+run creates a unique bucket and deletes it with its objects on exit. `ffprobe`
+is optional: when present, track codec and title assertions run, and
+`VXPIPE_MATROSKA_EXPORT_PATH` keeps a copy of the download for manual
+inspection. This lane never touches the protected live-provider credential
+file.
+
 ## MCP protocols
 
 Outbound protocol lanes use the pinned `2025-11-25` profile and committed dependency

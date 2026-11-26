@@ -24,4 +24,15 @@ defmodule Vxpipe.Console.TestCallRecordingBackend do
     send(observer, {:open_call_recording, principal, call_id, artifact_id})
     response
   end
+
+  @impl true
+  def open_all({observer, %{open_all: response}}, principal, call_id) do
+    send(observer, {:open_all_call_recordings, principal, call_id})
+    response
+  end
+
+  def open_all({observer, response}, principal, call_id) do
+    send(observer, {:open_all_call_recordings, principal, call_id})
+    response
+  end
 end

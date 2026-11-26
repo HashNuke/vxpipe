@@ -127,6 +127,145 @@ defmodule Vxpipe.Console.CallRecordingTest do
     refute_receive {:read_call_recording_object, _, _, _, _}
   end
 
+  test "opens all authorized sources while skipping metadata-only artifacts" do
+    stored = artifact()
+    metadata_only = %{stored | id: "artifact-metadata-only", object_reference: nil}
+
+    options = [
+      calls_options: [
+        artifact_repository:
+          {TestCallRecordingArtifactRepository, {self(), {:ok, [stored, metadata_only]}}}
+      ],
+      recording_settings: [bucket: "recordings"],
+      object_reader: TestCallRecordingObjectReader,
+      object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
+    ]
+
+    assert {:ok, [source]} = CallsRecordingBackend.open_all(options, @principal, "call-public-id")
+    assert source.id == "artifact-public-id"
+
+    assert_receive {:fetch_call_recording_artifacts, "tenantkey1234567", "call-public-id"}
+  end
+
+  test "opens all sources through the configured boundary" do
+    backend = {TestCallRecordingBackend, {self(), {:ok, [source()]}}}
+
+    assert {:ok, [_source]} =
+             CallRecording.open_all(@principal, "call-public-id", backend: backend)
+
+    assert_receive {:open_all_call_recordings, @principal, "call-public-id"}
+  end
+
+  test "empty artifact set returns 404 before storage lookup" do
+    options = [
+      calls_options: [
+        artifact_repository: {TestCallRecordingArtifactRepository, {self(), {:ok, []}}}
+      ],
+      recording_settings: []
+    ]
+
+    assert {:error, :no_recording_artifacts} =
+             CallsRecordingBackend.open_all(options, @principal, "call-public-id")
+
+    assert_receive {:fetch_call_recording_artifacts, "tenantkey1234567", "call-public-id"}
+  end
+
+  test "includes legacy full_mix alone and excludes duplicated mix with individuals" do
+    mix = artifact()
+
+    individual = %CallArtifact{
+      id: "artifact-individual",
+      tenant_key: "tenantkey1234567",
+      call_id: "call-public-id",
+      room_id: "room-public-id",
+      incarnation_id: "incarnation-public-id",
+      kind: :participant_track,
+      participant_id: "part_1",
+      connection_id: "conn_1",
+      track_id: "track_1",
+      participant_key: "caller",
+      reconnection: 0,
+      object_key: "calls/tenant/call/caller.s16le",
+      object_reference: %{"object_key" => "calls/tenant/call/caller.s16le"},
+      sample_rate: 1,
+      channels: 1,
+      sample_format: :s16le,
+      started_offset_samples: 0,
+      ended_offset_samples: 2,
+      sample_count: 2,
+      accepted_chunks: 1,
+      rejected_chunks: 0,
+      gaps: [],
+      status: :complete,
+      terminal_reason: "source_ended"
+    }
+
+    only_mix_options = [
+      calls_options: [
+        artifact_repository: {TestCallRecordingArtifactRepository, {self(), {:ok, [mix]}}}
+      ],
+      recording_settings: [bucket: "recordings"],
+      object_reader: TestCallRecordingObjectReader,
+      object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
+    ]
+
+    assert {:ok, [only]} = CallsRecordingBackend.open_all(only_mix_options, @principal, "call-public-id")
+    assert only.kind == :full_mix
+
+    mixed_options = [
+      calls_options: [
+        artifact_repository:
+          {TestCallRecordingArtifactRepository, {self(), {:ok, [mix, individual]}}}
+      ],
+      recording_settings: [bucket: "recordings"],
+      object_reader: TestCallRecordingObjectReader,
+      object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
+    ]
+
+    assert {:ok, [kept]} = CallsRecordingBackend.open_all(mixed_options, @principal, "call-public-id")
+    assert kept.kind == :participant_track
+    assert kept.id == "artifact-individual"
+  end
+
+  test "empty tracks are excluded and all-missing objects are unavailable" do
+    valid = %{artifact() | id: "artifact-valid", kind: :participant_track, participant_id: "p", connection_id: "c", track_id: "t", participant_key: "caller"}
+
+    empty_track = %{
+      valid
+      | id: "artifact-empty",
+        started_offset_samples: 0,
+        ended_offset_samples: 0,
+        sample_count: 0
+    }
+
+    options = [
+      calls_options: [
+        artifact_repository:
+          {TestCallRecordingArtifactRepository, {self(), {:ok, [valid, empty_track]}}}
+      ],
+      recording_settings: [bucket: "recordings"],
+      object_reader: TestCallRecordingObjectReader,
+      object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
+    ]
+
+    assert {:ok, [kept]} = CallsRecordingBackend.open_all(options, @principal, "call-public-id")
+    assert kept.id == "artifact-valid"
+
+    missing_only = %{valid | id: "artifact-missing", object_reference: nil}
+
+    missing_options = [
+      calls_options: [
+        artifact_repository: {TestCallRecordingArtifactRepository, {self(), {:ok, [missing_only]}}}
+      ],
+      recording_settings: [bucket: "recordings"],
+      object_reader: TestCallRecordingObjectReader,
+      object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
+    ]
+
+    assert {:error, :recording_unavailable} =
+             CallsRecordingBackend.open_all(missing_options, @principal, "call-public-id")
+  end
+
   defp source do
     {:ok, source} =
       Source.new(artifact(), {Vxpipe.Console.TestCallRecordingReader, {self(), <<1, 2, 3, 4>>}})

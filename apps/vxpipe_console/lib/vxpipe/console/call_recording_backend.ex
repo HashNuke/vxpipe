@@ -9,4 +9,7 @@ defmodule Vxpipe.Console.CallRecordingBackend do
 
   @callback open(term(), CallReadAccess.authority(), String.t(), String.t()) ::
               {:ok, Source.t()} | {:error, term()}
+
+  @callback open_all(term(), CallReadAccess.authority(), String.t()) ::
+              {:ok, [Source.t()]} | {:error, term()}
 end
