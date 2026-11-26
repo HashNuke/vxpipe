@@ -2,6 +2,7 @@ defmodule Vxpipe.Console.RecordingWave do
   @moduledoc "Presents one signed-16 PCM recording as an aligned virtual RIFF/WAVE file."
 
   alias Vxpipe.Console.CallRecording.{Reader, Source}
+  alias Vxpipe.Console.RecordingTimeline
 
   @header_bytes 44
   @maximum_chunk_bytes 1_048_576
@@ -75,85 +76,18 @@ defmodule Vxpipe.Console.RecordingWave do
   defp timeline_samples(_source), do: {:error, :unsupported_recording_layout}
 
   defp segments(source, timeline_samples, frame_bytes) do
-    expected_gap_samples = timeline_samples - source.sample_count
+    case RecordingTimeline.local_segments(source, frame_bytes) do
+      {:ok, segments, raw_samples, gap_samples} ->
+        expected_gap_samples = timeline_samples - source.sample_count
 
-    with true <- expected_gap_samples >= 0,
-         {:ok, segments, raw_samples, gap_samples} <-
-           build_segments(
-             source.gaps,
-             source.started_offset_samples,
-             source.ended_offset_samples,
-             frame_bytes
-           ),
-         true <- raw_samples == source.sample_count,
-         true <- gap_samples == expected_gap_samples do
-      {:ok, segments}
-    else
-      _invalid -> {:error, :unsupported_recording_layout}
+        if raw_samples == source.sample_count and gap_samples == expected_gap_samples,
+          do: {:ok, segments},
+          else: {:error, :unsupported_recording_layout}
+
+      {:error, _reason} ->
+        {:error, :unsupported_recording_layout}
     end
   end
-
-  defp build_segments(gaps, started, ended, frame_bytes) when is_list(gaps) do
-    initial = {:ok, [], started, 0, 0, 0}
-
-    with {:ok, reversed, cursor, raw_samples, gap_samples, virtual_bytes} <-
-           Enum.reduce_while(gaps, initial, fn gap, state ->
-             case add_gap(gap, state, ended, frame_bytes) do
-               {:ok, _, _, _, _, _} = next -> {:cont, next}
-               {:error, _reason} = error -> {:halt, error}
-             end
-           end),
-         true <- cursor <= ended do
-      data_samples = ended - cursor
-
-      {reversed, raw_samples, _virtual_bytes} =
-        add_object_segment(reversed, raw_samples, virtual_bytes, data_samples, frame_bytes)
-
-      {:ok, Enum.reverse(reversed), raw_samples, gap_samples}
-    else
-      _invalid -> {:error, :unsupported_recording_layout}
-    end
-  end
-
-  defp build_segments(_gaps, _started, _ended, _frame_bytes),
-    do: {:error, :unsupported_recording_layout}
-
-  defp add_gap(
-         %{"offset_samples" => offset, "sample_count" => count} = gap,
-         {:ok, reversed, cursor, raw_samples, gap_samples, virtual_bytes},
-         ended,
-         frame_bytes
-       )
-       when map_size(gap) == 2 and is_integer(offset) and is_integer(count) and count > 0 and
-              offset >= cursor and offset + count <= ended do
-    data_samples = offset - cursor
-
-    {reversed, raw_samples, virtual_bytes} =
-      add_object_segment(reversed, raw_samples, virtual_bytes, data_samples, frame_bytes)
-
-    silence_bytes = count * frame_bytes
-
-    {:ok, [segment(:silence, virtual_bytes, silence_bytes, nil) | reversed], offset + count,
-     raw_samples, gap_samples + count, virtual_bytes + silence_bytes}
-  end
-
-  defp add_gap(_gap, _state, _ended, _frame_bytes),
-    do: {:error, :unsupported_recording_layout}
-
-  defp add_object_segment(reversed, raw_samples, virtual_bytes, 0, _frame_bytes),
-    do: {reversed, raw_samples, virtual_bytes}
-
-  defp add_object_segment(reversed, raw_samples, virtual_bytes, sample_count, frame_bytes) do
-    length = sample_count * frame_bytes
-    object_first = raw_samples * frame_bytes
-
-    {[
-       segment(:object, virtual_bytes, length, object_first) | reversed
-     ], raw_samples + sample_count, virtual_bytes + length}
-  end
-
-  defp segment(kind, first, length, object_first),
-    do: %{kind: kind, first: first, length: length, object_first: object_first}
 
   defp data_bytes(timeline_samples, frame_bytes) do
     data_bytes = timeline_samples * frame_bytes
