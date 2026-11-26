@@ -16,9 +16,14 @@ defmodule Vxpipe.Artifacts.TestObjectStore do
     {:ok, %{observer: observer, spec: spec}}
   end
 
-  def write_chunk(session, chunk, _options) do
+  def write_chunk(session, chunk, options) do
     reference = make_ref()
-    send(session.observer, {:test_object_store_write, self(), reference, chunk})
+
+    if Keyword.get(options, :report_artifact, false) do
+      send(session.observer, {:test_artifact_write, self(), reference, session.spec, chunk})
+    else
+      send(session.observer, {:test_object_store_write, self(), reference, chunk})
+    end
 
     receive do
       {:test_object_store_continue, ^reference} -> {:ok, session}
