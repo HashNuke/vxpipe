@@ -6,7 +6,8 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
 
   @tag capture_log: true
   test "signed public parts and empty streaming carriers retain their exact layout" do
-    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Café"})
+    text =
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Café"})
 
     layouts = [
       [%{"text" => text, "thoughtSignature" => "public-signature"}],
@@ -83,8 +84,12 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
   end
 
   @tag capture_log: true
-  test "runtime IDs are not inserted into signed calls without provider IDs" do
+  test "a mixed preamble replays verbatim with its signed call, running response and private outcome" do
+    preamble =
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Let me check."})
+
     parts = [
+      %{"text" => preamble},
       %{
         "functionCall" => %{"name" => "lookup", "args" => %{}},
         "thoughtSignature" => "call-signature"
@@ -96,7 +101,12 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
         DialogueWireServer.start(self(), fn body ->
           output =
             if JSON.encode!(body) =~ "functionResponse",
-              do: [%{text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})}],
+              do: [
+                %{
+                  text:
+                    ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+                }
+              ],
               else: parts
 
           payload =
@@ -131,6 +141,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
       }
 
       assert {:ok, response} = generate(config, request, streaming)
+      assert response.text == preamble
       assert [call] = response.tool_calls
       assert is_binary(call.id) and call.id != ""
       assert_receive {:encoded_request, _}
@@ -142,7 +153,12 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
                  %{
                    request
                    | messages:
-                       request.messages ++ [assistant, Message.tool(call, %{"ok" => true})]
+                       request.messages ++
+                         [
+                           assistant,
+                           Message.tool(call, %{"status" => "running"}),
+                           Message.user("Tool completed with Florida", :engine)
+                         ]
                  },
                  streaming
                )
@@ -152,16 +168,21 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
       assert [
                _,
                %{"role" => "model", "parts" => ^parts},
-               %{"parts" => [%{"functionResponse" => result}]}
+               %{
+                 "role" => "user",
+                 "parts" => [%{"functionResponse" => result}, %{"text" => outcome}]
+               }
              ] = body["contents"]
 
+      assert outcome =~ "Florida"
       refute Map.has_key?(result, "id")
     end
   end
 
   @tag capture_log: true
   test "reasoning on an ordinary native dialogue reply remains private and replayable" do
-    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
+    text =
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
     for streaming <- [false, true], strategy <- [:google_object, :portable_json] do
       url =
@@ -219,7 +240,8 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
 
   @tag capture_log: true
   test "buffered and streamed private reasoning survives native tool continuation" do
-    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+    text =
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
 
     for streaming <- [false, true], strategy <- [:google_object, :portable_json] do
       url =

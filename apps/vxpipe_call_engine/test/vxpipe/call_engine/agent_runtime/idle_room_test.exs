@@ -21,22 +21,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "native idle waits after its spoken acknowledgement and produces one typed timeout continuation" do
     {_plan, room, caller, voice, sink} = start_call()
     command = submit(room, caller, "Give me a moment", "idle-origin")
-    assert_receive {:test_agent_runtime_stream, provider, request}
-    assert Enum.map(request.tools, & &1.name) == ["idle"]
-
-    {:ok, call} =
-      ToolCall.new(id: "idle-operation", name: "idle", arguments: %{"duration_seconds" => 1})
-
-    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
-    send(provider, {:test_agent_runtime_response, {:ok, response}})
-    assert_receive {:test_agent_runtime_stream, acknowledgment, ack_request}
-
-    assert Enum.any?(
-             ack_request.messages,
-             &(&1.role == :tool and JSON.decode!(&1.content)["status"] == "running")
-           )
-
-    reply(acknowledgment, :speaker, "Okay, I'll give you a moment.")
+    invoke_idle(1, speaker_preamble("Okay, I'll give you a moment."))
     assert_receive {:test_tts_control, ^voice, speak}
     assert JSON.decode!(speak)["text"] == "Okay, I'll give you a moment."
     # Quiet time belongs after supported playback, rather than after tool submission.
@@ -84,8 +69,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "silent acknowledgment waits ten seconds and emits only one timeout request" do
     {_plan, room, caller, voice, _sink} = start_call()
     submit(room, caller, "Wait ten seconds", "silent-idle")
-    {acknowledgment, _request} = invoke_idle(10)
-    reply(acknowledgment, :listener, nil)
+    invoke_idle(10)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "silent-idle"}}
     settled_at = System.monotonic_time(:millisecond)
     refute_receive {:test_tts_control, ^voice, _}, 100
@@ -107,8 +91,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "early input waits for the genuine cancellation fact before one resumption request" do
     {plan, room, caller, voice, sink} = start_call()
     submit(room, caller, "Wait a moment", "early-idle")
-    {acknowledgment, _request} = invoke_idle(1)
-    reply(acknowledgment, :listener, nil)
+    invoke_idle(1)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "early-idle"}}
 
     registry =
@@ -150,22 +133,21 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     refute_receive {:test_agent_runtime_stream, _, _}, 1_100
   end
 
-  test "a failed acknowledgment cancels the hold without a timeout generation" do
+  test "a failed first attempt never arms the hold and emits no timeout generation" do
     {_plan, room, caller, voice, _sink} = start_call()
     submit(room, caller, "Please wait", "failed-idle")
-    {acknowledgment, _request} = invoke_idle(1)
-    send(acknowledgment, {:test_agent_runtime_response, {:error, :provider_unavailable}})
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_response, {:error, :provider_unavailable}})
     assert_receive {:vxpipe_event, %AgentTurnFailed{correlation_id: "failed-idle"}}
 
-    assert_receive {:vxpipe_event,
+    refute_receive {:vxpipe_event,
                     %ToolCallCompleted{
-                      tool_call_id: "idle-operation",
-                      result: %{"status" => "cancelled", "reason" => "acknowledgment_failed"}
+                      tool_call_id: "idle-operation"
                     }},
-                   1_500
+                   200
 
     refute_receive {:test_agent_runtime_stream, _, _}, 1_100
-    refute_receive {:test_tts_control, ^voice, _}, 100
+    refute_received {:test_tts_control, ^voice, _}
   end
 
   test "Room admission after model completion still arms the idle timeout continuation" do
@@ -189,35 +171,27 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
       end
     end)
 
-    {acknowledgment, _request} = invoke_idle(1)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    :erlang.trace(room_pid, true, [:receive])
+    monitor = Process.monitor(provider)
 
-    registry =
-      CallEngine.AgentActivationSupervisor.child_ref(
-        plan.participants["receiver"].activation_id,
-        :invocation_registry
-      )
+    {:ok, call} =
+      ToolCall.new(id: "idle-operation", name: "idle", arguments: %{"duration_seconds" => 1})
 
-    assert {:ok, execution} =
-             CallEngine.Tool.InvocationRegistry.running_execution(registry, "idle-operation")
+    {:ok, response} =
+      ModelResponse.new(text: speaker_preamble("Okay, I will wait."), tool_calls: [call])
 
-    task = :sys.get_state(execution.worker).task.pid
-    :erlang.trace(task, true, [:send])
-    {:messages, queued} = Process.info(room_pid, :messages)
-
-    unless Enum.any?(queued, fn
-             {:"$gen_call", _, {:idle, _}} -> true
-             _ -> false
-           end) do
-      assert_receive {:trace, ^task, :send, {:"$gen_call", _, {:idle, _}}, _destination}
-    end
-
-    :erlang.trace(task, false, [:send])
-
-    current = :sys.get_state(coordinator).current
-    monitor = Process.monitor(current.task.pid)
-    reply(acknowledgment, :speaker, "Okay, I will wait.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:trace, ^room_pid, :receive, {:"$gen_call", _, {:idle, _}}}
+    :erlang.trace(room_pid, false, [:receive])
     assert_receive {:DOWN, ^monitor, :process, _, :normal}
-    state = :sys.get_state(coordinator)
+
+    state =
+      Enum.reduce_while(Stream.interval(10) |> Stream.take(200), nil, fn _, _ ->
+        state = :sys.get_state(coordinator)
+        if state.current == nil, do: {:halt, state}, else: {:cont, nil}
+      end)
+
     assert state.current == nil
     assert state.awaiting_output.command.id == command.id
     :ok = :sys.resume(room_pid)
@@ -234,7 +208,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     Application.put_env(:vxpipe_call_engine, :submitted_host_tool_observer, self())
     on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :submitted_host_tool_observer) end)
 
-    {_plan, room, caller, voice, _sink} =
+    {plan, room, caller, voice, _sink} =
       start_call(
         tools: %{
           "submitted_host_tool" => %{
@@ -246,6 +220,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
         host_tools: %{"submitted_host_tool" => CallEngine.TestSubmittedHostTool}
       )
 
+    await_idle = watch_idle_admission(plan, "receiver")
     submit(room, caller, "Check it while I wait", "background-idle")
     assert_receive {:test_agent_runtime_stream, provider, _request}
 
@@ -262,9 +237,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     {:ok, response} = ModelResponse.new(text: "", tool_calls: [background, idle])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:submitted_host_tool_started, execution, "actual-result"}
-    assert_receive {:test_agent_runtime_stream, acknowledgment, _request}
-    reply(acknowledgment, :listener, nil)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "background-idle"}}
+    await_idle.()
     send(execution, :release_submitted_host_tool)
     assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "background-operation"}}
     refute_receive {:test_agent_runtime_stream, _, _}, 700
@@ -288,8 +262,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "losing the native idle worker retires its timer and keeps human input usable" do
     {plan, room, caller, voice, _sink} = start_call()
     submit(room, caller, "Wait a moment", "worker-idle")
-    {acknowledgment, _request} = invoke_idle(1)
-    reply(acknowledgment, :listener, nil)
+    invoke_idle(1)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "worker-idle"}}
     activation = plan.participants["receiver"].activation_id
     registry = CallEngine.AgentActivationSupervisor.child_ref(activation, :invocation_registry)
@@ -319,13 +292,33 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     refute_receive {:test_tts_control, ^voice, _}, 100
   end
 
-  test "human resumption before acknowledgment generation prevents stale speech and timeout" do
-    {_plan, room, caller, voice, sink} = start_call()
+  test "human resumption while idle runs prevents stale speech and timeout" do
+    {plan, room, caller, voice, sink} = start_call()
     submit(room, caller, "Give me a moment", "armed-idle")
-    {acknowledgment, _request} = invoke_idle(1)
-    monitor = Process.monitor(acknowledgment)
+    provider = invoke_idle(1)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "armed-idle"}}
+
+    registry =
+      CallEngine.AgentActivationSupervisor.child_ref(
+        plan.participants["receiver"].activation_id,
+        :invocation_registry
+      )
+
+    assert {:ok, execution} =
+             CallEngine.Tool.InvocationRegistry.running_execution(registry, "idle-operation")
+
+    :ok = :sys.suspend(execution.worker)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(execution.worker)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
     submit(room, caller, "Actually continue now", "armed-resumption")
-    assert_receive {:DOWN, ^monitor, :process, ^acknowledgment, _}
+    :ok = :sys.resume(execution.worker)
     assert_receive {:test_agent_runtime_stream, response, request}
     assert JSON.decode!(List.last(request.messages).content)["message"] == "Actually continue now"
 
@@ -336,7 +329,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
              )
 
     assert completion.content =~ ~s("status":"cancelled")
-    reply(acknowledgment, :speaker, "Stale acknowledgment")
+    reply(provider, :speaker, "Stale acknowledgment")
     reply(response, :speaker, "Continuing now.")
     assert_receive {:test_tts_control, ^voice, speak}
     assert JSON.decode!(speak)["text"] == "Continuing now."
@@ -360,8 +353,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
 
     {:ok, response} = ModelResponse.new(text: "", tool_calls: calls)
     send(provider, {:test_agent_runtime_response, {:ok, response}})
-    assert_receive {:test_agent_runtime_stream, acknowledgment, _request}
-    reply(acknowledgment, :listener, nil)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "duplicate-idle"}}
 
     assert_receive {:vxpipe_event, %CallEngine.Event.ToolCallFailed{tool_call_id: rejected}},
@@ -387,39 +378,22 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   end
 
   @tag timeout: 45_000
-  test "a missing acknowledgment is bounded and fresh human input remains usable" do
-    settings = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
-
-    Application.put_env(
-      :vxpipe_call_engine,
-      CallEngine.Application,
-      Keyword.update!(settings, :agent_runtime, &Keyword.put(&1, :request_timeout_ms, 60_000))
-    )
-
+  test "a missing first response is bounded and fresh human input remains usable" do
     {_plan, room, caller, voice, _sink} = start_call()
     submit(room, caller, "Wait a moment", "missing-ack-idle")
-    {acknowledgment, _request} = invoke_idle(1)
-    monitor = Process.monitor(acknowledgment)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    monitor = Process.monitor(provider)
 
-    assert_receive {:vxpipe_event,
-                    %ToolCallCompleted{
-                      tool_call_id: "idle-operation",
-                      result: %{"status" => "cancelled", "reason" => "acknowledgment_timeout"}
-                    }},
-                   31_000
+    assert_receive {:vxpipe_event, %AgentTurnFailed{correlation_id: "missing-ack-idle"}}, 31_000
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
 
+    refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "idle-operation"}}, 200
     refute_receive {:test_agent_runtime_stream, _, _}, 1_100
-    refute_receive {:test_tts_control, ^voice, _}, 100
+    refute_received {:test_tts_control, ^voice, _}
     submit(room, caller, "Continue now", "missing-ack-resumption")
-    assert_receive {:DOWN, ^monitor, :process, ^acknowledgment, _}
     assert_receive {:test_agent_runtime_stream, response, request}
     assert JSON.decode!(List.last(request.messages).content)["message"] == "Continue now"
-
-    assert Enum.any?(
-             request.messages,
-             &(&1.origin == :engine and &1.content =~ "acknowledgment_timeout")
-           )
-
+    refute Enum.any?(request.messages, &(&1.origin == :engine))
     reply(response, :listener, nil)
     refute_receive {:test_agent_runtime_stream, _, _}, 100
   end
@@ -432,11 +406,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     # This case starts with an admitted hold and injects its deadline explicitly.
     # Admission racing silent acknowledgment is tracked separately in ~/notes/vxpipe/issues.
     :erlang.trace(room_pid, true, [:receive])
-    {acknowledgment, _request} = invoke_idle(300)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    {:ok, call} =
+      ToolCall.new(id: "idle-operation", name: "idle", arguments: %{"duration_seconds" => 300})
+
+    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:trace, ^room_pid, :receive, {:"$gen_call", _, {:idle, _}}}
     :erlang.trace(room_pid, false, [:receive])
     assert %{phase: :armed} = :sys.get_state(room_pid).idle_wait
-    reply(acknowledgment, :listener, nil)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "expiry-origin"}}
 
     registry =
@@ -485,8 +464,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "caller participant departure cancels quiet even while its connection drains" do
     {_plan, room, caller, _voice, _sink} = start_call()
     submit(room, caller, "Wait", "departed-origin")
-    {acknowledgment, _request} = invoke_idle(1)
-    reply(acknowledgment, :listener, nil)
+    invoke_idle(1)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "departed-origin"}}
     [{room_pid, _}] = Registry.lookup(CallEngine.RoomRegistry, {room.tenant_id, room.room_id})
     state = :sys.get_state(room_pid)
@@ -540,8 +518,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
                       played_ms: 990
                     }}
 
-    {acknowledgment, _request} = invoke_idle(1)
-    reply(acknowledgment, :speaker, "Okay, I will wait.")
+    invoke_idle(1, speaker_preamble("Okay, I will wait."))
     refute_receive {:test_tts_control, ^voice, _}, 100
 
     TestTextToSpeechTransport.deliver_control(
@@ -572,9 +549,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     test "#{outcome} acknowledgment playback cannot leave an unbounded idle hold" do
       {_plan, room, caller, voice, sink} = start_call()
       submit(room, caller, "Wait a moment", "sink-idle")
-      {acknowledgment, _request} = invoke_idle(1)
       :ok = TestAudioOutputSink.defer_finish(sink, true)
-      reply(acknowledgment, :speaker, "Okay, I will wait.")
+      invoke_idle(1, speaker_preamble("Okay, I will wait."))
       assert_receive {:test_tts_control, ^voice, _speak}
       assert_receive {:test_tts_control, ^voice, _flush}
 
@@ -622,8 +598,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
 
     {_plan, room, caller, _voice, _sink} = start_call()
     submit(room, caller, "Wait", "ordinary-idle-origin")
-    {acknowledgment, _request} = invoke_idle(1)
-    reply(acknowledgment, :listener, nil)
+    invoke_idle(1)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "ordinary-idle-origin"}}
     refute_receive {:test_agent_runtime_stream, _, _}, 850
     assert_receive {:test_agent_runtime_stream, followup, request}, 1_000
@@ -642,8 +617,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "connection replacement retires its old idle timer and accepts fresh input" do
     {_plan, room, caller, _voice, sink} = start_call()
     submit(room, caller, "Wait", "connection-idle")
-    {acknowledgment, _request} = invoke_idle(1)
-    reply(acknowledgment, :listener, nil)
+    invoke_idle(1)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "connection-idle"}}
     [{room_pid, _}] = Registry.lookup(CallEngine.RoomRegistry, {room.tenant_id, room.room_id})
     state = :sys.get_state(room_pid)
@@ -692,8 +666,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "a fresh idle operation ignores the retired wait's deadline" do
     {_plan, room, caller, _voice, _sink} = start_call()
     submit(room, caller, "Wait", "first-idle")
-    {acknowledgment, _request} = invoke_idle(1)
-    reply(acknowledgment, :listener, nil)
+    invoke_idle(1)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "first-idle"}}
     [{room_pid, _}] = Registry.lookup(CallEngine.RoomRegistry, {room.tenant_id, room.room_id})
     retired_token = :sys.get_state(room_pid).idle_wait.token
@@ -709,8 +682,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
 
     {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
     send(model, {:test_agent_runtime_response, {:ok, response}})
-    assert_receive {:test_agent_runtime_stream, second_acknowledgment, _request}
-    reply(second_acknowledgment, :listener, nil)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "second-idle"}}
     refute :sys.get_state(room_pid).idle_wait.token == retired_token
     send(room_pid, {:vxpipe_idle_wait_deadline, retired_token, :quiet})
@@ -731,8 +702,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     refute_receive {:test_agent_runtime_stream, _, _}, 100
   end
 
-  defp invoke_idle(seconds) do
-    assert_receive {:test_agent_runtime_stream, provider, _request}
+  defp invoke_idle(seconds, text \\ "") do
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert Enum.map(request.tools, & &1.name) == ["idle"]
 
     {:ok, call} =
       ToolCall.new(
@@ -741,10 +713,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
         arguments: %{"duration_seconds" => seconds}
       )
 
-    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    {:ok, response} = ModelResponse.new(text: text, tool_calls: [call])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
-    assert_receive {:test_agent_runtime_stream, acknowledgment, request}
-    {acknowledgment, request}
+    provider
   end
 
   defp latest_correlation(request), do: request.correlation.tool_context.correlation_id

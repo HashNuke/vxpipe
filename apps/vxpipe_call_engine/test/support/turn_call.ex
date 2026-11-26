@@ -40,6 +40,22 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
     }
 
     participants =
+      if Keyword.get(options, :billing_transfer, false) do
+        billing = %{
+          participants["receiver"]
+          | prompt: "Answer billing questions.",
+            tools: %{},
+            variable_permissions: %{}
+        }
+
+        participants
+        |> put_in(["receiver", :transfers], ["billing"])
+        |> Map.put("billing", Map.put(billing, :description, "Billing specialist"))
+      else
+        participants
+      end
+
+    participants =
       if Keyword.get(options, :second_human, false),
         do: Map.put(participants, "second", caller),
         else: participants

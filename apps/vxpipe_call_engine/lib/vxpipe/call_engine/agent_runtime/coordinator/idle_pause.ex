@@ -6,9 +6,19 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.IdlePause do
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.State
 
   def arm(%State{} = state, token, context) do
-    origin = state.current || state.awaiting_output
+    origin =
+      case state.current || state.awaiting_output do
+        %{correlation: correlation} ->
+          correlation
 
-    if origin != nil and %{context | tool_call_id: nil} == origin.correlation.tool_context do
+        nil ->
+          case state.history.entries do
+            [{_, correlation} | _] -> correlation
+            [] -> nil
+          end
+      end
+
+    if origin != nil and %{context | tool_call_id: nil} == origin.tool_context do
       pause = %{
         token: token,
         invocation_id: context.tool_call_id,
@@ -51,7 +61,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.IdlePause do
       tool_completion_id: continuation.invocation_id
     }
 
-    with :ok <- Session.record_engine(state.session, continuation.command.content, correlation),
+    with :ok <-
+           Session.retain_tool_result(state.session, continuation.command.content, correlation),
          :ok <- CompletionContinuation.acknowledge(state.invocation_registry, continuation) do
       pause = completed(state.idle_pause, continuation.invocation_id)
 

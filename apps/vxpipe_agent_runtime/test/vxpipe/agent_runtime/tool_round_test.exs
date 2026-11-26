@@ -10,6 +10,86 @@ defmodule Vxpipe.AgentRuntime.ToolRoundTest do
     ToolDescriptor
   }
 
+  for {mode, text, expected} <- [
+        {:blocking, :speaker, "Checking."},
+        {:non_blocking, :speaker, "Checking."},
+        {:blocking, :listener, nil},
+        {:blocking, "", nil},
+        {:non_blocking, :oversized, nil},
+        {:non_blocking, "not dialogue", nil},
+        {:await_completion, :speaker, nil}
+      ] do
+    test "a host-settled #{mode} tool with #{inspect(text)} ends the structured request on acceptance" do
+      mode = unquote(mode)
+
+      text = mixed_text(unquote(text))
+
+      session =
+        start_session([tool_descriptor("check_balance", :balance, mode)],
+          maximum_output_bytes: 512,
+          model_provider: Vxpipe.AgentRuntime.TestStreamingModelProvider,
+          history_mode: :host_settled,
+          reply_protocol: :mode_message_v1
+        )
+
+      task = request(session, "Check", "mixed")
+      release_pending_context("mixed", [])
+      assert_receive {:model_stream_process, provider, _}
+
+      {:ok, response} =
+        ModelResponse.new(text: text, tool_calls: [tool_call("mixed-tool", "check_balance")])
+
+      send(provider, {:test_stream_response, {:ok, response}})
+      assert_submission(:balance, "mixed-tool", "mixed")
+
+      assert {:ok, %Result{status: :completed, dialogue: %{message: unquote(expected)}}} =
+               Task.await(task, 1500)
+
+      refute_received {:pending_context_requested, _, _, _}
+    end
+  end
+
+  for first_mode <- [:blocking, {:error, :rejected}] do
+    test "structured batch corrects a rejection with first sibling #{inspect(first_mode)}" do
+      tools = [
+        tool_descriptor("check_balance", :balance, unquote(Macro.escape(first_mode))),
+        tool_descriptor("check_credit", :credit, {:error, :saturated})
+      ]
+
+      session =
+        start_session(tools,
+          model_provider: Vxpipe.AgentRuntime.TestStreamingModelProvider,
+          history_mode: :host_settled,
+          reply_protocol: :mode_message_v1
+        )
+
+      task = request(session, "Check", "batch")
+      release_pending_context("batch", [])
+      assert_receive {:model_stream_process, provider, _}
+      calls = [tool_call("first", "check_balance"), tool_call("second", "check_credit")]
+      {:ok, response} = ModelResponse.new(text: "ignored", tool_calls: calls)
+      send(provider, {:test_stream_response, {:ok, response}})
+      assert_submission(:balance, "first", "batch")
+      assert_submission(:credit, "second", "batch")
+      release_pending_context("batch", [])
+      assert_receive {:model_stream_process, _, correction}
+      results = Enum.filter(correction.messages, &(&1.role == :tool))
+      assert Enum.map(results, & &1.tool_call_id) == ["first", "second"]
+      assert JSON.decode!(List.last(results).content)["status"] == "rejected"
+      assert length(correction.tools) == 2
+
+      {:ok, quiet} =
+        ModelResponse.new(
+          text:
+            ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+        )
+
+      send(provider, {:test_stream_response, {:ok, quiet}})
+      assert {:ok, %Result{status: :completed, dialogue: %{message: nil}}} = Task.await(task)
+      refute_received {:tool_submitted, _, _, _, _, _}
+    end
+  end
+
   test "native replay survives an actual tool acknowledgement and subsequent input" do
     session = start_session([tool_descriptor("check_balance", :balance, :non_blocking)])
     caller = request(session, "Check once", "replay_first")
@@ -173,18 +253,23 @@ defmodule Vxpipe.AgentRuntime.ToolRoundTest do
     assert {:ok, %Result{status: :completed}} = Task.await(caller)
   end
 
-  defp start_session(tools) do
+  defp start_session(tools, options \\ []) do
     start_supervised!(
       {Session,
-       instructions: "Be concise",
-       model_provider: Vxpipe.AgentRuntime.TestModelProvider,
-       model: %{mode: :scripted, test_owner: self()},
-       tools: tools,
-       executor: Vxpipe.AgentRuntime.TestExecutor,
-       maximum_model_rounds: 2,
-       pending_context_source:
-         {Vxpipe.AgentRuntime.TestPendingContextSource, %{owner: self(), result: :block}},
-       event_destination: self()}
+       Keyword.merge(
+         [
+           instructions: "Be concise",
+           model_provider: Vxpipe.AgentRuntime.TestModelProvider,
+           model: %{mode: :scripted, test_owner: self()},
+           tools: tools,
+           executor: Vxpipe.AgentRuntime.TestExecutor,
+           maximum_model_rounds: 2,
+           pending_context_source:
+             {Vxpipe.AgentRuntime.TestPendingContextSource, %{owner: self(), result: :block}},
+           event_destination: self()
+         ],
+         options
+       )}
     )
   end
 
@@ -250,7 +335,7 @@ defmodule Vxpipe.AgentRuntime.ToolRoundTest do
   defp tool_descriptor(name, identity, submission) do
     submission =
       case submission do
-        mode when mode in [:blocking, :non_blocking] -> {:accepted, mode}
+        mode when mode in [:blocking, :non_blocking, :await_completion] -> {:accepted, mode}
         {:error, _reason} = error -> error
       end
 
@@ -268,5 +353,28 @@ defmodule Vxpipe.AgentRuntime.ToolRoundTest do
       )
 
     descriptor
+  end
+
+  defp mixed_text(text) do
+    case text do
+      :oversized ->
+        JSON.encode!(%{
+          "type" => "participant_message",
+          "participant_id" => "agent",
+          "agent_mode" => "speaker",
+          "message" => String.duplicate("x", 1000)
+        })
+
+      role when is_atom(role) ->
+        JSON.encode!(%{
+          "type" => "participant_message",
+          "participant_id" => "agent",
+          "agent_mode" => Atom.to_string(role),
+          "message" => "Checking."
+        })
+
+      other ->
+        other
+    end
   end
 end

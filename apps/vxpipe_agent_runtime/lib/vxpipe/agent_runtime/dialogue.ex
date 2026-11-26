@@ -16,7 +16,8 @@ defmodule Vxpipe.AgentRuntime.Dialogue do
       "participant_id supplied by the application; if none is supplied, use agent. " <>
       "Never copy another participant identity from history. Returned attribution is " <>
       "descriptive only; the application owns actual identity and speech admission. " <>
-      "Native tool calls remain available; never encode a tool call inside message. " <>
+      "A native tool call may accompany an optional speaker message in this format. " <>
+      "Tool outcomes arrive later as private input. Never encode a tool call inside message. " <>
       "speaker requires a nonempty message; listener permits null or a nonempty message. " <>
       JSON.encode!(schema())
   end

@@ -167,23 +167,47 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
            conversation <-
              commit_tool_exchange(response, submissions, conversation, staged_messages, request),
            :ok <- config.commit.(conversation) do
-        if mode == :await_completion do
-          {:ok, silent_output(config.reply_protocol), conversation}
-        else
-          generate(
-            conversation,
-            [],
-            next_output,
-            round + 1,
-            config.reply_protocol == :mode_message_v1 or mode != :blocking,
-            request,
-            config
-          )
+        case submission_output(response.text, submissions, mode, config) do
+          {:done, reply} ->
+            {:ok, reply, conversation}
+
+          :continue ->
+            generate(
+              conversation,
+              [],
+              next_output,
+              round + 1,
+              config.reply_protocol == :mode_message_v1 or mode != :blocking,
+              request,
+              config
+            )
         end
       else
         {:error, reason} when is_atom(reason) -> {:error, reason}
         _invalid -> {:error, :commit_failed}
       end
+    end
+  end
+
+  defp submission_output(text, submissions, mode, %{reply_protocol: :mode_message_v1} = config) do
+    if Enum.all?(submissions, fn {_call, result} -> result["status"] == "running" end) do
+      {:done, accepted_dialogue(mode, text, config.maximum_output_bytes)}
+    else
+      :continue
+    end
+  end
+
+  defp submission_output(_text, _submissions, :await_completion, config),
+    do: {:done, silent_output(config.reply_protocol)}
+
+  defp submission_output(_text, _submissions, _mode, _config), do: :continue
+
+  defp accepted_dialogue(:await_completion, _text, _maximum), do: silent_output(:mode_message_v1)
+
+  defp accepted_dialogue(_mode, text, maximum) do
+    case Dialogue.decode(text, maximum) do
+      {:ok, %Dialogue{agent_mode: :speaker} = preamble} -> preamble
+      _ -> silent_output(:mode_message_v1)
     end
   end
 
@@ -194,8 +218,9 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     with :ok <- validate_call_count(calls, config.maximum_tool_calls_per_round),
          :ok <- validate_unique_call_ids(calls),
          {:ok, resolved_calls} <- resolve_calls(calls, config.tool_registry),
+         {:ok, preflight_rejections} <- preflight_resolved_calls(resolved_calls, request, config),
          :ok <- config.begin_submission.() do
-      submit_resolved_calls(resolved_calls, request, config)
+      submit_resolved_calls(resolved_calls, preflight_rejections, request, config)
     end
   end
 
@@ -226,27 +251,52 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     end
   end
 
-  defp submit_resolved_calls(resolved_calls, request, config) do
+  defp submit_resolved_calls(resolved_calls, preflight_rejections, request, config) do
     {submissions, disposition} =
       Enum.reduce(resolved_calls, {[], :non_blocking}, fn {call, descriptor},
                                                           {submissions, disposition} ->
-        case Executor.submit(
+        case Map.get(preflight_rejections, call.id) do
+          nil ->
+            case Executor.submit(
+                   config.executor,
+                   descriptor.binding,
+                   call.arguments,
+                   request.correlation,
+                   call.id
+                 ) do
+              {:accepted, mode} ->
+                {[{call, running_result(call)} | submissions],
+                 submission_disposition(disposition, mode)}
+
+              {:error, reason} ->
+                {[{call, rejected_result(reason)} | submissions], disposition}
+            end
+
+          reason ->
+            {[{call, rejected_result(reason)} | submissions], disposition}
+        end
+      end)
+
+    {:ok, Enum.reverse(submissions), disposition}
+  end
+
+  # Room admission must stay cancellable while caller interruption waits on the session.
+  defp preflight_resolved_calls(resolved_calls, request, config) do
+    rejections =
+      Enum.reduce(resolved_calls, %{}, fn {call, descriptor}, acc ->
+        case Executor.preflight(
                config.executor,
                descriptor.binding,
                call.arguments,
                request.correlation,
                call.id
              ) do
-          {:accepted, mode} ->
-            {[{call, running_result(call)} | submissions],
-             submission_disposition(disposition, mode)}
-
-          {:error, reason} ->
-            {[{call, rejected_result(reason)} | submissions], disposition}
+          :ok -> acc
+          {:error, reason} -> Map.put(acc, call.id, reason)
         end
       end)
 
-    {:ok, Enum.reverse(submissions), disposition}
+    {:ok, rejections}
   end
 
   defp submission_disposition(:await_completion, _mode), do: :await_completion
@@ -448,9 +498,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp final_output(text, output, config),
     do: complete_output(text, output, config.maximum_output_bytes)
 
-  defp tool_output(text, _output, %{reply_protocol: :mode_message_v1} = config) do
-    with {:ok, _bounded} <- append_output(text, [], config.maximum_output_bytes), do: {:ok, []}
-  end
+  defp tool_output(_text, _output, %{reply_protocol: :mode_message_v1}), do: {:ok, []}
 
   defp tool_output(text, output, config),
     do: append_output(text, output, config.maximum_output_bytes)

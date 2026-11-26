@@ -16,12 +16,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     ActiveRequest,
     CompactionUsage,
     Configuration,
+    HeldOutput,
     History,
     IdlePause,
     Interruption,
     ModelUsage,
     OutputSettlement,
     RequestOutcome,
+    SourceRetirement,
     State,
     UsageRounds
   }
@@ -84,15 +86,39 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   @spec interrupt(GenServer.server(), [History.identity()]) ::
           {:ok, [SendText.t()]} | {:error, :unavailable}
-  def interrupt(coordinator, completed_turn_ids) when is_list(completed_turn_ids) do
-    GenServer.call(coordinator, {:interrupt, completed_turn_ids}, @call_timeout)
+  def interrupt(coordinator, completed_turn_ids, participant_id \\ nil, connection_id \\ nil)
+      when is_list(completed_turn_ids) do
+    GenServer.call(
+      coordinator,
+      {:interrupt, completed_turn_ids, participant_id, connection_id},
+      @call_timeout
+    )
   catch
     :exit, _reason -> {:error, :unavailable}
   end
 
-  @spec retire_source(GenServer.server(), String.t()) :: :ok | {:error, :unavailable}
-  def retire_source(coordinator, participant_id) do
-    GenServer.call(coordinator, {:retire_source, participant_id}, @call_timeout)
+  def interrupt_untracked(coordinator, participant_id, connection_id) do
+    GenServer.call(
+      coordinator,
+      {:interrupt_untracked, participant_id, connection_id},
+      @call_timeout
+    )
+  catch
+    :exit, _ -> {:error, :unavailable}
+  end
+
+  def continuation_active?(coordinator, command) do
+    GenServer.call(coordinator, {:continuation_active?, command}, @call_timeout)
+  catch
+    :exit, _ -> false
+  end
+
+  def retire_source(coordinator, participant_id, connection_id \\ nil, visible_commands \\ []) do
+    GenServer.call(
+      coordinator,
+      {:retire_source, participant_id, connection_id, visible_commands},
+      @call_timeout
+    )
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -103,6 +129,19 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     GenServer.call(coordinator, {:settle_output, command, text}, @call_timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc """
+  Returns a bounded provisional description of in-flight audio for model context.
+
+  Never blocks the caller on session or worker work; returns nil when no
+  output is outstanding or the coordinator is unavailable.
+  """
+  @spec in_flight_audio(GenServer.server(), map(), timeout()) :: map() | nil
+  def in_flight_audio(coordinator, correlation, timeout) do
+    GenServer.call(coordinator, {:in_flight_audio, correlation}, timeout)
+  catch
+    :exit, _reason -> nil
   end
 
   @impl true
@@ -120,10 +159,22 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   def handle_call({:settle_output, command, text}, _from, state) do
     case OutputSettlement.settle(state, command, text) do
-      {:ok, state} -> {:reply, :ok, start_next(state)}
-      :ignored -> {:reply, :ignored, state}
-      {:error, :unavailable} = error -> {:reply, error, state}
+      {:ok, state} ->
+        case HeldOutput.release(state, command, &finish_or_hold/2) do
+          {:stop, reason, state} -> {:stop, reason, {:error, :unavailable}, state}
+          state -> {:reply, :ok, start_next(state)}
+        end
+
+      :ignored ->
+        {:reply, :ignored, state}
+
+      {:error, :unavailable} = error ->
+        {:reply, error, state}
     end
+  end
+
+  def handle_call({:in_flight_audio, correlation}, _from, state) do
+    {:reply, OutputSettlement.in_flight_description(state, correlation), state}
   end
 
   def handle_call({:respond, command}, _from, %State{awaiting_output: pending} = state)
@@ -180,7 +231,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         _from,
         %State{current: nil, awaiting_output: nil} = state
       ) do
-    case ActiveRequest.start_greeting(command, request_options(state)) do
+    case ActiveRequest.start_greeting(command, State.request_options(state)) do
       {:ok, current} -> {:reply, :ok, put_current(state, current)}
       {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
     end
@@ -195,7 +246,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         _from,
         %State{current: nil, awaiting_output: nil} = state
       ) do
-    correlation = ActiveRequest.correlation(command, request_options(state))
+    correlation = ActiveRequest.correlation(command, State.request_options(state))
 
     case Session.record_assistant(state.session, text, correlation) do
       :ok ->
@@ -205,7 +256,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
         awaiting =
           if state.history_mode == :host_settled,
-            do: %{command: command, correlation: correlation},
+            do: OutputSettlement.pending(command, correlation, text),
             else: nil
 
         {:reply, :ok, %{state | history: history, awaiting_output: awaiting}}
@@ -224,7 +275,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         _from,
         %State{current: nil, awaiting_output: nil} = state
       ) do
-    case ActiveRequest.start_caller_idle(command, request_options(state)) do
+    case ActiveRequest.start_caller_idle(command, State.request_options(state)) do
       {:ok, current} -> {:reply, :ok, put_current(state, current)}
       {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
     end
@@ -234,30 +285,89 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     {:reply, {:error, :busy}, state}
   end
 
-  def handle_call({:retire_source, participant_id}, _from, state) do
-    pending = :queue.filter(&(&1.participant_id != participant_id), state.pending)
-    state = %{state | pending: pending}
+  def handle_call({:continuation_active?, command}, _from, state) do
+    active? =
+      state.reply_protocol != :mode_message_v1 or state.history_mode != :host_settled or
+        match?(%{command: ^command}, state.current) or
+        match?(%{command: ^command}, state.awaiting_output)
 
-    case state.current do
-      %ActiveRequest{command: %{participant_id: ^participant_id}} = current ->
-        :ok = ActiveRequest.cancel(current, state.session, @cancel_timeout)
+    {:reply, active?, state}
+  end
 
-        current
-        |> RequestOutcome.fail_uncommitted(:interrupted, request_outcome_options(state))
-        |> transition(state)
-        |> case do
-          {:noreply, state} -> {:reply, :ok, state}
-          {:stop, reason, state} -> {:stop, reason, {:error, :unavailable}, state}
-        end
+  def handle_call(
+        {:interrupt_untracked, participant_id, connection_id},
+        _from,
+        %State{reply_protocol: :mode_message_v1, history_mode: :host_settled} = state
+      ) do
+    matches? = fn command ->
+      is_struct(command, Vxpipe.CallEngine.Command.ContinueAgent) and
+        command.participant_id == participant_id and command.connection_id == connection_id
+    end
 
-      _other_source ->
-        {:reply, :ok, state}
+    with {:ok, state} <- SourceRetirement.cancel(state, matches?, @cancel_timeout),
+         :ok <-
+           Vxpipe.CallEngine.Tool.InvocationRegistry.update_source(
+             state.invocation_registry,
+             participant_id,
+             connection_id,
+             :interrupt
+           ),
+         {:ok, state} <- SourceRetirement.settle(state, matches?, [], &finish_or_hold/2) do
+      {:reply, :ok, state}
+    else
+      {:stop, reason, state} -> {:stop, reason, {:error, :unavailable}, state}
+      {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
     end
   end
 
-  def handle_call({:interrupt, completed_turn_ids}, _from, %State{} = state) do
+  def handle_call({:interrupt_untracked, _, _}, _from, state), do: {:reply, :ok, state}
+
+  def handle_call({:retire_source, _participant, connection_id, _visible}, _from, state)
+      when is_binary(connection_id) and state.reply_protocol != :mode_message_v1,
+      do: {:reply, :ok, state}
+
+  def handle_call({:retire_source, participant_id, connection_id, visible}, _from, state) do
+    retired? = fn command ->
+      command.participant_id == participant_id and
+        (is_nil(connection_id) or command.connection_id == connection_id)
+    end
+
+    pending = :queue.filter(&(not retired?.(&1)), state.pending)
+    state = %{state | pending: pending}
+
+    with {:ok, state} <- SourceRetirement.cancel(state, retired?, @cancel_timeout),
+         :ok <-
+           Vxpipe.CallEngine.Tool.InvocationRegistry.update_source(
+             state.invocation_registry,
+             participant_id,
+             connection_id,
+             :detach
+           ),
+         {:ok, state} <- SourceRetirement.settle(state, retired?, visible, &finish_or_hold/2) do
+      {:reply, :ok, start_next(state)}
+    else
+      {:stop, reason, state} -> {:stop, reason, {:error, :unavailable}, state}
+      {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
+    end
+  end
+
+  def handle_call(
+        {:interrupt, completed_turn_ids, participant_id, connection_id},
+        _from,
+        %State{} = state
+      ) do
     case Interruption.apply(state, completed_turn_ids, @cancel_timeout) do
       {:ok, interrupted, state} ->
+        if state.reply_protocol == :mode_message_v1 and is_binary(participant_id) do
+          :ok =
+            Vxpipe.CallEngine.Tool.InvocationRegistry.update_source(
+              state.invocation_registry,
+              participant_id,
+              connection_id,
+              :interrupt
+            )
+        end
+
         {:reply, {:ok, interrupted}, state}
 
       {:error, :unavailable, state} ->
@@ -278,6 +388,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         {:reply, {:error, :unavailable}, state}
     end
   end
+
+  @impl true
+
+  def handle_cast({:agent_playback_started, room, command_id}, %State{owner: room} = state) do
+    {:noreply, OutputSettlement.playback_started(state, command_id)}
+  end
+
+  def handle_cast(_stale, state), do: {:noreply, state}
 
   @impl true
   def handle_info({:vxpipe_idle_armed, owner, token, context}, %State{owner: owner} = state) do
@@ -309,12 +427,23 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
           }
         } = state
       ) do
-    send(
-      state.owner,
-      {:vxpipe_capability_continuation_started, self(), continuation.command}
-    )
+    if state.held_output do
+      held = %{state.held_output | continuation_started?: true}
 
-    {:noreply, %{state | current: ActiveRequest.mark_continuation_started(state.current)}}
+      {:noreply,
+       %{
+         state
+         | held_output: held,
+           current: ActiveRequest.mark_continuation_started(state.current)
+       }}
+    else
+      send(
+        state.owner,
+        {:vxpipe_capability_continuation_started, self(), continuation.command}
+      )
+
+      {:noreply, %{state | current: ActiveRequest.mark_continuation_started(state.current)}}
+    end
   end
 
   def handle_info(
@@ -326,15 +455,18 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       {:ok, current, segments} ->
         state = %{state | current: current}
         state = observe_first_output(text, state)
-        Enum.each(segments, &emit_text(state, &1))
-        {:noreply, state}
+
+        if state.held_output do
+          held = Enum.reduce(segments, state.held_output, &HeldOutput.push_text(&2, &1))
+          {:noreply, %{state | held_output: held}}
+        else
+          Enum.each(segments, &emit_text(state, &1))
+          {:noreply, state}
+        end
 
       {:error, :invalid_response} ->
         state = cancel_runtime_request(state)
-
-        state.current
-        |> RequestOutcome.fail_uncommitted(:invalid_response, request_outcome_options(state))
-        |> transition(state)
+        finish_or_hold(state, {:failure, :invalid_response})
     end
   end
 
@@ -380,19 +512,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         %State{current: %ActiveRequest{task: %Task{ref: reference}}} = state
       ) do
     Process.demonitor(reference, [:flush])
+    state = put_in(state.current.proposed_speech, OutputSettlement.proposed_speech(result))
 
-    state.current
-    |> RequestOutcome.finish(result, request_outcome_options(state))
-    |> transition(state)
+    finish_or_hold(state, {:result, result})
   end
 
   def handle_info(
         {:DOWN, reference, :process, _pid, _reason},
         %State{current: %ActiveRequest{task: %Task{ref: reference}}} = state
       ) do
-    state.current
-    |> RequestOutcome.fail_uncommitted(:provider_unavailable, request_outcome_options(state))
-    |> transition(state)
+    finish_or_hold(state, {:failure, :provider_unavailable})
   end
 
   def handle_info(
@@ -409,9 +538,40 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   def handle_info(_message, state), do: {:noreply, state}
 
   defp start_request(%SendText{} = command, %State{} = state) do
-    case ActiveRequest.start_caller(command, request_options(state)) do
+    if state.reply_protocol == :mode_message_v1 do
+      :ok =
+        Vxpipe.CallEngine.Tool.InvocationRegistry.update_source(
+          state.invocation_registry,
+          command.participant_id,
+          command.connection_id,
+          :resume
+        )
+    end
+
+    case ActiveRequest.start_caller(command, State.request_options(state)) do
       {:ok, current} -> {:ok, put_current(state, current)}
       {:error, :unavailable} = error -> error
+    end
+  end
+
+  defp start_next(
+         %State{
+           reply_protocol: :mode_message_v1,
+           awaiting_output: pending,
+           current: nil,
+           held_output: nil
+         } = state
+       )
+       when not is_nil(pending) do
+    # One inference at a time, overlapping playback: while exactly one
+    # predecessor output is outstanding, a leased completion may start. Caller,
+    # idle and greeting work wait, as does a second overlapping completion.
+    # The overlapping request's output is held until the predecessor settles.
+    case start_completion(state) do
+      {:ok, state} -> HeldOutput.start(state, pending)
+      {:held, state} -> state
+      {:empty, state} -> state
+      {:error, :unavailable} -> exit(:completion_lease_unavailable)
     end
   end
 
@@ -436,7 +596,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         start_next_caller(state)
 
       {:ready, command, state} ->
-        case ActiveRequest.start_caller_idle(command, request_options(state)) do
+        case ActiveRequest.start_caller_idle(command, State.request_options(state)) do
           {:ok, current} ->
             put_current(state, current)
 
@@ -475,13 +635,22 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
            state.completion_consumer_id
          ) do
       {:ok, continuation} ->
-        if IdlePause.retain?(state, continuation) do
-          case IdlePause.retain(state, continuation) do
-            {:ok, state} -> start_completion(state)
-            {:error, :unavailable} = error -> error
-          end
-        else
-          start_completion_request(continuation, state)
+        cond do
+          IdlePause.retain?(state, continuation) ->
+            with {:ok, state} <- IdlePause.retain(state, continuation),
+                 do: start_completion(state)
+
+          continuation.lease.source_retired? ->
+            with :ok <-
+                   CompletionContinuation.retain(
+                     continuation,
+                     state.session,
+                     state.invocation_registry
+                   ),
+                 do: start_completion(state)
+
+          true ->
+            start_completion_request(continuation, state)
         end
 
       {:error, :empty} ->
@@ -496,7 +665,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   defp start_completion_request(continuation, state) do
-    case ActiveRequest.start_completion(continuation, request_options(state)) do
+    case ActiveRequest.start_completion(continuation, State.request_options(state)) do
       {:ok, current} -> {:ok, put_current(state, current)}
       {:error, :unavailable} -> release_unstarted_completion(continuation, state)
     end
@@ -583,23 +752,20 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   defp current_registry?(_registry, _state), do: false
 
-  defp request_options(state) do
-    [
-      agent_participant_id: state.agent_participant_id,
-      invocation_registry: state.invocation_registry,
-      maximum_output_bytes: state.maximum_output_bytes,
-      request_supervisor: state.request_supervisor,
-      session: state.session
-    ]
+  defp finish_or_hold(%State{held_output: %HeldOutput{} = held} = state, final) do
+    {:noreply, %{state | held_output: %{held | final: final}}}
   end
 
-  defp request_outcome_options(state) do
-    [
-      session: state.session,
-      invocation_registry: state.invocation_registry,
-      owner: state.owner,
-      provider: state.provider
-    ]
+  defp finish_or_hold(state, {:result, result}) do
+    state.current
+    |> RequestOutcome.finish(result, State.request_outcome_options(state))
+    |> transition(state)
+  end
+
+  defp finish_or_hold(state, {:failure, reason}) do
+    state.current
+    |> RequestOutcome.fail_uncommitted(reason, State.request_outcome_options(state))
+    |> transition(state)
   end
 
   defp put_current(state, current) do

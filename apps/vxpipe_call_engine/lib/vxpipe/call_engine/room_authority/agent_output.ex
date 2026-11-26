@@ -258,6 +258,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     interrupt(interrupter, state, observation)
   end
 
+  def interrupt(
+        %TurnInterrupter{} = caller,
+        %State{
+          text_capability: %{module: AgentRuntimeCoordinator, pid: coordinator},
+          agent_turns: turns
+        } = state,
+        _observation
+      )
+      when map_size(turns) == 0 do
+    with :ok <-
+           AgentRuntimeCoordinator.interrupt_untracked(
+             coordinator,
+             caller.participant_id,
+             caller.connection_id
+           ) do
+      {:ok, TurnState.clear_recent(state, caller.connection_id)}
+    end
+  end
+
   def interrupt(%TurnInterrupter{}, %State{agent_turns: agent_turns} = state, _observation)
       when map_size(agent_turns) == 0,
       do: {:ok, state}
@@ -275,7 +294,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     turn_ids = Enum.map(turns, &TurnState.key(&1.command))
 
     with {:ok, speech_requests} <- interrupt_text_to_speech(state, observation),
-         {:ok, _commands} <- interrupt_text_generation(state, turn_ids),
+         {:ok, _commands} <- interrupt_text_generation(state, turn_ids, interrupter),
          {:ok, state} <- interrupt_speech_to_speech(state) do
       Enum.each(turns, &OutputHistory.settle(state, &1.command))
 
@@ -312,13 +331,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   def retire_source(state, _participant_id), do: state
 
-  defp retire_turns([], state, _coordinator, _participant_id), do: state
-
   defp retire_turns(turns, state, coordinator, participant_id) do
     requests = Enum.flat_map(turns, &TurnState.speech_targets(state, &1.command))
     _ = interrupt_selected_speech(state, requests)
 
-    case AgentRuntimeCoordinator.retire_source(coordinator, participant_id) do
+    case AgentRuntimeCoordinator.retire_source(
+           coordinator,
+           participant_id,
+           nil,
+           Enum.map(turns, & &1.command.id)
+         ) do
       :ok ->
         Enum.reduce(turns, state, fn turn, acc ->
           _ = OutputHistory.settle(acc, turn.command)
@@ -410,6 +432,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   end
 
   defp emit_speech_started(request, connection, state) do
+    if match?(%{module: AgentRuntimeCoordinator}, state.text_capability) do
+      GenServer.cast(
+        state.text_capability.pid,
+        {:agent_playback_started, self(), request.command_id}
+      )
+    end
+
     state = ResponseTiming.observe(state, request, request.output_id, :first_audio_start)
     event = struct!(AgentSpeechStarted, event_fields(request, state))
 
@@ -445,7 +474,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
     state
     |> Map.update!(:next_sequence, &(&1 + 1))
-    |> TurnState.delete(request)
+    |> TurnState.complete(request)
     |> FirstMessage.complete(request)
   end
 
@@ -470,7 +499,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
     state
     |> Map.update!(:next_sequence, &(&1 + 1))
-    |> TurnState.delete(command)
+    |> TurnState.complete(command)
     |> FirstMessage.complete(command)
   end
 
@@ -540,18 +569,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     end
   end
 
-  defp interrupt_text_generation(%{text_capability: %{module: ModelInference}} = state, ids) do
+  defp interrupt_text_generation(
+         %{text_capability: %{module: ModelInference}} = state,
+         ids,
+         _interrupter
+       ) do
     ModelInference.interrupt(state.text_capability.pid, ids)
   end
 
   defp interrupt_text_generation(
          %{text_capability: %{module: AgentRuntimeCoordinator}} = state,
-         ids
+         ids,
+         interrupter
        ) do
-    AgentRuntimeCoordinator.interrupt(state.text_capability.pid, ids)
+    AgentRuntimeCoordinator.interrupt(
+      state.text_capability.pid,
+      ids,
+      interrupter.participant_id,
+      interrupter.connection_id
+    )
   end
 
-  defp interrupt_text_generation(_state, _ids), do: {:ok, []}
+  defp interrupt_text_generation(_state, _ids, _interrupter), do: {:ok, []}
 
   defp emit_turn_interrupted(command, interrupter, played_ms, state) do
     connection = Map.get(state.connections, command.connection_id)
@@ -591,8 +630,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
       connection.participant_id == command.participant_id and
       command.tenant_id == state.snapshot.tenant_id and command.room_id == state.snapshot.room_id and
       command.incarnation_id == state.snapshot.incarnation_id and
-      not TurnState.active?(state, command)
+      not TurnState.active?(state, command) and
+      continuation_active?(state.text_capability, capability, command)
   end
+
+  defp continuation_active?(%{module: AgentRuntimeCoordinator}, capability, command),
+    do: AgentRuntimeCoordinator.continuation_active?(capability, command)
+
+  defp continuation_active?(_text_capability, _capability, _command), do: true
 
   defp event_fields(request, state) do
     %{

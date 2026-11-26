@@ -25,7 +25,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
               [
                 current: nil,
                 history_mode: :generated,
+                reply_protocol: :legacy,
                 awaiting_output: nil,
+                held_output: nil,
                 readiness_resource: nil,
                 remote_mcp_owner: nil,
                 pending: :queue.new(),
@@ -42,4 +44,23 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
           usage_rounds: UsageRounds.t(),
           completion_deferred?: boolean()
         }
+
+  def request_options(state) do
+    [
+      agent_participant_id: state.agent_participant_id,
+      invocation_registry: state.invocation_registry,
+      maximum_output_bytes: state.maximum_output_bytes,
+      request_supervisor: state.request_supervisor,
+      session: state.session
+    ]
+  end
+
+  def request_outcome_options(state) do
+    [
+      session: state.session,
+      invocation_registry: state.invocation_registry,
+      owner: state.owner,
+      provider: state.provider
+    ]
+  end
 end

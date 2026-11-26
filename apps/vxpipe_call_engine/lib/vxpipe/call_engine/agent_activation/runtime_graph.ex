@@ -47,7 +47,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
              invocation_registry,
              request_supervisor,
              session,
-             options
+             Keyword.put(options, :reply_protocol, reply_protocol)
            ),
            invocation_supervisor_child(activation_id, invocation_supervisor, options),
            invocation_registry_child(
@@ -138,6 +138,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
        call_id: Keyword.fetch!(options, :call_id),
        session: session,
        history_mode: Keyword.get(options, :history_mode, :generated),
+       reply_protocol: Keyword.fetch!(options, :reply_protocol),
        invocation_registry: invocation_registry,
        request_supervisor: request_supervisor,
        remote_mcp_owner: remote_mcp_owner(activation_id, options),
@@ -229,7 +230,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
       |> put_optional(:initial_messages, Keyword.get(options, :initial_messages))
       |> put_optional(
         :model_context_source,
-        model_context_source(Keyword.get(options, :model_context_source))
+        model_context_source(Keyword.get(options, :model_context_source), coordinator)
       )
       |> put_optional(:context_compaction, compaction_options(options))
 
@@ -255,10 +256,15 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   defp child_ref(activation_id, role),
     do: AgentActivationSupervisor.child_ref(activation_id, role)
 
-  defp model_context_source(nil), do: nil
+  defp model_context_source(nil, coordinator) do
+    model_context_source(
+      %ModelContextSource{variable_binding: nil, transfer_reason: nil},
+      coordinator
+    )
+  end
 
-  defp model_context_source(%ModelContextSource{} = source),
-    do: {ModelContextSource, source}
+  defp model_context_source(%ModelContextSource{} = source, coordinator),
+    do: {ModelContextSource, ModelContextSource.with_coordinator(source, coordinator)}
 
   defp put_optional(options, _key, nil), do: options
   defp put_optional(options, key, value), do: Keyword.put(options, key, value)

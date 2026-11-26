@@ -55,6 +55,11 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     safe_call(registry, :snapshot, timeout)
   end
 
+  def update_source(registry, participant_id, connection_id, operation)
+      when operation in [:detach, :interrupt, :resume] do
+    safe_call(registry, {:update_source, participant_id, connection_id, operation}, @call_timeout)
+  end
+
   @spec running_execution(GenServer.server(), String.t()) ::
           {:ok, InvocationRecord.running_execution()} | {:error, :unavailable}
   def running_execution(registry, invocation_id)
@@ -191,6 +196,22 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   def handle_call({:submission_outcome, %InvocationSubmission{} = submission}, _from, state) do
     {:reply, State.submission_outcome(state, submission), state}
+  end
+
+  def handle_call({:update_source, participant_id, connection_id, operation}, _from, state) do
+    records =
+      Map.new(state.records, fn {id, record} ->
+        context = record.submission.context
+
+        if context.source_participant_id == participant_id and
+             (is_nil(connection_id) or context.connection_id == connection_id) do
+          {id, InvocationRecord.update_source(record, operation)}
+        else
+          {id, record}
+        end
+      end)
+
+    {:reply, :ok, %{state | records: records}}
   end
 
   def handle_call(:snapshot, _from, state) do

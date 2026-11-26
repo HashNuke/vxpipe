@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.RoomAuthority.State
+  alias Vxpipe.CallEngine.RoomAuthority.{CallerAnswer, State}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
@@ -25,13 +25,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
          destination.participant_id == request.destination_participant_id and
          not MapSet.member?(state.participant_ids, request.destination_participant_id) and
          connection != nil and connection.participant_id == request.caller_participant_id do
-      :ok
+      terminal_authorize(state, request)
     else
       {:error, :rejected}
     end
   end
 
   def authorize(%Request{}, %State{}), do: {:error, :rejected}
+
+  # Defence in depth for the preflight gate: an engine turn must not
+  # transfer the call while the caller's answer is outstanding. Caller
+  # (`:caller`) and native STS (`:sts`) turns bypass the floor, so explicitly
+  # requested transfers still pass. This revalidates races where the floor rose
+  # after preflight.
+  defp terminal_authorize(state, request) do
+    case CallerAnswer.terminal_admission(state, request) do
+      :ok -> :ok
+      {:error, :caller_answer_pending} -> {:error, :rejected}
+    end
+  end
 
   defp source_voice_authorized?(state, request) do
     text_voice_authorized?(state, request) or sts_voice_authorized?(state, request)

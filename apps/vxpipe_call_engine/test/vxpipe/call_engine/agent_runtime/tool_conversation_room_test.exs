@@ -133,29 +133,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     })
 
     assert_receive {:test_blocking_tool_started, invocation}
-    assert_receive {:test_agent_runtime_stream, acknowledgment, ack_request}
-
-    assert Enum.any?(
-             ack_request.messages,
-             &(&1.role == :assistant and &1.content == "Native call prose")
-           )
-
-    assert Enum.any?(ack_request.messages, fn message ->
-             Enum.any?(
-               message.tool_calls,
-               &(&1.provider_metadata == %{thought_signature: "opaque-structured"})
-             )
-           end)
-
-    reply_with_text(
-      acknowledgment,
-      ~s({"type":"participant_message","participant_id":"forged-speaker","agent_mode":"speaker","message":"Checking."})
-    )
-
-    assert_receive {:vxpipe_event, %TextOutput{text: "Checking."}}
     first_correlation = first.correlation_id
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^first_correlation}}
     refute_received {:vxpipe_event, %TextOutput{text: "Native call prose"}}
+    refute_received {:vxpipe_event, %TextOutput{text: "Tool protocol prose must not be spoken."}}
+    refute_received {:vxpipe_event, %TextOutput{}}
 
     for text <- [
           ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}),
@@ -176,31 +158,61 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     assert system =~ "Current agent participant_id: " <> JSON.encode!(receiver_id) <> "."
 
     assert Enum.any?(completion_request.messages, fn message ->
+             Enum.any?(
+               message.tool_calls,
+               &(&1.provider_metadata == %{thought_signature: "opaque-structured"})
+             )
+           end)
+
+    assert Enum.any?(completion_request.messages, fn message ->
+             message.origin == :engine and message.content =~ "structured-tool" and
+               message.content =~ ~s("status":"completed") and
+               message.content =~ ~s("released":true)
+           end)
+
+    refute Enum.any?(completion_request.messages, &String.contains?(&1.content, "forged-speaker"))
+
+    reply_with_text(
+      completion,
+      ~s({"type":"participant_message","participant_id":"forged-speaker","agent_mode":"speaker","message":"The lookup is ready."})
+    )
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "The lookup is ready."}}
+    completion_correlation = completion_request.correlation.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^completion_correlation}}
+
+    thanks = send_text(plan, room, caller, "structured-profile", "thanks")
+
+    assert_receive {:test_agent_runtime_stream, thanks_provider, thanks_request}, 1_000
+
+    assert Enum.any?(thanks_request.messages, fn message ->
              message.role == :assistant and
                match?(
                  {:ok,
                   %{
                     "type" => "participant_message",
                     "participant_id" => ^receiver_id,
-                    "message" => "Checking."
+                    "message" => "The lookup is ready."
                   }},
                  JSON.decode(message.content)
                )
            end)
 
-    refute Enum.any?(completion_request.messages, &String.contains?(&1.content, "forged-speaker"))
+    refute Enum.any?(thanks_request.messages, &String.contains?(&1.content, "forged-speaker"))
 
     refute Enum.any?(
-             completion_request.messages,
+             thanks_request.messages,
              &(&1.role == :assistant and &1.content =~ ~s("message":null))
            )
 
     reply_with_text(
-      completion,
-      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"The lookup is ready."})
+      thanks_provider,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"You are welcome."})
     )
 
-    assert_receive {:vxpipe_event, %TextOutput{text: "The lookup is ready."}}
+    assert_receive {:vxpipe_event, %TextOutput{text: "You are welcome."}}
+    thanks_correlation = thanks.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^thanks_correlation}}
   end
 
   test "completed detached output does not leave speaker mode on reconnection" do
@@ -530,9 +542,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^completion_correlation}}
   end
 
-  test "delivers mixed tool text once and consumes its private completion once" do
+  test "delivers legacy mixed tool text once and consumes its private completion once" do
     plan = compile_plan("non_blocking")
-    connection_id = "conn-agent-runtime-mixed-tool"
+    connection_id = "conn-agent-runtime-mixed-tool-legacy"
     {room, caller} = start_room(plan, connection_id)
 
     initial = send_text(plan, room, caller, connection_id, "Start the check.")
@@ -592,6 +604,68 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
                       correlation_id: ^completion_correlation,
                       text: "The check completed."
                     }}
+  end
+
+  test "delivers mixed tool text once and consumes its private completion once" do
+    {:ok, protocol} = CallEngine.AgentProtocol.capture()
+    {:ok, plan} = CallEngine.AgentProtocol.pin(compile_plan("non_blocking"), protocol)
+    connection_id = "conn-agent-runtime-mixed-tool"
+    {room, caller} = start_room(plan, connection_id)
+
+    initial = send_text(plan, room, caller, connection_id, "Start the check.")
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert request.reply_protocol == :mode_message_v1
+
+    preamble =
+      JSON.encode!(%{
+        "type" => "participant_message",
+        "participant_id" => "agent",
+        "agent_mode" => "speaker",
+        "message" => "I will check now. "
+      })
+
+    reply_with_tool(provider, "mixed-tool-call", preamble)
+
+    assert_receive {:test_blocking_tool_started, invocation}
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: initial_correlation,
+                      text: "I will check now."
+                    }}
+
+    assert initial_correlation == initial.correlation_id
+    refute_receive {:test_agent_runtime_stream, _, _}, 200
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^initial_correlation}}
+
+    send(invocation, :release_test_tool)
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "mixed-tool-call"}}
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
+    assert List.last(completion_request.messages).origin == :engine
+    assert List.last(completion_request.messages).content =~ "mixed-tool-call"
+    completion_correlation = completion_request.correlation.correlation_id
+
+    reply_with_text(
+      completion_provider,
+      JSON.encode!(%{
+        "type" => "participant_message",
+        "participant_id" => "agent",
+        "agent_mode" => "speaker",
+        "message" => "The check is running."
+      })
+    )
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: ^completion_correlation,
+                      text: "The check is running."
+                    }}
+
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^completion_correlation}}
+
+    refute_received {:vxpipe_event, %TextOutput{}}
   end
 
   test "a nonblocking completion cannot release a second blocking invocation" do

@@ -136,6 +136,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec terminal_submission_admission(ToolContext.t()) ::
+          :ok | {:error, :caller_answer_pending | :unavailable}
+  def terminal_submission_admission(%ToolContext{} = context) do
+    GenServer.call(
+      via(context.tenant_id, context.room_id),
+      {:terminal_submission_admission, context},
+      500
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @spec idle(IdleRequest.t()) :: {:ok, map()} | {:error, :rejected | :unavailable}
   def idle(%IdleRequest{} = request) do
     GenServer.call(
@@ -377,6 +389,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_call({:announce_hangup, context, text}, from, state),
     do: ActionAnnouncement.hangup(context, text, from, state)
+
+  def handle_call({:terminal_submission_admission, context}, _from, state),
+    do: {:reply, __MODULE__.CallerAnswer.terminal_admission(state, context), state}
 
   def handle_call({:idle, %IdleRequest{} = request}, from, state) do
     case IdleWait.begin(request, from, state) do

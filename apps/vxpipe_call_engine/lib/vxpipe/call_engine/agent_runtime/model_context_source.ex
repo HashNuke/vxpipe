@@ -7,11 +7,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ModelContextSource do
 
   @derive {Inspect, only: []}
   @enforce_keys [:variable_binding, :transfer_reason]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [coordinator: nil]
 
   @type t :: %__MODULE__{
           variable_binding: nil | Binding.t(),
-          transfer_reason: nil | String.t()
+          transfer_reason: nil | String.t(),
+          coordinator: GenServer.server() | nil
         }
 
   @spec new(nil | Binding.t(), nil | String.t()) :: nil | t()
@@ -26,19 +27,33 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ModelContextSource do
     }
   end
 
+  @doc "Attaches the coordinator for bounded provisional in-flight audio."
+  @spec with_coordinator(t(), GenServer.server()) :: t()
+  def with_coordinator(%__MODULE__{} = source, coordinator)
+      when not is_nil(coordinator) do
+    %{source | coordinator: coordinator}
+  end
+
   @impl true
-  def snapshot(%__MODULE__{} = source, _correlation, timeout_ms)
+  def snapshot(%__MODULE__{} = source, correlation, timeout_ms)
       when is_integer(timeout_ms) and timeout_ms > 0 do
     with {:ok, variables} <- variable_projection(source.variable_binding, timeout_ms) do
       context =
         %{}
         |> put_optional("call_variables", variables)
         |> put_optional("transfer", transfer_context(source.transfer_reason))
+        |> put_optional("in_flight_audio", in_flight_audio(source, correlation, timeout_ms))
 
       {:ok, context}
     else
       _unavailable -> {:error, :model_context_unavailable}
     end
+  end
+
+  defp in_flight_audio(%{coordinator: nil}, _correlation, _timeout), do: nil
+
+  defp in_flight_audio(%{coordinator: coordinator}, correlation, timeout) do
+    Vxpipe.CallEngine.AgentRuntime.Coordinator.in_flight_audio(coordinator, correlation, timeout)
   end
 
   defp variable_projection(nil, _timeout_ms), do: {:ok, nil}

@@ -9,7 +9,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
 
   @derive {Inspect, only: [:kind, :first_output_observed?]}
   @enforce_keys [:command, :correlation, :kind, :output, :started_at, :task]
-  defstruct @enforce_keys ++ [first_output_observed?: false, continuation_started?: false]
+  defstruct @enforce_keys ++
+              [first_output_observed?: false, continuation_started?: false, proposed_speech: nil]
 
   @type kind :: :caller | :caller_idle | :greeting | {:completion, CompletionContinuation.t()}
   @type t :: %__MODULE__{
@@ -26,7 +27,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
   @spec start_caller(SendText.t(), keyword()) :: {:ok, t()} | {:error, :unavailable}
   def start_caller(%SendText{} = command, options) do
     request_id = Id.generate(:agent_request)
-    context = tool_context(command, request_id, Keyword.fetch!(options, :agent_participant_id))
+
+    context =
+      tool_context(command, request_id, Keyword.fetch!(options, :agent_participant_id), :caller)
+
     correlation = Correlation.new(Keyword.fetch!(options, :invocation_registry), context)
     session = Keyword.fetch!(options, :session)
 
@@ -45,7 +49,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
   @spec start_greeting(SendText.t(), keyword()) :: {:ok, t()} | {:error, :unavailable}
   def start_greeting(%SendText{} = command, options) do
     {:ok, input} = Input.platform(:greeting_request, %{}, :listener)
-    correlation = correlation(command, options)
+    correlation = correlation(command, options, :engine)
     session = Keyword.fetch!(options, :session)
 
     task =
@@ -63,7 +67,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
   @spec start_caller_idle(SendText.t(), keyword()) :: {:ok, t()} | {:error, :unavailable}
   def start_caller_idle(%SendText{} = command, options) do
     {:ok, input} = Input.platform(:idle_timeout, %{}, :listener)
-    correlation = correlation(command, options)
+    correlation = correlation(command, options, :engine)
     session = Keyword.fetch!(options, :session)
 
     task =
@@ -78,10 +82,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
     :exit, _reason -> {:error, :unavailable}
   end
 
-  @spec correlation(SendText.t(), keyword()) :: Correlation.t()
-  def correlation(%SendText{} = command, options) do
+  @spec correlation(SendText.t(), keyword(), :caller | :engine) :: Correlation.t()
+  def correlation(%SendText{} = command, options, origin \\ :engine) do
     request_id = Id.generate(:agent_request)
-    context = tool_context(command, request_id, Keyword.fetch!(options, :agent_participant_id))
+
+    context =
+      tool_context(command, request_id, Keyword.fetch!(options, :agent_participant_id), origin)
+
     Correlation.new(Keyword.fetch!(options, :invocation_registry), context)
   end
 
@@ -158,7 +165,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
      }}
   end
 
-  defp tool_context(command, request_id, agent_participant_id) do
+  defp tool_context(command, request_id, agent_participant_id, origin) do
     %Context{
       tenant_id: command.tenant_id,
       room_id: command.room_id,
@@ -170,6 +177,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
       correlation_id: command.correlation_id,
       agent_request_id: request_id,
       tool_call_id: nil,
+      request_origin: origin,
       audio_response: command.audio_response
     }
   end

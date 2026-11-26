@@ -23,7 +23,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
     :destination_participant_id,
     :reason
   ]
-  defstruct @enforce_keys ++ [announcement: nil]
+  defstruct @enforce_keys ++ [announcement: nil, request_origin: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -41,6 +41,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
           destination_call_spec_key: String.t(),
           destination_participant_id: String.t(),
           announcement: nil | String.t(),
+          request_origin: nil | :caller | :engine | :sts,
           reason: nil | String.t()
         }
 
@@ -71,6 +72,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
          destination_call_spec_key: target.call_spec_key,
          destination_participant_id: target.participant_id,
          announcement: announcement,
+         request_origin: Map.get(context, :request_origin),
          reason: reason
        }}
     else

@@ -283,7 +283,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       command_id: turn.command_id,
       correlation_id: turn.correlation_id,
       tool_call_id: tool_call_id,
-      source_capability: capability
+      source_capability: capability,
+      request_origin: :sts
     }
   end
 

@@ -125,15 +125,14 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
     assert String.downcase(cue) =~ "go ahead"
     refute_received {:tool_submitted, _, _, _, _, _}
 
-    assert %{message: acknowledgment} =
+    assert %{agent_mode: :listener, message: nil} =
              step(
                session,
                "lookup",
-               "Call lookup exactly once with reference DEMO-42. First wait for its native result before speaking.",
+               "Call lookup exactly once with reference DEMO-42. Submit silently with no accompanying speech.",
                evidence
              )
 
-    assert is_binary(acknowledgment) and acknowledgment != ""
     assert_receive {:tool_submitted, _, :lookup, %{"reference" => "DEMO-42"}, _, invocation}
     refute_received {:tool_submitted, _, _, _, _, _}
 
@@ -289,7 +288,7 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
     assert normalized(dialogue.message) == normalized(@long_reply)
   end
 
-  defp validate_dialogue!(name, dialogue) when name in ["silent", "idle"] do
+  defp validate_dialogue!(name, dialogue) when name in ["silent", "idle", "lookup"] do
     assert dialogue.agent_mode == :listener and is_nil(dialogue.message)
   end
 
@@ -300,7 +299,6 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
 
   defp validate_dialogue!(name, dialogue) do
     expected = %{
-      "lookup" => "the lookup is running",
       "unrelated" => "four",
       "completion" => "demo-42 is ready",
       "after_cancel" => "ready"
@@ -350,8 +348,8 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
     "You are the synthetic Northstar office receptionist. Office hours are 9 to 5 Monday to Friday. " <>
       "Use speaker mode for answers. When asked to wait silently or on idle_timeout, use listener mode with null message. " <>
       "When asked to say Go ahead and keep listening, use listener mode with message Go ahead. " <>
-      "Use lookup exactly once when explicitly asked. After its native result reports running, say exactly The lookup is running. " <>
-      "Do not give that acknowledgment before the native tool result, or claim that the lookup has completed. " <>
+      "Use lookup exactly once when explicitly asked. Submit it silently, without an accompanying message. " <>
+      "Wait for its actual completion before claiming success. " <>
       "Never repeat lookup for a running reference. Report a later trusted completion when it arrives. " <>
       "Do not call hangup unless explicitly requested. Keep responses concise except when asked for three sentences."
   end

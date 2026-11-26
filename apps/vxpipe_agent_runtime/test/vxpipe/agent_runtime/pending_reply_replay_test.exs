@@ -17,7 +17,10 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
 
   test "only source verified bounded unsigned replay can become a pending candidate" do
     {:ok, config} = Provider.new(model: "deepseek:deepseek-flash", api_key: "test-only")
-    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Café."})
+
+    text =
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Café."})
+
     upstream = ReqLLM.Context.assistant(text)
 
     upstream = %{
@@ -78,7 +81,8 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
       assert events != []
       refute :erlang.term_to_binary(events) =~ "private sentinel"
       refute inspect(:sys.get_state(session)) =~ "private sentinel"
-      assert %PendingReplyReplay{} = :sys.get_state(session).pending_replay
+      assert %{} = :sys.get_state(session).outstanding
+      assert %{replay: %PendingReplyReplay{}} = :sys.get_state(session).outstanding[corr]
       {:ok, spoken} = Message.spoken_assistant("agent", "Hello.", :speaker)
 
       assert {:error, :stale_settlement} =
@@ -92,7 +96,7 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
 
       assert {:error, :busy} = Session.request(session, input("early"), %{request_id: "early"})
       assert :ok = Session.settle_output(session, corr, spoken)
-      assert is_nil(:sys.get_state(session).pending_replay)
+      refute Map.has_key?(:sys.get_state(session).outstanding, corr)
       assert {:error, :stale_settlement} = Session.settle_output(session, corr, spoken)
       assert {:ok, _} = Session.request(session, input("next"), %{request_id: "next"})
       assert_receive {:encoded_request, next}
@@ -155,7 +159,7 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
       assert {:ok, _} = Session.request(session, input("first"), first)
       assert_receive {:encoded_request, _}
       assert :ok = Session.settle_output(session, first, nil)
-      assert is_nil(:sys.get_state(session).pending_replay)
+      refute Map.has_key?(:sys.get_state(session).outstanding, first)
       second = %{request_id: "second"}
 
       call =
@@ -166,14 +170,14 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
       assert :ok = Session.cancel(session)
       assert {:ok, %{status: :cancelled}} = Task.await(call)
       send(responder, :release)
-      assert is_nil(:sys.get_state(session).pending_replay)
+      assert %{replay: nil} = :sys.get_state(session).outstanding[second]
       {:ok, spoken} = Message.spoken_assistant("agent", "Hello.", :speaker)
       assert :ok = Session.settle_output(session, second, spoken)
       failed = %{request_id: "failed"}
       assert {:ok, %{status: :failed}} = Session.request(session, input("invalid"), failed)
       assert_receive {:encoded_request, wire}
       refute JSON.encode!(wire) =~ "private sentinel"
-      assert is_nil(:sys.get_state(session).pending_replay)
+      assert %{replay: nil} = :sys.get_state(session).outstanding[failed]
       assert :ok = Session.settle_output(session, failed, spoken)
       assert :ok = Session.record_assistant(session, "Hello.", %{request_id: "fixed"})
       assert :ok = Session.settle_output(session, %{request_id: "fixed"}, spoken)
@@ -204,7 +208,8 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
         content =
           if text == "invalid",
             do: "not dialogue",
-            else: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
+            else:
+              ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
         message = %{role: "assistant", content: content, reasoning_content: "private sentinel"}
 

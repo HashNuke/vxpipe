@@ -70,7 +70,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OutputHistory do
   def settle_untracked(%State{}, _command), do: :ignored
 
   @spec detached(State.t(), String.t()) :: State.t()
-  def detached(%State{} = state, connection_id) do
+  def detached(%State{} = state, connection_id, participant_id \\ nil) do
+    retire_detached_inference(state, connection_id, participant_id)
+
     state.agent_turns
     |> Map.values()
     |> Enum.filter(&(&1.command.connection_id == connection_id))
@@ -81,4 +83,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OutputHistory do
       end
     end)
   end
+
+  defp retire_detached_inference(
+         %{text_capability: %{module: Coordinator} = capability} = state,
+         connection_id,
+         participant_id
+       )
+       when is_binary(participant_id) and capability.participant_id != participant_id do
+    visible =
+      for {_, turn} <- state.agent_turns,
+          turn.command.connection_id == connection_id,
+          do: turn.command.id
+
+    Coordinator.retire_source(capability.pid, participant_id, connection_id, visible)
+  end
+
+  defp retire_detached_inference(_state, _connection, _participant), do: :ok
 end

@@ -28,7 +28,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CompletionContinuation do
           lease.completion.context
           | command_id: command.id,
             correlation_id: command.correlation_id,
-            tool_call_id: nil
+            tool_call_id: nil,
+            request_origin: :engine
         }
 
         {:ok,
@@ -65,7 +66,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CompletionContinuation do
   defp record_observation(true, _session, _continuation), do: :ok
 
   defp record_observation(false, session, continuation),
-    do: Session.record_engine(session, continuation.command.content, continuation.correlation)
+    do:
+      Session.retain_tool_result(session, continuation.command.content, continuation.correlation)
 
   @spec acknowledge(GenServer.server(), t()) :: :ok | {:error, :unavailable}
   def acknowledge(invocation_registry, %__MODULE__{} = continuation) do

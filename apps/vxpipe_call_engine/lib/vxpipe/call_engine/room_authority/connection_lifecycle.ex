@@ -581,7 +581,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         connections: Map.delete(state.connections, connection_id)
     }
 
-    state = OutputHistory.detached(state, connection_id)
+    state = OutputHistory.detached(state, connection_id, connection && connection.participant_id)
     state = StartupReadiness.connection_removed(connection_id, connection, state)
 
     if connection == nil or connection.admission != :main do

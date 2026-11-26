@@ -12,7 +12,13 @@ defmodule Vxpipe.CallEngine.Tool.Context do
     :correlation_id
   ]
   defstruct @enforce_keys ++
-              [:agent_request_id, :tool_call_id, :source_capability, audio_response: false]
+              [
+                :agent_request_id,
+                :tool_call_id,
+                :source_capability,
+                :request_origin,
+                audio_response: false
+              ]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -26,6 +32,7 @@ defmodule Vxpipe.CallEngine.Tool.Context do
           agent_request_id: nil | String.t(),
           tool_call_id: nil | String.t(),
           source_capability: nil | pid(),
+          request_origin: nil | :caller | :engine | :sts,
           audio_response: boolean()
         }
 end

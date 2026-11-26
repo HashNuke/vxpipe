@@ -16,10 +16,14 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     assert Enum.any?(repair.messages, &(&1.content == "malformed-private"))
     assert repair.tools == first.tools
 
-    reply(provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."}), %{
-      input_tokens: 15,
-      output_tokens: 20
-    })
+    reply(
+      provider,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."}),
+      %{
+        input_tokens: 15,
+        output_tokens: 20
+      }
+    )
 
     assert {:ok, %{status: :completed, dialogue: %{message: "Hello."}, output: nil}} =
              Task.await(task)
@@ -36,7 +40,12 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     next = Task.async(fn -> Session.request(session, "Next", %{request_id: "next"}) end)
     assert_receive {:model_stream_process, next_provider, next_request}
     assert next_request.messages == first.messages ++ [spoken, Message.user("Next")]
-    reply(next_provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
+
+    reply(
+      next_provider,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+    )
+
     assert {:ok, %{status: :completed}} = Task.await(next)
   end
 
@@ -77,7 +86,12 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     next = Task.async(fn -> Session.request(session, "Next", %{}) end)
     assert_receive {:model_stream_process, next_provider, request}
     assert request.messages == first.messages ++ [Message.user("Next")]
-    reply(next_provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
+
+    reply(
+      next_provider,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+    )
+
     assert {:ok, %{status: :completed}} = Task.await(next)
   end
 
@@ -120,17 +134,16 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     end
   end
 
-  test "modern blocking acknowledgments retain tools but malformed output after dispatch cannot retry" do
+  test "a malformed preamble alongside a native tool cannot trigger repair or repeat the tool" do
     session = session()
     task = Task.async(fn -> Session.request(session, "Lookup", %{}) end)
-    assert_receive {:model_stream_process, provider, first}
-    reply(provider, "", %{output_tokens: 10}, [call("original")])
+    assert_receive {:model_stream_process, provider, _}
+    reply(provider, "bad preamble", %{output_tokens: 10}, [call("original")])
     assert_receive {:tool_submitted, _, :lookup, %{}, %{}, "original"}
-    assert_receive {:model_stream_process, ^provider, next}
-    assert next.tools == first.tools
-    assert List.last(next.messages).role == :tool
-    reply(provider, "bad")
-    assert {:ok, %{status: :failed, reason: :invalid_dialogue}} = Task.await(task)
+
+    assert {:ok, %{status: :completed, dialogue: %{agent_mode: :listener, message: nil}}} =
+             Task.await(task)
+
     refute_received {:model_stream_process, _, _}
     refute_received {:tool_submitted, _, _, _, _, _}
   end
@@ -186,7 +199,12 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     task = Task.async(fn -> Session.request(restarted, "Hello", %{}) end)
     assert_receive {:model_stream_process, provider, request}
     assert request.maximum_output_tokens == 100
-    reply(provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
+
+    reply(
+      provider,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+    )
+
     assert {:ok, %{status: :completed}} = Task.await(task)
     refute_received {:model_stream_process, _, _}
   end
@@ -208,7 +226,12 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     reply(provider, "bad")
     assert_receive {:model_stream_process, ^provider, second}
     assert second.maximum_output_tokens == 50
-    reply(provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
+
+    reply(
+      provider,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
+    )
+
     assert {:ok, %{status: :completed}} = Task.await(task)
     refute_received {:context_compaction_requested, _, _}
   end

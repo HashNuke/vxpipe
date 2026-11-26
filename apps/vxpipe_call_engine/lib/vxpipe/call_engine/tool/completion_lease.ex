@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.Tool.CompletionLease do
 
   @derive {Inspect, only: [:invocation_id, :consumer_id]}
   @enforce_keys [:invocation_id, :consumer_id, :lease_id, :completion]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [source_retired?: false]
 
   @type t :: %__MODULE__{
           invocation_id: String.t(),

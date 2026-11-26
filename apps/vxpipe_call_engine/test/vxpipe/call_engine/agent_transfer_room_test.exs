@@ -1431,6 +1431,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     source = Map.fetch!(plan.participants, "reception")
     assert {:ok, room} = CallEngine.TestCallStartup.start_call_raw(plan)
     attach_caller(plan, room, caller)
+    await_idle = CallEngine.TestVoiceToolRoom.watch_idle_admission(plan, "reception")
     command = send_command(plan, room, caller, "Wait while transfer is prepared")
     assert :ok = CallEngine.send_text(command)
     assert_receive {:test_agent_runtime_stream, model, _request}
@@ -1444,23 +1445,10 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     {:ok, response} = ModelResponse.new(text: "", tool_calls: [idle])
     send(model, {:test_agent_runtime_response, {:ok, response}})
-    assert_receive {:test_agent_runtime_stream, acknowledgment, _request}
-
-    {:ok, silence} =
-      ModelResponse.new(
-        text:
-          JSON.encode!(%{
-            "type" => "participant_message",
-            "participant_id" => "agent",
-            "agent_mode" => "listener",
-            "message" => nil
-          })
-      )
-
-    send(acknowledgment, {:test_agent_runtime_response, {:ok, silence}})
     correlation = command.correlation_id
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation}}
     authority = room_authority(plan)
+    await_idle.()
     before_transfer = :sys.get_state(authority)
     assert before_transfer.idle_wait.phase == :quiet
     token = before_transfer.idle_wait.token
@@ -1494,7 +1482,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
            ) == 1
 
     refute Enum.any?(request.messages, &(&1.content =~ ~s("event":"idle_timeout")))
-    send(resumed, {:test_agent_runtime_response, {:ok, silence}})
+    Vxpipe.CallEngine.TestVoiceToolRoom.reply(resumed, :listener, nil)
   end
 
   defp legacy_selected_plan(options \\ []) do

@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.TestVoiceToolRoom do
 
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
+    TestSpeechToTextTransport,
     TestTextToSpeechTransport,
     TestTransferConnection,
     TestTurnCall
@@ -67,6 +68,7 @@ defmodule Vxpipe.CallEngine.TestVoiceToolRoom do
         variable_permissions: Keyword.get(options, :variable_permissions, %{}),
         speech_to_text: Keyword.get(options, :speech_to_text, false),
         agent_protocol: protocol,
+        billing_transfer: Keyword.get(options, :billing_transfer, false),
         tools: Map.merge(idle, Keyword.get(options, :tools, %{})),
         host_tools: Keyword.get(options, :host_tools, %{})
       )
@@ -88,6 +90,34 @@ defmodule Vxpipe.CallEngine.TestVoiceToolRoom do
     {:ok, _} = TestTransferConnection.attach(attach, sink)
     CallEngine.TestCallStartup.await_ready(room_id)
     {plan, room, caller, voice, sink}
+  end
+
+  def watch_idle_admission(plan, agent) do
+    coordinator =
+      CallEngine.AgentActivationSupervisor.child_ref(
+        plan.participants[agent].activation_id,
+        :coordinator
+      )
+
+    owner = self()
+    ref = make_ref()
+
+    callback = fn token, event, _ ->
+      case event do
+        {:in, {:vxpipe_idle_armed, _, _, _}} -> send(owner, {:idle_admitted, token})
+        _ -> :ok
+      end
+
+      token
+    end
+
+    :ok = :sys.install(coordinator, {callback, ref})
+
+    fn ->
+      assert_receive {:idle_admitted, ^ref}, 1_000
+      _ = :sys.get_state(coordinator)
+      :ok = :sys.remove(coordinator, callback)
+    end
   end
 
   def submit(room, caller, content, correlation) do
@@ -123,7 +153,34 @@ defmodule Vxpipe.CallEngine.TestVoiceToolRoom do
     send(provider, {:test_agent_runtime_response, {:ok, response}})
   end
 
-  def settle(voice, sink, speech_id, correlation) do
+  def speaker_preamble(message) do
+    JSON.encode!(%{
+      "type" => "participant_message",
+      "participant_id" => "agent",
+      "agent_mode" => "speaker",
+      "message" => message
+    })
+  end
+
+  def turn(stt, event, sequence, transcript) do
+    message = %{
+      "type" => "TurnInfo",
+      "request_id" => "request-1",
+      "sequence_id" => sequence,
+      "event" => event,
+      "turn_index" => 0,
+      "audio_window_start" => 0.0,
+      "audio_window_end" => 1.0,
+      "transcript" => transcript,
+      "words" => [],
+      "end_of_turn_confidence" => 0.8
+    }
+
+    message = if event == "EndOfTurn", do: Map.put(message, "trigger", "model"), else: message
+    TestSpeechToTextTransport.deliver(stt, JSON.encode!(message))
+  end
+
+  def begin_playback(voice, sink, speech_id, correlation) do
     assert_receive {:test_tts_control, ^voice, flush}
     assert JSON.decode!(flush)["type"] == "Flush"
 
@@ -142,7 +199,15 @@ defmodule Vxpipe.CallEngine.TestVoiceToolRoom do
 
     assert_receive {:test_audio_output_finish, ^sink, ^correlation}
     :ok = TestAudioOutputSink.playback_started(sink)
+  end
+
+  def release_playback(sink) do
     :ok = TestAudioOutputSink.playback_completed(sink)
+  end
+
+  def settle(voice, sink, speech_id, correlation) do
+    begin_playback(voice, sink, speech_id, correlation)
+    release_playback(sink)
   end
 
   defp deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)

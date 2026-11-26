@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TurnState do
       pending_speech: 0
     }
 
+    state = clear_recent(state, command.connection_id)
     %{state | agent_turns: Map.put(state.agent_turns, key(command), turn)}
   end
 
@@ -57,10 +58,42 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TurnState do
   @spec get(State.t(), struct()) :: map() | nil
   def get(%State{} = state, command), do: Map.get(state.agent_turns, key(command))
 
+  def clear_recent(state, connection_id) do
+    %{
+      state
+      | connections:
+          Map.replace_lazy(
+            state.connections,
+            connection_id,
+            &Map.delete(&1, :last_completed_turn)
+          )
+    }
+  end
+
+  def complete(state, command) do
+    identity = key(command)
+
+    connections =
+      Map.replace_lazy(
+        state.connections,
+        command.connection_id,
+        &Map.put(&1, :last_completed_turn, identity)
+      )
+
+    delete(%{state | connections: connections}, command)
+  end
+
   def idle_targets(state, command) do
     case get(state, command) do
       nil ->
-        {:error, :stale}
+        connection = Map.get(state.connections, command.connection_id, %{})
+
+        if map_size(state.agent_turns) == 0 and
+             Map.get(connection, :last_completed_turn) == key(command) do
+          {:ok, []}
+        else
+          {:error, :stale}
+        end
 
       origin ->
         others = state.agent_turns |> Map.delete(key(command)) |> Map.values()
@@ -119,6 +152,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TurnState do
 
   @spec replace(State.t(), struct(), map()) :: State.t()
   def replace(%State{} = state, command, turn) do
+    state = clear_recent(state, command.connection_id)
     %{state | agent_turns: Map.put(state.agent_turns, key(command), turn)}
   end
 

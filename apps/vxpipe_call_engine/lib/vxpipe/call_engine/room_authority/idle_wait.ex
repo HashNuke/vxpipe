@@ -145,7 +145,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.IdleWait do
              context.agent_participant_id == state.text_capability.participant_id,
          %{participant_id: participant_id} <- Map.get(state.connections, context.connection_id),
          true <- participant_id == context.source_participant_id,
-         origin when not is_nil(origin) <- TurnState.get(state, context),
          {:ok, _targets} <- TurnState.idle_targets(state, context),
          registry = AgentActivationSupervisor.child_ref(activation_id, :invocation_registry),
          {:ok, execution} <- InvocationRegistry.running_execution(registry, context.tool_call_id),

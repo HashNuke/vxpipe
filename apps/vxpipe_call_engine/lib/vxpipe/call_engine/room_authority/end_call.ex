@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EndCall do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Error
-  alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State, TextCapability}
+  alias Vxpipe.CallEngine.RoomAuthority.{CallerAnswer, SpeechToSpeech, State, TextCapability}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools, as: STSTools
   alias Vxpipe.CallEngine.Tool.Context
 
@@ -57,7 +57,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EndCall do
         connection.participant_id == context.source_participant_id and
         state.text_capability != nil and
           state.text_capability.participant_id == context.agent_participant_id ->
-        :ok
+        terminal_authorize(state, context)
 
       SpeechToSpeech.current?(state, capability) and
         context.tenant_id == state.snapshot.tenant_id and
@@ -67,13 +67,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EndCall do
         connection.participant_id == context.source_participant_id and
         state.speech_to_speech_capability != nil and
           state.speech_to_speech_capability.participant_id == context.agent_participant_id ->
-        :ok
+        terminal_authorize(state, context)
 
       true ->
         {:error,
          Error.new(
            :unauthorized_call_end,
            "The call cannot be ended by this tool invocation."
+         )}
+    end
+  end
+
+  # Defence in depth for the preflight gate: an engine turn must not end
+  # the call while the caller's answer is outstanding. Caller (`:caller`) and
+  # native STS (`:sts`) turns bypass the floor; explicitly requested goodbyes
+  # still pass. The preflight runs before `begin_submission/0` so it never
+  # blocks the coordinator cancel path; this revalidates races where the floor
+  # rose after preflight.
+  defp terminal_authorize(state, context) do
+    case CallerAnswer.terminal_admission(state, context) do
+      :ok ->
+        :ok
+
+      {:error, :caller_answer_pending} ->
+        {:error,
+         Error.new(
+           :caller_answer_pending,
+           "The call cannot end while the caller's answer is outstanding."
          )}
     end
   end

@@ -20,12 +20,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
           {:ok, [SendText.t()], State.t()} | {:error, :unavailable, State.t()}
   def apply(%State{} = state, completed_turn_ids, timeout) when is_list(completed_turn_ids) do
     current = state.current
+    held = state.held_output
     interrupted = interrupted_commands(state)
     report_interruption(current, state)
     state = cancel_current(state, timeout)
+    state = drop_held(state, held, timeout)
     {correlations, history} = History.select(state.history, completed_turn_ids)
     state = %{state | history: history, pending: :queue.new()}
-    correlations = current_correlations(current) ++ correlations
+    correlations = current_correlations(current) ++ held_correlations(held) ++ correlations
 
     with {:ok, state} <- settle_completion(current, state, timeout),
          :ok <- discard(state.session, Enum.uniq(correlations), timeout) do
@@ -70,11 +72,43 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
 
   defp cancel_current(%State{current: nil} = state, _timeout), do: state
 
+  defp cancel_current(
+         %State{current: %ActiveRequest{} = current, awaiting_output: pending} = state,
+         timeout
+       )
+       when not is_nil(pending) do
+    # Overlapping inference cancelled while its predecessor still plays:
+    # keep the predecessor gate, drop held output without publishing it.
+    :ok = ActiveRequest.cancel(current, state.session, timeout)
+    %{state | current: nil}
+  end
+
   defp cancel_current(%State{current: %ActiveRequest{} = current} = state, timeout) do
     :ok = ActiveRequest.cancel(current, state.session, timeout)
     state = OutputSettlement.await(state)
     %{state | current: nil}
   end
+
+  defp drop_held(state, nil, _timeout), do: state
+
+  defp drop_held(state, held, _timeout) do
+    # Held output is never sent after barge-in. Free its Session outstanding
+    # without appending history; its durable input (a completed tool write)
+    # stays a fact and an accepted tool is never re-run.
+    _ = settle_held_outstanding(state, held)
+    %{state | held_output: nil}
+  end
+
+  defp settle_held_outstanding(state, held) do
+    try do
+      Session.settle_output(state.session, held.correlation, nil)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
+  defp held_correlations(nil), do: []
+  defp held_correlations(%{correlation: correlation}), do: [correlation]
 
   defp settle_completion(nil, state, _timeout), do: {:ok, state}
   defp settle_completion(%ActiveRequest{kind: :caller}, state, _timeout), do: {:ok, state}

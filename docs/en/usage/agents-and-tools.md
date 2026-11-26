@@ -125,6 +125,12 @@ rather than replayed as a later turn. Use `non_blocking` for work that should
 continue while the agent converses, subject to the provider/session's supported
 semantic operations.
 
+For a structured LLM voice agent, a tool call can include a short spoken message.
+For example, the agent can say “Let me check” while a lookup runs. The agent gets
+the actual outcome when the lookup finishes. If earlier speech is still playing,
+the agent can prepare its reply and wait to speak. A caller who interrupts can
+correct the request before the prepared reply plays.
+
 Tool visibility controls what arguments/results can enter permitted history and
 inspection. It is separate from whether a tool is allowed to run. The Console's
 default is hidden; exposing tool data requires an explicit visibility choice.

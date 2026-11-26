@@ -4,14 +4,15 @@ defmodule Vxpipe.AgentRuntime.Conversation do
   alias Vxpipe.AgentRuntime.Conversation.Entry
   alias Vxpipe.AgentRuntime.Message
 
-  @derive {Inspect, only: [:size]}
+  @derive {Inspect, only: [:size, :version]}
   @enforce_keys [:entries, :messages, :size]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [version: 0]
 
   @type t :: %__MODULE__{
           entries: [Entry.t()],
           messages: [Message.t()],
-          size: non_neg_integer()
+          size: non_neg_integer(),
+          version: non_neg_integer()
         }
 
   @spec new(String.t(), [Message.t()]) :: t()
@@ -35,14 +36,56 @@ defmodule Vxpipe.AgentRuntime.Conversation do
   def append_exchange(%__MODULE__{} = conversation, messages, correlation, retention)
       when is_list(messages) and is_map(correlation) do
     entry = Entry.new(messages, retention, correlation)
-    rebuild(conversation.entries ++ [entry])
+    rebuild(conversation.entries ++ [entry], conversation.version + 1)
+  end
+
+  @doc "Places a playback receipt after the last exchange belonging to its source request."
+  def settle_delivery(conversation, nil, correlation) do
+    entries =
+      Enum.reject(conversation.entries, &(&1.messages == [] and &1.correlation == correlation))
+
+    if entries == conversation.entries,
+      do: conversation,
+      else: from_entries(entries, conversation.version + 1)
+  end
+
+  def settle_delivery(%__MODULE__{} = conversation, message, correlation) do
+    {later, earlier} =
+      conversation.entries
+      |> Enum.reverse()
+      |> Enum.split_while(&(correlation not in Entry.source_correlations(&1)))
+
+    case earlier do
+      [] ->
+        append_exchange(conversation, [message], correlation, :durable)
+
+      _ ->
+        receipt = Entry.new([message], :durable, correlation)
+
+        # A fixed greeting reserves a position without adding a model message.
+        earlier =
+          case earlier do
+            [%Entry{messages: [], correlation: ^correlation} | prefix] -> prefix
+            entries -> entries
+          end
+
+        from_entries(
+          Enum.reverse(earlier, [receipt | Enum.reverse(later)]),
+          conversation.version + 1
+        )
+    end
   end
 
   @spec discard(t(), [map()]) :: t()
   def discard(%__MODULE__{} = conversation, correlations) when is_list(correlations) do
     discarded = MapSet.new(correlations)
     entries = Enum.reject(conversation.entries, &Entry.discardable_for?(&1, discarded))
-    rebuild(entries)
+
+    if length(entries) == length(conversation.entries) do
+      conversation
+    else
+      rebuild(entries, conversation.version + 1)
+    end
   end
 
   @spec durable?(t(), map()) :: boolean()
@@ -52,10 +95,18 @@ defmodule Vxpipe.AgentRuntime.Conversation do
 
   @doc false
   @spec from_entries([Entry.t()]) :: t()
-  def from_entries(entries) when is_list(entries), do: rebuild(entries)
+  def from_entries(entries) when is_list(entries), do: rebuild(entries, 0)
 
-  defp rebuild(entries) do
+  @doc false
+  @spec from_entries([Entry.t()], non_neg_integer()) :: t()
+  def from_entries(entries, version)
+      when is_list(entries) and is_integer(version) and version >= 0,
+      do: rebuild(entries, version)
+
+  defp rebuild(entries), do: rebuild(entries, 0)
+
+  defp rebuild(entries, version) do
     messages = Enum.flat_map(entries, & &1.messages)
-    %__MODULE__{entries: entries, messages: messages, size: length(messages)}
+    %__MODULE__{entries: entries, messages: messages, size: length(messages), version: version}
   end
 end

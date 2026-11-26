@@ -127,10 +127,16 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
             dialogue("cue", "listener", "Go ahead", bad_step, bad_text)
 
           String.contains?(input, "Call lookup") ->
-            %{
+            call = %{
               functionCall: %{name: "lookup", args: %{reference: "DEMO-42"}},
               thoughtSignature: "test"
             }
+
+            if bad_step == "lookup" do
+              [dialogue("lookup", "speaker", nil, bad_step, bad_text), call]
+            else
+              [call]
+            end
 
           String.contains?(input, "two plus two") ->
             dialogue("unrelated", "speaker", "Four", bad_step, bad_text)
@@ -147,7 +153,7 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
 
       payload =
         JSON.encode!(%{
-          candidates: [%{content: %{role: "model", parts: [part]}, finishReason: "STOP"}]
+          candidates: [%{content: %{role: "model", parts: List.wrap(part)}, finishReason: "STOP"}]
         })
 
       if streaming,
@@ -157,10 +163,26 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
   end
 
   defp dialogue(step, mode, _text, step, bad),
-    do: %{text: JSON.encode!(%{type: "participant_message", participant_id: "agent", agent_mode: mode, message: bad})}
+    do: %{
+      text:
+        JSON.encode!(%{
+          type: "participant_message",
+          participant_id: "agent",
+          agent_mode: mode,
+          message: bad
+        })
+    }
 
   defp dialogue(_step, mode, text, _bad_step, _bad),
-    do: %{text: JSON.encode!(%{type: "participant_message", participant_id: "agent", agent_mode: mode, message: text})}
+    do: %{
+      text:
+        JSON.encode!(%{
+          type: "participant_message",
+          participant_id: "agent",
+          agent_mode: mode,
+          message: text
+        })
+    }
 
   defp evidence(output) do
     for line <- String.split(output, "\n"),

@@ -23,7 +23,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
     :started_at,
     :status
   ]
-  defstruct @enforce_keys ++ [completion: nil, lease: nil, usage_attempt: nil, model_hold: nil]
+  defstruct @enforce_keys ++
+              [
+                completion: nil,
+                lease: nil,
+                usage_attempt: nil,
+                model_hold: nil,
+                source_state: :active
+              ]
 
   @type t :: %__MODULE__{}
 
@@ -119,6 +126,16 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
     }
   end
 
+  def update_source(record, :detach), do: %{record | source_state: :detached}
+
+  def update_source(%{source_state: :active} = record, :interrupt),
+    do: %{record | source_state: :interrupted}
+
+  def update_source(%{source_state: :interrupted, status: :running} = record, :resume),
+    do: %{record | source_state: :active}
+
+  def update_source(record, _operation), do: record
+
   @spec lease(t(), String.t(), reference()) :: {:ok, t(), CompletionLease.t()} | :error
   def lease(%__MODULE__{status: :terminal_queued} = record, consumer_id, lease_id)
       when is_binary(consumer_id) and is_reference(lease_id) do
@@ -126,7 +143,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
       invocation_id: record.invocation_id,
       consumer_id: consumer_id,
       lease_id: lease_id,
-      completion: record.completion
+      completion: record.completion,
+      source_retired?: record.source_state != :active
     }
 
     {:ok, %{record | status: :completion_admitted, lease: lease}, lease}

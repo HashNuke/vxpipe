@@ -50,9 +50,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolRecoveryRoomTest do
 
   test "caller interruption cancels a tool-result retry and admits the answer" do
     {room, caller, voice, sink, worker} = start_lookup()
-    assert_receive {:test_agent_runtime_stream, acknowledgement, _}
-    TestVoiceToolRoom.reply(acknowledgement, :listener, nil)
     assert_receive {:vxpipe_event, %Event.AgentTurnCompleted{correlation_id: "service-turn"}}
+    refute_received {:test_tts_control, ^voice, _}
     send(worker, :release_test_tool)
     assert_receive {:test_agent_runtime_stream, first, _}
     send(first, {:test_agent_runtime_response, {:error, :provider_unavailable}})
@@ -76,9 +75,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolRecoveryRoomTest do
 
   test "a departing caller's draining connection cannot receive late retry output" do
     {room, caller, voice, _, worker} = start_lookup()
-    assert_receive {:test_agent_runtime_stream, acknowledgement, _}
-    TestVoiceToolRoom.reply(acknowledgement, :listener, nil)
     assert_receive {:vxpipe_event, %Event.AgentTurnCompleted{correlation_id: "service-turn"}}
+    refute_received {:test_tts_control, ^voice, _}
     send(worker, :release_test_tool)
     assert_receive {:test_agent_runtime_stream, first, _}
     send(first, {:test_agent_runtime_response, {:error, :provider_unavailable}})
@@ -106,10 +104,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolRecoveryRoomTest do
   end
 
   test "exhausting a tool follow-up settles playback and answers the caller on the same connection" do
-    {room, caller, voice, sink, worker} = start_lookup()
-    assert_receive {:test_agent_runtime_stream, acknowledgement, _}
+    {room, caller, voice, sink, worker} =
+      start_lookup(preamble: TestVoiceToolRoom.speaker_preamble("Where are you located?"))
 
-    TestVoiceToolRoom.reply(acknowledgement, :speaker, "Where are you located?")
     assert_receive {:test_tts_control, ^voice, speak}
     assert JSON.decode!(speak)["text"] == "Where are you located?"
     TestVoiceToolRoom.settle(voice, sink, "where", "service-turn")
@@ -151,6 +148,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolRecoveryRoomTest do
   end
 
   defp start_lookup(options \\ []) do
+    {preamble, options} = Keyword.pop(options, :preamble, "")
+
     {_, room, caller, voice, sink} =
       TestVoiceToolRoom.start_call(
         options ++
@@ -163,7 +162,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolRecoveryRoomTest do
     TestVoiceToolRoom.submit(room, caller, "Commercial landscaping", "service-turn")
     assert_receive {:test_agent_runtime_stream, provider, _}
     {:ok, call} = ToolCall.new(id: "intake-tool", name: "wait_for_test", arguments: %{})
-    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    {:ok, response} = ModelResponse.new(text: preamble, tool_calls: [call])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_blocking_tool_started, worker}
     {room, caller, voice, sink, worker}
