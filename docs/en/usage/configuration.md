@@ -92,8 +92,7 @@ they cannot set transport URLs, authentication headers or arbitrary modules.
 
 `VXPIPE_DEV_TENANT` selects a provisioned tenant for the managed voice playground.
 `VXPIPE_DEV_TLS`, `VXPIPE_DEV_TLS_CERTFILE` and `VXPIPE_DEV_TLS_KEYFILE` control local
-TLS. `VXPIPE_RECORDING_ENABLED=true` enables the development recording path when
-object storage is configured. `MORSE_CODE_API_BASE_URL` is used only when the
+TLS. `MORSE_CODE_API_BASE_URL` is used only when the
 remote Morse test provider is selected.
 
 `bin/dev` loads the checkout's ignored `.env`; direct Mix commands do not. See
