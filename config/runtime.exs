@@ -142,6 +142,20 @@ credential_keyring =
 
 database_enabled? = not is_nil(database_url) or (config_env() == :dev and not is_nil(worktree))
 
+# Shared artifact destination for call-details JSON and recordings. Storage
+# configuration alone makes recording available; no recording switch exists.
+storage_bucket = nonempty_env.("STORAGE_BUCKET")
+
+artifact_storage = [
+  bucket: storage_bucket,
+  region: nonempty_env.("AWS_REGION"),
+  endpoint: nonempty_env.("AWS_ENDPOINT_URL_S3") || nonempty_env.("AWS_ENDPOINT_URL")
+]
+
+if nonempty_env.("AWS_SESSION_TOKEN") do
+  config :ex_aws, :s3, security_token: {:system, "AWS_SESSION_TOKEN"}
+end
+
 if database_enabled? do
   config :vxpipe_persistence, :enabled, true
 
@@ -201,12 +215,9 @@ if database_enabled? do
   config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     credential_source: {Vxpipe.Calls.ProviderCredentialSource, :configured}
 
-  publication_recording =
-    if config_env() == :dev and System.get_env("VXPIPE_RECORDING_ENABLED") in ["1", "true"] do
-      :configured
-    else
-      :unconfigured
-    end
+  # Recording is available whenever the shared artifact destination is
+  # configured. Whether a call is recorded is decided per call spec.
+  publication_recording = if storage_bucket, do: :configured, else: :unconfigured
 
   config :vxpipe_calls, Vxpipe.Calls,
     admin_repository: {Vxpipe.Persistence.AdminStore, Vxpipe.Persistence.Repo},
@@ -257,18 +268,6 @@ if database_enabled? do
       {Vxpipe.Persistence.CallDetailsPublicationStore, Vxpipe.Persistence.Repo}
 end
 
-storage_bucket = nonempty_env.("STORAGE_BUCKET")
-
-artifact_storage = [
-  bucket: storage_bucket,
-  region: nonempty_env.("AWS_REGION"),
-  endpoint: nonempty_env.("AWS_ENDPOINT_URL_S3") || nonempty_env.("AWS_ENDPOINT_URL")
-]
-
-if nonempty_env.("AWS_SESSION_TOKEN") do
-  config :ex_aws, :s3, security_token: {:system, "AWS_SESSION_TOKEN"}
-end
-
 if database_enabled? && storage_bucket do
   document_store_options =
     case Vxpipe.Artifacts.S3DocumentConfiguration.build(artifact_storage) do
@@ -293,14 +292,18 @@ if database_enabled? && storage_bucket do
     publication_artifact_writer: publication_writer
 end
 
-if config_env() == :dev do
+# Recording settings come from the same shared artifact destination as call
+# details, in every non-test environment. Recording is available when storage
+# and persistence are configured; each call spec decides per call.
+if config_env() != :test do
   config :vxpipe_console,
          :recording,
-         [
-           enabled: System.get_env("VXPIPE_RECORDING_ENABLED"),
-           persistence_enabled: database_enabled?
-         ] ++ artifact_storage
+         [persistence_enabled: database_enabled?] ++ artifact_storage
 
+  config :vxpipe_calls, :recording_available, not is_nil(storage_bucket) and database_enabled?
+end
+
+if config_env() == :dev do
   app_host =
     case System.get_env("APP_HOST") do
       nil -> nil

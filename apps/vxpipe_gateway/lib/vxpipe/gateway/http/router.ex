@@ -13,6 +13,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   }
 
   alias Vxpipe.Gateway.CallAdmission
+  alias Vxpipe.Gateway.Telephony.CallIngress
   alias Vxpipe.Providers.Telnyx
   alias Vxpipe.Providers.Twilio
 
@@ -25,6 +26,8 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       options
       |> Keyword.get(:call_admission, [])
       |> configure_call_admission(telephony_events)
+
+    telephony_events = inherit_recording(telephony_events, call_admission)
 
     media_options =
       telephony
@@ -362,6 +365,38 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       end
 
     Keyword.put(options, :backend, backend)
+  end
+
+  # The telephony ingress backend admits the same rooms as the ordinary
+  # admission backend, so an opted-in call records on every leg. An explicit
+  # telephony recording configuration stays authoritative.
+  defp inherit_recording(%{handler: {CallIngress, handler_options}} = telephony, call_admission) do
+    with {CallAdmission, admission_options} <- Keyword.get(call_admission, :backend),
+         {:ok, recording} <- Keyword.fetch(admission_options, :recording) do
+      %{telephony | handler: {CallIngress, put_ingress_recording(handler_options, recording)}}
+    else
+      _unavailable -> telephony
+    end
+  end
+
+  defp inherit_recording(telephony, _call_admission), do: telephony
+
+  defp put_ingress_recording(handler_options, recording) do
+    case Keyword.get(handler_options, :backend) do
+      {CallAdmission, backend_options} ->
+        if Keyword.has_key?(backend_options, :recording) do
+          handler_options
+        else
+          Keyword.put(
+            handler_options,
+            :backend,
+            {CallAdmission, Keyword.put(backend_options, :recording, recording)}
+          )
+        end
+
+      _custom ->
+        handler_options
+    end
   end
 
   defp validate_options!(options, allowed) do

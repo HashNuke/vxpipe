@@ -3,14 +3,26 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
 
   alias Vxpipe.Console.RecordingConfiguration
 
-  test "keeps recording disabled unless the host explicitly enables it" do
+  test "stays disabled without storage, regardless of persistence" do
     assert {:ok, [enabled: false]} = RecordingConfiguration.build([])
-    assert {:ok, [enabled: false]} = RecordingConfiguration.build(enabled: "false")
+    assert {:ok, [enabled: false]} = RecordingConfiguration.build(persistence_enabled: true)
+    assert {:ok, [enabled: false]} = RecordingConfiguration.build(bucket: "")
+    assert {:ok, [enabled: false]} = RecordingConfiguration.build(bucket: "   ")
   end
 
-  test "builds the trusted S3 writer and metadata adapter from host settings" do
+  test "stays disabled when persistence is missing, even with a bucket" do
+    assert {:ok, [enabled: false]} =
+             RecordingConfiguration.build(bucket: "vxpipe-call-artifacts")
+
+    assert {:ok, [enabled: false]} =
+             RecordingConfiguration.build(
+               bucket: "vxpipe-call-artifacts",
+               persistence_enabled: false
+             )
+  end
+
+  test "storage and persistence together enable the trusted S3 writer" do
     settings = [
-      enabled: "true",
       persistence_enabled: true,
       bucket: "vxpipe-call-artifacts",
       region: "eu-west-2",
@@ -21,7 +33,7 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
 
     assert [
              enabled: true,
-             targets: [:full_mix, :individual_tracks],
+             targets: [:room_track, :individual_tracks],
              maximum_egress_frames: 100,
              maximum_pull_frames: 16,
              writer: {Vxpipe.Artifacts.RecordingWriter, writer_options}
@@ -59,7 +71,6 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
   test "uses ExAws defaults when no region or endpoint override is configured" do
     assert {:ok, recording} =
              RecordingConfiguration.build(
-               enabled: "1",
                persistence_enabled: true,
                bucket: "vxpipe-call-artifacts"
              )
@@ -73,7 +84,6 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
 
   test "builds trusted playback reads independently of capture enablement" do
     settings = [
-      enabled: false,
       bucket: "vxpipe-call-artifacts",
       region: "eu-west-2",
       endpoint: "http://127.0.0.1:9000"
@@ -93,32 +103,21 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
               ]
             ]} = RecordingConfiguration.playback(settings)
 
-    assert {:error, :recording_bucket_required} = RecordingConfiguration.playback(enabled: false)
+    assert {:error, :recording_bucket_required} = RecordingConfiguration.playback([])
   end
 
-  test "rejects incomplete or malformed enabled host settings" do
-    assert {:error, :recording_persistence_required} =
-             RecordingConfiguration.build(enabled: "true", bucket: "calls")
-
-    assert {:error, :recording_bucket_required} =
-             RecordingConfiguration.build(enabled: "true", persistence_enabled: true)
-
+  test "rejects malformed storage endpoints instead of disabling capture" do
     assert {:error, :invalid_recording_endpoint} =
              RecordingConfiguration.build(
-               enabled: "true",
                persistence_enabled: true,
                bucket: "calls",
                endpoint: "ftp://objects.example.test"
              )
-
-    assert {:error, :invalid_recording_enabled} =
-             RecordingConfiguration.build(enabled: "sometimes")
   end
 
   test "recording and playback reject invalid endpoint ports before opening storage" do
     for port <- ["bad", "-1", "0", "65536", "99999"] do
       settings = [
-        enabled: true,
         persistence_enabled: true,
         bucket: "call-artifacts",
         endpoint: "http://objects.example.test:" <> port

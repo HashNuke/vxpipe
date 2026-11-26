@@ -52,7 +52,7 @@ defmodule Vxpipe.Gateway.Application do
         case backend do
           {CallAdmission, options} ->
             {{CallAdmission, Keyword.put(options, :managed_cleanup, true)},
-             Keyword.take(options, [:archive, :cleanup_options])}
+             Keyword.take(options, [:archive, :recording, :cleanup_options])}
 
           custom ->
             {custom, []}

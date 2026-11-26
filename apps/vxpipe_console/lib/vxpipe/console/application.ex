@@ -8,6 +8,7 @@ defmodule Vxpipe.Console.Application do
   alias Vxpipe.Console.RecordingConfiguration
   alias Vxpipe.Console.TelemetryReporter
   alias Vxpipe.Gateway.CallAdmission
+  alias Vxpipe.Gateway.CallSpecAuthoring
   alias Vxpipe.Gateway.HTTP.Mount
 
   @impl true
@@ -46,6 +47,9 @@ defmodule Vxpipe.Console.Application do
         {:error, reason} -> raise ArgumentError, "invalid recording configuration: #{reason}"
       end
 
+    gateway_settings =
+      put_recording_before_http(gateway_settings, recording)
+
     gateway_settings
     |> Vxpipe.Gateway.Application.http_options()
     |> Keyword.take([
@@ -70,6 +74,7 @@ defmodule Vxpipe.Console.Application do
       end)
     )
     |> Keyword.update!(:call_admission, &configure_recording(&1, recording))
+    |> Keyword.update!(:call_spec_authoring, &configure_authoring_recording(&1, recording))
     |> Keyword.update(
       :account_management,
       [browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}],
@@ -108,6 +113,50 @@ defmodule Vxpipe.Console.Application do
 
       _invalid ->
         raise ArgumentError, "recording requires the configured call-admission backend"
+    end
+  end
+
+  # Prod recording lives only in Console. Inject it into the gateway settings
+  # before `Gateway.Application.http_options/1` so managed cleanup shares the
+  # exact same writer with the default telephony handler. The later
+  # `configure_recording/2` pass stays idempotent for the ordinary web backend,
+  # while `Router.inherit_recording/2` remains the fallback for non-managed
+  # compositions. Standalone gateway keeps its own contract: Gateway never
+  # depends on Console.
+  defp put_recording_before_http(settings, enabled: false) when is_list(settings) do
+    settings
+  end
+
+  defp put_recording_before_http(settings, recording) when is_list(settings) do
+    case Keyword.fetch(settings, :http) do
+      {:ok, http} when is_list(http) ->
+        Keyword.put(
+          settings,
+          :http,
+          Keyword.update(http, :call_admission, [], &configure_recording(&1, recording))
+        )
+
+      _missing ->
+        settings
+    end
+  end
+
+  # Call-spec authoring warns (never blocks) when a revision requests
+  # recording on an installation without recording storage.
+  defp configure_authoring_recording(authoring, recording) do
+    available? = Keyword.get(recording, :enabled, false) == true
+
+    {module, backend_options} =
+      Keyword.get(authoring, :backend, {CallSpecAuthoring, []})
+
+    if is_atom(module) and is_list(backend_options) do
+      Keyword.put(
+        authoring,
+        :backend,
+        {module, Keyword.put(backend_options, :recording_available, available?)}
+      )
+    else
+      authoring
     end
   end
 end

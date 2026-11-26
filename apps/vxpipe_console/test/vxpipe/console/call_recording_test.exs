@@ -209,7 +209,9 @@ defmodule Vxpipe.Console.CallRecordingTest do
       object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
     ]
 
-    assert {:ok, [only]} = CallsRecordingBackend.open_all(only_mix_options, @principal, "call-public-id")
+    assert {:ok, [only]} =
+             CallsRecordingBackend.open_all(only_mix_options, @principal, "call-public-id")
+
     assert only.kind == :full_mix
 
     mixed_options = [
@@ -222,13 +224,23 @@ defmodule Vxpipe.Console.CallRecordingTest do
       object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
     ]
 
-    assert {:ok, [kept]} = CallsRecordingBackend.open_all(mixed_options, @principal, "call-public-id")
+    assert {:ok, [kept]} =
+             CallsRecordingBackend.open_all(mixed_options, @principal, "call-public-id")
+
     assert kept.kind == :participant_track
     assert kept.id == "artifact-individual"
   end
 
   test "empty tracks are excluded and all-missing objects are unavailable" do
-    valid = %{artifact() | id: "artifact-valid", kind: :participant_track, participant_id: "p", connection_id: "c", track_id: "t", participant_key: "caller"}
+    valid = %{
+      artifact()
+      | id: "artifact-valid",
+        kind: :participant_track,
+        participant_id: "p",
+        connection_id: "c",
+        track_id: "t",
+        participant_key: "caller"
+    }
 
     empty_track = %{
       valid
@@ -255,7 +267,8 @@ defmodule Vxpipe.Console.CallRecordingTest do
 
     missing_options = [
       calls_options: [
-        artifact_repository: {TestCallRecordingArtifactRepository, {self(), {:ok, [missing_only]}}}
+        artifact_repository:
+          {TestCallRecordingArtifactRepository, {self(), {:ok, [missing_only]}}}
       ],
       recording_settings: [bucket: "recordings"],
       object_reader: TestCallRecordingObjectReader,

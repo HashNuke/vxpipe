@@ -7,7 +7,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)
   @development Path.expand("../../../../../config/dev.exs", __DIR__)
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE STORAGE_BUCKET AWS_REGION AWS_ENDPOINT_URL AWS_ENDPOINT_URL_S3 AWS_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-    AWS_SESSION_TOKEN VXPIPE_RECORDING_ENABLED VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE
+    AWS_SESSION_TOKEN VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE
     VXPIPE_RECORDING_S3_BUCKET VXPIPE_RECORDING_S3_REGION VXPIPE_RECORDING_S3_ENDPOINT
     VXPIPE_CALL_DETAILS_S3_BUCKET VXPIPE_CALL_DETAILS_S3_REGION VXPIPE_CALL_DETAILS_S3_ENDPOINT
     VXPIPE_CREDENTIAL_KEY_ID VXPIPE_CREDENTIAL_KEYS VXPIPE_DEV_MODEL_FIXTURE
@@ -52,28 +52,31 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
     System.put_env("STORAGE_BUCKET", "shared-artifacts")
     System.put_env("AWS_REGION", "eu-west-2")
     System.put_env("AWS_ENDPOINT_URL", "http://objects.example.test:9000")
-    System.put_env("VXPIPE_RECORDING_ENABLED", "true")
     seed_retired_settings()
 
-    configuration = Config.Reader.read!(@runtime, env: :dev)
-    recording_settings = setting(configuration, :vxpipe_console, :recording)
-    assert {:ok, recording} = RecordingConfiguration.build(recording_settings)
-    {_writer, writer_options} = Keyword.fetch!(recording, :writer)
-    destination = Keyword.fetch!(writer_options, :object_store_options)
+    for environment <- [:dev, :prod] do
+      host = if environment == :dev, do: "127.0.0.1", else: "console.example.test"
+      System.put_env("APP_HOST", host)
+      configuration = Config.Reader.read!(@runtime, env: environment)
+      recording_settings = setting(configuration, :vxpipe_console, :recording)
+      assert {:ok, recording} = RecordingConfiguration.build(recording_settings)
+      {_writer, writer_options} = Keyword.fetch!(recording, :writer)
+      destination = Keyword.fetch!(writer_options, :object_store_options)
 
-    assert Keyword.fetch!(destination, :bucket) == "shared-artifacts"
-    request = destination |> Keyword.fetch!(:client_options) |> Keyword.fetch!(:request_options)
-    assert Keyword.fetch!(request, :region) == "eu-west-2"
-    assert Keyword.fetch!(request, :host) == "objects.example.test"
-    assert Keyword.fetch!(request, :port) == 9000
-    assert Keyword.fetch!(request, :virtual_host) == false
-    assert {:ok, ^destination} = RecordingConfiguration.playback(recording_settings)
-    assert publication_destination(configuration) == destination
+      assert Keyword.fetch!(destination, :bucket) == "shared-artifacts"
+      request = destination |> Keyword.fetch!(:client_options) |> Keyword.fetch!(:request_options)
+      assert Keyword.fetch!(request, :region) == "eu-west-2"
+      assert Keyword.fetch!(request, :host) == "objects.example.test"
+      assert Keyword.fetch!(request, :port) == 9000
+      assert Keyword.fetch!(request, :virtual_host) == false
+      assert {:ok, ^destination} = RecordingConfiguration.playback(recording_settings)
+      assert publication_destination(configuration) == destination
 
-    recovery = setting(configuration, :vxpipe_persistence, :call_details_publication_recovery)
+      recovery = setting(configuration, :vxpipe_persistence, :call_details_publication_recovery)
 
-    assert {CallDetailsWriter, [document_store_options: ^destination]} =
-             Keyword.fetch!(recovery, :publication_artifact_writer)
+      assert {CallDetailsWriter, [document_store_options: ^destination]} =
+               Keyword.fetch!(recovery, :publication_artifact_writer)
+    end
   end
 
   test "the S3 endpoint overrides the global endpoint for publication and recording playback" do
@@ -81,7 +84,6 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
     System.put_env("AWS_REGION", "auto")
     System.put_env("AWS_ENDPOINT_URL", "https://global.example.test")
     System.put_env("AWS_ENDPOINT_URL_S3", "https://account.r2.cloudflarestorage.com")
-    System.put_env("VXPIPE_RECORDING_ENABLED", "true")
 
     for environment <- [:dev, :prod] do
       host = if environment == :dev, do: "127.0.0.1", else: "console.example.test"
@@ -94,12 +96,10 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
       assert Keyword.fetch!(request, :scheme) == "https://"
       assert Keyword.fetch!(request, :virtual_host) == false
 
-      if environment == :dev do
-        assert {:ok, ^destination} =
-                 configuration
-                 |> setting(:vxpipe_console, :recording)
-                 |> RecordingConfiguration.playback()
-      end
+      assert {:ok, ^destination} =
+               configuration
+               |> setting(:vxpipe_console, :recording)
+               |> RecordingConfiguration.playback()
     end
   end
 
@@ -131,19 +131,26 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
     refute Exception.message(error) =~ "private-user"
   end
 
-  test "a shared bucket enables publication without enabling recording" do
+  test "a shared bucket enables publication and recording together" do
     System.put_env("STORAGE_BUCKET", "shared-artifacts")
-    configuration = Config.Reader.read!(@runtime, env: :dev)
 
-    assert {:ok, [enabled: false]} =
-             configuration
-             |> setting(:vxpipe_console, :recording)
-             |> RecordingConfiguration.build()
+    for environment <- [:dev, :prod] do
+      host = if environment == :dev, do: "127.0.0.1", else: "console.example.test"
+      System.put_env("APP_HOST", host)
+      configuration = Config.Reader.read!(@runtime, env: environment)
 
-    assert Keyword.fetch!(publication_destination(configuration), :bucket) == "shared-artifacts"
+      assert {:ok, recording} =
+               configuration
+               |> setting(:vxpipe_console, :recording)
+               |> RecordingConfiguration.build()
+
+      assert Keyword.fetch!(recording, :enabled)
+
+      assert Keyword.fetch!(publication_destination(configuration), :bucket) == "shared-artifacts"
+    end
   end
 
-  test "absent or blank buckets ignore retired-only settings and cannot rescue enabled recording" do
+  test "absent or blank buckets ignore retired-only settings and disable recording" do
     seed_retired_settings()
 
     for value <- [nil, "", "   "] do
@@ -151,15 +158,18 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
         do: System.put_env("STORAGE_BUCKET", value),
         else: System.delete_env("STORAGE_BUCKET")
 
-      System.put_env("VXPIPE_RECORDING_ENABLED", "true")
-      configuration = Config.Reader.read!(@runtime, env: :dev)
-      calls = setting(configuration, :vxpipe_calls, Vxpipe.Calls)
-      refute Keyword.has_key?(calls, :call_details_publication)
+      for environment <- [:dev, :prod] do
+        host = if environment == :dev, do: "127.0.0.1", else: "console.example.test"
+        System.put_env("APP_HOST", host)
+        configuration = Config.Reader.read!(@runtime, env: environment)
+        calls = setting(configuration, :vxpipe_calls, Vxpipe.Calls)
+        refute Keyword.has_key?(calls, :call_details_publication)
 
-      assert {:error, :recording_bucket_required} =
-               configuration
-               |> setting(:vxpipe_console, :recording)
-               |> RecordingConfiguration.build()
+        assert {:ok, [enabled: false]} =
+                 configuration
+                 |> setting(:vxpipe_console, :recording)
+                 |> RecordingConfiguration.build()
+      end
     end
   end
 

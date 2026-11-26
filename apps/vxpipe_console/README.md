@@ -48,12 +48,13 @@ start their owning umbrella applications.
 
 ## Development recording composition
 
-Recording is disabled by default. To select the implemented multipart S3-compatible
-writer for repository development, configure PostgreSQL and enable recording:
+Recording is available whenever PostgreSQL and the shared artifact bucket are
+configured, and each call spec decides per call whether to record. To select
+the implemented multipart S3-compatible writer for repository development,
+configure PostgreSQL and storage:
 
 ```shell
 VXPIPE_DB_URL=postgres://user:password@database/vxpipe
-VXPIPE_RECORDING_ENABLED=true
 STORAGE_BUCKET=vxpipe-call-artifacts
 AWS_REGION=us-east-1
 # AWS_ENDPOINT_URL_S3=http://127.0.0.1:9000
@@ -84,7 +85,8 @@ Both writers and recording playback use `STORAGE_BUCKET`, `AWS_REGION` and
 The former per-artifact S3 variables are removed and ignored. A configured database and bucket enable post-commit
 finalization plus pending-revision recovery; without either one, automatic publication remains
 disabled. The endpoint accepts only a root HTTP(S) origin and uses path-style access. ExAws obtains
-credentials from its standard provider chain. These settings do not enable recording, and none of
+credentials from its standard provider chain. A configured database and bucket also
+make recording available; each call spec decides per call whether to record. None of
 the bucket, endpoint, or credentials belong in a call spec or browser request.
 
 Renaming variables does not move stored objects. Set the new bucket and endpoint to the existing

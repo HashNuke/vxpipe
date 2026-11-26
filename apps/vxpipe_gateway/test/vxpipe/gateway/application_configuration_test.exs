@@ -6,12 +6,16 @@ defmodule Vxpipe.Gateway.ApplicationConfigurationTest do
 
   test "one managed setting reaches default HTTP, MCP and incoming backends" do
     archive = [enabled: true, writer: {SyntheticArchive, []}]
+    recording = [enabled: true]
 
     settings = [
       managed_cleanup: [enabled: true],
       http: [
         enabled: false,
-        call_admission: [enabled: true, backend: {CallAdmission, [archive: archive]}],
+        call_admission: [
+          enabled: true,
+          backend: {CallAdmission, [archive: archive, recording: recording]}
+        ],
         telephony: [enabled: true, services: [service()]]
       ]
     ]
@@ -29,6 +33,7 @@ defmodule Vxpipe.Gateway.ApplicationConfigurationTest do
     for options <- [http, creation, incoming, endpoint.mcp.call_options] do
       assert Keyword.fetch!(options, :managed_cleanup)
       assert Keyword.fetch!(options, :archive) == archive
+      assert Keyword.fetch!(options, :recording) == recording
     end
   end
 
