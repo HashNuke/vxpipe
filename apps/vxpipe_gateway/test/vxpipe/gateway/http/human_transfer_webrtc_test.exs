@@ -2019,8 +2019,14 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert :sys.get_state(room_authority).pending_participant_transfer.accepted? == false
 
-    deliver_voice_tone(briefing_tts, "readiness-briefing", 750)
-    assert :ok = await_tone(support_client, 750, 5_000)
+    deliver_voice_tone(briefing_tts, "readiness-briefing", 750, 960)
+    packet = await_audio(support_client, 5_000)
+    decoder = Decoder.Native.create(48_000, 1)
+    # The first Opus packet includes encoder lookahead. Check its settled 10 ms.
+    <<_onset::binary-size(960), settled::binary-size(960)>> =
+      Decoder.Native.decode_packet(decoder, packet.payload)
+
+    assert tone?(settled, 750)
 
     assert %{"data" => %{"attempt_id" => ^attempt_id}} =
              await_sideband(support_client, "transfer.acceptance_ready", 2_000)
@@ -4102,13 +4108,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
-  defp deliver_voice_tone(voice, id, frequency) do
+  defp deliver_voice_tone(voice, id, frequency, sample_count \\ 9_600) do
     TestTextToSpeechTransport.deliver_control(
       voice,
       JSON.encode!(%{type: "SpeechStarted", speech_id: id})
     )
 
-    <<_header::binary-size(44), pcm::binary>> = tone_wave(frequency)
+    <<_header::binary-size(44), pcm::binary>> = tone_wave(frequency, sample_count)
     TestTextToSpeechTransport.deliver_audio(voice, pcm)
 
     TestTextToSpeechTransport.deliver_control(
