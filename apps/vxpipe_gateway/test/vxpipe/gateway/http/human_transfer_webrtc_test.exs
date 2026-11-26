@@ -960,7 +960,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert %{"id" => "held-for-recording"} = await_sideband(client, "error-response", 2_000)
       refute_receive {:test_tts_control, ^voice, _}, 100
       refute_receive {:test_stt_audio, ^speech, _}, 100
-      refute_receive {:test_recording_chunk, _, _}, 100
+      assert_startup_recording(mode)
 
       :ok = :atomics.put(writer_readiness, 1, 0)
       assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
@@ -972,7 +972,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                await_sideband(client, "bot-output", 2_000)
 
       refute_receive {:test_stt_audio, ^speech, _held_audio}, 100
-      refute_receive {:test_recording_chunk, _, _private_audio}, 100
+      assert_startup_recording(mode)
       refute_receive {:test_stt_transport_started, _, _}, 100
       refute_receive {:test_tts_transport_started, _, _}, 100
 
@@ -988,7 +988,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       refute_receive {:test_tts_control, ^voice, _duplicate_greeting}, 100
       send_tone(client, 700, 11)
       assert_receive {:test_stt_audio, ^speech, _conversation}, 2_000
-      assert_receive {:test_recording_chunk, _, _conversation}, 2_000
+      caller_id = caller.participant_id
+      assert_receive {:test_recording_chunk, _, %{source_participant_ids: [^caller_id]}}, 2_000
 
       if mode == :custom_url do
         assert_receive {:test_opening_audio_fetch, "https://media.example.com/handoff.wav", _}
@@ -1457,7 +1458,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert %{"id" => "held-during-mcp"} = await_sideband(client, "error-response", 2_000)
       send_tone(client, 500, 1)
       refute_receive {:test_stt_audio, ^speech, _held_input}, 100
-      refute_receive {:test_recording_chunk, _, _private_audio}, 100
+      assert_only_room_audio([500], 100)
       refute_receive {:test_tts_transport_started, _destination, _}, 0
       refute_receive {:test_tts_control, ^source_tts, _late_speech}, 0
       assert Agent.get(remote_client, & &1.invocations) == []
@@ -1520,7 +1521,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       refute_receive {:test_stt_transport_started, _replacement, _}, 0
       refute_receive {:DOWN, ^speech_monitor, :process, ^speech, _}, 0
       refute_receive {:test_stt_audio, ^speech, _held_input}, 0
-      refute_receive {:test_recording_chunk, _, _private_audio}, 0
+      assert_only_room_audio([500], 0)
 
       assert {:ok, after_transfer} = CallEngine.RoomAuthority.readiness_binding(authority)
       assert after_transfer.room == before_transfer.room
@@ -1549,7 +1550,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       refute_native_activation(client, System.monotonic_time(:millisecond) + 50)
       send_tone(client, 500, 11)
       assert_receive {:test_stt_audio, ^speech, _conversation}, 2_000
-      assert_receive {:test_recording_chunk, _, _conversation}, 2_000
+      caller_id = caller.participant_id
+      assert_receive {:test_recording_chunk, _, %{source_participant_ids: [^caller_id]}}, 2_000
 
       assert :ok =
                send_rtvi_text(client, "use-billing-tools", false, "Look up my billing account.")
@@ -2017,19 +2019,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert :sys.get_state(room_authority).pending_participant_transfer.accepted? == false
 
-    TestTextToSpeechTransport.deliver_control(
-      briefing_tts,
-      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"readiness-briefing"})
-    )
-
-    TestTextToSpeechTransport.deliver_audio(briefing_tts, :binary.copy(<<1, 0>>, 960))
-
-    TestTextToSpeechTransport.deliver_control(
-      briefing_tts,
-      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"readiness-briefing"})
-    )
-
-    assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+    deliver_voice_tone(briefing_tts, "readiness-briefing", 750)
+    assert :ok = await_tone(support_client, 750, 5_000)
 
     assert %{"data" => %{"attempt_id" => ^attempt_id}} =
              await_sideband(support_client, "transfer.acceptance_ready", 2_000)
@@ -2106,7 +2097,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     refute_tone(support_client, 1_750, 100)
     refute_receive {:test_stt_audio, ^remaining_stt, _held_input}, 100
     refute_receive {:test_stt_audio, ^joining_stt, _held_input}, 100
-    refute_receive {:test_recording_chunk, _, _private_audio}, 100
+    assert_only_room_audio([750, 1_500, 1_750], 100)
     refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 100
     assert Authority.snapshot(binding.policy_authority) == policy
 
@@ -2362,7 +2353,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert {:ok, _binding, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(connection)
 
       refute_receive {:test_stt_audio, ^joining_stt, _held_or_private_audio}, 100
-      refute_receive {:test_recording_chunk, _stream, _private_audio}, 100
+      assert_only_room_audio([750, 1_500, 1_750], 100)
       refute_receive {:test_opening_audio_fetch, _url, _limits}
 
       # Inspect the queued cue and subsequent conversation together: no wait may follow
@@ -4186,7 +4177,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     "RIFF" <> <<byte_size(body) + 4::little-32>> <> "WAVE" <> body
   end
 
-  defp compile_plan(options \\ []) do
+  defp compile_plan(options) do
     resource_id = unique_id("human-transfer-call-spec")
 
     assert {:ok, call_spec} =
@@ -5007,6 +4998,34 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     connection
     |> Map.put(:morse_encoder, encoder)
     |> Map.put(:morse_sequence, first_sequence + div(byte_size(pcm), 1_920))
+  end
+
+  defp assert_startup_recording(mode) when mode in [:silent_caller, :silent_all] do
+    refute_receive {:test_recording_chunk, _, _}, 100
+  end
+
+  defp assert_startup_recording(_audible_mode), do: assert_only_room_audio([500], 100)
+
+  defp assert_only_room_audio(private_tones, timeout) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    check_room_chunks(private_tones, deadline)
+  end
+
+  defp check_room_chunks(private_tones, deadline) do
+    receive do
+      {:test_recording_chunk, stream, chunk} ->
+        assert stream == "room-track"
+        assert chunk.source_participant_ids == ["room"]
+
+        for frequency <- private_tones do
+          refute tone?(chunk.payload, frequency),
+                 "private microphone audio entered the room track"
+        end
+
+        check_room_chunks(private_tones, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) -> :ok
+    end
   end
 
   defp collect_native_recording(chunks) do
