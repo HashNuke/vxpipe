@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
           | {:platform, module()}
           | {:participant_transfer, TransferBinding.t()}
           | {:call_variables, VariablesBinding.t()}
+          | {:invalid_variable_arguments, VariablesBinding.t()}
           | {:remote_mcp, GenServer.server()}
   @type t :: %__MODULE__{
           name: String.t(),
@@ -168,8 +169,9 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   def valid?(%__MODULE__{
         name: name,
         conversation_mode: conversation_mode,
-        handler: {:call_variables, %VariablesBinding{} = binding}
-      }) do
+        handler: {handler, %VariablesBinding{} = binding}
+      })
+      when handler in [:call_variables, :invalid_variable_arguments] do
     conversation_mode == :blocking and is_pid(binding.server) and
       VariablesBinding.permitted_tool?(binding, name)
   end

@@ -6,10 +6,9 @@ defmodule Vxpipe.CallEngine.Tool.UpdateVariable do
     "properties" => %{
       "section_name" => %{"type" => "string"},
       "variable_name" => %{"type" => "string"},
-      "value" => %{},
-      "expected_revision" => %{"type" => "integer", "minimum" => 0}
+      "variable_value" => %{}
     },
-    "required" => ["section_name", "variable_name", "value", "expected_revision"],
+    "required" => ["section_name", "variable_name", "variable_value"],
     "additionalProperties" => false
   }
 
@@ -21,7 +20,8 @@ defmodule Vxpipe.CallEngine.Tool.UpdateVariable do
   def definition do
     %Definition{
       name: "update_variable",
-      description: "Set one literal variable in a writable Call Variables section.",
+      description:
+        "Set one field in a writable section. Pass its literal JSON value directly as variable_value.",
       parameters: @parameters
     }
   end

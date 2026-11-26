@@ -89,6 +89,55 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
     assert schemas == %{"intake" => expected}
   end
 
+  test "agent writes correct individual answers and errors expose only writable form schemas" do
+    %{server: server, plan: plan} = start_variables()
+    agent = plan.participants["reception"]
+    binding = CallVariables.Binding.new(server, plan, agent, "rinc-test")
+
+    context = %Vxpipe.CallEngine.Tool.Context{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: binding.incarnation_id,
+      agent_participant_id: agent.participant_id,
+      source_participant_id: "part-caller",
+      connection_id: "connection",
+      command_id: "cmd",
+      correlation_id: "turn"
+    }
+
+    write = fn tool, args -> CallVariables.Binding.execute(binding, tool, args, context) end
+
+    field = %{
+      "section_name" => "intake",
+      "variable_name" => "summary",
+      "variable_value" => "first answer"
+    }
+
+    assert {:ok, %{"revision" => 1}} = write.("update_variable", field)
+    merge = %{"section_name" => "intake", "data" => %{"priority" => 2}}
+    assert {:ok, %{"revision" => 2}} = write.("update_variables", merge)
+
+    assert {:ok, %{"revision" => 3, "value" => %{"summary" => "corrected", "priority" => 2}}} =
+             write.("update_variable", %{field | "variable_value" => "corrected"})
+
+    invalid = %{merge | "data" => %{"priority" => "high"}}
+
+    assert {:ok, %{"error" => %{"details" => %{"expected_schema" => schema}}}} =
+             write.("update_variables", invalid)
+
+    assert {:ok, validator} = JSV.build(schema)
+    assert {:error, _} = JSV.validate(invalid, validator)
+    assert {:ok, _} = JSV.validate(merge, validator)
+
+    for section <- ["private", "customer", "absent"] do
+      assert {:ok, %{"error" => %{"code" => "call_variables_forbidden", "details" => details}}} =
+               write.("update_variables", %{merge | "section_name" => section})
+
+      assert details["expected_schema"] ==
+               Vxpipe.CallEngine.Tool.UpdateVariables.definition().parameters
+    end
+  end
+
   test "discovery reads all permitted sections when a form has more than 32 sections" do
     input = call_spec_input()
     names = for index <- 1..33, do: "intake_#{index}"

@@ -41,16 +41,26 @@ defmodule Vxpipe.AgentRuntime.ToolRegistry do
           {:ok, ToolDescriptor.t()} | {:error, :invalid_arguments | :unknown_tool}
   def resolve(%__MODULE__{} = registry, name, arguments)
       when is_binary(name) and is_map(arguments) do
-    with {:ok, descriptor} <- Map.fetch(registry.by_name, name),
-         {:ok, _validated} <- JSV.validate(arguments, descriptor.compiled_schema, cast: false) do
-      {:ok, descriptor}
-    else
+    case Map.fetch(registry.by_name, name) do
+      {:ok, descriptor} -> validate_call(descriptor, arguments)
       :error -> {:error, :unknown_tool}
-      {:error, _validation_error} -> {:error, :invalid_arguments}
     end
   end
 
   def resolve(%__MODULE__{}, _name, _arguments), do: {:error, :invalid_arguments}
+
+  defp validate_call(descriptor, arguments) do
+    case JSV.validate(arguments, descriptor.compiled_schema, cast: false) do
+      {:ok, _validated} ->
+        {:ok, descriptor}
+
+      {:error, _} when not is_nil(descriptor.invalid_arguments_binding) ->
+        {:ok, %{descriptor | binding: descriptor.invalid_arguments_binding}}
+
+      {:error, _} ->
+        {:error, :invalid_arguments}
+    end
+  end
 
   defp build(descriptors) do
     Enum.reduce_while(descriptors, {:ok, %{}, []}, fn descriptor, {:ok, by_name, tools} ->

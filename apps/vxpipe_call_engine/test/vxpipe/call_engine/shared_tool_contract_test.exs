@@ -50,8 +50,7 @@ defmodule Vxpipe.CallEngine.SharedToolContractTest do
       assert [:ok] =
                Room.invoke(context, "update_variables", %{
                  "section_name" => "intake",
-                 "data" => %{"appointment" => "FOUND"},
-                 "expected_revision" => 0
+                 "data" => %{"appointment" => "FOUND"}
                })
 
       assert_receive {:vxpipe_event,

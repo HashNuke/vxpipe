@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallVariables
+  alias Vxpipe.CallEngine.CallVariables.WriteSchema
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Tool.{Context, ReadVariables, UpdateVariable, UpdateVariables}
@@ -13,7 +14,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
            except: [
              :server,
              :read_sections,
-             :write_sections
+             :writable_schemas
            ]}
   @enforce_keys [
     :server,
@@ -23,7 +24,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     :participant_id,
     :activation_id,
     :read_sections,
-    :write_sections
+    :writable_schemas
   ]
   defstruct @enforce_keys
 
@@ -35,7 +36,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
           participant_id: String.t(),
           activation_id: String.t(),
           read_sections: [String.t()],
-          write_sections: [String.t()]
+          writable_schemas: %{String.t() => map()}
         }
 
   @spec new(pid(), Vxpipe.CallEngine.ResolvedCallPlan.t(), map(), String.t()) :: t()
@@ -51,13 +52,18 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
       participant_id: participant.participant_id,
       activation_id: participant.activation_id,
       read_sections: readable_sections(grants),
-      write_sections: writable_sections(grants)
+      writable_schemas:
+        for(
+          {name, :read_write} <- grants,
+          into: %{},
+          do: {name, Map.fetch!(plan.call_variables.sections, name).schema}
+        )
     }
   end
 
   @spec actions(map() | t()) :: [module()]
   def actions(%__MODULE__{} = binding) do
-    actions(binding.read_sections != [], binding.write_sections != [])
+    actions(binding.read_sections != [], map_size(binding.writable_schemas) > 0)
   end
 
   def actions(grants) when is_map(grants) do
@@ -76,7 +82,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
 
   def permitted_tool?(%__MODULE__{} = binding, name)
       when name in ["update_variables", "update_variable"],
-      do: binding.write_sections != []
+      do: map_size(binding.writable_schemas) > 0
 
   def permitted_tool?(%__MODULE__{}, _name), do: false
 
@@ -84,15 +90,38 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
           {:ok, map()} | {:error, :invalid_arguments | :tool_failed}
   def execute(%__MODULE__{} = binding, name, arguments, %Context{} = context) do
     with :ok <- authorize_context(binding, context),
-         {:ok, command} <- command(binding, name, arguments, context) do
-      command
-      |> dispatch(binding)
-      |> normalize_result()
+         {:ok, command} <- command(binding, name, arguments, context),
+         {:ok, _result} = success <- dispatch(command, binding) do
+      success
     else
-      {:error, %Error{} = error} -> normalize_result({:error, error})
-      {:error, reason} when reason in [:invalid_arguments, :tool_failed] -> {:error, reason}
-      _invalid -> {:error, :tool_failed}
+      {:error, %Error{} = error} when name in ["update_variable", "update_variables"] ->
+        write_error(binding, name, arguments, error)
+
+      {:error, %Error{} = error} ->
+        public_error(error)
+
+      {:error, reason} ->
+        {:error, reason}
+
+      :error ->
+        {:error, :invalid_arguments}
     end
+  end
+
+  def reject_arguments(binding, name, arguments, context) do
+    with :ok <- authorize_context(binding, context) do
+      error =
+        Error.new(:invalid_call_variables_update, "The variable tool arguments are invalid.",
+          details: %{"argument_path" => ""}
+        )
+
+      write_error(binding, name, arguments, error)
+    end
+  end
+
+  defp write_error(binding, name, arguments, error) do
+    details = WriteSchema.details(name, arguments, binding.writable_schemas)
+    public_error(%{error | details: Map.merge(details, error.details)})
   end
 
   @spec projection(t(), pos_integer()) :: {:ok, map()} | {:error, :tool_failed}
@@ -115,13 +144,6 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
   defp readable_sections(grants) do
     grants
     |> Enum.filter(fn {_section, grant} -> grant in [:read, :read_write] end)
-    |> Enum.map(fn {section, _grant} -> section end)
-    |> Enum.sort()
-  end
-
-  defp writable_sections(grants) do
-    grants
-    |> Enum.filter(fn {_section, grant} -> grant == :read_write end)
     |> Enum.map(fn {section, _grant} -> section end)
     |> Enum.sort()
   end
@@ -157,11 +179,9 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
 
   defp command(binding, "update_variables", arguments, context) do
     with {:ok, section} <- fetch(arguments, :section_name),
-         {:ok, data} <- fetch(arguments, :data),
-         {:ok, revision} <- fetch(arguments, :expected_revision) do
+         {:ok, data} <- fetch(arguments, :data) do
       update_command(binding, context,
         section: section,
-        expected_revision: revision,
         operation: {:merge, data}
       )
     end
@@ -170,11 +190,9 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
   defp command(binding, "update_variable", arguments, context) do
     with {:ok, section} <- fetch(arguments, :section_name),
          {:ok, variable} <- fetch(arguments, :variable_name),
-         {:ok, value} <- fetch(arguments, :value),
-         {:ok, revision} <- fetch(arguments, :expected_revision) do
+         {:ok, value} <- fetch(arguments, :variable_value) do
       update_command(binding, context,
         section: section,
-        expected_revision: revision,
         operation: {:put, variable, value}
       )
     end
@@ -186,6 +204,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     UpdateCallVariables.new(
       identity_options(binding) ++
         [
+          expected_revision: :current,
           activation_id: binding.activation_id,
           source_participant_id: context.source_participant_id,
           correlation_id: context.correlation_id,
@@ -219,11 +238,7 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     CallVariables.update(binding.server, command, @command_timeout_ms)
   end
 
-  defp normalize_result({:ok, result}), do: {:ok, result}
-
-  defp normalize_result({:error, %Error{} = error}) do
-    {:ok, %{"error" => Error.to_public(error)}}
-  end
+  defp public_error(error), do: {:ok, %{"error" => Error.to_public(error)}}
 
   defp deadline(timeout_ms \\ @command_timeout_ms),
     do: DateTime.add(DateTime.utc_now(), timeout_ms, :millisecond)

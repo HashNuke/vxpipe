@@ -5,10 +5,9 @@ defmodule Vxpipe.CallEngine.Tool.UpdateVariables do
     "type" => "object",
     "properties" => %{
       "section_name" => %{"type" => "string"},
-      "data" => %{"type" => "object", "additionalProperties" => true},
-      "expected_revision" => %{"type" => "integer", "minimum" => 0}
+      "data" => %{"type" => "object", "additionalProperties" => true}
     },
-    "required" => ["section_name", "data", "expected_revision"],
+    "required" => ["section_name", "data"],
     "additionalProperties" => false
   }
 

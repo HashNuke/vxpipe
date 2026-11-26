@@ -1316,19 +1316,57 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     assert_receive {:test_agent_runtime_stream, update_provider, update_request}
     assert List.last(update_request.messages).origin == :engine
 
+    arguments = %{
+      "section_name" => "intake",
+      "variable_name" => "summary",
+      "variable_value" => %{"summary" => "Asked for assistance"}
+    }
+
+    assert {:ok, malformed} =
+             ToolCall.new(id: "malformed-field", name: "update_variable", arguments: arguments)
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [malformed])
+    send(update_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{
+                      tool_call_id: "malformed-field",
+                      result: %{
+                        "error" => %{
+                          "details" => %{
+                            "expected_schema" => schema,
+                            "argument_path" => "/variable_value"
+                          }
+                        }
+                      }
+                    }},
+                   2_000
+
+    assert {:ok, validator} = JSV.build(schema)
+    assert {:error, _} = JSV.validate(arguments, validator)
+
+    assert {:ok, _} =
+             JSV.validate(%{arguments | "variable_value" => "Asked for assistance"}, validator)
+
+    assert_receive {:test_agent_runtime_stream, ack, _}
+    assert {:ok, response} = ModelResponse.new(text: "I will check that field.")
+    send(ack, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_agent_runtime_stream, correction_provider, correction}
+    assert List.last(correction.messages).content =~ "expected_schema"
+
     assert {:ok, update_call} =
              ToolCall.new(
                id: "tool-update-variables",
-               name: "update_variables",
+               name: "update_variable",
                arguments: %{
                  "section_name" => "intake",
-                 "data" => %{"summary" => "Asked for assistance"},
-                 "expected_revision" => 0
+                 "variable_name" => "summary",
+                 "variable_value" => "Asked for assistance"
                }
              )
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [update_call])
-    send(update_provider, {:test_agent_runtime_response, {:ok, response}})
+    send(correction_provider, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:vxpipe_event,
                     %ToolCallCompleted{

@@ -196,7 +196,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
       participant_id: context.agent_participant_id,
       activation_id: "activation-agent",
       read_sections: ["order"],
-      write_sections: []
+      writable_schemas: %{}
     }
 
     assert {:ok, binding} =

@@ -5,13 +5,14 @@ defmodule Vxpipe.AgentRuntime.ToolDescriptor do
 
   @derive {Inspect, only: [:name, :description, :input_schema]}
   @enforce_keys [:name, :description, :input_schema, :binding, :compiled_schema]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [invalid_arguments_binding: nil]
 
   @type t :: %__MODULE__{
           name: String.t(),
           description: String.t(),
           input_schema: map(),
           binding: term(),
+          invalid_arguments_binding: term(),
           compiled_schema: JSV.Root.t()
         }
 

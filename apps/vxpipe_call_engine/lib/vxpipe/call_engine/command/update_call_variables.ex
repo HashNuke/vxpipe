@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.Command.UpdateCallVariables do
   @moduledoc """
-  Applies one optimistic Call Variables update using trusted attribution.
+  Applies one Call Variables update using trusted attribution. Agent writes use
+  the current section. A trusted caller can supply a revision for a conditional update.
   """
 
   alias Vxpipe.CallEngine.{Error, Id}
@@ -52,7 +53,7 @@ defmodule Vxpipe.CallEngine.Command.UpdateCallVariables do
           correlation_id: String.t(),
           tool_call_id: String.t(),
           section: String.t(),
-          expected_revision: non_neg_integer(),
+          expected_revision: non_neg_integer() | :current,
           operation: operation(),
           deadline: DateTime.t()
         }
@@ -122,6 +123,7 @@ defmodule Vxpipe.CallEngine.Command.UpdateCallVariables do
 
   defp validate_identifier(field, _value), do: invalid(field, "must be a string")
 
+  defp validate_revision(:current), do: {:ok, :current}
   defp validate_revision(value) when is_integer(value) and value >= 0, do: {:ok, value}
   defp validate_revision(_value), do: invalid(:expected_revision, "must be non-negative")
 

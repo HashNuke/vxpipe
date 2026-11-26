@@ -502,8 +502,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     update = %{
       "section_name" => "intake",
       "variable_name" => "note",
-      "value" => "updated",
-      "expected_revision" => 0
+      "variable_value" => "updated"
     }
 
     assert :ok =

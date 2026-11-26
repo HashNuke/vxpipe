@@ -93,6 +93,62 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
     refute inspect(List.first(descriptors)) =~ "CallVariables.Binding"
   end
 
+  test "malformed variable envelopes return the tool schema without executing a write" do
+    binding = variable_binding()
+    assert {:ok, descriptors} = ToolDescriptors.compile(%{}, binding)
+    assert {:ok, registry} = Vxpipe.AgentRuntime.ToolRegistry.new(descriptors)
+    arguments = %{"section_name" => "unavailable", "value" => "wrong envelope"}
+
+    assert {:ok, rejected} =
+             Vxpipe.AgentRuntime.ToolRegistry.resolve(registry, "update_variable", arguments)
+
+    context = %Vxpipe.CallEngine.Tool.Context{
+      tenant_id: binding.tenant_id,
+      room_id: binding.room_id,
+      incarnation_id: binding.incarnation_id,
+      agent_participant_id: binding.participant_id,
+      source_participant_id: "caller",
+      connection_id: "line",
+      command_id: "cmd",
+      correlation_id: "turn"
+    }
+
+    assert {:ok, %{"error" => %{"details" => %{"expected_schema" => schema}}}} =
+             Vxpipe.CallEngine.Tool.InvocationExecution.run(
+               rejected.binding,
+               arguments,
+               context,
+               16_384
+             )
+
+    assert schema == rejected.input_schema
+
+    # The literal field is valid here. The extra key violates the outer envelope.
+    valid_field = %{
+      "section_name" => "intake",
+      "variable_name" => "note",
+      "variable_value" => "yes"
+    }
+
+    extra_key = Map.put(valid_field, "expected_revision", 0)
+
+    assert {:ok, rejected} =
+             Vxpipe.AgentRuntime.ToolRegistry.resolve(registry, "update_variable", extra_key)
+
+    assert {:ok,
+            %{"error" => %{"details" => %{"argument_path" => "", "expected_schema" => expected}}}} =
+             Vxpipe.CallEngine.Tool.InvocationExecution.run(
+               rejected.binding,
+               extra_key,
+               context,
+               16_384
+             )
+
+    assert {:ok, validator} = JSV.build(expected)
+    assert {:ok, _} = JSV.validate(valid_field, validator)
+    assert {:error, _} = JSV.validate(extra_key, validator)
+  end
+
   test "compiles an MCP alias from its pinned schema and private activation owner" do
     owner = {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {:test, "remote-owner"}}}
     {_integrations, remote_binding} = RemoteMCPFixture.binding!(self(), self(), "private")
@@ -186,7 +242,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
       participant_id: "participant-agent",
       activation_id: "activation-agent",
       read_sections: ["intake", "order"],
-      write_sections: ["intake"]
+      writable_schemas: %{
+        "intake" => %{"type" => "object", "properties" => %{"note" => %{"type" => "string"}}}
+      }
     }
   end
 end

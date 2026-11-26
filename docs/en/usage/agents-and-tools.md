@@ -54,6 +54,17 @@ values, ask for missing fields, and save answers through the variable tools.
 Calling `read_variables` with no arguments reads the agent's permitted sections.
 Passing `sections` limits the result to the requested sections.
 
+To save one answer, call `update_variable` with the field's literal JSON value:
+
+```json
+{"section_name":"caller_requests","variable_name":"service_area","variable_value":"Florida"}
+```
+
+Use `update_variables` with `section_name` and a `data` object to merge several answers.
+Each write applies to the current section, including corrections made later in the call.
+On a validation error, the tool returns `error.details.expected_schema` for the
+arguments the agent can submit. A rejected write leaves the stored answers intact.
+
 When the agent determines that the caller's purpose is outside its remit and
 there is no applicable handoff, the shared instructions direct it to invoke the
 configured hangup tool in that turn. The same instruction applies when the

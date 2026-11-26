@@ -1170,8 +1170,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
       "update_variables",
       %{
         "section_name" => "customer",
-        "data" => %{"customer_id" => "customer-42", "status" => "found"},
-        "expected_revision" => 0
+        "data" => %{"customer_id" => "customer-42", "status" => "found"}
       }
     )
 

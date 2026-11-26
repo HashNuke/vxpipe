@@ -30,9 +30,19 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
     with :ok <- validate_json(schema, path),
          :ok <- validate_root(schema, path),
          :ok <- validate_node(schema, path),
-         {:ok, validator} <- build(relax_required(schema), path) do
+         {:ok, validator} <- build(write_schema(schema), path) do
       {:ok, validator}
     end
+  end
+
+  @doc "Returns the JSON Schema used to validate incremental writes, including field nullability."
+  @spec write_schema(map()) :: map()
+  def write_schema(schema) do
+    schema
+    |> Map.delete("required")
+    |> Map.delete("nullable")
+    |> relax_properties()
+    |> relax_items()
   end
 
   defp validate_json(value, path) when is_map(value) do
@@ -212,14 +222,6 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
     end
   end
 
-  defp relax_required(schema) do
-    schema
-    |> Map.delete("required")
-    |> Map.delete("nullable")
-    |> relax_properties()
-    |> relax_items()
-  end
-
   defp relax_properties(schema) do
     case Map.fetch(schema, "properties") do
       {:ok, properties} ->
@@ -245,7 +247,7 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
 
   # Section roots remain objects. Only variables and item schemas inherit nullability.
   defp nullable_node(schema) do
-    normalized = relax_required(schema)
+    normalized = write_schema(schema)
 
     if Map.get(schema, "nullable", true) do
       normalized

@@ -221,7 +221,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
     with %Definition{name: name} <- action.definition(),
          {:ok, binding} <- InvocationBinding.from_call_variables(name, variable_binding),
          {:ok, descriptor} <- action_descriptor(action, name, binding) do
-      {:ok, descriptor}
+      if name in ["update_variable", "update_variables"] do
+        rejection = %{binding | handler: {:invalid_variable_arguments, variable_binding}}
+        {:ok, %{descriptor | invalid_arguments_binding: rejection}}
+      else
+        {:ok, descriptor}
+      end
     else
       _invalid -> {:error, :invalid_tool_binding}
     end

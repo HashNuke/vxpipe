@@ -245,6 +245,8 @@ defmodule Vxpipe.CallEngine.CallVariables do
     end
   end
 
+  defp ensure_revision(:current, _section), do: :ok
+
   defp ensure_revision(expected, section) do
     if expected == section.revision do
       :ok

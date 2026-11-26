@@ -48,6 +48,17 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
   end
 
   def run(
+        %InvocationBinding{name: name, handler: {:invalid_variable_arguments, binding}},
+        arguments,
+        %Context{} = context,
+        maximum_result_bytes
+      ) do
+    binding
+    |> VariablesBinding.reject_arguments(name, arguments, context)
+    |> normalize(maximum_result_bytes)
+  end
+
+  def run(
         %InvocationBinding{handler: {:participant_transfer, binding}},
         arguments,
         %Context{} = context,
