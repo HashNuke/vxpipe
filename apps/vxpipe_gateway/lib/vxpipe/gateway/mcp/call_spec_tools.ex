@@ -150,7 +150,13 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
       {:ok,
        revision
        |> CallSpecJSON.write_revision()
-       |> Map.take([:call_spec_id, :revision, :validation_errors, :publication])}
+       |> Map.take([
+         :call_spec_id,
+         :revision,
+         :validation_errors,
+         :validation_warnings,
+         :publication
+       ])}
     end
   end
 
@@ -170,7 +176,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
 
       {:ok,
        projection
-       |> Map.take([:call_spec_id, :publication])
+       |> Map.take([:call_spec_id, :publication, :validation_warnings])
        |> Map.put(:published_revision, published_revision)}
     end
   end

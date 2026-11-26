@@ -66,7 +66,11 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     const saved = record(body) ? body.call_spec : undefined;
     if (!record(saved) || typeof saved.call_spec_id !== "string" || !saved.call_spec_id || !revision(saved.revision)) throw new Error("Invalid saved revision");
     const publication = parseCallSpecPublication(saved.publication);
-    return { status: response.status, callSpecId: saved.call_spec_id, revision: saved.revision, ...(publication ? { publication } : {}) };
+    const validationWarnings = Array.isArray(saved.validation_warnings)
+      ? saved.validation_warnings.filter((warning: unknown) =>
+          record(warning) && typeof warning.code === "string")
+      : undefined;
+    return { status: response.status, callSpecId: saved.call_spec_id, revision: saved.revision, ...(publication ? { publication } : {}), ...(validationWarnings ? { validationWarnings } : {}) };
   };
   async function catalog(signal: AbortSignal): Promise<ModelCatalog> {
     const entries = await Promise.all(catalogCapabilities.map(async (capability) => {

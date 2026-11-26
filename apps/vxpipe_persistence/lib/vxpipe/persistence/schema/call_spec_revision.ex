@@ -5,16 +5,17 @@ defmodule Vxpipe.Persistence.Schema.CallSpecRevision do
   alias Vxpipe.Persistence.Schema.{CallSpec, ParticipantRoute, TelephonyRoute}
 
   schema "call_spec_revisions" do
-    field :revision, :integer
-    field :schema_version, :string
-    field :source, :map
-    field :source_digest, :string
-    field :compiled_metadata, :map
-    field :validation_errors, {:array, :map}
+    field(:revision, :integer)
+    field(:schema_version, :string)
+    field(:source, :map)
+    field(:source_digest, :string)
+    field(:compiled_metadata, :map)
+    field(:validation_errors, {:array, :map})
+    field(:validation_warnings, {:array, :map})
 
-    belongs_to :call_spec, CallSpec
-    has_many :participant_routes, ParticipantRoute
-    has_many :telephony_routes, TelephonyRoute
+    belongs_to(:call_spec, CallSpec)
+    has_many(:participant_routes, ParticipantRoute)
+    has_many(:telephony_routes, TelephonyRoute)
 
     timestamps(type: :utc_datetime_usec, updated_at: false)
   end
@@ -28,6 +29,7 @@ defmodule Vxpipe.Persistence.Schema.CallSpecRevision do
       :source_digest,
       :compiled_metadata,
       :validation_errors,
+      :validation_warnings,
       :call_spec_id
     ])
     |> validate_required([

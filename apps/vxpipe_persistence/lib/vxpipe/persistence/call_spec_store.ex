@@ -92,7 +92,8 @@ defmodule Vxpipe.Persistence.CallSpecStore do
           source: revision.source,
           source_digest: revision.source_digest,
           compiled_metadata: revision.compiled_metadata,
-          validation_errors: revision.validation_errors
+          validation_errors: revision.validation_errors,
+          validation_warnings: revision.validation_warnings
         })
       end)
       |> Multi.run(:routes, fn repo, %{tenant: tenant, revision: stored_revision} ->
@@ -478,6 +479,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
       source_digest: revision.source_digest,
       compiled_metadata: revision.compiled_metadata,
       validation_errors: revision.validation_errors,
+      validation_warnings: revision.validation_warnings || [],
       routes:
         routes
         |> Enum.map(&to_route(&1, tenant_key, Integer.to_string(call_spec.id), revision.revision))

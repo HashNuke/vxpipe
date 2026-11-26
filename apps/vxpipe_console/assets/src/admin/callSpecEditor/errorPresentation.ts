@@ -5,7 +5,8 @@ import { record } from "./validationFields";
 
 export type IssueLocation = { nodeId: string; tab: string; field: string[]; label: string };
 export type AuthoringError = { code: string; path?: string[]; reason?: string };
-export type ActionResult = { status?: number; revision?: number; publication?: CallSpecPublication; error?: AuthoringError; clientIssues?: SourceIssue[] };
+export type ValidationWarning = { code: string; path?: string[]; reason?: string };
+export type ActionResult = { status?: number; revision?: number; publication?: CallSpecPublication; error?: AuthoringError; clientIssues?: SourceIssue[]; validationWarnings?: ValidationWarning[] };
 export type ActionFeedback = {
   tone: "success" | "error";
   message: string;
@@ -78,9 +79,20 @@ export function actionOutcome(source: CallSpecSource, action: "save" | "publish"
     const issue = result.clientIssues[0]!;
     return { tone: "error", persistent: true, message: `Fix ${result.clientIssues.length} ${result.clientIssues.length === 1 ? "issue" : "issues"} before ${verb}`, action: "show", issue, location: locateIssue(source, issue.path) };
   }
-  if (result.status && result.status >= 200 && result.status < 300) return {
-    tone: "success", persistent: false, message: action === "save" ? "Draft saved" : result.publication?.version ? `Version ${result.publication.version} published` : "Published",
-  };
+  if (result.status && result.status >= 200 && result.status < 300) {
+    const recordingWarning = result.validationWarnings?.find((warning) => warning.code === "recording_unavailable");
+    if (recordingWarning) {
+      const published = action === "publish" && result.publication?.version ? `Version ${result.publication.version} published` : action === "save" ? "Draft saved" : "Published";
+      return {
+        tone: "success",
+        persistent: true,
+        message: `${published} — recording requested but this installation has no recording storage. The call will proceed without being recorded.`,
+      };
+    }
+    return {
+      tone: "success", persistent: false, message: action === "save" ? "Draft saved" : result.publication?.version ? `Version ${result.publication.version} published` : "Published",
+    };
+  }
   const error = result.error;
   const path = error?.path ?? [];
   const location = error?.path ? locateIssue(source, path) : null;

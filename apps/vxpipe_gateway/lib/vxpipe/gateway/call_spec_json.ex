@@ -35,6 +35,7 @@ defmodule Vxpipe.Gateway.CallSpecJSON do
       published: not is_nil(revision.published_at),
       published_at: if(revision.published_at, do: DateTime.to_iso8601(revision.published_at)),
       validation_errors: CallSpecErrors.validation_errors(revision.validation_errors),
+      validation_warnings: revision.validation_warnings,
       routes:
         Enum.map(
           revision.routes,

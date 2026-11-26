@@ -278,6 +278,70 @@ defmodule Vxpipe.Calls.CallSpecsTest do
              CallSpecs.save(tenant.key, unsupported, options)
   end
 
+  test "requesting recording without installation storage warns instead of blocking publish", %{
+    tenant: tenant,
+    options: options
+  } do
+    source = Map.put(call_spec_input(), :media_policy, %{record_audio: true})
+    unavailable = Keyword.put(options, :recording_available, false)
+
+    assert {:ok, draft} = CallSpecs.save(tenant.key, source, unavailable)
+    assert draft.validation_errors == []
+
+    assert [
+             %{
+               "code" => "recording_unavailable",
+               "path" => ["media_policy", "record_audio"]
+             } = warning
+           ] = draft.validation_warnings
+
+    assert is_binary(warning["reason"])
+
+    assert {:ok, published} =
+             CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, unavailable)
+
+    assert published.validation_warnings == draft.validation_warnings
+
+    assert {:ok, stored} =
+             CallSpecs.fetch(tenant.key, draft.call_spec_id, draft.revision, unavailable)
+
+    assert stored.validation_warnings == draft.validation_warnings
+  end
+
+  test "requesting recording with installation storage stays silent", %{
+    tenant: tenant,
+    options: options
+  } do
+    source = Map.put(call_spec_input(), :media_policy, %{record_audio: true})
+
+    assert {:ok, available} = CallSpecs.save(tenant.key, source, options)
+    assert available.validation_errors == []
+    assert available.validation_warnings == []
+
+    assert {:ok, _published} =
+             CallSpecs.publish(tenant.key, available.call_spec_id, available.revision, options)
+
+    assert {:ok, explicit} =
+             CallSpecs.save(
+               tenant.key,
+               source,
+               Keyword.put(options, :recording_available, true)
+             )
+
+    assert explicit.validation_warnings == []
+  end
+
+  test "a revision without a recording request never warns", %{
+    tenant: tenant,
+    options: options
+  } do
+    unavailable = Keyword.put(options, :recording_available, false)
+
+    assert {:ok, draft} = CallSpecs.save(tenant.key, call_spec_input(), unavailable)
+    assert draft.validation_errors == []
+    assert draft.validation_warnings == []
+  end
+
   test "direction is fixed by the first revision while same-direction edits remain writable", %{
     tenant: tenant,
     options: options

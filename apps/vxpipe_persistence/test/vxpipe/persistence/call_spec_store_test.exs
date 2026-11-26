@@ -404,6 +404,36 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
     end
   end
 
+  test "recording warnings persist with the revision and never block publish", %{
+    tenant: tenant,
+    options: options
+  } do
+    source = Map.put(call_spec_input(), :media_policy, %{record_audio: true})
+    unavailable = Keyword.put(options, :recording_available, false)
+
+    assert {:ok, draft} = CallSpecs.save(tenant.key, source, unavailable)
+    assert draft.validation_errors == []
+
+    assert [
+             %{
+               "code" => "recording_unavailable",
+               "path" => ["media_policy", "record_audio"]
+             } = warning
+           ] = draft.validation_warnings
+
+    assert is_binary(warning["reason"])
+
+    assert {:ok, published} =
+             CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, unavailable)
+
+    assert published.validation_warnings == draft.validation_warnings
+
+    assert {:ok, stored} =
+             CallSpecs.fetch(tenant.key, draft.call_spec_id, draft.revision, unavailable)
+
+    assert stored.validation_warnings == draft.validation_warnings
+  end
+
   defp registries do
     %{
       host_tools: %{}

@@ -72,6 +72,57 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecAuthorityTest do
     assert first.source == source()
   end
 
+  test "requesting recording without installation storage warns instead of blocking publish",
+       ctx do
+    unavailable =
+      Endpoint.init(
+        call_spec_authoring: [
+          enabled: true,
+          backend: {CallSpecAuthoring, Keyword.put(ctx.options, :recording_available, false)}
+        ]
+      )
+
+    source = Map.put(source(), "media_policy", %{"record_audio" => true})
+    path = "/api/tenants/#{ctx.tenant.key}/call-specs"
+
+    created =
+      conn(:post, path, JSON.encode!(%{"source" => source}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer " <> @platform)
+      |> Endpoint.call(unavailable)
+
+    assert created.status == 201
+    body = JSON.decode!(created.resp_body)
+
+    assert [
+             %{
+               "code" => "recording_unavailable",
+               "path" => ["media_policy", "record_audio"]
+             }
+           ] = body["call_spec"]["validation_warnings"]
+
+    id = body["call_spec"]["call_spec_id"]
+    published = request_publish(ctx, unavailable, path <> "/#{id}/revisions/1/publish")
+    assert published.status == 200
+
+    assert JSON.decode!(published.resp_body)["call_spec"]["validation_warnings"] ==
+             body["call_spec"]["validation_warnings"]
+  end
+
+  test "requesting recording with installation storage stays silent", ctx do
+    source = Map.put(source(), "media_policy", %{"record_audio" => true})
+    path = "/api/tenants/#{ctx.tenant.key}/call-specs"
+
+    created =
+      conn(:post, path, JSON.encode!(%{"source" => source}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer " <> @platform)
+      |> Endpoint.call(ctx.endpoint)
+
+    assert created.status == 201
+    assert JSON.decode!(created.resp_body)["call_spec"]["validation_warnings"] == []
+  end
+
   test "canonical authentication returns the original platform actor and rejects denied keys",
        ctx do
     assert {:ok,
@@ -137,9 +188,19 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecAuthorityTest do
   defdelegate next_revision(repository, tenant, id), to: TestMemoryRepository
   defdelegate fetch_revision(repository, tenant, id, revision), to: TestMemoryRepository
 
+  defdelegate publish_revision(repository, tenant, id, revision, published_at),
+    to: TestMemoryRepository
+
   def insert_revision(repository, tenant, revision, routes) do
     send(self(), {:revision_inserted, revision.revision})
     TestMemoryRepository.insert_revision(repository, tenant, revision, routes)
+  end
+
+  defp request_publish(_ctx, endpoint, path) do
+    conn(:post, path, JSON.encode!(%{}))
+    |> put_req_header("content-type", "application/json")
+    |> put_req_header("authorization", "Bearer " <> @platform)
+    |> Endpoint.call(endpoint)
   end
 
   defp request(ctx, method, path, secret) do

@@ -54,8 +54,10 @@ defmodule Vxpipe.Calls.CallSpecs do
   @spec fetch(String.t(), String.t(), pos_integer(), keyword()) ::
           {:ok, CallSpecRevision.t()} | {:error, term()}
   def fetch(tenant_key, call_spec_id, revision, options \\ []) do
-    with {:ok, repository} <- Repositories.fetch(options, :call_spec_repository) do
-      Repositories.call(repository, :fetch_revision, [tenant_key, call_spec_id, revision])
+    with {:ok, repository} <- Repositories.fetch(options, :call_spec_repository),
+         {:ok, stored} <-
+           Repositories.call(repository, :fetch_revision, [tenant_key, call_spec_id, revision]) do
+      {:ok, with_current_warnings(stored, options)}
     end
   end
 
@@ -68,19 +70,27 @@ defmodule Vxpipe.Calls.CallSpecs do
          :ok <- publishable(stored),
          {:ok, call_spec} <-
            CallSpec.new(stored.source, resource_id: call_spec_id, revision: revision) do
-      CallSpecCredentials.with_active(
-        call_spec,
-        tenant_key,
-        Keyword.merge(options, outbound_number_required?: true, telephony_publication?: true),
-        fn ->
-          Repositories.call(repository, :publish_revision, [
-            tenant_key,
-            call_spec_id,
-            revision,
-            now(options)
-          ])
-        end
-      )
+      warnings = recording_warnings(call_spec, options)
+
+      with {:ok, published} <-
+             CallSpecCredentials.with_active(
+               call_spec,
+               tenant_key,
+               Keyword.merge(options,
+                 outbound_number_required?: true,
+                 telephony_publication?: true
+               ),
+               fn ->
+                 Repositories.call(repository, :publish_revision, [
+                   tenant_key,
+                   call_spec_id,
+                   revision,
+                   now(options)
+                 ])
+               end
+             ) do
+        {:ok, %{published | validation_warnings: warnings}}
+      end
     end
   end
 
@@ -131,7 +141,7 @@ defmodule Vxpipe.Calls.CallSpecs do
            Vxpipe.CallEngine.AgentProtocol.capture(
              Keyword.get(options, :agent_protocol_version, :mode_message_v1)
            ),
-         {:ok, validation_errors} <-
+         {:ok, validation_errors, validation_warnings} <-
            validate_draft(
              call_spec,
              tenant_key,
@@ -149,6 +159,7 @@ defmodule Vxpipe.Calls.CallSpecs do
         source_digest: source_digest(source),
         compiled_metadata: Map.put(compiled_metadata(call_spec), "agent_protocol", protocol),
         validation_errors: validation_errors,
+        validation_warnings: validation_warnings,
         routes: routes,
         telephony_routes: telephony_routes,
         published_at: nil,
@@ -209,7 +220,8 @@ defmodule Vxpipe.Calls.CallSpecs do
           {%{call_spec | opening_audio: nil}, [Error.to_public(error)]}
       end
 
-    with :ok <- validate_support(spec_for_validation, tenant_key, options), do: {:ok, errors}
+    with :ok <- validate_support(spec_for_validation, tenant_key, options),
+         do: {:ok, errors, recording_warnings(call_spec, options)}
   end
 
   defp validate_support(call_spec, tenant_key, options) do
@@ -231,6 +243,44 @@ defmodule Vxpipe.Calls.CallSpecs do
     else
       {:error, %Error{} = error} -> {:error, error}
       {:error, _reason} -> {:error, :call_spec_validation_unavailable}
+    end
+  end
+
+  # D4: a revision that requests recording on an installation without
+  # recording storage warns instead of failing. Warnings never block
+  # publication; the call proceeds unrecorded.
+  defp recording_warnings(call_spec, options) do
+    if call_spec.media_policy.record_audio == true and not recording_available?(options) do
+      [
+        %{
+          "code" => "recording_unavailable",
+          "path" => ["media_policy", "record_audio"],
+          "reason" =>
+            "Recording was requested but this installation has no recording storage. The call will proceed without being recorded."
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  defp recording_available?(options) do
+    case Keyword.fetch(options, :recording_available) do
+      {:ok, available?} -> available?
+      :error -> Application.get_env(:vxpipe_calls, :recording_available, true)
+    end
+  end
+
+  defp with_current_warnings(%CallSpecRevision{} = stored, options) do
+    case CallSpec.new(stored.source,
+           resource_id: stored.call_spec_id,
+           revision: stored.revision
+         ) do
+      {:ok, call_spec} ->
+        %{stored | validation_warnings: recording_warnings(call_spec, options)}
+
+      {:error, _reason} ->
+        stored
     end
   end
 

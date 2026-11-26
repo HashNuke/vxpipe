@@ -99,8 +99,12 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
 
     assert create["isError"] == false
 
-    assert %{"call_spec_id" => id, "revision" => 1, "validation_errors" => []} =
-             create["structuredContent"]
+    assert %{
+             "call_spec_id" => id,
+             "revision" => 1,
+             "validation_errors" => [],
+             "validation_warnings" => []
+           } = create["structuredContent"]
 
     assert {:ok, %{published_revision: nil}} =
              Calls.fetch_operator_call_spec(ctx.actor, ctx.tenant.key, id, ctx.calls_options)
@@ -144,7 +148,11 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
       })
       |> result()
 
-    assert published["structuredContent"] == %{"call_spec_id" => id, "published_revision" => 1}
+    assert published["structuredContent"] == %{
+             "call_spec_id" => id,
+             "published_revision" => 1,
+             "validation_warnings" => []
+           }
 
     latest =
       invoke(ctx.endpoint, session, 6, "get_call_spec", %{
