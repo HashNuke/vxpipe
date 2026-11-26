@@ -77,6 +77,8 @@ defmodule Vxpipe.Providers.Google.STT do
 
   def encode_audio(_audio), do: {:error, :invalid_audio}
 
+  def audio_stream_end, do: JSON.encode!(%{"realtimeInput" => %{"audioStreamEnd" => true}})
+
   def decode(payload) when is_binary(payload) and byte_size(payload) <= @maximum_message_bytes do
     case JSON.decode(payload) do
       {:ok, %{"error" => _error}} -> {:error, :provider_failure}

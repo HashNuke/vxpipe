@@ -14,6 +14,9 @@ defmodule Vxpipe.Providers.Deepgram.STTSocket do
     Socket.send_frame(socket, {:binary, audio})
   end
 
+  def force_end_turn(socket),
+    do: Socket.send_frame(socket, {:text, JSON.encode!(%{"type" => "ForceEndTurn"})})
+
   def close(socket) do
     Socket.close(socket, JSON.encode!(%{"type" => "CloseStream"}))
   end

@@ -11,8 +11,11 @@ defmodule Vxpipe.CallEngine.SpeechOnsetProbe do
   @impl true
   def configure(options) do
     {encoding, options} = Keyword.pop(options, :encoding, :linear16)
+    {finalize?, options} = Keyword.pop(options, :finalize, false)
 
     with {:ok, descriptor} <- MorseSession.configure(options) do
+      descriptor = %{descriptor | turn_finalize?: finalize?}
+
       format =
         if encoding == :opus,
           do:
@@ -34,6 +37,8 @@ defmodule Vxpipe.CallEngine.SpeechOnsetProbe do
   def push_audio(pid, audio), do: GenServer.call(pid, {:audio, audio})
   @impl true
   def close(pid), do: GenServer.stop(pid, :normal)
+  @impl true
+  def input_activity(pid, :ended), do: GenServer.call(pid, :finalize)
 
   @impl true
   def init(options) do
@@ -48,6 +53,11 @@ defmodule Vxpipe.CallEngine.SpeechOnsetProbe do
   @impl true
   def handle_call({:audio, audio}, _from, state) do
     send(state.owner, {:recognized_audio, audio})
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:finalize, _from, state) do
+    send(state.owner, {:finalize_requested, self()})
     {:reply, :ok, state}
   end
 

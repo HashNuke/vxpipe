@@ -47,10 +47,23 @@ the room creates public turn/command identities.
 
 ## Input and caller turns
 
-Human STT starts on the first nonempty transcript. `speech_to_text.vad: true`
-adds allocation-owned Silero onset with transcript fallback; local silence does
-not replace the recognizer's endpoint. Provider onset hints alone cannot bypass
-the default. Empty transcripts do not create model input.
+Human STT starts on the first nonempty transcript and ends on the recognizer's
+endpoint. Provider onset hints alone cannot bypass the default. Empty
+transcripts do not create model input.
+
+`speech_to_text.vad: true` makes allocation-owned Silero the authority for both
+boundaries through `Speech.LocalTurnEnd`, following Pipecat's speech-timeout stop
+strategy. Recognizer turns become segments of one canonical turn, and their ends
+never end it. After Silero's 512 ms offset, a 300 ms resume window runs; speech
+resuming cancels it. When it elapses, already-final text ends the turn
+immediately. Otherwise recognizers that declare `turn_finalize?` receive
+`input_activity(:ended)` through the ordered input slot (Scribe commit, Flux
+`ForceEndTurn`, Gemini `audioStreamEnd`), and a bounded 1 s wait follows. A final
+during that wait ends the turn; on expiry the turn ends with the latest text,
+which may be empty. Text without a local onset opens a turn that closes the same
+way. The outer descriptor and every turn end declare `local_gap`; eager and resume
+marks are not forwarded. Turn ends carry the summed provider-reported duration
+and latest request identity of their segments for caller usage.
 
 Conversational STT declares `provider_semantic`, `provider_gap`, `local_gap` or
 an explicitly supported `inferred_gap`. A recognition segment is not necessarily

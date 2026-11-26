@@ -54,8 +54,8 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
 
     :ok = CaptureHandoff.close(handoff)
-    assert :ok = Session.push_audio(session, pcm)
-    assert_receive {:classified, _, 2_048, ^pcm}
+    assert :ok = Session.push_audio(session, silence())
+    assert_receive {:classified, _, 2_048, _silence}
     native = make_ref()
 
     assert :ok =
@@ -97,6 +97,12 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert {:reset, 0, :partial_start, _} = packet(handoff)
     send(worker, :finish)
     _ = event(session, :speech_started)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    assert :ok = Session.push_audio(session, silence())
+    assert_receive {:classified, silence_worker, 2_048, _silence}
+    send(silence_worker, :finish)
+    _ = :sys.get_state(Session.provider(session))
+    # The partially covered epoch still reports nothing until its reset.
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
 
     assert :ok =
@@ -177,6 +183,10 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert_receive {:classified, _, 0, ^pcm}
     _ = event(session, :speech_started)
     assert {:mapped_probabilities, 0, 0, 32_000, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+    assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048, payload: silence()})
+    assert_receive {:classified, _, 2_048, _silence}
+    assert {:mapped_probabilities, 0, 2_048, 34_048, silent, _} = packet(handoff)
+    assert silent == List.duplicate(0.0, 16)
 
     assert :ok =
              GenServer.call(
@@ -187,12 +197,12 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
 
     _ = event(session, :transcript)
     _ = event(session, :turn_ended)
-    assert {:operational_epoch_closed, 0, 32_000, 34_048, _} = packet(handoff)
+    assert {:operational_epoch_closed, 0, 32_000, 42_240, _} = packet(handoff)
     assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
-    assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048})
+    assert :ok = Session.push_frame(session, %{frame | timestamp: 42_240})
     assert_receive {:classified, _, 0, ^pcm}
     _ = event(session, :speech_started)
-    assert {:mapped_probabilities, 1, 0, 34_048, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+    assert {:mapped_probabilities, 1, 0, 42_240, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
     refute_received {:classified, _, _, _}
   end
 
@@ -374,7 +384,10 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
         {:error, :fixture_inference_failed}
       else
         count = div(byte_size(audio), 1_024)
-        {:ok, %{stream | samples: stream.samples + count * 512}, List.duplicate(0.9, count)}
+        probability = if :binary.first(audio) == 0, do: 0.0, else: 0.9
+
+        {:ok, %{stream | samples: stream.samples + count * 512},
+         List.duplicate(probability, count)}
       end
     end
 
@@ -387,6 +400,10 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
                provider: ConversationalSTT,
                options: [provider: SpeechOnsetProbe, options: [sample_rate: 16_000], vad: true],
                private: [
+                 # Local VAD ends turns: a 1 ms resume window after silence, then
+                 # the recognizer final settles the turn.
+                 endpoint_hangover_ms: 1,
+                 final_wait_ms: 10_000,
                  recognizer: SpeechOnsetProbe,
                  recognizer_options: [sample_rate: 16_000],
                  recognizer_private: [observer: self()],
@@ -404,6 +421,8 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     _ = event(session, :ready)
     {session, recognizer}
   end
+
+  defp silence, do: :binary.copy(<<0, 0>>, 8_192)
 
   defp handoff do
     assert {:ok, handoff} =
