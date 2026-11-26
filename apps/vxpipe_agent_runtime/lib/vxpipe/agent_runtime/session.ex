@@ -63,6 +63,15 @@ defmodule Vxpipe.AgentRuntime.Session do
     GenServer.call(server, {:request, :engine, input, correlation}, timeout)
   end
 
+  @doc "Consumes a private tool result with one bounded retry of its initial model attempt."
+  @spec continue_tool_result(server(), String.t(), map(), timeout()) ::
+          {:ok, Result.t()} | {:error, atom()}
+  def continue_tool_result(server, input, correlation, timeout) do
+    GenServer.call(server, {:request, :tool_result, input, correlation}, timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @doc """
   Retains a trusted engine observation without starting model generation.
 
@@ -170,7 +179,9 @@ defmodule Vxpipe.AgentRuntime.Session do
         caller,
         %{status: :idle, pending_output: nil} = state
       ) do
-    with {:ok, request} <- Request.new(input, correlation, origin: origin) do
+    request_origin = if origin == :tool_result, do: :engine, else: origin
+
+    with {:ok, request} <- Request.new(input, correlation, origin: request_origin) do
       state = admit_input(state, request)
       emit(state.configuration.event_destination, Event.new(:request_started, correlation))
       session = self()
@@ -194,21 +205,21 @@ defmodule Vxpipe.AgentRuntime.Session do
         )
       end
 
-      emit_model_usage = fn usage, provider_metadata ->
+      emit_model_usage = fn usage, provider_metadata, outcome ->
         emit_request_event(
           session,
           token,
           :model_usage,
-          %{usage: usage, provider_metadata: provider_metadata},
+          %{usage: usage, provider_metadata: provider_metadata, outcome: outcome},
           state.configuration.event_handoff_timeout_ms
         )
       end
 
-      emit_model_attempt_started = fn ->
+      emit_model_attempt = fn kind ->
         emit_request_event(
           session,
           token,
-          :model_attempt_started,
+          kind,
           %{},
           state.configuration.event_handoff_timeout_ms
         )
@@ -228,12 +239,15 @@ defmodule Vxpipe.AgentRuntime.Session do
         begin_submission: begin_submission,
         commit: commit,
         emit_context_compaction_usage: emit_context_compaction_usage,
-        emit_model_attempt_started: emit_model_attempt_started,
+        emit_model_attempt: emit_model_attempt,
         emit_model_usage: emit_model_usage,
         emit_text_delta: emit_text_delta
       }
 
-      runner_options = SessionConfiguration.runner_options(state.configuration, callbacks)
+      runner_options =
+        state.configuration
+        |> SessionConfiguration.runner_options(callbacks)
+        |> Map.put(:retry_tool_result?, origin == :tool_result)
 
       task =
         Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
@@ -399,6 +413,7 @@ defmodule Vxpipe.AgentRuntime.Session do
       when kind in [
              :context_compaction_usage,
              :model_attempt_started,
+             :model_attempt_failed,
              :text_delta,
              :model_usage
            ] and is_map(data) do

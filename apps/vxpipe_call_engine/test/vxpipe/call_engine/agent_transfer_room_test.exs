@@ -1370,6 +1370,54 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                    100
   end
 
+  test "transfer retires a source tool-result retry and the destination takes the next turn" do
+    plan = compile_plan(selected_variables: true)
+    caller = Map.fetch!(plan.participants, "caller")
+    source = Map.fetch!(plan.participants, "reception")
+    assert {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+    attach_caller(plan, room, caller)
+    assert :ok = CallEngine.send_text(send_command(plan, room, caller, "Check my request."))
+    assert_receive {:test_agent_runtime_stream, first, _request}
+    {:ok, read} = ToolCall.new(id: "read-before-transfer", name: "read_variables", arguments: %{})
+    {:ok, response} = ModelResponse.new(text: "", tool_calls: [read])
+    send(first, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_agent_runtime_stream, acknowledgement, _request}
+    {:ok, response} = ModelResponse.new(text: "Checking.")
+    send(acknowledgement, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_stream, followup, request}
+    assert List.last(request.messages).content =~ "read-before-transfer"
+    send(followup, {:test_agent_runtime_response, {:error, :provider_unavailable}})
+    assert_receive {:test_agent_runtime_stream, retry, _}, 1_000
+    monitor = Process.monitor(retry)
+
+    {:ok, transfer} =
+      CallEngine.Tool.InvocationBinding.from_participant_transfer(
+        Map.fetch!(source.tools, "transfer")
+      )
+
+    assert {:accepted, :blocking} =
+             CallEngine.Tool.InvocationRegistry.submit(
+               request.correlation.invocation_registry,
+               transfer,
+               %{"destination" => "billing"},
+               request.correlation.tool_context,
+               "transfer-during-retry"
+             )
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "transfer-during-retry"}},
+                   2_000
+
+    assert_receive {:DOWN, ^monitor, :process, ^retry, _}, 2_000
+    assert :ok = CallEngine.send_text(send_command(plan, room, caller, "Florida"))
+    assert_receive {:test_agent_runtime_stream, destination, request}
+    assert hd(request.messages).content == system_prompt("Handle billing requests.")
+    assert JSON.decode!(List.last(request.messages).content)["message"] == "Florida"
+    {:ok, response} = ModelResponse.new(text: "Billing has your location.")
+    send(destination, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_event, %TextOutput{text: "Billing has your location."}}
+  end
+
   test "a configured transfer retires quiet before its held caller can receive expiry" do
     plan =
       compile_plan(

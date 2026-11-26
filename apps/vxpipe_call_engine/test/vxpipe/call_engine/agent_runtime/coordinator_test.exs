@@ -641,40 +641,65 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     refute_receive {:vxpipe_capability_continuation_started, ^coordinator, _duplicate}
   end
 
-  test "releases an uncommitted completion lease and fails closed" do
-    runtime = start_runtime(completion_target: self())
+  for outcome <- [:recovers, :exhausts], history_mode <- [:generated, :host_settled] do
+    test "a failed tool follow-up #{outcome} with one retry and preserves #{history_mode} history" do
+      runtime = start_runtime(history_mode: unquote(history_mode))
+      id = "failed-continuation-call"
+      assert {:accepted, :blocking} = submit_invocation(runtime, :blocking, id)
+      assert_receive {:submitted_host_tool_started, execution, ^id}
+      send(execution, :release_submitted_host_tool)
 
-    assert {:accepted, :blocking} =
-             submit_invocation(runtime, :blocking, "failed-continuation-call")
+      assert_receive {:vxpipe_capability_continuation_started, coordinator, continuation}
+      assert_receive {:test_agent_runtime_stream, first, request}
+      observation = List.last(request.messages)
+      assert observation.origin == :engine
+      assert observation.content =~ ~s("invocation_id":"failed-continuation-call")
+      assert observation.content =~ ~s("status":"completed")
 
-    assert_receive {:submitted_host_tool_started, execution, "failed-continuation-call"}
-    send(execution, :release_submitted_host_tool)
+      {:ok, partial} =
+        ModelResponse.new(text: "Uncommitted provider data", usage: %{total_tokens: 3})
 
-    assert_receive {:vxpipe_tool_completion_available, registry, "failed-continuation-call"}
-    monitor = Process.monitor(runtime.coordinator)
+      send(
+        first,
+        {:test_agent_runtime_response, {:runtime_error, :provider_unavailable, partial}}
+      )
 
-    send(
-      runtime.coordinator,
-      {:vxpipe_tool_completion_available, registry, "failed-continuation-call"}
-    )
+      assert_receive {:test_agent_runtime_stream, retry, retry_request}, 1_000
+      assert retry_request.messages == request.messages
+      assert retry_request.correlation == request.correlation
+      assert_receive {:vxpipe_usage_observations, ^coordinator, [failed_attempt]}
+      assert failed_attempt.outcome == :failed
+      assert failed_attempt.measurement.quantity == 3
 
-    assert_receive {:vxpipe_capability_continuation_started, coordinator,
-                    %ContinueAgent{} = continuation}
+      case unquote(outcome) do
+        :recovers ->
+          {:ok, answer} = ModelResponse.new(text: "The tool finished.")
+          send(retry, {:test_agent_runtime_response, {:ok, answer}})
+          assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^continuation}
 
-    assert_receive {:test_agent_runtime_stream, provider, _request}
-    send(provider, {:test_agent_runtime_response, {:error, :provider_unavailable}})
+        :exhausts ->
+          send(retry, {:test_agent_runtime_response, {:error, :provider_unavailable}})
 
-    assert_receive {:vxpipe_capability_failed, ^coordinator, ^continuation, :provider_unavailable}
+          assert_receive {:vxpipe_capability_failed, ^coordinator, ^continuation,
+                          :provider_unavailable}
+      end
 
-    assert_receive {:DOWN, ^monitor, :process, ^coordinator, :completion_continuation_failed}
+      if unquote(history_mode) == :host_settled do
+        assert :ok = Coordinator.settle_output(coordinator, continuation, nil)
+      end
 
-    assert {:ok,
-            [
-              %Vxpipe.CallEngine.Tool.InvocationStatus{
-                invocation_id: "failed-continuation-call",
-                status: :terminal_queued
-              }
-            ]} = InvocationRegistry.snapshot(runtime.registry)
+      assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
+      caller = command("after-failure", "Florida")
+      assert :ok = Coordinator.respond(coordinator, caller)
+      assert_receive {:test_agent_runtime_stream, next, next_request}
+      assert List.last(next_request.messages).content == caller.content
+      assert Enum.count(next_request.messages, &(&1 == observation)) == 1
+      {:ok, answer} = ModelResponse.new(text: "Thank you for the location.")
+      send(next, {:test_agent_runtime_response, {:ok, answer}})
+      assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^caller}
+      refute_receive {:submitted_host_tool_started, _, _}
+      refute_receive {:test_agent_runtime_stream, _, _}
+    end
   end
 
   test "interrupts current and queued callers, discards selected completed history, and accepts replacement" do

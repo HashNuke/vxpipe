@@ -19,6 +19,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   alias Vxpipe.CallEngine.{Id, TextToSpeechRequest, TurnInterrupter}
 
   alias Vxpipe.CallEngine.RoomAuthority.{
+    CallerAnswer,
     ConnectionLifecycle,
     EventPublisher,
     FirstMessage,
@@ -44,12 +45,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   def text(capability, command, text, %State{} = state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    if TurnState.active?(state, command) and TurnState.output_eligible?(state, command) and
-         IdleWait.output_allowed?(state, capability, command) and
-         not State.conversation_held?(state, command.participant_id) and
-         TextCapability.current?(state, capability) and
-         connection != nil and
-         connection.participant_id == command.participant_id do
+    if deliver_text?(capability, command, connection, text, state) do
       occurred_at = DateTime.utc_now(:millisecond)
 
       will_be_spoken =
@@ -125,6 +121,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     end
   end
 
+  defp deliver_text?(capability, command, connection, text, state) do
+    TurnState.active?(state, command) and TurnState.output_eligible?(state, command) and
+      IdleWait.output_allowed?(state, capability, command) and
+      not State.conversation_held?(state, command.participant_id) and
+      TextCapability.current?(state, capability) and
+      connection != nil and
+      CallerAnswer.output_allowed?(command, connection, state.text_capability.pid, text) and
+      connection.participant_id == command.participant_id
+  end
+
   @spec failed(pid(), struct(), term(), State.t()) :: State.t()
   def failed(capability, command, reason, %State{} = state) do
     state = IdleWait.acknowledgment_failed(capability, command, state)
@@ -142,34 +148,46 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     if TurnState.active?(state, command) and
          TextCapability.current?(state, capability) and
          connection != nil and connection.participant_id == command.participant_id do
-      event = %AgentTurnFailed{
-        id: Id.generate(:event),
-        sequence: state.next_sequence,
-        tenant_id: state.snapshot.tenant_id,
-        room_id: state.snapshot.room_id,
-        incarnation_id: state.snapshot.incarnation_id,
-        participant_id: state.text_capability.participant_id,
-        source_participant_id: command.participant_id,
-        connection_id: command.connection_id,
-        command_id: command.id,
-        correlation_id: command.correlation_id,
-        reason: failure_reason(reason),
-        retryable: true,
-        occurred_at: DateTime.utc_now(:millisecond)
-      }
-
-      _ = OutputHistory.settle(state, command)
-      state = EventPublisher.publish(state, connection.pid, event)
-
-      # A failed opening releases its protection like a completed one; otherwise the
-      # caller's queued turns would wait for the rest of the call.
-      state
-      |> Map.update!(:next_sequence, &(&1 + 1))
-      |> TurnState.delete(command)
-      |> FirstMessage.complete(command)
+      if TurnState.get(state, command).pending_speech == 0 do
+        emit_turn_failed(command, reason, connection, state)
+      else
+        TurnState.update(
+          state,
+          command,
+          &Map.merge(&1, %{generation_complete?: true, failure: reason})
+        )
+      end
     else
       state
     end
+  end
+
+  defp emit_turn_failed(command, reason, connection, state) do
+    event = %AgentTurnFailed{
+      id: Id.generate(:event),
+      sequence: state.next_sequence,
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      participant_id: state.text_capability.participant_id,
+      source_participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id,
+      reason: failure_reason(reason),
+      retryable: true,
+      occurred_at: DateTime.utc_now(:millisecond)
+    }
+
+    _ = OutputHistory.settle(state, command)
+    state = EventPublisher.publish(state, connection.pid, event)
+
+    # A failed opening releases its protection like a completed one; otherwise the
+    # caller's queued turns would wait for the rest of the call.
+    state
+    |> Map.update!(:next_sequence, &(&1 + 1))
+    |> TurnState.delete(command)
+    |> FirstMessage.complete(command)
   end
 
   @spec playback(pid(), TextToSpeechRequest.t(), term(), State.t()) :: State.t()
@@ -278,6 +296,41 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
         end)
 
       {:ok, state}
+    end
+  end
+
+  def retire_source(
+        %State{text_capability: %{module: AgentRuntimeCoordinator} = capability} = state,
+        participant_id
+      )
+      when capability.participant_id != participant_id do
+    turns =
+      Enum.filter(Map.values(state.agent_turns), &(&1.command.participant_id == participant_id))
+
+    retire_turns(turns, state, capability.pid, participant_id)
+  end
+
+  def retire_source(state, _participant_id), do: state
+
+  defp retire_turns([], state, _coordinator, _participant_id), do: state
+
+  defp retire_turns(turns, state, coordinator, participant_id) do
+    requests = Enum.flat_map(turns, &TurnState.speech_targets(state, &1.command))
+    _ = interrupt_selected_speech(state, requests)
+
+    case AgentRuntimeCoordinator.retire_source(coordinator, participant_id) do
+      :ok ->
+        Enum.reduce(turns, state, fn turn, acc ->
+          _ = OutputHistory.settle(acc, turn.command)
+          acc |> TurnState.delete(turn.command) |> FirstMessage.complete(turn.command)
+        end)
+
+      {:error, :unavailable} ->
+        # The activation may already be shutting down during transfer. Its
+        # monitor owns that lifecycle. Invalidate output for the draining source.
+        Enum.reduce(turns, state, fn turn, acc ->
+          TurnState.retire_connection_output(acc, turn.command.connection_id)
+        end)
     end
   end
 
@@ -434,9 +487,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
       {:ok, state} ->
         turn = TurnState.get(state, request)
 
-        if turn.generation_complete? and turn.pending_speech == 0,
-          do: emit_turn_completed(request, connection, state),
-          else: state
+        case turn do
+          %{pending_speech: 0, failure: reason} ->
+            emit_turn_failed(turn.command, reason, connection, state)
+
+          %{pending_speech: 0, generation_complete?: true} ->
+            emit_turn_completed(request, connection, state)
+
+          _pending ->
+            state
+        end
 
       :stale ->
         state
@@ -527,6 +587,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     connection = Map.get(state.connections, command.connection_id)
 
     TextCapability.current?(state, capability) and connection != nil and
+      MapSet.member?(state.participant_ids, command.participant_id) and
       connection.participant_id == command.participant_id and
       command.tenant_id == state.snapshot.tenant_id and command.room_id == state.snapshot.room_id and
       command.incarnation_id == state.snapshot.incarnation_id and

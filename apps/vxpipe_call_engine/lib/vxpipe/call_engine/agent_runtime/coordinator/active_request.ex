@@ -92,7 +92,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
 
     task =
       Task.Supervisor.async_nolink(Keyword.fetch!(options, :request_supervisor), fn ->
-        Session.continue(
+        Session.continue_tool_result(
           session,
           continuation.command.content,
           continuation.correlation,

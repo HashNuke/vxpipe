@@ -12,13 +12,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ModelUsage do
     end
   end
 
-  @spec record(State.t(), map(), map()) :: State.t()
-  def record(%State{} = state, correlation, data)
+  @spec record(State.t(), map(), map(), :succeeded | :failed) :: State.t()
+  def record(%State{} = state, correlation, data, outcome)
       when is_map(correlation) and is_map(data) do
     case UsageRounds.finish(state.usage_rounds, correlation) do
       {:ok, round, usage_rounds} ->
         state = %{state | usage_rounds: usage_rounds}
-        emit(data, correlation, round, state)
+        emit(data, correlation, round, state, outcome)
         state
 
       {:error, :unknown_attempt} ->
@@ -40,7 +40,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ModelUsage do
     end
   end
 
-  defp emit(data, correlation, round, state, outcome \\ :succeeded) do
+  defp emit(data, correlation, round, state, outcome) do
     case ModelProjection.project(data, correlation, state.usage_provider,
            call_id: state.call_id,
            activation_id: state.activation_id,

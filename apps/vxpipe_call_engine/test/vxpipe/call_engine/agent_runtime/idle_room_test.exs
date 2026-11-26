@@ -3,39 +3,19 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
 
   alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
+  alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, AgentTurnFailed, ToolCallCompleted}
 
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
     TestTextToSpeechTransport,
-    TestTransferConnection,
-    TestTurnCall
+    TestTransferConnection
   }
 
+  import Vxpipe.CallEngine.TestVoiceToolRoom
+
   setup do
-    original = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
-
-    settings =
-      original
-      |> Keyword.update!(
-        :agent_runtime,
-        &Keyword.put(&1, :fixture, {CallEngine.TestAgentRuntimeModelProvider, [owner: self()]})
-      )
-      |> Keyword.put(:text_to_speech,
-        providers: %{
-          Vxpipe.Providers.Deepgram.TTSSession => [
-            enabled: true,
-            wire_module: TestTextToSpeechTransport,
-            wire_options: [observer: self(), ready_on_start: true],
-            maximum_requests: 4
-          ]
-        }
-      )
-
-    Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)
-    on_exit(fn -> Application.put_env(:vxpipe_call_engine, CallEngine.Application, original) end)
-    :ok
+    configure()
   end
 
   test "native idle waits after its spoken acknowledgement and produces one typed timeout continuation" do
@@ -751,59 +731,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     refute_receive {:test_agent_runtime_stream, _, _}, 100
   end
 
-  defp start_call(options \\ []) do
-    {:ok, protocol} = CallEngine.AgentProtocol.capture()
-    room_id = "native-idle-#{System.unique_integer([:positive])}"
-
-    {plan, room, caller} =
-      TestTurnCall.start(room_id,
-        text_to_speech: true,
-        agent_protocol: protocol,
-        tools:
-          Map.merge(
-            %{"idle" => %{type: "platform", tool: "idle"}},
-            Keyword.get(options, :tools, %{})
-          ),
-        host_tools: Keyword.get(options, :host_tools, %{})
-      )
-
-    assert_receive {:test_tts_transport_started, voice, _}
-    sink = start_supervised!({TestAudioOutputSink, observer: self()})
-
-    {:ok, attach} =
-      AttachConnection.new(
-        tenant_id: room.tenant_id,
-        actor_id: "actor-demo",
-        room_id: room.room_id,
-        incarnation_id: room.incarnation_id,
-        participant_id: caller.participant_id,
-        connection_id: "idle-human",
-        deadline: deadline()
-      )
-
-    {:ok, _} = TestTransferConnection.attach(attach, sink)
-    CallEngine.TestCallStartup.await_ready(room_id)
-    {plan, room, caller, voice, sink}
-  end
-
-  defp submit(room, caller, content, correlation) do
-    {:ok, command} =
-      SendText.new(
-        tenant_id: room.tenant_id,
-        actor_id: "actor-demo",
-        room_id: room.room_id,
-        incarnation_id: room.incarnation_id,
-        participant_id: caller.participant_id,
-        connection_id: "idle-human",
-        correlation_id: correlation,
-        content: content,
-        deadline: deadline()
-      )
-
-    assert :ok = TestTransferConnection.send_text(command)
-    command
-  end
-
   defp invoke_idle(seconds) do
     assert_receive {:test_agent_runtime_stream, provider, _request}
 
@@ -818,43 +745,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_agent_runtime_stream, acknowledgment, request}
     {acknowledgment, request}
-  end
-
-  defp reply(provider, mode, message) do
-    {:ok, response} =
-      ModelResponse.new(
-        text:
-          JSON.encode!(%{
-            "type" => "participant_message",
-            "participant_id" => "agent",
-            "agent_mode" => Atom.to_string(mode),
-            "message" => message
-          })
-      )
-
-    send(provider, {:test_agent_runtime_response, {:ok, response}})
-  end
-
-  defp settle(voice, sink, speech_id, correlation) do
-    assert_receive {:test_tts_control, ^voice, flush}
-    assert JSON.decode!(flush)["type"] == "Flush"
-
-    TestTextToSpeechTransport.deliver_control(
-      voice,
-      JSON.encode!(%{"type" => "SpeechStarted", "speech_id" => speech_id})
-    )
-
-    TestTextToSpeechTransport.deliver_audio(voice, <<1, 0, 2, 0>>)
-    assert_receive {:test_audio_output, ^sink, %{correlation_id: ^correlation}}
-
-    TestTextToSpeechTransport.deliver_control(
-      voice,
-      JSON.encode!(%{"type" => "SpeechMetadata", "speech_id" => speech_id})
-    )
-
-    assert_receive {:test_audio_output_finish, ^sink, ^correlation}
-    :ok = TestAudioOutputSink.playback_started(sink)
-    :ok = TestAudioOutputSink.playback_completed(sink)
   end
 
   defp latest_correlation(request), do: request.correlation.tool_context.correlation_id

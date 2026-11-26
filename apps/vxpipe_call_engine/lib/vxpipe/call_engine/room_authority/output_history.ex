@@ -2,17 +2,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OutputHistory do
   @moduledoc false
 
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator
-  alias Vxpipe.CallEngine.RoomAuthority.{FirstMessage, State, TurnState}
+  alias Vxpipe.CallEngine.RoomAuthority.{CallerAnswer, FirstMessage, State, TurnState}
 
   @spec confirm(State.t(), struct(), String.t(), String.t()) :: State.t()
   def confirm(%State{} = state, command, output_id, text) do
-    TurnState.update(state, command, fn turn ->
-      segments = Map.get(turn, :supported_segments, [])
+    case TurnState.get(state, command) do
+      nil ->
+        state
 
-      if Enum.any?(segments, fn {id, _text} -> id == output_id end),
-        do: turn,
-        else: Map.put(turn, :supported_segments, segments ++ [{output_id, text}])
-    end)
+      turn ->
+        segments = Map.get(turn, :supported_segments, [])
+
+        if Enum.any?(segments, fn {id, _text} -> id == output_id end) do
+          state
+        else
+          state =
+            TurnState.replace(
+              state,
+              command,
+              Map.put(turn, :supported_segments, segments ++ [{output_id, text}])
+            )
+
+          if TurnState.output_eligible?(state, command),
+            do: CallerAnswer.delivered(state, command, text),
+            else: state
+        end
+    end
   end
 
   @spec settle(State.t(), struct()) :: :ok | :ignored

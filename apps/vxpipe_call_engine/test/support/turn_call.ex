@@ -34,6 +34,7 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
         first_message: %{mode: "wait_for_input"},
         capabilities: output,
         tools: Keyword.get(options, :tools, %{}),
+        variable_permissions: Keyword.get(options, :variable_permissions, %{}),
         transfers: []
       }
     }
@@ -49,7 +50,7 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
       wait_sounds: nil,
-      call_variables: %{sections: %{}},
+      call_variables: %{sections: Keyword.get(options, :call_variables, %{})},
       participants: participants,
       limits: %{max_duration_ms: 60_000}
     }

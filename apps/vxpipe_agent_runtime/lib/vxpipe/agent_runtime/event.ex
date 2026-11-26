@@ -8,6 +8,7 @@ defmodule Vxpipe.AgentRuntime.Event do
   @type kind ::
           :request_started
           | :context_compaction_usage
+          | :model_attempt_failed
           | :model_attempt_started
           | :text_delta
           | :model_usage
@@ -22,6 +23,7 @@ defmodule Vxpipe.AgentRuntime.Event do
              :request_started,
              :context_compaction_usage,
              :model_attempt_started,
+             :model_attempt_failed,
              :text_delta,
              :model_usage,
              :response_completed,

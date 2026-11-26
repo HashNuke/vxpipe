@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.AgentRuntime.CompletionContinuation do
   @moduledoc false
 
+  alias Vxpipe.AgentRuntime.Session
   alias Vxpipe.CallEngine.AgentRuntime.Correlation
   alias Vxpipe.CallEngine.Command.ContinueAgent
   alias Vxpipe.CallEngine.Tool.{CompletionLease, InvocationRegistry}
@@ -45,6 +46,26 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CompletionContinuation do
         {:error, :unavailable}
     end
   end
+
+  @doc "Retains the terminal fact exactly once when its model request fails or its source departs."
+  @spec retain(t(), GenServer.server(), GenServer.server()) :: :ok | {:error, :unavailable}
+  def retain(continuation, session, invocation_registry) do
+    with {:ok, durable?} <- Session.durable?(session, continuation.correlation),
+         :ok <- record_observation(durable?, session, continuation) do
+      acknowledge(invocation_registry, continuation)
+    else
+      _unavailable -> {:error, :unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  # Host-settled history retains the input at admission. Generated history
+  # may also have committed it with an accepted nested tool exchange.
+  defp record_observation(true, _session, _continuation), do: :ok
+
+  defp record_observation(false, session, continuation),
+    do: Session.record_engine(session, continuation.command.content, continuation.correlation)
 
   @spec acknowledge(GenServer.server(), t()) :: :ok | {:error, :unavailable}
   def acknowledge(invocation_registry, %__MODULE__{} = continuation) do

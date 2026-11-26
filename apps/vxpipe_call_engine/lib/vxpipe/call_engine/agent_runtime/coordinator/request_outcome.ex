@@ -83,17 +83,24 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
 
   @spec fail_uncommitted(ActiveRequest.t(), atom(), keyword()) :: outcome()
   def fail_uncommitted(%ActiveRequest{} = request, reason, options) do
+    outcome =
+      case request.kind do
+        kind when kind in @ordinary_request_kinds -> :advance
+        {:completion, continuation} -> retain_failed_completion(continuation, options)
+      end
+
     report_failure(request, reason, options)
+    outcome
+  end
 
-    case request.kind do
-      kind when kind in @ordinary_request_kinds ->
-        :advance
-
-      {:completion, continuation} ->
-        case CompletionContinuation.release(invocation_registry(options), continuation) do
-          :ok -> {:stop, :completion_continuation_failed}
-          {:error, :unavailable} -> {:stop, :completion_release_failed}
-        end
+  defp retain_failed_completion(continuation, options) do
+    case CompletionContinuation.retain(
+           continuation,
+           Keyword.fetch!(options, :session),
+           invocation_registry(options)
+         ) do
+      :ok -> :advance
+      {:error, :unavailable} -> {:stop, :completion_acknowledgement_failed}
     end
   end
 
@@ -120,7 +127,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
 
       {:completion, continuation} ->
         case CompletionContinuation.acknowledge(invocation_registry(options), continuation) do
-          :ok -> {:stop, :completion_output_failed}
+          :ok -> :advance
           {:error, :unavailable} -> {:stop, :completion_acknowledgement_failed}
         end
     end

@@ -301,12 +301,13 @@ inline call spec and `start_call`; the legacy model preset and automatic global 
 have been removed. Embedded fixture/Morse selections remain available without provider credentials.
 See [credential reader boundaries](https://github.com/HashNuke/notes/blob/main/vxpipe/labnotes/20260915-1521-credential-reader-boundaries.md).
 
-Terminal tool results are now leased before caller work and submitted through the Session's private
-engine-origin continuation API. Successful committed continuation acknowledges and removes the
-registry record; a failed uncommitted continuation releases it and stops the coordinator rather than
-rerunning the tool or admitting caller work with missing state. The active-request and terminal-
-outcome mechanics live in separate cohesive modules so the coordinator remains the scheduler rather
-than becoming another all-purpose runtime.
+The coordinator leases each terminal tool result and delivers it to the Session as a private
+observation. If the first model attempt consuming it reports provider unavailability before
+emitting output, the Session retries that attempt once after 100 ms within the original deadline.
+Caller interruption cancels the active request, including its backoff. The tool runs once across
+both attempts. After exhaustion, the coordinator retains the observation, acknowledges the
+registry record and stays available for the next caller turn. Playback settlement records
+completed speech segments from a failed stream.
 
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,

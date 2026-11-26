@@ -90,6 +90,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec retire_source(GenServer.server(), String.t()) :: :ok | {:error, :unavailable}
+  def retire_source(coordinator, participant_id) do
+    GenServer.call(coordinator, {:retire_source, participant_id}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @spec settle_output(GenServer.server(), struct(), String.t() | nil) ::
           :ok | :ignored | {:error, :unavailable}
   def settle_output(coordinator, command, text) do
@@ -227,6 +234,27 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     {:reply, {:error, :busy}, state}
   end
 
+  def handle_call({:retire_source, participant_id}, _from, state) do
+    pending = :queue.filter(&(&1.participant_id != participant_id), state.pending)
+    state = %{state | pending: pending}
+
+    case state.current do
+      %ActiveRequest{command: %{participant_id: ^participant_id}} = current ->
+        :ok = ActiveRequest.cancel(current, state.session, @cancel_timeout)
+
+        current
+        |> RequestOutcome.fail_uncommitted(:interrupted, request_outcome_options(state))
+        |> transition(state)
+        |> case do
+          {:noreply, state} -> {:reply, :ok, state}
+          {:stop, reason, state} -> {:stop, reason, {:error, :unavailable}, state}
+        end
+
+      _other_source ->
+        {:reply, :ok, state}
+    end
+  end
+
   def handle_call({:interrupt, completed_turn_ids}, _from, %State{} = state) do
     case Interruption.apply(state, completed_turn_ids, @cancel_timeout) do
       {:ok, interrupted, state} ->
@@ -326,10 +354,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   def handle_info(
+        {:agent_runtime_event, %Event{kind: :model_attempt_failed, correlation: correlation}},
+        %State{} = state
+      ) do
+    {:noreply, ModelUsage.record(state, correlation, %{}, :failed)}
+  end
+
+  def handle_info(
         {:agent_runtime_event, %Event{kind: :model_usage, correlation: correlation, data: data}},
         %State{} = state
       ) do
-    {:noreply, ModelUsage.record(state, correlation, data)}
+    {:noreply, ModelUsage.record(state, correlation, data, Map.get(data, :outcome, :succeeded))}
   end
 
   def handle_info(
@@ -560,6 +595,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   defp request_outcome_options(state) do
     [
+      session: state.session,
       invocation_registry: state.invocation_registry,
       owner: state.owner,
       provider: state.provider

@@ -19,6 +19,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     ToolRegistry
   }
 
+  @tool_result_retry_delay_ms 100
+
   @spec run(Conversation.t(), Request.t(), map()) ::
           {:ok, String.t() | Dialogue.t(), Conversation.t()}
           | {:ok, Dialogue.t(), Conversation.t(), PendingReplyReplay.t()}
@@ -55,8 +57,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
            |> DialogueRepair.bound(config.reply_repair_policy),
          {:ok, prepared_conversation, model_request} <-
            prepare_context(conversation, model_request, config),
-         :ok <- config.emit_model_attempt_started.(),
-         {:ok, response} <- generate_observed_response(config, model_request, output),
+         :ok <- config.emit_model_attempt.(:model_attempt_started),
+         {:ok, response} <- generate_round(config, model_request, output, round),
          {:ok, response} <- maybe_correct(response, model_request, round, config) do
       handle_response(
         response,
@@ -73,6 +75,34 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     end
   end
 
+  defp generate_round(%{retry_tool_result?: true} = config, request, output, 1) do
+    emitted = :atomics.new(1, signed: false)
+
+    observe = fn text ->
+      :atomics.put(emitted, 1, 1)
+      config.emit_text_delta.(text)
+    end
+
+    result = generate_observed_response(%{config | emit_text_delta: observe}, request, output)
+
+    case {result, :atomics.get(emitted, 1)} do
+      {{:error, :provider_unavailable}, 0} ->
+        # The session owns this worker and its original deadline. Barge-in
+        # cancels the backoff and any retry together with the request.
+        with :ok <- config.emit_model_attempt.(:model_attempt_failed),
+             :ok <- Process.sleep(@tool_result_retry_delay_ms),
+             :ok <- config.emit_model_attempt.(:model_attempt_started) do
+          generate_observed_response(config, request, output)
+        end
+
+      _finished ->
+        result
+    end
+  end
+
+  defp generate_round(config, request, output, _round),
+    do: generate_observed_response(config, request, output)
+
   defp maybe_correct(
          %ModelResponse{tool_calls: []} = response,
          model_request,
@@ -84,7 +114,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
       {:error, :invalid_dialogue} ->
         with {:ok, repair} <-
                DialogueRepair.prepare(config.reply_repair_policy, model_request, response),
-             :ok <- config.emit_model_attempt_started.(),
+             :ok <- config.emit_model_attempt.(:model_attempt_started),
              {:ok, corrected} <- generate_observed_response(config, repair, []),
              true <- corrected.tool_calls == [],
              {:ok, _dialogue} <- Dialogue.decode(corrected.text, config.maximum_output_bytes) do
@@ -141,14 +171,14 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
           {:ok, silent_output(config.reply_protocol), conversation}
         else
           generate(
-          conversation,
-          [],
-          next_output,
-          round + 1,
-          config.reply_protocol == :mode_message_v1 or mode != :blocking,
-          request,
-          config
-        )
+            conversation,
+            [],
+            next_output,
+            round + 1,
+            config.reply_protocol == :mode_message_v1 or mode != :blocking,
+            request,
+            config
+          )
         end
       else
         {:error, reason} when is_atom(reason) -> {:error, reason}
@@ -198,7 +228,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
 
   defp submit_resolved_calls(resolved_calls, request, config) do
     {submissions, disposition} =
-      Enum.reduce(resolved_calls, {[], :non_blocking}, fn {call, descriptor}, {submissions, disposition} ->
+      Enum.reduce(resolved_calls, {[], :non_blocking}, fn {call, descriptor},
+                                                          {submissions, disposition} ->
         case Executor.submit(
                config.executor,
                descriptor.binding,
@@ -207,7 +238,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
                call.id
              ) do
           {:accepted, mode} ->
-            {[{call, running_result(call)} | submissions], submission_disposition(disposition, mode)}
+            {[{call, running_result(call)} | submissions],
+             submission_disposition(disposition, mode)}
 
           {:error, reason} ->
             {[{call, rejected_result(reason)} | submissions], disposition}
@@ -354,10 +386,10 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp generate_observed_response(config, model_request, output) do
     case generate_response(config, model_request, output) do
       {:ok, %ModelResponse{} = response} ->
-        with :ok <- emit_model_usage(response, config), do: {:ok, response}
+        with :ok <- emit_model_usage(response, config, :succeeded), do: {:ok, response}
 
       {:error, reason, %ModelResponse{} = response} ->
-        with :ok <- emit_model_usage(response, config), do: {:error, reason}
+        with :ok <- emit_model_usage(response, config, :failed), do: {:error, reason}
 
       {:error, _reason} = error ->
         error
@@ -403,8 +435,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     end
   end
 
-  defp emit_model_usage(%ModelResponse{} = response, config) do
-    config.emit_model_usage.(response.usage, response.provider_metadata)
+  defp emit_model_usage(%ModelResponse{} = response, config, outcome) do
+    config.emit_model_usage.(response.usage, response.provider_metadata, outcome)
   end
 
   defp stream_emitter(%{reply_protocol: :mode_message_v1}), do: fn _text -> :ok end

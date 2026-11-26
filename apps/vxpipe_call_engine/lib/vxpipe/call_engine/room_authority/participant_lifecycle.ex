@@ -11,7 +11,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
     RoomParticipantSupervisor
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.{ParticipantPreparation, State, TextCapability}
+  alias Vxpipe.CallEngine.RoomAuthority.{
+    AgentOutput,
+    ParticipantPreparation,
+    State,
+    TextCapability
+  }
 
   @spec join(struct(), State.t()) :: {:reply, {:ok, struct()} | {:error, Error.t()}, State.t()}
   @spec join(struct(), State.t(), String.t() | nil) ::
@@ -176,6 +181,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
         connection.participant_id == participant_id
       end)
 
+    state = AgentOutput.retire_source(state, participant_id)
     notify_connections(affected_connections, :participant_unavailable)
 
     if state.text_capability != nil and

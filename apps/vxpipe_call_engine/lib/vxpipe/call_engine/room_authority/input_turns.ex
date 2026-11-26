@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
+    CallerAnswer,
     CallerIdle,
     CallerSpeechRecovery,
     ConnectionLifecycle,
@@ -57,7 +58,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       {:ok, state} ->
         case FirstMessage.respond(capability, command, state) do
           {:ok, state} ->
-            state = state |> TurnState.put(command) |> emit_participant_text_turn(command)
+            state =
+              state
+              |> CallerAnswer.accepted(command)
+              |> TurnState.put(command)
+              |> emit_participant_text_turn(command)
+
             {:reply, :ok, state}
 
           {:error, reason} ->
@@ -389,6 +395,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
                 state
                 |> Map.put(:archive_recorder, archive_recorder)
+                |> CallerAnswer.accepted(command)
                 |> TurnState.put(command, observation)
 
               {:error, reason} ->
