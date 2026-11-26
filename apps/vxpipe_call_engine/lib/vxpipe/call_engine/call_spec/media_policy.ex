@@ -20,6 +20,13 @@ defmodule Vxpipe.CallEngine.CallSpec.MediaPolicy do
           save_transcripts: permission()
         }
 
+  @spec from_call(:error | {:ok, term()}) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
+  def from_call(input) do
+    with {:ok, policy} <- from_optional(input, ["media_policy"]) do
+      {:ok, %{policy | record_audio: policy.record_audio == true}}
+    end
+  end
+
   @spec from_optional(:error | {:ok, term()}, [String.t()]) ::
           {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
   def from_optional(:error, _path), do: {:ok, inherit()}

@@ -30,7 +30,7 @@ defmodule Vxpipe.CallEngine.CallSpec.MediaPolicyCompilerTest do
     assert %MediaPolicy{
              audio_routes: %{},
              transcript_routes: :inherit,
-             record_audio: :inherit,
+             record_audio: false,
              save_transcripts: :inherit
            } = call_spec.media_policy
 

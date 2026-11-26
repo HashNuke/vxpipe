@@ -216,6 +216,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     plan =
       compile_plan(
+        record_audio: true,
         morse: true,
         agent_destination: true,
         reception_model: "test:blocked",
@@ -379,6 +380,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     plan =
       compile_plan(
+        record_audio: true,
         morse: true,
         agent_destination: true,
         reception_model: "test:blocked",
@@ -902,6 +904,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       plan =
         compile_plan(
+          record_audio: true,
           reception_model: "test:blocked",
           caller_speech_to_text?: true,
           wait_sounds: sounds,
@@ -1358,6 +1361,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       plan =
         compile_plan(
+          record_audio: true,
           agent_destination: true,
           caller_speech_to_text?: true,
           tenant_id: "tenant-demo",
@@ -1845,6 +1849,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     plan =
       compile_plan(
+        record_audio: true,
         wait_sounds: wait_sounds,
         observer_speech_to_text?: true,
         observer_policy: %{},
@@ -3184,7 +3189,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   test "a destination accepts privately before joining bidirectional room audio" do
-    plan = compile_plan(wait_sounds: nil)
+    plan = compile_plan(record_audio: true, wait_sounds: nil)
 
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
@@ -3463,7 +3468,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     alias Vxpipe.CallEngine.Readiness.{Collector, Preparation}
     alias Vxpipe.Gateway.Media.RoomAudioEgress
 
-    plan = compile_plan()
+    plan = compile_plan(record_audio: true)
 
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
@@ -4188,6 +4193,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              CallSpec.new(
                %{
                  schema_version: "20260915.01",
+                 media_policy: %{record_audio: Keyword.get(options, :record_audio, false)},
                  entry_caller: "caller",
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},

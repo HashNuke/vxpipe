@@ -1581,6 +1581,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       end
 
     source = %{
+      media_policy: %{record_audio: recording_toggle? == true},
       schema_version: "20260915.01",
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",

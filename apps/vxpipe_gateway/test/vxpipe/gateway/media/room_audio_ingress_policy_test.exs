@@ -308,7 +308,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressPolicyTest do
                  entry_caller: "caller",
                  entry_receiver: "receiver",
                  defaults: %{capabilities: %{}},
-                 media_policy: Keyword.get(options, :media_policy, %{}),
+                 media_policy: Keyword.get(options, :media_policy, %{record_audio: true}),
                  call_variables: %{sections: %{}},
                  participants: participants,
                  limits: %{max_duration_ms: 60_000}

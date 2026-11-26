@@ -719,6 +719,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     input = %{
       schema_version: "20260915.01",
+      media_policy: %{record_audio: true},
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",

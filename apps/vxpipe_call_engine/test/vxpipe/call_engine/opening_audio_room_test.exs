@@ -547,7 +547,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
             }
         end
 
-      plan = compile_plan(opening_audio: opening)
+      plan = compile_plan(opening_audio: opening, record_audio: true)
 
       caller = Map.fetch!(plan.participants, plan.entry_caller)
 
@@ -1523,6 +1523,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     call_spec_input = %{
       schema_version: "20260915.01",
       wait_sounds: Keyword.get(options, :wait_sounds),
+      media_policy: %{record_audio: Keyword.get(options, :record_audio, false)},
       entry_caller: "caller",
       entry_receiver: "receiver",
       opening_audio:

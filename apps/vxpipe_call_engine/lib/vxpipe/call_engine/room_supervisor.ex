@@ -444,7 +444,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       archive_source_policy: archive.source_policy,
       call_lifecycle: call_lifecycle_options(runtime_options),
       live_inspection: live_inspection_options(),
-      recording: Keyword.get(runtime_options, :recording, enabled: false),
+      recording: recording_options(plan, runtime_options),
       room_mixer: room_mixer_options(),
       transcript_router: transcript_router_options(),
       opening_audio: Keyword.fetch!(runtime_options, :opening_audio),
@@ -517,6 +517,11 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   defp source_stopped(nil, _reason), do: :ok
   defp source_stopped(handoff, reason), do: Handoff.source_stopped(handoff, reason)
+
+  defp recording_options(%{media_policy: %{record_audio: true}}, options),
+    do: Keyword.get(options, :recording, enabled: false)
+
+  defp recording_options(_plan, _options), do: [enabled: false]
 
   defp plan_startup_options(runtime_options) do
     speech_runtime = Keyword.get(runtime_options, :speech_runtime, [])

@@ -101,6 +101,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           entry_caller: "caller",
           entry_receiver: "reception",
           defaults: %{capabilities: %{}},
+          media_policy: %{record_audio: Keyword.has_key?(options, :recording)},
           wait_sounds: Keyword.get(options, :wait_sounds, %{}),
           participants: %{
             "caller" => %{

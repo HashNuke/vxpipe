@@ -113,7 +113,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
            ),
          {:ok, wait_sounds} <- WaitSounds.from_optional(Map.fetch(input, :wait_sounds)),
          {:ok, media_policy} <-
-           MediaPolicy.from_optional(Map.fetch(input, :media_policy), ["media_policy"]),
+           MediaPolicy.from_call(Map.fetch(input, :media_policy)),
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
            CallSpecValidation.fetch(input, :participants, code, message, []),

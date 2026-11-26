@@ -149,8 +149,27 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                     {:shutdown, :maximum_duration_reached}}
   end
 
+  test "does not start a recorder for an opted-out or unspecified call with storage" do
+    for policy <- [%{}, %{media_policy: %{record_audio: false}}] do
+      plan = compile_plan(policy)
+
+      assert {:ok, room} =
+               Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+                 recording: [
+                   enabled: true,
+                   targets: [:full_mix],
+                   maximum_pull_frames: 4,
+                   writer: {TestRecordingWriter, [observer: self()]}
+                 ]
+               )
+
+      assert GenServer.whereis(Vxpipe.CallEngine.RoomRecording.ref(room.incarnation_id)) == nil
+      assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+    end
+  end
+
   test "starts an explicitly enabled full-mix recording with the room" do
-    plan = compile_plan()
+    plan = compile_plan(%{media_policy: %{record_audio: true}})
 
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call(plan,
@@ -246,7 +265,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                     {:shutdown, :maximum_duration_reached}}
   end
 
-  defp compile_plan do
+  defp compile_plan(overrides \\ %{}) do
     room_id = unique_id("room-human-only")
 
     input = %{
@@ -264,7 +283,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     }
 
     assert {:ok, call_spec} =
-             CallSpec.new(input, resource_id: "human-only", revision: 1)
+             CallSpec.new(Map.merge(input, overrides), resource_id: "human-only", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(

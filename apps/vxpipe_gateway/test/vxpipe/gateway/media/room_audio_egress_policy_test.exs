@@ -243,6 +243,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressPolicyTest do
              CallSpec.new(
                %{
                  schema_version: "20260915.01",
+                 media_policy: %{record_audio: true},
                  entry_caller: "caller",
                  entry_receiver: "receiver",
                  defaults: %{capabilities: %{}},
