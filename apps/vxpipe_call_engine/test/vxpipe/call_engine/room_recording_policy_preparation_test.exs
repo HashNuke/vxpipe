@@ -10,8 +10,10 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
     TestRecordingWriter
   }
 
+  alias Vxpipe.CallEngine.Media.EgressAcceptedFrame
   alias Vxpipe.CallEngine.Media.NormalizedFrame
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer, Snapshot}
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
 
   test "prepares future writers privately and preserves live sequence numbers through adoption" do
     context = start_context()
@@ -21,7 +23,7 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
              RoomRecording.prepare_policy(
                context.recording,
                context.candidate,
-               tracks(context),
+               [:room_track | tracks(context)],
                context.options
              )
 
@@ -34,14 +36,15 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
              RoomRecording.prepare_policy(
                context.recording,
                context.candidate,
-               tracks(context),
+               [:room_track | tracks(context)],
                context.options
              )
 
     refute_receive {:test_recording_writer_opened, _caller, _source, _stream}
 
+    offer_room(context, context.caller, "connection-egress-1", 0)
     push(context, context.caller, 1, 0)
-    assert_receive {:test_recording_chunk, "full-mix", %{sequence: 0}}
+    assert_receive {:test_recording_chunk, "room-track", %{sequence: 0, offset_samples: 0}}
 
     assert_receive {:test_recording_chunk, caller_stream,
                     %{sequence: 0, source_participant_ids: [caller]}}
@@ -58,10 +61,8 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
              RoomRecording.discard_policy(context.recording, prepared.token)
 
     push(context, context.caller, 2, 2)
-    assert_receive {:test_recording_chunk, "full-mix", %{sequence: 1}}
     assert_receive {:test_recording_chunk, ^caller_stream, %{sequence: 1}}
     push(context, context.joining, 1, 4)
-    assert_receive {:test_recording_chunk, "full-mix", %{sequence: 2}}
 
     assert_receive {:test_recording_chunk, _joining_stream,
                     %{sequence: 0, source_participant_ids: [joining]}}
@@ -152,8 +153,9 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
 
       assert {:ok, ^live, :ready} = RoomRecording.readiness(context.recording)
       assert Authority.snapshot(context.authority) == context.candidate.base_snapshot
+      offer_room(context, context.caller, "connection-egress-1", 0)
       push(context, context.caller, 1, 0)
-      assert_receive {:test_recording_chunk, "full-mix", %{sequence: 0}}
+      assert_receive {:test_recording_chunk, "room-track", %{sequence: 0}}
     end
   end
 
@@ -248,8 +250,10 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
     assert {:ok, _resource, :preparing} = RoomRecording.readiness(context.recording)
     :ok = :atomics.put(readiness, 1, 0)
     assert {:ok, _resource, :ready} = RoomRecording.readiness(context.recording)
+    offer_room(context, context.caller, "connection-egress-2", 2)
     push(context, context.caller, 2, 2)
-    assert_receive {:test_recording_chunk, "full-mix", %{sequence: 0}}
+    assert {:ok, _counts} = RoomMixer.flush_through(context.mixer, 16)
+    assert_receive {:test_recording_chunk, "room-track", %{sequence: 0, offset_samples: 16}}
   end
 
   test "refresh retains pending writers and changed recording permission uses prepared subscriptions" do
@@ -313,8 +317,8 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
     refute_receive {:test_recording_chunk, _stream, _chunk}
   end
 
-  test "an unchanged full-mix writer retains its exact readiness descriptor" do
-    context = start_context(full_mix_only: true)
+  test "an unchanged room-track writer retains its exact readiness descriptor" do
+    context = start_context(room_track_only: true)
     current = Authority.snapshot(context.authority)
 
     assert {:ok, candidate} =
@@ -411,6 +415,27 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
   defp tracks(context), do: Enum.sort([track(context.caller), track(context.joining)])
   defp track(id), do: {:individual_track, id, "connection-#{id}", "track-#{id}"}
 
+  defp offer_room(context, source, connection_id, timestamp_ms) do
+    Process.put(:egress_clock_ms, timestamp_ms)
+    assert {:ok, handoff} = RoomMixer.open_recording_egress(context.mixer, connection_id)
+
+    frame = %EgressAcceptedFrame{
+      tenant_id: context.identity.tenant_id,
+      room_id: context.identity.room_id,
+      incarnation_id: context.identity.incarnation_id,
+      source_participant_id: source,
+      connection_id: connection_id,
+      sample_rate: 8_000,
+      channels: 1,
+      origin: :room,
+      payload: <<1::little-signed-16, 2::little-signed-16>>
+    }
+
+    assert :ok = EgressHandoff.offer(handoff, frame)
+    _ = :sys.get_state(context.mixer)
+    :ok
+  end
+
   defp push(context, id, sequence, timestamp) do
     policy = Authority.snapshot(context.authority)
 
@@ -435,7 +460,7 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
   end
 
   defp start_context(writer_options \\ []) do
-    {full_mix_only?, writer_options} = Keyword.pop(writer_options, :full_mix_only, false)
+    {room_track_only?, writer_options} = Keyword.pop(writer_options, :room_track_only, false)
     suffix = Integer.to_string(System.unique_integer([:positive, :monotonic]))
     incarnation = "recording-preparation-#{suffix}"
 
@@ -510,7 +535,9 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
              channels: 1,
              frame_samples: 2,
              maximum_buffered_timestamps: 4,
-             maximum_sink_frames: 4
+             maximum_sink_frames: 4,
+             clock: fn -> Process.get(:egress_clock_ms, 0) end,
+             clock_origin_ms: 0
            ]}
       )
 
@@ -525,27 +552,30 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
              mixer: mixer,
              recording_token: recording_token,
              targets:
-               if(full_mix_only?,
-                 do: [:full_mix],
-                 else: [:full_mix, {:individual_tracks, [identities.caller, identities.joining]}]
+               if(room_track_only?,
+                 do: [:room_track],
+                 else: [
+                   :room_track,
+                   {:individual_tracks, [identities.caller, identities.joining]}
+                 ]
                ),
              writer: {TestRecordingWriter, Keyword.put(writer_options, :observer, self())},
              maximum_pull_frames: 4
            ]}
       )
 
-    unless full_mix_only? do
+    unless room_track_only? do
       assert :ok =
                RoomRecording.prepare_tracks(
                  recording,
-                 [track(identities.caller)],
+                 [track(identities.caller), :room_track],
                  Snapshot.interval(base, :recording)
                )
     end
 
-    assert_receive {:test_recording_writer_opened, _caller, ^recording, %{mode: :full_mix}}
+    assert_receive {:test_recording_writer_opened, _caller, ^recording, %{mode: :room_track}}
 
-    unless full_mix_only? do
+    unless room_track_only? do
       assert_receive {:test_recording_writer_opened, _caller, ^recording,
                       %{mode: {:individual_track, _, _, _}}}
     end

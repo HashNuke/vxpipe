@@ -199,12 +199,65 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert_frame(Subscription.take(monitor, 1), "monitor", ["alice"], [4_000, -3_000], 0)
   end
 
+  test "preserves simultaneous human tracks literally named agent-egress as per-connection recordings" do
+    recording_token = make_ref()
+    mixer = start_mixer(recording_token: recording_token)
+    :ok = apply_policy(mixer, 0, ["alice", "monitor"])
+
+    assert {:ok, recording} =
+             subscribe_recording(mixer, recording_token, {:individual_tracks, ["alice"]})
+
+    assert {:ok, monitor} = subscribe(mixer, "monitor-output", "monitor", :full_mix)
+
+    assert :ok =
+             RoomMixer.push(
+               mixer,
+               frame("alice", 1, 0, [1_000, 2_000],
+                 connection_id: "connection-a",
+                 track_id: "agent-egress"
+               )
+             )
+
+    assert :ok =
+             RoomMixer.push(
+               mixer,
+               frame("alice", 1, 0, [3_000, -5_000],
+                 connection_id: "connection-b",
+                 track_id: "agent-egress"
+               )
+             )
+
+    assert {:ok, %{delivered: 3}} = RoomMixer.flush_through(mixer, 0)
+
+    # Monitor keeps the full live mix of both human connections.
+    assert_frame(Subscription.take(monitor, 1), "monitor", ["alice"], [4_000, -3_000], 0)
+
+    # Recording preserves both human tracks with per-connection prepared modes,
+    # never collapsing a human track named agent-egress into the stable agent mode.
+    assert {:ok, [first, second]} = Subscription.take(recording, 2)
+
+    by_connection =
+      Map.new([first, second], fn frame -> {frame.mode, frame} end)
+
+    assert %{
+             {:individual_track, "alice", "connection-a", "agent-egress"} => first_frame,
+             {:individual_track, "alice", "connection-b", "agent-egress"} => second_frame
+           } = by_connection
+
+    assert decode_samples(first_frame.payload) == [1_000, 2_000]
+    assert decode_samples(second_frame.payload) == [3_000, -5_000]
+    assert first_frame.recording_duplicate_frames == 0
+    assert second_frame.recording_duplicate_frames == 0
+
+    refute {:individual_track, "alice", "alice", "agent-egress"} in Map.keys(by_connection)
+  end
+
   test "preserves buffered and queued live and recording audio across unrelated revisions" do
     token = make_ref()
     mixer = start_mixer(recording_token: token)
     :ok = apply_policy(mixer, 0, ["alice", "bob"])
     assert {:ok, alice} = subscribe(mixer, "alice-output", "alice", :mix_minus)
-    assert {:ok, recording} = subscribe_recording(mixer, token, :full_mix)
+    assert {:ok, recording} = subscribe_recording(mixer, token, {:individual_tracks, ["bob"]})
     assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200]))
     assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
     assert :ok = RoomMixer.push(mixer, frame("bob", 2, 2, [300, 400]))
@@ -266,14 +319,17 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
       )
 
     assert {:error, :recording_not_authorized} =
-             subscribe_recording(mixer, make_ref(), :full_mix)
+             subscribe_recording(mixer, make_ref(), {:individual_tracks, ["alice", "bob"]})
 
-    assert {:ok, recording} = subscribe_recording(mixer, recording_token, :full_mix)
+    assert {:ok, recording} =
+             subscribe_recording(mixer, recording_token, {:individual_tracks, ["alice", "bob"]})
 
     assert :ok = RoomMixer.push(mixer, frame("alice", 1, 0, [1_000, 2_000]))
     assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [3_000, -5_000]))
-    assert {:ok, %{delivered: 1, dropped: 0}} = RoomMixer.flush_through(mixer, 0)
-    assert_frame(Subscription.take(recording, 1), nil, ["alice", "bob"], [4_000, -3_000], 0)
+    assert {:ok, %{delivered: 2, dropped: 0}} = RoomMixer.flush_through(mixer, 0)
+
+    assert_frame(Subscription.take(recording, 1), nil, ["alice"], [1_000, 2_000], 0)
+    assert_frame(Subscription.take(recording, 1), nil, ["bob"], [3_000, -5_000], 0)
 
     :ok = apply_policy(mixer, 1, ["alice", "bob"], record_audio: false)
 
@@ -281,7 +337,7 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
              RoomMixer.push(mixer, frame("alice", 2, 2, [5_000, 6_000], policy_revision: 1))
 
     assert {:ok, %{delivered: 0, dropped: 0}} = RoomMixer.flush_through(mixer, 2)
-    assert {:ok, []} = Subscription.take(recording, 1)
+    assert {:ok, []} = Subscription.take(recording, 2)
 
     :ok = apply_policy(mixer, 2, ["alice", "bob"], record_audio: true)
 
@@ -305,7 +361,9 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
 
     :ok = apply_policy(mixer, 0, ["alice", "agent", "bob"], record_audio: true)
     assert {:ok, listener} = subscribe(mixer, "alice-output", "alice", :full_mix)
-    assert {:ok, recording} = subscribe_recording(mixer, recording_token, :full_mix)
+
+    assert {:ok, recording} =
+             subscribe_recording(mixer, recording_token, {:individual_tracks, ["agent", "bob"]})
 
     assert {:ok, handoff} = RoomMixer.open_recording_egress(mixer, "connection-alice")
     assert {:ok, binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
@@ -320,15 +378,23 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     _ = :sys.get_state(mixer)
     assert {:ok, ^binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
     assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200]))
-    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+    assert {:ok, %{delivered: 3}} = RoomMixer.flush_through(mixer, 0)
 
     assert_frame(Subscription.take(listener, 1), "alice", ["bob"], [100, 200], 0)
 
     assert_frame(
       Subscription.take(recording, 1),
       nil,
-      ["agent", "bob"],
-      [400, 600],
+      ["agent"],
+      [300, 400],
+      0
+    )
+
+    assert_frame(
+      Subscription.take(recording, 1),
+      nil,
+      ["bob"],
+      [100, 200],
       0
     )
 

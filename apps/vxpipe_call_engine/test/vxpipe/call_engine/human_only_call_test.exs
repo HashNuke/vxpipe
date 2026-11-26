@@ -157,7 +157,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                  recording: [
                    enabled: true,
-                   targets: [:full_mix],
+                   targets: [:room_track],
                    maximum_pull_frames: 4,
                    writer: {TestRecordingWriter, [observer: self()]}
                  ]
@@ -168,7 +168,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     end
   end
 
-  test "starts an explicitly enabled full-mix recording with the room" do
+  test "records a named caller track in an opted-in room" do
     plan = compile_plan(%{media_policy: %{record_audio: true}})
 
     assert {:ok, room} =
@@ -180,7 +180,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                ],
                recording: [
                  enabled: true,
-                 targets: [:full_mix, {:individual_participants, ["caller"]}],
+                 targets: [{:individual_participants, ["caller"]}],
                  writer: {TestRecordingWriter, [observer: self()]},
                  maximum_pull_frames: 4
                ]
@@ -193,14 +193,6 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
       Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
     room_monitor = Process.monitor(authority)
-
-    assert_receive {:test_recording_writer_opened, _caller, recording, stream}
-    assert is_pid(recording)
-    assert stream.tenant_id == plan.tenant_id
-    assert stream.call_id == plan.call_id
-    assert stream.room_id == plan.room_id
-    assert stream.incarnation_id == room.incarnation_id
-    assert stream.mode == :full_mix
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
@@ -241,9 +233,13 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
              )
 
     mixer = RoomMixer.whereis(room.incarnation_id)
-    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 0)
 
-    assert_receive {:test_recording_writer_opened, _caller, ^recording, individual_stream}
+    assert_receive {:test_recording_writer_opened, _caller, recording, individual_stream}
+    assert individual_stream.participant_key == "caller"
+    assert individual_stream.reconnection == 0
+    assert individual_stream.call_id == plan.call_id
+    assert individual_stream.incarnation_id == room.incarnation_id
 
     assert individual_stream.mode ==
              {:individual_track, caller.participant_id, "conn-recording-caller", "embedded"}

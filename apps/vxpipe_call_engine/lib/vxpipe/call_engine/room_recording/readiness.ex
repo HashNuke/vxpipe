@@ -81,13 +81,13 @@ defmodule Vxpipe.CallEngine.RoomRecording.Readiness do
       handles: handles,
       selections: selections,
       subscriptions: Enum.map(streams, & &1.subscription),
-      tracks_ready?: Enum.all?(streams, &(&1.target == :full_mix or &1.required_modes != nil)),
-      tracks_required?: Enum.any?(streams, &(&1.target != :full_mix)),
+      tracks_ready?: Enum.all?(streams, &(&1.target == :room_track or &1.required_modes != nil)),
+      tracks_required?: Enum.any?(streams, &(&1.target != :room_track)),
       prepared_interval: state.prepared_interval
     }
   end
 
-  defp required_modes(%{required_modes: nil, target: :full_mix}), do: [:full_mix]
+  defp required_modes(%{required_modes: nil, target: :room_track}), do: [:room_track]
   defp required_modes(%{required_modes: nil}), do: []
   defp required_modes(stream), do: Enum.sort(stream.required_modes)
 

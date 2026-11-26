@@ -20,9 +20,11 @@ defmodule Vxpipe.CallEngine.Recording.EgressHandoff do
     :cursor,
     :format,
     :gate,
+    :id,
     :identity,
     :receiver,
-    :token
+    :token,
+    :valid
   ]
   defstruct @enforce_keys
 
@@ -36,6 +38,8 @@ defmodule Vxpipe.CallEngine.Recording.EgressHandoff do
              capacity > 0 and is_reference(counters) do
     cursor = :atomics.new(2, signed: true)
     :ok = :atomics.put(cursor, @timestamp_index, -configuration.frame_samples)
+    valid = :atomics.new(1, signed: false)
+    :ok = :atomics.put(valid, 1, 1)
 
     %__MODULE__{
       capacity: capacity,
@@ -46,25 +50,51 @@ defmodule Vxpipe.CallEngine.Recording.EgressHandoff do
       cursor: cursor,
       format: Map.take(configuration, [:channels, :frame_samples, :sample_rate]),
       gate: Map.fetch!(configuration, :gate),
+      id: make_ref(),
       identity: identity,
       receiver: receiver,
-      token: token
+      token: token,
+      valid: valid
     }
   end
 
   @spec offer(t(), EgressAcceptedFrame.t()) :: :ok | :ignored | {:error, term()}
   def offer(%__MODULE__{} = handoff, %EgressAcceptedFrame{} = frame) do
-    with :ok <- validate(frame, handoff),
+    with :ok <- check_valid(handoff),
+         :ok <- validate(frame, handoff),
          {:record, revision} <- policy(handoff.gate),
          :ok <- reserve(handoff) do
-      normalized = normalize(frame, revision, handoff)
-      send(handoff.receiver, {:vxpipe_recording_egress, handoff, normalized})
-      :ok
+      case check_valid(handoff) do
+        :ok ->
+          normalized = normalize(frame, revision, handoff)
+          send(handoff.receiver, {:vxpipe_recording_egress, handoff, normalized})
+          :ok
+
+        {:error, :stale_handoff} = stale ->
+          # Undo the reservation so a revoked credential never queues PCM.
+          _ = release(handoff)
+          stale
+      end
     else
       :ignore -> :ignored
       {:error, _reason} = error -> error
     end
   end
+
+  @doc false
+  @spec invalidate(t()) :: :ok
+  def invalidate(%__MODULE__{} = handoff) do
+    :ok = :atomics.put(handoff.valid, 1, 0)
+    :ok
+  end
+
+  @doc false
+  @spec valid?(t()) :: boolean()
+  def valid?(%__MODULE__{} = handoff), do: :atomics.get(handoff.valid, 1) == 1
+
+  @doc false
+  @spec id(t()) :: reference()
+  def id(%__MODULE__{} = handoff), do: handoff.id
 
   @doc false
   @spec release(t()) :: :ok
@@ -142,6 +172,10 @@ defmodule Vxpipe.CallEngine.Recording.EgressHandoff do
     if rem(encoded, 2) == 1, do: {:record, revision}, else: :ignore
   end
 
+  defp check_valid(handoff) do
+    if :atomics.get(handoff.valid, 1) == 1, do: :ok, else: {:error, :stale_handoff}
+  end
+
   defp reserve(handoff) do
     pending = :atomics.get(handoff.counters, @pending_index)
 
@@ -171,6 +205,7 @@ defmodule Vxpipe.CallEngine.Recording.EgressHandoff do
       policy_revision: revision,
       sample_rate: frame.sample_rate,
       channels: frame.channels,
+      origin: Map.get(frame, :origin, :participant),
       payload: frame.payload
     }
   end

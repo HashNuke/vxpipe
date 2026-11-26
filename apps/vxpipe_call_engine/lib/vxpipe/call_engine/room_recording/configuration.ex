@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
     :writer_options,
     :targets
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [participant_keys: %{}]
 
   @type t :: %__MODULE__{
           identity: %{
@@ -26,10 +26,11 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
           maximum_pull_frames: pos_integer(),
           writer: module(),
           writer_options: keyword(),
-          targets: [target()]
+          targets: [target()],
+          participant_keys: %{optional(String.t()) => String.t()}
         }
 
-  @type target :: :full_mix | {:individual_tracks, [String.t()]}
+  @type target :: :room_track | {:individual_tracks, [String.t()]}
 
   @spec new(keyword()) :: {:ok, t()} | {:error, term()}
   def new(options) when is_list(options) do
@@ -39,7 +40,8 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
            Keyword.get(options, :recording_token),
          {:ok, maximum_pull_frames} <- positive(options, :maximum_pull_frames),
          {:ok, writer, writer_options} <- writer(options),
-         {:ok, targets} <- targets(options) do
+         {:ok, targets} <- targets(options),
+         {:ok, participant_keys} <- participant_keys(options) do
       {:ok,
        %__MODULE__{
          identity: identity,
@@ -48,7 +50,8 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
          maximum_pull_frames: maximum_pull_frames,
          writer: writer,
          writer_options: writer_options,
-         targets: targets
+         targets: targets,
+         participant_keys: participant_keys
        }}
     else
       {:error, reason} -> {:error, reason}
@@ -123,7 +126,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
     end)
   end
 
-  defp normalize_target(:full_mix), do: {:ok, :full_mix}
+  defp normalize_target(:room_track), do: {:ok, :room_track}
 
   defp normalize_target({:individual_tracks, participant_ids}) when is_list(participant_ids) do
     if participant_ids != [] and Enum.all?(participant_ids, &valid_identifier?/1) and
@@ -143,6 +146,21 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
       _invalid -> {:error, {:invalid_room_recording_option, key}}
     end
   end
+
+  defp participant_keys(options) do
+    case Keyword.get(options, :participant_keys, %{}) do
+      keys when is_map(keys) ->
+        if Enum.all?(keys, fn {id, key} -> valid_identifier?(id) and valid_key?(key) end),
+          do: {:ok, keys},
+          else: {:error, {:invalid_room_recording_option, :participant_keys}}
+
+      _invalid ->
+        {:error, {:invalid_room_recording_option, :participant_keys}}
+    end
+  end
+
+  defp valid_key?(nil), do: true
+  defp valid_key?(key), do: is_binary(key) and key != "" and byte_size(key) <= 255
 
   defp valid_identifier?(value),
     do: is_binary(value) and value != "" and byte_size(value) <= 128

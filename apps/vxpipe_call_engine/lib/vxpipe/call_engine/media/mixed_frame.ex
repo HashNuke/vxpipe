@@ -18,11 +18,17 @@ defmodule Vxpipe.CallEngine.Media.MixedFrame do
     :channels,
     :payload
   ]
-  defstruct @enforce_keys ++ [output_generation: 0]
+  defstruct @enforce_keys ++
+              [
+                output_generation: 0,
+                recording_duplicate_frames: 0,
+                recording_selected_connection_id: nil
+              ]
 
   @type mode ::
           :mix_minus
           | :full_mix
+          | :room_track
           | {:individual_track, String.t()}
           | {:individual_track, String.t(), String.t(), String.t()}
 

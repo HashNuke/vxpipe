@@ -12,9 +12,16 @@ defmodule Vxpipe.CallEngine.Recording.Stream do
     :channels,
     :sample_format
   ]
-  defstruct @enforce_keys ++ [participant_id: nil, connection_id: nil, track_id: nil]
+  defstruct @enforce_keys ++
+              [
+                participant_id: nil,
+                participant_key: nil,
+                reconnection: 0,
+                connection_id: nil,
+                track_id: nil
+              ]
 
-  @type mode :: :full_mix | {:individual_track, String.t(), String.t(), String.t()}
+  @type mode :: :room_track | {:individual_track, String.t(), String.t(), String.t()}
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -24,6 +31,8 @@ defmodule Vxpipe.CallEngine.Recording.Stream do
           stream_id: String.t(),
           mode: mode(),
           participant_id: nil | String.t(),
+          participant_key: nil | String.t(),
+          reconnection: non_neg_integer(),
           connection_id: nil | String.t(),
           track_id: nil | String.t(),
           sample_rate: pos_integer(),
@@ -44,6 +53,8 @@ defmodule Vxpipe.CallEngine.Recording.Stream do
       stream_id: stream_id(mode),
       mode: mode,
       participant_id: participant_id,
+      participant_key: Map.get(identity, :participant_key),
+      reconnection: Map.get(identity, :reconnection, 0),
       connection_id: connection_id,
       track_id: track_id,
       sample_rate: Map.get(format, :sample_rate),
@@ -57,7 +68,10 @@ defmodule Vxpipe.CallEngine.Recording.Stream do
   def new(_identity, _mode, _format), do: {:error, :invalid_recording_stream}
 
   defp valid?(stream) do
-    identifiers?(stream) and mode_identity?(stream) and is_integer(stream.sample_rate) and
+    identifiers?(stream) and mode_identity?(stream) and
+      (is_nil(stream.participant_key) or valid_identifier?(stream.participant_key)) and
+      is_integer(stream.reconnection) and stream.reconnection >= 0 and
+      is_integer(stream.sample_rate) and
       stream.sample_rate > 0 and is_integer(stream.channels) and stream.channels > 0 and
       stream.channels <= 8
   end
@@ -73,7 +87,7 @@ defmodule Vxpipe.CallEngine.Recording.Stream do
     is_binary(value) and value != "" and byte_size(value) <= 128
   end
 
-  defp mode_identity?(%__MODULE__{mode: :full_mix} = stream) do
+  defp mode_identity?(%__MODULE__{mode: :room_track} = stream) do
     is_nil(stream.participant_id) and is_nil(stream.connection_id) and is_nil(stream.track_id)
   end
 
@@ -85,7 +99,7 @@ defmodule Vxpipe.CallEngine.Recording.Stream do
 
   defp mode_identity?(_stream), do: false
 
-  defp stream_id(:full_mix), do: "full-mix"
+  defp stream_id(:room_track), do: "room-track"
 
   defp stream_id({:individual_track, participant_id, connection_id, track_id}) do
     digest =

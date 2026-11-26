@@ -387,6 +387,136 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     refute_receive {:vxpipe_recording_egress, ^handoff, _}
   end
 
+  test "room-origin private cue plays through native transport and enters recording" do
+    observer = self()
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         send_rtp: fn _, _, packet ->
+           send(observer, {:test_rtp, packet})
+           :ok
+         end,
+         schedule: fn target, message, _ ->
+           send(observer, {:pace, target, message})
+           make_ref()
+         end}
+      )
+
+    handoff = recording_handoff("connection-test")
+    assert :ok = OutputSink.bind_recording(egress, handoff)
+
+    room_private =
+      frame(:binary.copy(<<1, 0>>, 960))
+      |> Map.put(:audio_scope, :private)
+      |> Map.put(:origin, :room)
+
+    assert :ok = OutputSink.push(egress, room_private)
+    assert :ok = OutputSink.finish(egress, "turn-test", self())
+    assert_receive {:test_rtp, %Packet{sequence_number: 0}}
+    assert_receive {:pace, ^egress, message}
+    send(egress, message)
+    assert_receive {:vxpipe_audio_playback, ^egress, "turn-test", {:completed, 20}}
+
+    assert_receive {:vxpipe_recording_egress, ^handoff,
+                    %NormalizedFrame{origin: :room} = accepted}
+
+    assert accepted.source_participant_id == "agent-test"
+    assert accepted.connection_id == "connection-test"
+    :ok = EgressHandoff.release(handoff)
+  end
+
+  test "participant-origin private briefing plays without entering recording" do
+    observer = self()
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         send_rtp: fn _, _, packet ->
+           send(observer, {:test_rtp, packet})
+           :ok
+         end,
+         schedule: fn target, message, _ ->
+           send(observer, {:pace, target, message})
+           make_ref()
+         end}
+      )
+
+    handoff = recording_handoff("connection-test")
+    assert :ok = OutputSink.bind_recording(egress, handoff)
+
+    briefing =
+      frame(:binary.copy(<<1, 0>>, 960))
+      |> Map.put(:audio_scope, :private)
+      |> Map.put(:origin, :participant)
+
+    assert :ok = OutputSink.push(egress, briefing)
+    assert :ok = OutputSink.finish(egress, "turn-test", self())
+    assert_receive {:test_rtp, %Packet{sequence_number: 0}}
+    assert_receive {:pace, ^egress, message}
+    send(egress, message)
+    assert_receive {:vxpipe_audio_playback, ^egress, "turn-test", {:completed, 20}}
+    refute_receive {:vxpipe_recording_egress, ^handoff, _}
+    :ok = EgressHandoff.release(handoff)
+  end
+
+  test "native continuation rejects an origin change within the same turn" do
+    observer = self()
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         maximum_packets: 4,
+         send_rtp: fn _, _, packet ->
+           send(observer, {:test_rtp, packet})
+           :ok
+         end,
+         schedule: fn target, message, _ ->
+           send(observer, {:pace, target, message})
+           make_ref()
+         end}
+      )
+
+    first =
+      frame(:binary.copy(<<1, 0>>, 960))
+      |> Map.put(:audio_scope, :private)
+      |> Map.put(:origin, :room)
+
+    assert :ok = OutputSink.push(egress, first)
+    assert_receive {:test_rtp, %Packet{sequence_number: 0}}
+
+    second =
+      frame(:binary.copy(<<2, 0>>, 960))
+      |> Map.put(:audio_scope, :private)
+      |> Map.put(:origin, :participant)
+
+    assert {:error, :busy} = OutputSink.push(egress, second)
+  end
+
   test "phase clearing drains the sent packet and retains the encoder and RTP timeline" do
     observer = self()
 

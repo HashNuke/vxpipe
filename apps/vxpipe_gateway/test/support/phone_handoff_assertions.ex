@@ -15,7 +15,7 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
       support_speech_to_text?: true,
       recording: [
         enabled: true,
-        targets: [:full_mix, :individual_tracks],
+        targets: [:room_track, :individual_tracks],
         writer: {CallEngine.TestRecordingWriter, observer: self()},
         maximum_pull_frames: 20
       ]
@@ -685,13 +685,19 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
       {:test_recording_chunk, _stream, chunk} ->
         # The initial signed-call check sends one permitted silence frame before
         # transfer. Its asynchronous write may arrive after holding begins.
-        assert chunk.source_participant_ids == [caller_id]
+        if chunk.source_participant_ids == ["room"] do
+          # Room assets (wait sounds, transfer cues) are recorded on the room
+          # track for permitted listeners; only participant tracks stay silent.
+          :ok
+        else
+          assert chunk.source_participant_ids == [caller_id]
 
-        assert Enum.all?(
-                 for(<<sample::little-signed-16 <- chunk.payload>>, do: sample),
-                 &(abs(&1) <= 32)
-               ),
-               "private phone audio entered recording"
+          assert Enum.all?(
+                   for(<<sample::little-signed-16 <- chunk.payload>>, do: sample),
+                   &(abs(&1) <= 32)
+                 ),
+                 "private phone audio entered recording"
+        end
 
         assert_private_recordings(caller_id, deadline)
     after

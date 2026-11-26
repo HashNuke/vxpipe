@@ -2,13 +2,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
-  alias Vxpipe.CallEngine.Media.{Ingress, OutputSink}
+  alias Vxpipe.CallEngine.Media.Ingress
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
-  alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, RoomMixer}
+  alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor}
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     OpeningAudio,
     OutputHistory,
+    RecordingBinding,
     SpeechToSpeech,
     STTAudioAdmission,
     StartupReadiness,
@@ -96,6 +97,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       {connection_id, connection} ->
         promoted = %{connection | admission: :main, transfer_attempt_id: nil}
 
+        state = %{
+          state
+          | connections: Map.put(state.connections, connection_id, promoted)
+        }
+
+        # A permitted destination keeps a usable handoff after promotion so
+        # subsequent agent frames are captured. Denied destinations never bind.
+        # Binding failures preserve transfer readiness and any preparation handoff.
+        _ =
+          RecordingBinding.bind(
+            promoted.participant_id,
+            connection_id,
+            promoted.output_sink,
+            state
+          )
+
         archive_recorder =
           ArchiveRecorder.connection_attached(
             state.archive_recorder,
@@ -103,11 +120,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
             connection.role
           )
 
-        state = %{
-          state
-          | archive_recorder: archive_recorder,
-            connections: Map.put(state.connections, connection_id, promoted)
-        }
+        state = %{state | archive_recorder: archive_recorder}
 
         {:ok, promoted, state}
 
@@ -318,7 +331,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   defp attachment_ready?(%State{} = state), do: TextCapability.ready?(state)
 
   defp put(command, subscriber, output_sink, room_monitor, source_control?, state) do
-    case bind_recording_egress(command.connection_id, output_sink, state.room_mixer) do
+    case RecordingBinding.bind(
+           command.participant_id,
+           command.connection_id,
+           output_sink,
+           state
+         ) do
       :ok -> put_bound(command, subscriber, output_sink, room_monitor, source_control?, state)
       {:error, _reason} -> {:reply, {:error, recording_unavailable()}, state}
     end
@@ -377,18 +395,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     }
   end
 
-  defp bind_recording_egress(_connection_id, nil, _room_mixer), do: :ok
-  defp bind_recording_egress(_connection_id, _output_sink, nil), do: :ok
-
-  defp bind_recording_egress(connection_id, output_sink, room_mixer)
-       when is_binary(connection_id) and is_pid(output_sink) and is_pid(room_mixer) do
-    case RoomMixer.open_recording_egress(room_mixer, connection_id) do
-      :disabled -> :ok
-      {:ok, handoff} -> OutputSink.bind_recording(output_sink, handoff)
-      {:error, _reason} = error -> error
-    end
-  end
-
   defp put_transfer_preparation(
          command,
          subscriber,
@@ -398,6 +404,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
          attempt_id,
          state
        ) do
+    # Bind early so a permitted destination's private room assets are captured
+    # even before promotion. Denied destinations never receive handoffs.
+    # Recording failures preserve transfer readiness.
+    _ =
+      RecordingBinding.bind(
+        command.participant_id,
+        command.connection_id,
+        output_sink,
+        state
+      )
+
     monitor = Process.monitor(subscriber)
 
     connection = %{
@@ -566,6 +583,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   defp remove_by_id(connection_id, state, attributes) do
     connection = Map.get(state.connections, connection_id)
+
+    # Detachment, replacement and discard invalidate the listener credential
+    # before any further PCM can be enqueued. The room-wide gate alone is not
+    # enough: a removed listener must not be able to queue through a stale
+    # handoff. Revocation is best-effort and never blocks detachment.
+    _ = RecordingBinding.revoke_connection(state.room_mixer, connection_id)
+
     state = TurnState.retire_connection_output(state, connection_id)
     state = SpeechToSpeech.source_disconnected(state, connection_id)
     state = clear_speech_to_text(connection_id, false, state)

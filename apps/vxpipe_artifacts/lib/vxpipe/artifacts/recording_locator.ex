@@ -16,6 +16,8 @@ defmodule Vxpipe.Artifacts.RecordingLocator do
       object_key: object_key(stream, artifact_id),
       kind: artifact_kind(stream),
       participant_id: stream.participant_id,
+      participant_key: stream.participant_key,
+      reconnection: stream.reconnection,
       connection_id: stream.connection_id,
       track_id: stream.track_id,
       sample_rate: stream.sample_rate,
@@ -24,7 +26,7 @@ defmodule Vxpipe.Artifacts.RecordingLocator do
     }
   end
 
-  defp artifact_kind(%Stream{mode: :full_mix}), do: :full_mix
+  defp artifact_kind(%Stream{mode: :room_track}), do: :room_track
   defp artifact_kind(%Stream{mode: {:individual_track, _, _, _}}), do: :participant_track
 
   defp object_key(stream, artifact_id) do

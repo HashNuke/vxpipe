@@ -84,6 +84,24 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   @doc false
+  @spec open_recording_egress(GenServer.server(), String.t(), nil | String.t()) ::
+          :disabled | {:ok, Vxpipe.CallEngine.Recording.EgressHandoff.t()} | {:error, term()}
+  def open_recording_egress(server, connection_id, listener)
+      when is_binary(connection_id) do
+    safe_call(server, {:open_recording_egress, connection_id, listener})
+  end
+
+  @doc false
+  def revoke_recording_egress(server, connection_id) when is_binary(connection_id) do
+    safe_call(server, {:revoke_recording_egress, connection_id})
+  end
+
+  @doc false
+  def revoke_recording_handoff(server, handoff) do
+    safe_call(server, {:revoke_recording_handoff, handoff})
+  end
+
+  @doc false
   @spec take(Subscription.t(), pos_integer()) :: {:ok, [MixedFrame.t()]} | {:error, term()}
   def take(%Subscription{} = subscription, maximum_frames)
       when is_integer(maximum_frames) and maximum_frames > 0 do
@@ -280,7 +298,39 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   def handle_call({:open_recording_egress, connection_id}, _from, state) do
-    {:reply, RecordingEgress.open(state.recording_egress, self(), connection_id), state}
+    case RecordingEgress.open(state.recording_egress, self(), connection_id) do
+      :disabled ->
+        {:reply, :disabled, state}
+
+      {:ok, handoff, recording_egress} ->
+        {:reply, {:ok, handoff}, %{state | recording_egress: recording_egress}}
+
+      {:error, _reason} = error ->
+        {:reply, error, state}
+    end
+  end
+
+  def handle_call({:open_recording_egress, connection_id, listener}, _from, state) do
+    case RecordingEgress.open(state.recording_egress, self(), connection_id, listener) do
+      :disabled ->
+        {:reply, :disabled, state}
+
+      {:ok, handoff, recording_egress} ->
+        {:reply, {:ok, handoff}, %{state | recording_egress: recording_egress}}
+
+      {:error, _reason} = error ->
+        {:reply, error, state}
+    end
+  end
+
+  def handle_call({:revoke_recording_egress, connection_id}, _from, state) do
+    recording_egress = RecordingEgress.revoke_connection(state.recording_egress, connection_id)
+    {:reply, :ok, %{state | recording_egress: recording_egress}}
+  end
+
+  def handle_call({:revoke_recording_handoff, handoff}, _from, state) do
+    recording_egress = RecordingEgress.revoke_handoff(state.recording_egress, handoff)
+    {:reply, :ok, %{state | recording_egress: recording_egress}}
   end
 
   def handle_call({:recording_egress_readiness, handoff}, _from, state) do
@@ -365,7 +415,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
         state
       ) do
     recording_egress =
-      if OpeningGate.admits?(state.opening_gate, frame.timestamp) do
+      if OpeningGate.admits_recording?(state.opening_gate, frame) do
         case RecordingEgress.put(
                state.recording_egress,
                handoff,
@@ -397,7 +447,12 @@ defmodule Vxpipe.CallEngine.RoomMixer do
       recording_egress_buffered_timestamps: egress_stats.buffered_timestamps,
       recording_egress_buffer_overflows: egress_stats.buffer_overflows,
       recording_egress_pending_frames: egress_stats.pending_frames,
-      recording_egress_rejected_frames: egress_stats.rejected_frames
+      recording_egress_rejected_frames: egress_stats.rejected_frames,
+      recording_egress_room_duplicate_frames: egress_stats.room_duplicate_frames,
+      recording_egress_agent_duplicate_frames: Map.get(egress_stats, :agent_duplicate_frames, 0),
+      recording_egress_duplicate_frames: Map.get(egress_stats, :recording_duplicate_frames, 0),
+      recording_egress_selected_connection_ids:
+        Map.get(egress_stats, :selected_connection_ids, [])
     }
   end
 

@@ -107,7 +107,7 @@ defmodule Vxpipe.CallEngine.Recording.EgressPolicyReadinessTest do
              )
 
     assert tracks == [
-             {:individual_track, context.receiver, context.identity.connection_id, "agent-egress"}
+             Vxpipe.CallEngine.RoomMixer.RecordingSelection.stable_agent_mode(context.receiver)
            ]
 
     assert mixer_resource in resources

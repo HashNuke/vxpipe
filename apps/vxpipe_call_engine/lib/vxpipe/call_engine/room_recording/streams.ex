@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.RoomRecording.Streams do
   @moduledoc false
 
+  require Logger
+
   alias Vxpipe.CallEngine.Media.MixedFrame
   alias Vxpipe.CallEngine.Recording.{Chunk, Stream}
   alias Vxpipe.CallEngine.RoomMixer
@@ -44,12 +46,95 @@ defmodule Vxpipe.CallEngine.RoomRecording.Streams do
     if Map.has_key?(state.outputs, mode) do
       {:ok, state}
     else
-      with {:ok, stream} <- Stream.new(configuration.identity, mode, format),
+      reconnection = next_reconnection(state.outputs, mode)
+
+      with {:ok, stream} <-
+             Stream.new(
+               identity_with_reconnection(configuration, mode, reconnection),
+               mode,
+               format
+             ),
            {:ok, handle} <- open_writer(configuration, stream, self()) do
-        output = %Output{writer_handle: handle, next_sequence: 0}
+        log_track_opened(stream, mode)
+        output = %Output{writer_handle: handle, next_sequence: 0, reconnection: reconnection}
         {:ok, put_output(state, mode, output)}
       end
     end
+  end
+
+  @doc false
+  @spec identity_with_reconnection(map(), Stream.mode(), nil | non_neg_integer()) :: map()
+  def identity_with_reconnection(
+        configuration,
+        {:individual_track, participant, _, _},
+        reconnection
+      ) do
+    keys = Map.get(configuration, :participant_keys, %{})
+
+    configuration.identity
+    |> Map.put(:participant_key, Map.get(keys, participant))
+    |> Map.put(:reconnection, reconnection || 0)
+  end
+
+  def identity_with_reconnection(configuration, _mode, _reconnection), do: configuration.identity
+
+  @doc false
+  @spec next_reconnection(%{optional(Stream.mode()) => Output.t()}, Stream.mode()) ::
+          nil | non_neg_integer()
+  def next_reconnection(_outputs, :room_track), do: nil
+
+  def next_reconnection(outputs, {:individual_track, participant, _, _}) do
+    smallest_free(used_reconnections(outputs, participant))
+  end
+
+  @doc false
+  def used_reconnections(outputs, participant) when is_map(outputs) do
+    outputs
+    |> Map.to_list()
+    |> used_reconnections(participant)
+  end
+
+  def used_reconnections(entries, participant) when is_list(entries) do
+    {integers, has_nil?} =
+      Enum.reduce(entries, {[], false}, fn
+        {{:individual_track, ^participant, _, _}, %Output{reconnection: reconnection}},
+        {ints, nil?} ->
+          if is_integer(reconnection),
+            do: {[reconnection | ints], nil?},
+            else: {ints, true}
+
+        {{:individual_track, ^participant, _, _}, _other}, {ints, _nil?} ->
+          {ints, true}
+
+        _other, acc ->
+          acc
+      end)
+
+    if has_nil? do
+      count =
+        Enum.count(entries, fn
+          {{:individual_track, ^participant, _, _}, _} -> true
+          _ -> false
+        end)
+
+      fallback =
+        if count > 0, do: MapSet.new(0..(count - 1)), else: MapSet.new()
+
+      MapSet.union(MapSet.new(integers), fallback)
+    else
+      MapSet.new(integers)
+    end
+  end
+
+  @doc false
+  def smallest_free(used) do
+    used_set =
+      case used do
+        %MapSet{} -> used
+        list -> MapSet.new(list)
+      end
+
+    Enum.find(0..MapSet.size(used_set), &(not MapSet.member?(used_set, &1)))
   end
 
   @spec pull(SubscriptionState.t(), Configuration.t()) ::
@@ -98,9 +183,17 @@ defmodule Vxpipe.CallEngine.RoomRecording.Streams do
   end
 
   defp open_output(state, frame, configuration) do
-    with {:ok, stream} <- Stream.new(configuration.identity, frame.mode, frame),
+    reconnection = next_reconnection(state.outputs, frame.mode)
+
+    with {:ok, stream} <-
+           Stream.new(
+             identity_with_reconnection(configuration, frame.mode, reconnection),
+             frame.mode,
+             frame
+           ),
          {:ok, writer_handle} <- open_writer(configuration, stream, self()) do
-      output = %Output{writer_handle: writer_handle, next_sequence: 0}
+      log_track_opened(stream, frame.mode)
+      output = %Output{writer_handle: writer_handle, next_sequence: 0, reconnection: reconnection}
       {:ok, output, put_output(state, frame.mode, output)}
     end
   end
@@ -113,10 +206,11 @@ defmodule Vxpipe.CallEngine.RoomRecording.Streams do
     %{state | outputs: Map.put(state.outputs, mode, output)}
   end
 
-  defp initial_outputs(configuration, :full_mix, format, source) do
-    with {:ok, stream} <- Stream.new(configuration.identity, :full_mix, format),
+  defp initial_outputs(configuration, :room_track, format, source) do
+    with {:ok, stream} <- Stream.new(configuration.identity, :room_track, format),
          {:ok, writer_handle} <- open_writer(configuration, stream, source) do
-      {:ok, %{full_mix: %Output{writer_handle: writer_handle, next_sequence: 0}}}
+      {:ok,
+       %{room_track: %Output{writer_handle: writer_handle, next_sequence: 0, reconnection: nil}}}
     end
   end
 
@@ -136,8 +230,24 @@ defmodule Vxpipe.CallEngine.RoomRecording.Streams do
     )
   end
 
-  defp subscription_id(:full_mix), do: "recording-full-mix"
+  defp subscription_id(:room_track), do: "recording-room-track"
   defp subscription_id({:individual_tracks, _participant_ids}), do: "recording-individual-tracks"
+
+  defp log_track_opened(stream, mode) do
+    Logger.info("recording_track_opened",
+      tenant_id: stream.tenant_id,
+      call_id: stream.call_id,
+      room_id: stream.room_id,
+      incarnation_id: stream.incarnation_id,
+      stream_id: stream.stream_id,
+      mode: inspect(mode),
+      participant_id: stream.participant_id,
+      participant_key: stream.participant_key,
+      reconnection: stream.reconnection,
+      connection_id: stream.connection_id,
+      track_id: stream.track_id
+    )
+  end
 
   defp open_writer(configuration, stream, source) do
     options = Keyword.put(configuration.writer_options, :source, source)

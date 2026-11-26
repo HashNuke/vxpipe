@@ -13,7 +13,8 @@ defmodule Vxpipe.CallEngine.Recording.Chunk do
     :source_participant_ids,
     :payload
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [recording_duplicate_frames: 0, recording_selected_connection_id: nil]
 
   @type t :: %__MODULE__{
           sequence: non_neg_integer(),
@@ -41,7 +42,9 @@ defmodule Vxpipe.CallEngine.Recording.Chunk do
          timestamp: frame.timestamp,
          policy_revision: frame.policy_revision,
          source_participant_ids: frame.source_participant_ids,
-         payload: frame.payload
+         payload: frame.payload,
+         recording_duplicate_frames: Map.get(frame, :recording_duplicate_frames, 0) || 0,
+         recording_selected_connection_id: Map.get(frame, :recording_selected_connection_id)
        }}
     else
       {:error, :invalid_recording_frame}

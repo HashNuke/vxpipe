@@ -197,6 +197,17 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
     assert inventory.missing_participants == MapSet.new()
   end
 
+  test "speech-to-speech-only agents are recordable for individual tracks", context do
+    plan = sts_only_agent("two", context.plan)
+
+    assert {:ok, inventory} =
+             build(%{context | plan: plan},
+               recording: [enabled: true, targets: [{:individual_participants, ["two"]}]]
+             )
+
+    assert MapSet.member?(inventory.recording_participant_ids, context.ids["two"])
+  end
+
   test "uses a prospective policy preview while the source remains live and leaves it unchanged",
        context do
     authority =
@@ -253,7 +264,7 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
           nil,
           [],
           [:unknown],
-          [:full_mix, :full_mix],
+          [:room_track, :room_track],
           [{:individual_tracks, []}],
           [{:individual_tracks, ["foreign"]}],
           [{:individual_participants, ["one", "one"]}],
@@ -400,7 +411,7 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
 
     recording = [
       enabled: Keyword.get(options, :recording?, false),
-      targets: Keyword.get(options, :recording_targets, [:full_mix]),
+      targets: Keyword.get(options, :recording_targets, [:room_track]),
       writer:
         {TestRecordingWriter,
          Keyword.merge(
@@ -798,6 +809,25 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
     %{plan | participants: Map.put(plan.participants, key, participant)}
   end
 
+  defp sts_only_agent(key, plan) do
+    participant = Map.fetch!(plan.participants, key)
+
+    capabilities = %Capabilities{
+      model_inference: selection(:model_inference),
+      speech_to_speech: selection(:speech_to_speech)
+    }
+
+    participant = %{
+      participant
+      | kind: :agent,
+        activation_id: "activation-#{key}",
+        connection: nil,
+        capabilities: capabilities
+    }
+
+    %{plan | participants: Map.put(plan.participants, key, participant)}
+  end
+
   defp plan do
     participants =
       Map.new(["one", "two", "three", "four", "departing", "joining", "unused"], fn key ->
@@ -811,6 +841,7 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
                  schema_version: "20260915.01",
                  entry_caller: "one",
                  entry_receiver: "departing",
+                 media_policy: %{record_audio: true},
                  participants: participants
                },
                resource_id: "inventory",

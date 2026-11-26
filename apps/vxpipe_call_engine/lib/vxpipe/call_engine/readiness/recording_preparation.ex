@@ -28,11 +28,13 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
   defp prepare_candidate_recording(recording, captured, connections, options, mixer_resource) do
     with {:ok, agent_tracks, outputs} <-
            RecordingOutputs.prepare(captured, connections, mixer_resource),
-         {:ok, tracks} <- tracks(captured, connections, agent_tracks),
+         {:ok, room_outputs} <-
+           RecordingOutputs.prepare_room(captured, connections, mixer_resource),
+         {:ok, tracks} <- tracks(captured, connections, {agent_tracks, room_outputs}),
          {:ok, prepared} <-
            RoomRecording.prepare_policy(recording, captured.candidate, tracks, options) do
       handles = [%{adapter: RoomRecording, instance: recording, token: prepared.token}]
-      {:ok, tracks, prepared.resources ++ outputs, handles}
+      {:ok, tracks, prepared.resources ++ outputs ++ room_outputs, handles}
     else
       {:error, %{kind: _kind}} = failure -> failure
       _unavailable -> ResourceQuery.failure(:recording, :room, :preparation_failed)
@@ -45,13 +47,14 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
     with {:ok, _resource} <- ResourceQuery.observe(:recording, :room, recording, policy),
          :ok <- installed_recording_sources(captured),
          {:ok, agent_tracks, outputs} <- RecordingOutputs.prepare(captured, connections),
-         {:ok, tracks} <- tracks(captured, connections, agent_tracks),
+         {:ok, room_outputs} <- RecordingOutputs.prepare_room(captured, connections),
+         {:ok, tracks} <- tracks(captured, connections, {agent_tracks, room_outputs}),
          :ok <-
            RoomRecording.prepare_tracks(recording, tracks, Snapshot.interval(policy, :recording)),
          {:ok, [resource | _dependencies] = resources} <-
            RoomRecording.readiness_resources(recording),
          {:ok, ^resource} <- ResourceQuery.observe(:recording, :room, recording, policy) do
-      {:ok, tracks, resources ++ outputs}
+      {:ok, tracks, resources ++ outputs ++ room_outputs}
     else
       {:error, %{kind: _kind}} = failure -> failure
       _unavailable -> ResourceQuery.failure(:recording, :room, :preparation_failed)
@@ -78,7 +81,7 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
     end
   end
 
-  defp tracks(captured, connections, agent_tracks) do
+  defp tracks(captured, connections, {agent_tracks, _room_outputs}) do
     selected =
       for {:individual_tracks, ids} <- captured.inventory.recording_targets,
           id <- ids,
@@ -105,7 +108,16 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
         |> Map.values()
         |> List.flatten()
 
-      {:ok, Enum.sort(tracks ++ output_tracks)}
+      # The room track follows the target and the permitted interval, not
+      # the taps: taps bind as connections attach, while the track itself is
+      # always prepared for a permitted call that targets it.
+      room_tracks =
+        if Inventory.room_target?(captured.inventory.recording_targets) and
+             captured.candidate.snapshot.effective.record_audio,
+           do: [:room_track],
+           else: []
+
+      {:ok, Enum.sort(tracks ++ output_tracks ++ room_tracks)}
     else
       # Every selected source needs a prepared input or an authorized output recording track.
       ResourceQuery.failure(:recording, :room, :output_track_unavailable)

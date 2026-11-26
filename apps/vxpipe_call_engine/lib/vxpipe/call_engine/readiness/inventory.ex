@@ -173,7 +173,9 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
   end
 
   defp recordable?(%{kind: :agent} = participant, _connections),
-    do: participant.capabilities.text_to_speech != nil
+    do:
+      participant.capabilities.text_to_speech != nil or
+        participant.capabilities.speech_to_speech != nil
 
   defp recordable?(participant, connections) do
     attached =
@@ -189,10 +191,13 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
 
   defp recording_target?(targets, id) do
     Enum.any?(targets, fn
-      :full_mix -> true
       {:individual_tracks, ids} -> id in ids
+      _other -> false
     end)
   end
+
+  @doc false
+  def room_target?(targets), do: :room_track in targets
 
   defp recording_targets(plan, options) do
     settings = Keyword.get(options, :recording, [])
@@ -224,7 +229,7 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
 
   defp resolve_targets(_targets, _plan), do: {:error, :invalid_recording_targets}
 
-  defp resolve_target(:full_mix, _plan), do: {:ok, :full_mix}
+  defp resolve_target(:room_track, _plan), do: {:ok, :room_track}
 
   defp resolve_target(:individual_tracks, plan) do
     {:ok,

@@ -340,7 +340,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
 
   defp subscription_mode(_mode, _snapshot), do: {:error, :invalid_subscription_mode}
 
-  defp recording_mode(:full_mix), do: {:ok, :full_mix}
+  defp recording_mode(:room_track), do: {:ok, :room_track}
 
   defp recording_mode(:individual_tracks), do: {:ok, :individual_tracks}
 

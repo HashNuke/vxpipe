@@ -521,7 +521,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   end
 
   for source <- [:file_url, :text] do
-    test "records neither announcement nor live/delayed caller audio during #{source} opening" do
+    test "records the opening announcement on the room track without attributing it to the caller during #{source} opening" do
       configure_speech_runtime()
 
       configure_opening_audio(
@@ -556,13 +556,15 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
                Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                  recording: [
                    enabled: true,
-                   targets: [:full_mix, :individual_tracks],
+                   targets: [:room_track, :individual_tracks],
                    writer: {Vxpipe.CallEngine.TestRecordingWriter, [observer: self()]},
                    maximum_pull_frames: 8
                  ]
                )
 
-      assert_receive {:test_recording_writer_opened, _caller, recording, %{stream_id: "full-mix"}}
+      assert_receive {:test_recording_writer_opened, _caller, recording,
+                      %{stream_id: "room-track"}}
+
       sink = start_supervised!({TestAudioOutputSink, observer: self()})
       command = attach_command(plan, room, caller, "conn-opening-recording")
       assert {:ok, attachment} = TestTransferConnection.attach(command, sink)
@@ -605,13 +607,22 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
                    connection_id: command.connection_id,
                    sample_rate: 48_000,
                    channels: 1,
+                   origin: :room,
                    payload: :binary.copy(<<500::little-signed-16>>, 960)
                  }
                )
 
       assert :ok = CallEngine.push_room_audio(attachment, recording_frame(plan, room, caller, 0))
-      assert {:ok, %{delivered: 0}} = Vxpipe.CallEngine.RoomMixer.flush_through(mixer, 0)
-      assert %{accepted_chunks: 0} = Vxpipe.CallEngine.RoomRecording.stats(recording)
+
+      # Room-origin audio is admitted to the recording even while the opening
+      # gate holds live audio: the announcement lands on the room track from
+      # the start, never attributed to the caller.
+      assert {:ok, %{delivered: 1}} = Vxpipe.CallEngine.RoomMixer.flush_through(mixer, 0)
+      assert %{accepted_chunks: 1} = Vxpipe.CallEngine.RoomRecording.stats(recording)
+
+      assert_receive {:test_recording_chunk, "room-track", announcement}
+      assert announcement.offset_samples == 0
+      assert announcement.source_participant_ids == ["room"]
 
       :atomics.put(clock, 1, 40)
       assert :ok = TestAudioOutputSink.playback_completed(sink)
@@ -622,18 +633,45 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
                CallEngine.push_room_audio(attachment, recording_frame(plan, room, caller, 960))
 
       assert {:ok, %{delivered: 0}} = Vxpipe.CallEngine.RoomMixer.flush_through(mixer, 960)
-      assert %{accepted_chunks: 0} = Vxpipe.CallEngine.RoomRecording.stats(recording)
+      assert %{accepted_chunks: 1} = Vxpipe.CallEngine.RoomRecording.stats(recording)
 
       assert :ok =
                CallEngine.push_room_audio(attachment, recording_frame(plan, room, caller, 1920))
 
+      # The announcement is already on the room track from the gate-closed
+      # phase. Offer this later room audio now that the room is open: it lands
+      # on the room track at the same room-clock instant as the caller's live
+      # audio, never attributed to the caller.
+      assert {:ok, announcement_handoff} =
+               Vxpipe.CallEngine.RoomMixer.open_recording_egress(
+                 mixer,
+                 "conn-opening-announcement"
+               )
+
+      assert :ok =
+               Vxpipe.CallEngine.Recording.EgressHandoff.offer(
+                 announcement_handoff,
+                 %Vxpipe.CallEngine.Media.EgressAcceptedFrame{
+                   tenant_id: plan.tenant_id,
+                   room_id: plan.room_id,
+                   incarnation_id: room.incarnation_id,
+                   source_participant_id: caller.participant_id,
+                   connection_id: "conn-opening-announcement",
+                   sample_rate: 48_000,
+                   channels: 1,
+                   origin: :room,
+                   payload: :binary.copy(<<500::little-signed-16>>, 960)
+                 }
+               )
+
       assert {:ok, %{delivered: 2}} = Vxpipe.CallEngine.RoomMixer.flush_through(mixer, 1920)
-      assert_receive {:test_recording_chunk, "full-mix", full_mix}
-      assert full_mix.offset_samples == 1920
+      assert_receive {:test_recording_chunk, "room-track", room}
+      assert room.offset_samples == 1920
+      assert room.source_participant_ids == ["room"]
       assert_receive {:test_recording_chunk, individual_id, individual}
-      assert individual_id != "full-mix"
+      assert individual_id != "room-track"
       assert individual.offset_samples == 1920
-      assert %{accepted_chunks: 2} = Vxpipe.CallEngine.RoomRecording.stats(recording)
+      assert %{accepted_chunks: 3} = Vxpipe.CallEngine.RoomRecording.stats(recording)
     end
   end
 

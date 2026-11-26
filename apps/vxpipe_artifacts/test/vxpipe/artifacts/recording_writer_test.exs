@@ -15,7 +15,7 @@ defmodule Vxpipe.Artifacts.RecordingWriterTest do
                  room_id: "room",
                  incarnation_id: "instance"
                },
-               :full_mix,
+               :room_track,
                %{sample_rate: 8_000, channels: 1}
              )
 
@@ -59,8 +59,8 @@ defmodule Vxpipe.Artifacts.RecordingWriterTest do
       call_id: "call-test",
       room_id: "room-test",
       incarnation_id: "incarnation-test",
-      stream_id: "full-mix",
-      mode: :full_mix,
+      stream_id: "room-track",
+      mode: :room_track,
       sample_rate: 48_000,
       channels: 2,
       sample_format: :s16le
@@ -81,7 +81,7 @@ defmodule Vxpipe.Artifacts.RecordingWriterTest do
     assert_receive {:test_object_store_opened, _task, spec}
     assert spec.tenant_id == stream.tenant_id
     assert spec.call_id == stream.call_id
-    assert spec.kind == :full_mix
+    assert spec.kind == :room_track
     assert spec.channels == 2
     assert String.starts_with?(spec.artifact_id, "artifact_")
     assert String.ends_with?(spec.object_key, "/#{spec.artifact_id}.s16le")

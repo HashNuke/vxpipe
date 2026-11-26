@@ -30,4 +30,18 @@ defmodule Vxpipe.CallEngine.RoomMixer.OpeningGate do
 
   def admits?(%__MODULE__{minimum_timestamp: minimum}, timestamp),
     do: is_integer(timestamp) and timestamp >= minimum
+
+  @spec awaiting?(t()) :: boolean()
+  def awaiting?(%__MODULE__{minimum_timestamp: nil}), do: true
+  def awaiting?(%__MODULE__{}), do: false
+
+  @spec admits_recording?(t(), map()) :: boolean()
+  def admits_recording?(%__MODULE__{minimum_timestamp: nil} = _gate, %{origin: :room} = frame),
+    do: is_integer(Map.get(frame, :timestamp)) and Map.get(frame, :timestamp) >= 0
+
+  def admits_recording?(%__MODULE__{} = gate, %{timestamp: timestamp}),
+    do: admits?(gate, timestamp)
+
+  def admits_recording?(%__MODULE__{} = gate, timestamp) when is_integer(timestamp),
+    do: admits?(gate, timestamp)
 end

@@ -914,7 +914,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       options =
         Keyword.put(options, :recording,
           enabled: true,
-          targets: [:full_mix, :individual_tracks],
+          targets: [:room_track, :individual_tracks],
           writer: {CallEngine.TestRecordingWriter, observer: self(), readiness: writer_readiness},
           maximum_pull_frames: 20
         )
@@ -1381,7 +1381,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           remote_mcp_protocol_client: CallEngine.TestRemoteMCPProtocolClient,
           recording: [
             enabled: true,
-            targets: [:full_mix, :individual_tracks],
+            targets: [:room_track, :individual_tracks],
             writer: {CallEngine.TestRecordingWriter, observer: self()},
             maximum_pull_frames: 20
           ]
@@ -1866,7 +1866,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                plan,
                Keyword.put(options, :recording,
                  enabled: true,
-                 targets: [:full_mix, :individual_tracks],
+                 targets: [:room_track, :individual_tracks],
                  writer:
                    {CallEngine.TestRecordingWriter, observer: self(), readiness: writer_readiness},
                  maximum_pull_frames: 20
@@ -5047,8 +5047,16 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
   defp refute_private_recording(chunks) do
     for chunk <- chunks do
-      refute tone?(chunk.payload, 250), "waiting entered the recording"
-      refute tone?(chunk.payload, 1_000), "a connection cue entered the recording"
+      if chunk.source_participant_ids == ["room"] do
+        # Room assets (wait sounds, transfer and readiness cues) are recorded
+        # on the room track for permitted listeners. Participant tracks must
+        # never carry them: the announcement stays off the caller's track and
+        # private briefings never reach any track.
+        :ok
+      else
+        refute tone?(chunk.payload, 250), "waiting entered a participant recording"
+        refute tone?(chunk.payload, 1_000), "a connection cue entered a participant recording"
+      end
     end
   end
 

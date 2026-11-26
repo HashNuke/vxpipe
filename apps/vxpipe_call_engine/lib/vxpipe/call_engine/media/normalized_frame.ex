@@ -18,7 +18,13 @@ defmodule Vxpipe.CallEngine.Media.NormalizedFrame do
     :channels,
     :payload
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [
+                origin: :participant,
+                recording_duplicate_frames: 0,
+                recording_selected_connection_id: nil,
+                recording_equivalent_max_order: nil
+              ]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -32,6 +38,10 @@ defmodule Vxpipe.CallEngine.Media.NormalizedFrame do
           policy_revision: non_neg_integer(),
           sample_rate: pos_integer(),
           channels: pos_integer(),
+          origin: :participant | :room,
+          recording_duplicate_frames: non_neg_integer(),
+          recording_selected_connection_id: nil | String.t(),
+          recording_equivalent_max_order: nil | non_neg_integer(),
           payload: binary()
         }
 end

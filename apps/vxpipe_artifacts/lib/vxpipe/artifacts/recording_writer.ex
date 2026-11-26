@@ -39,7 +39,9 @@ defmodule Vxpipe.Artifacts.RecordingWriter do
       timestamp: chunk.timestamp,
       policy_revision: chunk.policy_revision,
       source_participant_ids: chunk.source_participant_ids,
-      payload: chunk.payload
+      payload: chunk.payload,
+      recording_duplicate_frames: Map.get(chunk, :recording_duplicate_frames, 0) || 0,
+      recording_selected_connection_id: Map.get(chunk, :recording_selected_connection_id)
     }
 
     Handoff.offer(handle.handoff, artifact_chunk)

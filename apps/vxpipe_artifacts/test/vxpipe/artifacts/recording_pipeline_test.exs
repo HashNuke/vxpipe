@@ -2,10 +2,12 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.Artifacts.{RecordingWriter, TestObjectStore}
-  alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
+  alias Vxpipe.CallEngine.Media.{EgressAcceptedFrame, MixedFrame, NormalizedFrame}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Readiness.Collector
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
   alias Vxpipe.CallEngine.{RoomMixer, RoomRecording}
+  alias Vxpipe.Calls.CallArtifact
 
   @identity %{
     tenant_id: "tenant-recording-pipeline",
@@ -19,6 +21,12 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
       start_supervised!({Task.Supervisor, name: Vxpipe.CallEngine.ReadinessTaskSupervisor})
     end
 
+    if is_nil(Process.whereis(Vxpipe.CallEngine.ReadinessWatchRegistry)) do
+      start_supervised!(
+        {Registry, keys: :duplicate, name: Vxpipe.CallEngine.ReadinessWatchRegistry}
+      )
+    end
+
     token = make_ref()
     mixer = start_mixer(token)
     :ok = apply_policy(mixer, 0, true)
@@ -30,7 +38,7 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
            [
              mixer: mixer,
              recording_token: token,
-             targets: [:full_mix],
+             targets: [:room_track],
              writer:
                {RecordingWriter,
                 [
@@ -81,7 +89,7 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
            [
              mixer: mixer,
              recording_token: recording_token,
-             targets: [:full_mix],
+             targets: [{:individual_tracks, ["alice"]}],
              writer:
                {RecordingWriter,
                 [
@@ -95,18 +103,26 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
            ]}
       )
 
+    assert :ok =
+             RoomRecording.prepare_tracks(
+               recording,
+               [{:individual_track, "alice", "connection-alice", "track-alice"}],
+               0
+             )
+
     assert_receive {:test_object_store_opened, _task, spec}
-    assert spec.kind == :full_mix
+    assert spec.kind == :participant_track
+    assert spec.participant_id == "alice"
     assert {:ok, ready, :ready} = RoomRecording.readiness(recording)
 
-    first_mix = [4_000, -3_000]
+    first_alice = [1_000, 2_000]
     flush_mix(mixer, 1, 0, 0, [1_000, 2_000], [3_000, -5_000])
-    assert_monitor(monitor, first_mix, 0)
+    assert_monitor(monitor, [4_000, -3_000], 0)
 
     assert_receive {:test_object_store_write, first_task, first_reference, first_chunk}
     assert first_chunk.sequence == 0
     assert first_chunk.offset_samples == 0
-    assert decode_samples(first_chunk.payload) == first_mix
+    assert decode_samples(first_chunk.payload) == first_alice
 
     :ok = apply_policy(mixer, 1, false)
     denied_mix = [1_200, 1_400]
@@ -115,13 +131,21 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
     refute_receive {:test_object_store_write, _task, _reference, _chunk}
 
     :ok = apply_policy(mixer, 2, true)
-    second_mix = [40, 60]
-    flush_mix(mixer, 3, 4, 2, [10, 20], [30, 40])
-    assert_monitor(monitor, second_mix, 0)
 
-    rejected_mix = [120, 140]
-    flush_mix(mixer, 4, 6, 2, [50, 60], [70, 80])
-    assert_monitor(monitor, rejected_mix, 0)
+    assert :ok =
+             RoomRecording.prepare_tracks(
+               recording,
+               [{:individual_track, "alice", "connection-alice", "track-alice"}],
+               2
+             )
+
+    second_alice = [10, 20]
+    flush_alice(mixer, 3, 4, 2, second_alice)
+    assert_monitor(monitor, second_alice, 0)
+
+    rejected_alice = [50, 60]
+    flush_alice(mixer, 4, 6, 2, rejected_alice)
+    assert_monitor(monitor, rejected_alice, 0)
 
     _state = :sys.get_state(recording)
 
@@ -136,11 +160,11 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
     assert_receive {:test_object_store_write, second_task, second_reference, second_chunk}
     assert second_chunk.sequence == 1
     assert second_chunk.offset_samples == 4
-    assert decode_samples(second_chunk.payload) == second_mix
+    assert decode_samples(second_chunk.payload) == second_alice
 
-    final_mix = [50, 225]
-    flush_mix(mixer, 5, 8, 2, [100, 200], [-50, 25])
-    assert_monitor(monitor, final_mix, 0)
+    final_alice = [100, 200]
+    flush_alice(mixer, 5, 8, 2, final_alice)
+    assert_monitor(monitor, final_alice, 0)
 
     _state = :sys.get_state(recording)
 
@@ -151,7 +175,7 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
     assert_receive {:test_object_store_write, third_task, third_reference, third_chunk}
     assert third_chunk.sequence == 3
     assert third_chunk.offset_samples == 8
-    assert decode_samples(third_chunk.payload) == final_mix
+    assert decode_samples(third_chunk.payload) == final_alice
     send(third_task, {:test_object_store_continue, third_reference})
 
     recording_monitor = Process.monitor(recording)
@@ -229,6 +253,13 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
              RoomMixer.push(mixer, frame("alice", sequence, timestamp, policy_revision, alice))
 
     assert :ok = RoomMixer.push(mixer, frame("bob", sequence, timestamp, policy_revision, bob))
+    assert {:ok, %{dropped: 0}} = RoomMixer.flush_through(mixer, timestamp)
+  end
+
+  defp flush_alice(mixer, sequence, timestamp, policy_revision, alice) do
+    assert :ok =
+             RoomMixer.push(mixer, frame("alice", sequence, timestamp, policy_revision, alice))
+
     assert {:ok, %{dropped: 0}} = RoomMixer.flush_through(mixer, timestamp)
   end
 

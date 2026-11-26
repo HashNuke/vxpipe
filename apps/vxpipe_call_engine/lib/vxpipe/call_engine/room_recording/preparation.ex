@@ -40,6 +40,11 @@ defmodule Vxpipe.CallEngine.RoomRecording.Preparation do
 
   def validate_tracks(_tracks, _config, _policy), do: {:error, :invalid_recording_tracks}
 
+  defp valid_track?(:room_track, config, policy) do
+    Enum.any?(config.targets, &(&1 == :room_track)) and
+      match?({:ok, _stream}, Stream.new(config.identity, :room_track, policy.format))
+  end
+
   defp valid_track?({:individual_track, participant, _connection, _track} = mode, config, policy) do
     MapSet.member?(policy.present, participant) and
       Enum.any?(config.targets, &selected?(&1, mode)) and
@@ -53,7 +58,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Preparation do
       Map.new(state.streams, fn {id, stream} ->
         modes =
           case stream.target do
-            :full_mix -> MapSet.new([:full_mix])
+            :room_track -> MapSet.new([:room_track])
             target -> tracks |> Enum.filter(&selected?(target, &1)) |> MapSet.new()
           end
 
