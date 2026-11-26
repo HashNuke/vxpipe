@@ -5,9 +5,9 @@ defmodule Vxpipe.Console.RecordingMatroskaS3Test do
   Requires a loopback S3-compatible server (moto) serving
   `VXPIPE_TEST_S3_ENDPOINT_URL` (default `http://127.0.0.1:18764`):
 
-      moto_server s3 -p 18764
+      moto_server -p 18764
       VXPIPE_TEST_S3_ENDPOINT_URL=http://127.0.0.1:18764 mix test \
-        test/integration/recording_matroska_s3_test.exs --include integration --only s3
+        apps/vxpipe_console/test/integration/recording_matroska_s3_test.exs --include integration --only s3
 
   Each run uses a unique bucket that is deleted with its objects on exit.
   `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` stay set only because the
@@ -77,8 +77,8 @@ defmodule Vxpipe.Console.RecordingMatroskaS3Test do
     settings = s3_settings(endpoint_url)
     overrides = exaws_overrides(settings)
 
-    bucket = "vxp-matroska-test-#{System.unique_integer([:positive])}"
-    prefix = "calls/test/#{System.unique_integer([:positive])}"
+    bucket = "vxp-matroska-test-#{Ecto.UUID.generate()}"
+    prefix = "calls/test/#{Ecto.UUID.generate()}"
     assert {:ok, _} = bucket |> ExAws.S3.put_bucket(@s3_region) |> ExAws.request(overrides)
 
     room_key = "#{prefix}/room.s16le"
@@ -223,7 +223,7 @@ defmodule Vxpipe.Console.RecordingMatroskaS3Test do
         IO.puts("ffprobe absent, skipping Matroska stream/title assertions")
 
       ffprobe ->
-        path = Path.join(System.tmp_dir!(), "recording-#{System.unique_integer([:positive])}.mka")
+        path = Path.join(System.tmp_dir!(), "recording-#{Ecto.UUID.generate()}.mka")
         File.write!(path, body)
 
         try do

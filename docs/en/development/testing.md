@@ -228,9 +228,9 @@ boundary byte-for-byte.
 The S3 test needs a local moto server and is excluded from the default suite:
 
 ```shell
-moto_server s3 -p 18764
+moto_server -p 18764
 VXPIPE_TEST_S3_ENDPOINT_URL=http://127.0.0.1:18764 mix test \
-  test/integration/recording_matroska_s3_test.exs --include integration --only s3
+  apps/vxpipe_console/test/integration/recording_matroska_s3_test.exs --include integration --only s3
 ```
 
 `VXPIPE_TEST_S3_ENDPOINT_URL` defaults to `http://127.0.0.1:18764`, so the
