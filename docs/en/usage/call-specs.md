@@ -127,16 +127,27 @@ URL** or turn opening audio off. If the model changes after a message has been
 written, the draft retains the text until you select a different opening type.
 File openings use HTTPS audio. Do not embed credentials or signed URLs in the spec.
 The caller cannot interrupt the protected opening before actual playback completes;
-opening output is private and the ordinary room recording path stays closed.
+opening output is private to the caller. When the call is recorded, the opening
+is captured on the room track, never on the caller's track.
 
 In **Call settings → Media**, wait sounds cover setup, agent transfers, human transfers and joining. The editor
 offers built-ins, an audio URL and silence. Previewing a sound does not modify the
 call's runtime state.
 
-Recording, transcript persistence and participant routing permissions are distinct.
-An Allow choice does not override a call-wide denial or grant another participant
-access to private media. Tools have separate [visibility and conversation
-behavior](agents-and-tools.md#conversation-behavior).
+Recording is opt-in and transcript persistence is separate. In
+**Call settings → Media**, **Record audio** defaults to **Off**; turn it
+**On** to record the call. A participant-level **Don't record** silences that
+participant's present interval in every track, and a call-wide off records
+nothing. An Allow choice elsewhere does not override a call-wide denial or grant
+another participant access to private media. Tools have separate [visibility and
+conversation behavior](agents-and-tools.md#conversation-behavior).
+
+A recorded call downloads from its call-details page as one Matroska file
+(`recording.mka`). Tracks are named by participant key — the first connection
+is `caller`, later reconnections append a count (`caller-1`, `caller-2`) —
+plus a `room` track carrying audio the room itself played, such as the opening
+and wait sounds. Every track starts at the same room-clock zero, with silence
+covering gaps and the time before a track starts.
 
 Human STT starts on its first nonempty transcript by default, and the
 recognizer decides when the caller's turn ends. JSON authors can set

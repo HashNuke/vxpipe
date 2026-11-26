@@ -113,7 +113,33 @@ function call(value: unknown): CallDetailsSnapshot["call"] {
     endedAt: nullableInstant(item.ended_at, "call.ended_at"),
     terminalReason: nullableString(item.terminal_reason, "call.terminal_reason"),
     durationMs: nullableNonnegativeNumber(item.duration_ms, "call.duration_ms"),
+    recording: recording(item.recording, "call.recording"),
   };
+}
+
+function recording(
+  value: unknown,
+  path: string,
+): CallDetailsSnapshot["call"]["recording"] {
+  if (value === undefined) return { status: "not_requested" };
+  if (typeof value === "string") {
+    if (value === "not_requested" || value === "recorded") return { status: value };
+    if (value.startsWith("unavailable:")) {
+      const reason = value.slice("unavailable:".length);
+      if (reason.length > 0) return { status: "unavailable", reason };
+    }
+    return invalid(path);
+  }
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const item = value as Record<string, unknown>;
+    if (item.status === "not_requested" || item.status === "recorded") {
+      return { status: item.status };
+    }
+    if (item.status === "unavailable" && typeof item.reason === "string" && item.reason.length > 0) {
+      return { status: "unavailable", reason: item.reason };
+    }
+  }
+  return invalid(path);
 }
 
 function incarnation(value: unknown): CallDetailsSnapshot["incarnation"] {

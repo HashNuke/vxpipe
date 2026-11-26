@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react";
 import { AdminShell } from "./AdminShell";
 import { CallDetailsConsoleHeader } from "./CallDetailsConsoleHeader";
 import { CallIdentity } from "./CallIdentity";
+import { CallRecording } from "./CallRecording";
 import { CallDetailsSkeleton } from "./CallDetailsSkeleton";
 import type { CallDetailsPageState } from "./callDetailsTypes";
 import { PageNotice } from "./PageNotice";
@@ -49,8 +50,15 @@ export function CallDetailsPage({
     />
   );
   const callContext = (
-    <div className="flex min-w-0 items-center gap-3">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
       {callIdentity}
+      {state.status === "ready" ? (
+        <CallRecording
+          tenantKey={state.tenant.key}
+          callId={state.callId}
+          controller={state.controller}
+        />
+      ) : null}
       {state.status === "ready" && state.completeness === "incomplete" ? (
         <span
           className="inline-flex shrink-0 items-center gap-1 text-[var(--admin-amber)]"

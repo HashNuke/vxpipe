@@ -133,7 +133,7 @@ test("human Models show only speech recognition and edit only the selected parti
   expect(saved().participants.specialist).not.toHaveProperty("capabilities");
   expect(stt.getByRole("combobox", { name: "Provider" })).toHaveTextContent("Deepgram");
   fireEvent.mouseDown(screen.getByRole("tab", { name: "Media" }), { button: 0 });
-  await choose("Record audio", "Deny");
+  await choose("Record audio", "Don't record");
   expect(saved().participants.specialist.while_present).toEqual({ record_audio: false });
 });
 test("read-only entry and destination inspectors preserve source and disable all edits", () => {

@@ -47,6 +47,7 @@ export const EntryHandler: Story = {
   },
 };
 export const MediaAndRecording: Story = { args: { panel: "media", initial: { ...editorFixture, source: { ...editorFixture.source, media_policy: { audio_routes: { intake: ["caller"], caller: ["intake"] }, record_audio: false } } } } };
+export const MediaRecordingOn: Story = { args: { panel: "media", initial: { ...editorFixture, source: { ...editorFixture.source, media_policy: { audio_routes: { intake: ["caller"], caller: ["intake"] }, record_audio: true } } } } };
 export const WaitSounds: Story = { args: { panel: "wait", initial: { ...editorFixture, source: { ...editorFixture.source, wait_sounds: { transfer_to_agent: "https://example.test/wait.wav", transfer_joining: null } } } } };
 export const AllSilent: Story = { args: { panel: "wait", initial: { ...editorFixture, source: { ...editorFixture.source, wait_sounds: null } } } };
 export const Advanced: Story = { args: { panel: "advanced", initial: { ...editorFixture, source: { ...editorFixture.source, transfer_policy: { attempt_timeout_ms: 900 } } } } };

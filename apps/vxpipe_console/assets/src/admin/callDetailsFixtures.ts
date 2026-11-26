@@ -2,6 +2,7 @@ import {
   createCallDetailsStore,
   type CallConsoleController,
   type CallDetailsSnapshot,
+  type CallRecordingStatus,
   type LocalSessionSnapshot,
 } from "@vxpipe/core";
 
@@ -15,6 +16,8 @@ import type { TenantContext } from "./callSpecTypes";
 export type CallDetailsFixtureScenario =
   | "ongoing"
   | "ended"
+  | "recorded"
+  | "recording-unavailable"
   | "partial-archive"
   | "long-content"
   | "metrics"
@@ -37,6 +40,7 @@ function snapshot(
   selectedCall: CallSummary,
   completeness: "complete" | "incomplete" | "unconfirmed",
   content: "default" | "long" | "metrics" = "default",
+  recording: CallRecordingStatus = { status: "not_requested" },
 ): CallDetailsSnapshot {
   const ended = selectedCall.state === "ended" || selectedCall.state === "failed";
   const durationMs =
@@ -60,6 +64,7 @@ function snapshot(
       endedAt: selectedCall.endedAt,
       terminalReason: selectedCall.terminalReason,
       durationMs,
+      recording,
     },
     incarnation:
       selectedCall.state === "prepared"
@@ -324,8 +329,9 @@ function readyState(
   callSpec: CallSpecContext = demoCallSpec,
   tenant: TenantContext = demoTenant,
   content: "default" | "long" | "metrics" = "default",
+  recording: CallRecordingStatus = { status: "not_requested" },
 ): CallDetailsPageState {
-  const details = snapshot(selectedCall, completeness, content);
+  const details = snapshot(selectedCall, completeness, content, recording);
   const store = createCallDetailsStore(details);
   const controller: CallConsoleController = {
     details: store,
@@ -349,6 +355,15 @@ export function callDetailsFixture(
 ): CallDetailsPageState {
   if (scenario === "ongoing") return readyState(calls[0], "unconfirmed");
   if (scenario === "ended") return readyState(calls[1], "complete");
+  if (scenario === "recorded")
+    return readyState(calls[1], "complete", demoCallSpec, demoTenant, "default", {
+      status: "recorded",
+    });
+  if (scenario === "recording-unavailable")
+    return readyState(calls[1], "complete", demoCallSpec, demoTenant, "default", {
+      status: "unavailable",
+      reason: "storage_unconfigured",
+    });
   if (scenario === "metrics") return readyState(calls[1], "complete", demoCallSpec, demoTenant, "metrics");
   if (scenario === "partial-archive") return readyState(calls[1], "incomplete");
   if (scenario === "long-content") {

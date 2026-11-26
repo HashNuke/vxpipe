@@ -54,6 +54,7 @@ test("maps an ongoing database response into the Core snapshot", () => {
     endedAt: null,
     terminalReason: null,
     durationMs: null,
+    recording: { status: "not_requested" },
   });
   expect(snapshot.incarnation).toEqual({
     roomId: "room-1",
@@ -337,4 +338,34 @@ test("preserves canonical activity kinds and accepts legacy activities", () => {
   delete (activity.value as Record<string, unknown>).event_kind;
   expect(parseCallInspectionResponse(response).timeline.find((entry) => entry.kind === "activity")?.value)
     .not.toHaveProperty("eventKind");
+});
+
+test("defaults a missing call recording to not requested", () => {
+  const snapshot = parseCallInspectionResponse(responseFixture("ended"));
+  expect(snapshot.call.recording).toEqual({ status: "not_requested" });
+});
+
+test("parses recorded and unavailable call recordings", () => {
+  const recorded = responseFixture("ended");
+  Object.assign(recorded.call, { recording: "recorded" });
+  expect(parseCallInspectionResponse(recorded).call.recording).toEqual({ status: "recorded" });
+
+  const unavailable = responseFixture("ended");
+  Object.assign(unavailable.call, { recording: "unavailable:storage_unconfigured" });
+  expect(parseCallInspectionResponse(unavailable).call.recording).toEqual({
+    status: "unavailable",
+    reason: "storage_unconfigured",
+  });
+});
+
+test("parses object-shaped call recordings", () => {
+  const response = responseFixture("ended");
+  Object.assign(response.call, { recording: { status: "recorded" } });
+  expect(parseCallInspectionResponse(response).call.recording).toEqual({ status: "recorded" });
+});
+
+test("rejects an invalid call recording", () => {
+  const response = responseFixture("ended");
+  Object.assign(response.call, { recording: "archived" });
+  expect(() => parseCallInspectionResponse(response)).toThrow("call.recording");
 });

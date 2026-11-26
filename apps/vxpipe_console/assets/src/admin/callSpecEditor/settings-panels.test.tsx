@@ -37,10 +37,9 @@ test.each(["default", "outgoing"] as const)("entry handler field leaves particip
 
 test("media controls preserve omitted defaults, explicit denials and other routes", async () => {
   render(<Harness panel="media" initial={{ ...editorFixture, source: { ...editorFixture.source, media_policy: { audio_routes: { intake: ["caller"] }, save_transcripts: false } } }} />);
-  await choose("Record audio", "Allow");
+  await choose("Record audio", "Off");
   expect(saved().media_policy).not.toHaveProperty("record_audio");
-  await choose("Record audio", "Deny");
-  await choose("Record audio", "Allow");
+  await choose("Record audio", "On");
   expect(saved().media_policy).toEqual({ audio_routes: { intake: ["caller"] }, save_transcripts: false, record_audio: true });
   expect(screen.queryByRole("combobox", { name: "Audio routing" })).not.toBeInTheDocument();
   expect(screen.queryByRole("combobox", { name: "Transcript routing" })).not.toBeInTheDocument();
@@ -97,10 +96,10 @@ test.each([null, "intake"])("media edits preserve explicit empty route maps for 
   else initial.source.participants[participantKey]!.while_present = policy;
   render(<Harness panel="media" participantKey={participantKey} initial={initial} />);
   expect(screen.queryByRole("combobox", { name: /routing/ })).not.toBeInTheDocument();
-  await choose("Record audio", "Deny");
+  await choose("Record audio", participantKey === null ? "On" : "Don't record");
   const updated = saved();
   expect(participantKey === null ? updated.media_policy : updated.participants[participantKey].while_present)
-    .toEqual({ ...policy, record_audio: false });
+    .toEqual({ ...policy, record_audio: participantKey === null });
 });
 
 test("whole-policy silence is displayed and preserved for unedited wait slots", async () => {
@@ -115,7 +114,7 @@ test("prototype-shaped participant identifiers remain ordinary route keys", asyn
   source.participants = { ...source.participants, ["constructor"]: { type: "human" as const, connection: { service: "web", mode: "receive" as const, admission: "transfer" as const } } };
   source.participants.intake!.while_present = { audio_routes: { ["constructor"]: ["caller"] } };
   render(<Harness panel="media" participantKey="intake" initial={{ ...editorFixture, source }} />);
-  await choose("Record audio", "Deny");
+  await choose("Record audio", "Don't record");
   expect(saved().participants.intake.while_present.audio_routes.constructor).toEqual(["caller"]);
 });
 
@@ -136,13 +135,35 @@ test("Advanced exposes only call-wide visibility and preserves saved tool overri
 
 test("omitted settings display the concrete runtime choices without changing source", async () => {
   render(<Harness panel="media" />);
-  expect(screen.getByRole("combobox", { name: "Record audio" })).toHaveTextContent("Allow");
+  expect(screen.getByRole("combobox", { name: "Record audio" })).toHaveTextContent("Off");
   expect(screen.getByRole("combobox", { name: "Save transcripts" })).toHaveTextContent("Allow");
   expect(screen.queryByRole("combobox", { name: "Audio routing" })).not.toBeInTheDocument();
   expect(screen.queryByRole("combobox", { name: "Transcript routing" })).not.toBeInTheDocument();
   fireEvent.keyDown(screen.getByRole("combobox", { name: "Record audio" }), { key: "ArrowDown" });
-  expect((await screen.findAllByRole("option")).map(item => item.textContent)).toEqual(["Allow", "Deny"]);
+  expect((await screen.findAllByRole("option")).map(item => item.textContent)).toEqual(["On", "Off"]);
   expect(saved()).toEqual(editorFixture.source);
+});
+test("record audio defaults off with on/off choices and opt-in help", async () => {
+  render(<Harness panel="media" />);
+  expect(screen.getByRole("combobox", { name: "Record audio" })).toHaveTextContent("Off");
+  expect(screen.getByText(/Turn recording on/i)).toBeVisible();
+  expect(screen.getByText(/one track per participant connection/i)).toBeVisible();
+  expect(screen.getByText(/caller-1/)).toBeVisible();
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Record audio" }), { key: "ArrowDown" });
+  expect((await screen.findAllByRole("option")).map(item => item.textContent)).toEqual(["On", "Off"]);
+  fireEvent.click(screen.getByRole("option", { name: "On" }));
+  expect(saved().media_policy).toEqual({ record_audio: true });
+  await choose("Record audio", "Off");
+  expect(saved().media_policy ?? {}).not.toHaveProperty("record_audio");
+});
+test("participant record audio offers inherit or don't record", async () => {
+  render(<Harness panel="media" participantKey="intake" />);
+  expect(screen.getByText(/silences all tracks while this participant is present/i)).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Record audio" })).toHaveTextContent("Inherit");
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Record audio" }), { key: "ArrowDown" });
+  expect((await screen.findAllByRole("option")).map(item => item.textContent)).toEqual(["Inherit", "Don't record"]);
+  fireEvent.click(screen.getByRole("option", { name: "Don't record" }));
+  expect(saved().participants.intake.while_present).toEqual({ record_audio: false });
 });
 test("omitted wait sounds show their slot-specific audio choices", () => {
   render(<Harness panel="wait" />);
@@ -173,19 +194,19 @@ test.each([null, "caller", "intake", "specialist"])("Media exposes storage permi
   expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   expect(saved()).toEqual(initial.source);
 
-  await choose("Record audio", "Deny");
+  await choose("Record audio", participantKey === null ? "On" : "Don't record");
   await choose("Save transcripts", "Deny");
   const expected = structuredClone(initial.source);
   const policy = participantKey === null ? expected.media_policy! : expected.participants[participantKey]!.while_present!;
-  policy.record_audio = false;
+  policy.record_audio = participantKey === null ? true : false;
   policy.save_transcripts = false;
   expect(saved()).toEqual(expected);
 
-  const reset = participantKey === null ? "Allow" : "Inherit";
+  const reset = participantKey === null ? "Off" : "Inherit";
   await choose("Record audio", reset);
-  await choose("Save transcripts", reset);
+  await choose("Save transcripts", participantKey === null ? "Allow" : "Inherit");
   if (participantKey === null) {
-    policy.record_audio = true;
+    delete policy.record_audio;
     policy.save_transcripts = true;
   } else {
     delete policy.record_audio;

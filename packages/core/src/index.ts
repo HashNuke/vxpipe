@@ -38,6 +38,7 @@ export type {
   CallIdentityAndLifecycle,
   CallIncarnation,
   CallLifecycleState,
+  CallRecordingStatus,
   MetricObservation,
   RevisionedEntity,
   UnavailableReason,

@@ -34,6 +34,12 @@ Recordings and immutable call-detail publications are separate artifacts. They
 require configured object storage and relevant capture permissions. A readable
 inspection page does not imply a recording exists.
 
+A recorded call offers a **Download recording** link on its call-details page,
+serving one Matroska file (`recording.mka`) with a track per participant
+connection plus a `room` track, all aligned to the same room-clock zero. Calls
+without a recording show **Not recorded**, and calls whose spec requested a
+recording the installation could not store show **Recording unavailable**.
+
 ## Passive latency diagnostics
 
 Collection is off by default. In **Installation → Diagnostics**, built-in Admin

@@ -13,6 +13,8 @@ const meta = {
       options: [
         "ongoing",
         "ended",
+        "recorded",
+        "recording-unavailable",
         "partial-archive",
         "long-content",
         "metrics",
@@ -31,6 +33,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Ongoing: Story = {};
 export const Ended: Story = { args: { scenario: "ended" } };
+export const Recorded: Story = { args: { scenario: "recorded" } };
+export const RecordingUnavailable: Story = { args: { scenario: "recording-unavailable" } };
 export const PartialArchive: Story = { args: { scenario: "partial-archive" } };
 export const LongContent: Story = { args: { scenario: "long-content" } };
 export const Metrics: Story = {

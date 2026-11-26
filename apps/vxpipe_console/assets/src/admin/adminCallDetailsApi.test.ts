@@ -61,3 +61,18 @@ test("rejects malformed context and inspection data", () => {
     }),
   ).toThrow();
 });
+
+test("passes the call recording status through to the snapshot", () => {
+  const valid = adminCallDetailsResponse();
+  const recorded = parseAdminCallDetails({
+    ...valid,
+    inspection: {
+      ...valid.inspection,
+      call: { ...valid.inspection.call, recording: "recorded" },
+    },
+  });
+  expect(recorded.snapshot.call.recording).toEqual({ status: "recorded" });
+  expect(parseAdminCallDetails(valid).snapshot.call.recording).toEqual({
+    status: "not_requested",
+  });
+});

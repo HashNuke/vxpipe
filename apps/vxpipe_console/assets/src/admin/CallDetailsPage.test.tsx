@@ -25,6 +25,16 @@ vi.mock("@vxpipe/react", () => ({
 import { CallDetailsPage } from "./CallDetailsPage";
 import { CallDetailsStory } from "./CallDetailsStory";
 
+function recordingController(recording: unknown) {
+  const snapshot = { call: { id: "call-1", recording } };
+  return {
+    details: {
+      getSnapshot: vi.fn(() => snapshot),
+      subscribe: vi.fn(() => () => undefined),
+    },
+  } as unknown as CallConsoleController;
+}
+
 afterEach(() => {
   cleanup();
   callConsole.mockClear();
@@ -42,9 +52,11 @@ const context = {
   callSpecRevision: 3,
 };
 
+const readySnapshot = { call: { id: "call-1" } };
+
 const controller = {
   details: {
-    getSnapshot: vi.fn(),
+    getSnapshot: vi.fn(() => readySnapshot),
     subscribe: vi.fn(() => () => undefined),
   },
 } as unknown as CallConsoleController;
@@ -147,4 +159,57 @@ test("the individual story return links load working admin previews", () => {
     expect(url.searchParams.get("id")).toMatch(/^vxpipe-console-(tenants-directory|call-specs-call-specs|calls-calls)--populated$/);
     expect(url.hash).toBe(`#${path}`);
   }
+});
+
+test("offers a recording download when the call was recorded", () => {
+  render(
+    <CallDetailsPage
+      state={{
+        status: "ready",
+        ...context,
+        controller: recordingController({ status: "recorded" }),
+        completeness: "complete",
+      }}
+    />,
+  );
+
+  const link = screen.getByRole("link", { name: "Download recording" });
+  expect(link).toHaveAttribute(
+    "href",
+    "/api/tenants/tn_demo_01/calls/call-1/recording.mka",
+  );
+  expect(screen.queryByText("Not recorded")).not.toBeInTheDocument();
+  expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
+});
+
+test("notes a call without a recording instead of linking a file", () => {
+  render(
+    <CallDetailsPage
+      state={{
+        status: "ready",
+        ...context,
+        controller: recordingController({ status: "not_requested" }),
+        completeness: "complete",
+      }}
+    />,
+  );
+
+  expect(screen.getByText("Not recorded")).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Download recording" })).not.toBeInTheDocument();
+});
+
+test("notes an unavailable recording without linking a file", () => {
+  render(
+    <CallDetailsPage
+      state={{
+        status: "ready",
+        ...context,
+        controller: recordingController({ status: "unavailable", reason: "storage_unconfigured" }),
+        completeness: "complete",
+      }}
+    />,
+  );
+
+  expect(screen.getByText("Recording unavailable")).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Download recording" })).not.toBeInTheDocument();
 });

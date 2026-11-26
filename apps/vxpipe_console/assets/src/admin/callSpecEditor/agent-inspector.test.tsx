@@ -144,7 +144,7 @@ test("agent permissions and presence edit the selected participant only", async 
   render(<Harness initialTab="variables" />);
   await choose("appointment access for intake", "Read");
   expect(saved().participants.intake.variable_permissions).toEqual({ appointment: ["read"] });
-  switchTab("Media"); await choose("Record audio", "Deny");
+  switchTab("Media"); await choose("Record audio", "Don't record");
   expect(saved().participants.intake.while_present).toEqual({ record_audio: false });
   expect(saved().participants.specialist).toEqual(editorFixture.source.participants.specialist);
 });

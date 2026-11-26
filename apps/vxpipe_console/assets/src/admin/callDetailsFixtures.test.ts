@@ -74,3 +74,14 @@ test("the long-content fixture provides long call context and console content", 
   if (!message || message.kind !== "message") return;
   expect(message.value.text.length).toBeGreaterThan(150);
 });
+
+test.each([
+  ["recorded", { status: "recorded" }],
+  ["recording-unavailable", { status: "unavailable", reason: "storage_unconfigured" }],
+  ["ended", { status: "not_requested" }],
+] as const)("the %s fixture reports its recording status", (scenario, recording) => {
+  const state = callDetailsFixture(scenario);
+  expect(state.status).toBe("ready");
+  if (state.status !== "ready") return;
+  expect(state.controller.details.getSnapshot().call.recording).toEqual(recording);
+});

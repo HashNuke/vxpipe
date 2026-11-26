@@ -25,7 +25,17 @@ export interface CallIdentityAndLifecycle {
   terminalReason: string | null;
   /** Authoritative elapsed call duration when known. */
   durationMs: number | null;
+  /**
+   * Recording availability for this call. Absent on snapshots produced before
+   * the recording status was published; treat a missing value as not requested.
+   */
+  recording?: CallRecordingStatus;
 }
+
+export type CallRecordingStatus =
+  | { status: "not_requested" }
+  | { status: "recorded" }
+  | { status: "unavailable"; reason: string };
 
 export interface CallIncarnation {
   roomId: string;
@@ -175,7 +185,10 @@ function compareTimeline(
 function copySnapshot(snapshot: CallDetailsSnapshot): CallDetailsSnapshot {
   return {
     ...snapshot,
-    call: { ...snapshot.call },
+    call: {
+      ...snapshot.call,
+      ...(snapshot.call.recording ? { recording: { ...snapshot.call.recording } as CallDetailsSnapshot["call"]["recording"] } : {}),
+    },
     incarnation: snapshot.incarnation ? { ...snapshot.incarnation } : null,
     participants: [...snapshot.participants],
     timeline: [...snapshot.timeline].sort(compareTimeline),
