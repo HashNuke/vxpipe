@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -60,6 +60,8 @@ export function QuestionSection({ title, timing, questions, change, unavailable 
           <Item size="sm" className="flex-nowrap gap-2 py-2">
             <ItemContent className="min-w-0"><ItemTitle className="wrap-anywhere font-normal">{question.text}</ItemTitle></ItemContent>
             <ItemActions><Button variant="ghost" size="icon-sm" aria-label={`Edit question: ${question.text}`} onClick={() => setEditing(question)}><Pencil /></Button>
+              <Button variant="ghost" size="icon-sm" aria-label={`Delete question: ${question.text}`}
+                onClick={() => change(questions.filter(candidate => candidate.id !== question.id))}><Trash2 /></Button>
             </ItemActions>
           </Item>
         </Fragment>)}

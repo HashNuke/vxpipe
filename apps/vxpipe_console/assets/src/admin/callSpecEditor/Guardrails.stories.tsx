@@ -22,9 +22,9 @@ export const EveryTurn: Story = { play: async ({ canvasElement }) => {
   await expect(panel.queryByRole("switch")).toBeNull();
   const before = within(panel.getByRole("region", { name: "Before turn" }));
   await expect(panel.queryByText("When blocked")).toBeNull();
-  await userEvent.click(before.getByRole("button", { name: /^Edit question/ }));
-  const editing = within(await page.findByRole("dialog", { name: "Edit question" }));
-  await userEvent.click(editing.getByRole("button", { name: "Delete question" }));
+  await userEvent.click(before.getByRole("button", { name: /^Delete question:/ }));
+  const after = within(panel.getByRole("region", { name: "After turn" }));
+  await expect(after.getByRole("button", { name: /^Edit question:/ })).toBeVisible();
   await expect(before.queryByRole("button", { name: /^Edit question/ })).toBeNull();
   await userEvent.click(before.getByRole("button", { name: "Add question" }));
   const dialog = within(await page.findByRole("dialog", { name: "Add question" }));
