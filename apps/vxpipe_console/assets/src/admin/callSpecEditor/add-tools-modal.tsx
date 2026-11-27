@@ -13,7 +13,7 @@ import type { ToolSelection } from "./types";
 import { useActionFailure } from "./action-failure-context";
 
 const emptyCatalog: ToolCatalog = { tools: [], mcpAvailable: false };
-export function AddToolsModal({ document, onChange, issues, participantKey, integrations, catalog = emptyCatalog, onClose }: InspectorProps & { participantKey: string; integrations: string[]; catalog?: ToolCatalog; onClose: () => void }) {
+export function AddToolsModal({ document, onChange, issues, participantKey, integrations, catalog = emptyCatalog, onSelectTransfer, onClose }: InspectorProps & { participantKey: string; integrations: string[]; catalog?: ToolCatalog; onSelectTransfer?: () => void; onClose: () => void }) {
   const tools = agent(document.source, participantKey).tools ?? {};
   const [selected, setSelected] = useState<AvailableTool[]>([]);
   const [integration, setIntegration] = useState<string>();
@@ -25,6 +25,7 @@ export function AddToolsModal({ document, onChange, issues, participantKey, inte
   const single = integration === undefined ? selected[0] : undefined;
   const toolMode = (tool: AvailableTool) => toolModes[toolIdentity(tool)] ?? "blocking";
   function unavailable(tool: AvailableTool) {
+    if (onSelectTransfer && tool.type === "platform" && tool.tool === "transfer" && agent(document.source, participantKey).transfers?.length) return "Added";
     if (Object.values(tools).some((entry) => toolIdentity(entry) === toolIdentity(tool))) return "Added";
     const name = registeredToolName(tool);
     const issue = tool.type === "mcp" ? registeredToolNameIssue(name) : undefined;
@@ -67,7 +68,7 @@ export function AddToolsModal({ document, onChange, issues, participantKey, inte
             <p className="shrink-0 text-xs text-muted-foreground">Includes the tools available now. Future tools stay excluded.</p>
             {!catalog.mcpAvailable && <p role="status" className="shrink-0 text-sm text-muted-foreground">The MCP catalog is unavailable. Reload the editor to try again.</p>}
             <McpToolChecklist tools={mcpTools} search={search} selected={selected} unavailable={unavailable} disabled={document.readOnly} onToggle={toggle} nonBlocking={(tool) => toolMode(tool) === "non_blocking"} onNonBlocking={(tool, checked) => setToolModes((current) => ({ ...current, [toolIdentity(tool)]: checked ? "non_blocking" : "blocking" }))} />
-          </> : <ToolPicker catalog={catalog} integrations={integrations} search={search} disabled={document.readOnly} unavailable={unavailable} onTool={(tool) => { setSelected([tool]); setError(""); }} onMcp={(name) => { setIntegration(name); setSelected([]); setSearch(""); setError(""); }} />}
+          </> : <ToolPicker catalog={onSelectTransfer ? { ...catalog, tools: [...catalog.tools, { type: "platform", tool: "transfer", description: "Hand off the call to an allowed participant." }] } : catalog} integrations={integrations} search={search} disabled={document.readOnly} unavailable={unavailable} onTool={(tool) => { if (onSelectTransfer && tool.type === "platform" && tool.tool === "transfer") { onSelectTransfer(); return; } setSelected([tool]); setError(""); }} onMcp={(name) => { setIntegration(name); setSelected([]); setSearch(""); setError(""); }} />}
         </>}
       </IssueAnchor>
       {single && <div className="shrink-0 border-t border-border pt-3"><ChoiceField label="Conversation mode" path={[...path, "conversation_mode"]} issues={issues} disabled={document.readOnly} value={toolMode(single)} choices={[{ value: "blocking", label: "Blocking" }, { value: "non_blocking", label: "Non-blocking" }]} onChange={(value) => setToolModes((current) => ({ ...current, [toolIdentity(single)]: value === "non_blocking" ? "non_blocking" : "blocking" }))} hint="Blocking waits for the result. Non-blocking lets the conversation continue while the tool runs." /></div>}

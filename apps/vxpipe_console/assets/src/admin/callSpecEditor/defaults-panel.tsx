@@ -1,4 +1,5 @@
 import { useContext } from "react";
+import { GuardrailInspectorContext } from "./guardrail-inspector-context";
 import { CredentialNamesContext } from "./credential-names";
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { CapabilityFields } from "./capability-fields";
@@ -18,10 +19,11 @@ const labels: Record<DefaultModelKind, string> = {
 };
 export function DefaultsPanel(props: DefaultsPanelProps) {
   const { document, onChange, catalog, issues } = props;
+  const prototype = useContext(GuardrailInspectorContext);
   const credentialNames = useContext(CredentialNamesContext);
   const mode = defaultAgentModelMode(document.source);
   return <div className="space-y-6">
-    <p className="text-xs text-muted-foreground">Participants inherit these models unless they choose their own provider and model.</p>
+    <p className="text-xs text-muted-foreground">{prototype ? "These models provide the defaults for this call." : "Participants inherit these models unless they choose their own provider and model."}</p>
     <section aria-label="AI agents" className="space-y-6 rounded-md border p-4">
       <h3 className="text-base font-semibold">AI agents</h3>
       <ChoiceField label="Model type" layout="inline" path={["defaults", "capabilities"]} issues={issues} disabled={document.readOnly} value={mode}
@@ -36,6 +38,7 @@ export function DefaultsPanel(props: DefaultsPanelProps) {
       </div> :
         <DefaultCapability {...props} kind="speech_to_speech" showHeading={false} />
       }
+      {prototype?.decisionsField("call", document.readOnly)}
     </section>
     <section aria-label="Human participants" className="space-y-6 rounded-md border p-4">
       <div className="space-y-1">

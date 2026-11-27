@@ -1,5 +1,6 @@
 import { ParticipantSource } from "./participant-source";
-import { useLayoutEffect, useRef, useState } from "react";
+import { GuardrailInspectorContext } from "./guardrail-inspector-context";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { Bot, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -8,6 +9,8 @@ import type { ModelCatalog } from "../modelCatalog";
 import { IssueCount } from "./issue-count";
 import { issueCounts } from "./issues";
 import { InspectorIssues, UnplacedIssues } from "./issue-scope";
+import { agentModelMode } from "./agent-models";
+import { agent } from "./edits";
 import { AgentPromptPanel } from "./agent-prompt-panel";
 import { AgentModelsPanel } from "./agent-models-panel";
 import { AgentToolsPanel } from "./agent-tools-panel";
@@ -18,18 +21,31 @@ import { removeParticipant, renameParticipant } from "./participants";
 import { RenameField } from "./rename-field";
 import { SectionPermissionMatrix } from "./section-permission-matrix";
 
-const tabs = [
+const standardTabs = [
   { id: "prompt", label: "Prompt" }, { id: "voice", label: "Models" },
   { id: "variables", label: "Variables" }, { id: "transfers", label: "Transfers" },
   { id: "tools", label: "Tools" }, { id: "presence", label: "Media" },
 ] as const;
-export type AgentInspectorTab = typeof tabs[number]["id"];
-export function AgentInspector({ catalog, lookups, participantKey, onRenamed, onRemoved, tab, onTabChange, ...props }: InspectorProps & { catalog: ModelCatalog; lookups: EditorLookups; participantKey: string; onRenamed?: (key: string) => void; onRemoved?: () => void; tab?: AgentInspectorTab; onTabChange?: (tab: AgentInspectorTab) => void }) {
+export type AgentInspectorTab = typeof standardTabs[number]["id"] | "guardrails";
+export function AgentInspector({ catalog, lookups, participantKey, onRenamed, onRemoved, tab: requestedTab, onTabChange, ...props }: InspectorProps & { catalog: ModelCatalog; lookups: EditorLookups; participantKey: string; onRenamed?: (key: string) => void; onRemoved?: () => void; tab?: AgentInspectorTab; onTabChange?: (tab: AgentInspectorTab) => void }) {
+  const guardrails = useContext(GuardrailInspectorContext);
+  const tab = guardrails && requestedTab === "transfers" ? "tools" : requestedTab;
+  const tabs = guardrails ? standardTabs.map(tab => tab.id === "transfers" ? { id: "guardrails", label: "Guardrails" } as const : tab) : standardTabs;
   const [active, setActive] = useState<AgentInspectorTab>("prompt");
   const [deleting, setDeleting] = useState(false);
   const tabBar = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { tabBar.current?.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [tab, active]);
   const { document, onChange } = props;
+  function renderGuardrails() {
+    if (!guardrails) return null;
+    const participant = agent(document.source, participantKey);
+    const defaults = document.source.defaults?.capabilities;
+    const hasLlm = participant.capabilities?.model_inference ?? defaults?.model_inference;
+    const hasTts = participant.capabilities?.text_to_speech ?? defaults?.text_to_speech;
+    const support = agentModelMode(document.source, participantKey) === "speech_to_speech"
+      ? "speech_to_speech" : hasLlm && hasTts ? "supported" : "missing_capability";
+    return guardrails.guardrails(participantKey, support);
+  }
   const counts = issueCounts(document.source, props.issues ?? []).tabs[participantKey] ?? {};
   return <InspectorIssues source={document.source} issues={props.issues} request={props.focusRequest} nodeId={participantKey} tab={tab ?? active}><aside className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
     <ParticipantSource {...props} participantKey={participantKey} heading={<><Bot className="h-3.5 w-3.5" /><span>Agent</span></>}
@@ -40,7 +56,8 @@ export function AgentInspector({ catalog, lookups, participantKey, onRenamed, on
         {tabs.map(({ id, label }) => <TabsTrigger key={id} value={id} className="flex-none" aria-description={counts[id] ? `${counts[id]} ${counts[id] === 1 ? "issue" : "issues"}` : undefined}>{label}<IssueCount count={counts[id]} /></TabsTrigger>)}
       </TabsList></div>
       {tabs.map(({ id }) => <TabsContent key={id} value={id} className="m-0 min-h-0 flex-1 overflow-auto p-4">
-        <UnplacedIssues />{id === "prompt" ? <AgentPromptPanel {...props} participantKey={participantKey} />
+        <UnplacedIssues />{id === "guardrails" ? renderGuardrails()
+          : id === "prompt" ? <AgentPromptPanel {...props} participantKey={participantKey} />
           : id === "voice" ? <AgentModelsPanel {...props} participantKey={participantKey} catalog={catalog} />
           : id === "variables" ? <SectionPermissionMatrix key={participantKey} {...props} agentKey={participantKey} />
           : id === "transfers" ? <AgentTransfersPanel {...props} participantKey={participantKey} />

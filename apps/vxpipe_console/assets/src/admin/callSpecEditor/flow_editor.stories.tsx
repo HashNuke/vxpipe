@@ -19,14 +19,23 @@ import type { SourceDocument } from "./types";
 import { pageSnapshot, type EditorScenario } from "./page-fixtures";
 import "../admin.css";
 
-type Props = { conversationLanguages?: string[]; theme: "dark" | "light"; scenario: EditorScenario; outcome?: EditorResult; pageStatus?: "loading" | "spec-error" | "catalog-error" };
+import { setAgentModelMode } from "./agent-models";
+
+type Props = { transferExample?: boolean; guardrailMode?: "llm" | "speech_to_speech"; conversationLanguages?: string[]; theme: "dark" | "light"; scenario: EditorScenario; outcome?: EditorResult; pageStatus?: "loading" | "spec-error" | "catalog-error" };
 // Adapted from Callpipe's flow_editor.stories: whole-page fixtures and real UI actions.
-function FlowEditorStory({ theme, scenario, outcome, pageStatus, conversationLanguages }: Props) {
+function FlowEditorStory({ theme, scenario, outcome, pageStatus, conversationLanguages, transferExample, guardrailMode = "llm" }: Props) {
   const [destination, setDestination] = useState<string>();
   const [created, setCreated] = useState<SourceDocument>();
   const [retried, setRetried] = useState(false);
   const [revision, setRevision] = useState(() => pageSnapshot(scenario).saved?.revision ?? 0);
   const snapshot = scenario === "new" && created ? { document: created } : pageSnapshot(scenario);
+  if (transferExample) {
+    snapshot.document = setAgentModelMode(snapshot.document, "intake", guardrailMode, modelCatalogFixture);
+    const { participants } = snapshot.document.source;
+    participants.scheduling = { type: "agent", prompt: "Help the caller arrange a follow-up appointment. Confirm their preferred date and time, then repeat the booking details." };
+    participants.billing = { type: "agent", prompt: "Help the caller with billing questions. Ask which appointment they are calling about before discussing their account." };
+    if (participants.intake?.type === "agent") participants.intake.transfers = ["specialist", "scheduling"];
+  }
   if (conversationLanguages) snapshot.document.source.conversation_languages = conversationLanguages;
   return <StoryNavigationContext value={storyNavigation(`/t/${demoTenant.key}/editor`, setDestination, demoTenant)}><EditorTheme theme={theme}>{destination ? <main className="grid min-h-dvh place-content-center gap-4 bg-background p-6">
     <h1 className="text-lg font-semibold">{destination.endsWith("/dashboard") ? "Dashboard" : destination === "#services" ? "Tenant services" : "Call specs"}</h1>

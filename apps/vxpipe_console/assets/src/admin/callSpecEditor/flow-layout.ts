@@ -18,7 +18,7 @@ export type FlowNodeData = {
 };
 export type CanvasNode = Node<FlowNodeData, "flowNode">;
 
-export function canvasGraph(document: SourceDocument, selectedNodeId: string | null = null, issues: Record<string, number> = {}): { nodes: CanvasNode[]; edges: Edge[] } {
+export function canvasGraph(document: SourceDocument, selectedNodeId: string | null = null, issues: Record<string, number> = {}, countTransferTool = false): { nodes: CanvasNode[]; edges: Edge[] } {
   const graph = projectGraph(document);
   return {
     nodes: graph.nodes.map((node) => {
@@ -37,7 +37,7 @@ export function canvasGraph(document: SourceDocument, selectedNodeId: string | n
           kind: node.kind,
           label: node.kind === "entry" ? "Entry" : node.participantKey,
           subtitle: node.kind === "entry" ? `${document.source.outgoing_call ? "Outgoing" : "Incoming"} · ${node.participantKey}` : "",
-          toolCount: Object.keys(agent?.tools ?? {}).length,
+          toolCount: Object.keys(agent?.tools ?? {}).length + (countTransferTool && agent?.transfers?.length ? 1 : 0),
           variableCount: Object.entries(agent?.variable_permissions ?? {}).reduce((count, [key, permissions]) => {
             const sections = document.source.call_variables?.sections;
             const section = sections && Object.hasOwn(sections, key) ? sections[key] : undefined;

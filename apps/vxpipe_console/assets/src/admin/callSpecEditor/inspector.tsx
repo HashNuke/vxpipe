@@ -34,7 +34,7 @@ export function Inspector({ selectedNodeId, tab, onRenamed, onRemoved, ...props 
     tab={member<CallSettingsTab>(tab, ["connection", "defaults", "variables", "media", "advanced"], "connection")} />;
   if (!node) return <GenericNodeInspector participantKey={selectedNodeId} />;
   if (node.kind === "agent") return <AgentInspector {...props} participantKey={node.participantKey} onRenamed={onRenamed} onRemoved={onRemoved}
-    tab={member<AgentInspectorTab>(tab, ["prompt", "voice", "variables", "transfers", "tools", "presence"], "prompt")} />;
+    tab={member<AgentInspectorTab>(tab, ["prompt", "voice", "variables", "transfers", "tools", "presence", "guardrails"], "prompt")} />;
   return <HumanInspector {...props} participantKey={node.participantKey} onRenamed={onRenamed} onRemoved={onRemoved}
     tab={member<HumanInspectorTab>(tab, ["connection", "voice", "presence"], "connection")} />;
 }

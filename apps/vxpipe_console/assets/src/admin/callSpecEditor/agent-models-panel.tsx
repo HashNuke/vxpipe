@@ -1,4 +1,5 @@
 import { useContext } from "react";
+import { GuardrailInspectorContext } from "./guardrail-inspector-context";
 import { CredentialNamesContext } from "./credential-names";
 import type { ModelCatalog } from "../modelCatalog";
 import { agentModelKinds, agentModelMode, canSelectAgentModels, setAgentModelMode } from "./agent-models";
@@ -8,6 +9,7 @@ import { ParticipantCapabilities } from "./participant-capabilities";
 
 export function AgentModelsPanel(props: InspectorProps & { participantKey: string; catalog: ModelCatalog }) {
   const { document, participantKey, catalog, onChange, issues } = props;
+  const prototype = useContext(GuardrailInspectorContext);
   const credentialNames = useContext(CredentialNamesContext);
   const mode = agentModelMode(document.source, participantKey);
   return <div className="space-y-5">
@@ -19,5 +21,6 @@ export function AgentModelsPanel(props: InspectorProps & { participantKey: strin
       hint={mode === "speech_to_speech" ? "One model handles speech input and speech output." : "Choose an LLM for responses and Text-to-Speech for this agent's voice."}
       onChange={(next) => { if (next === "llm" || next === "speech_to_speech") onChange(setAgentModelMode(document, participantKey, next, catalog, credentialNames)); }} />
     <ParticipantCapabilities {...props} kinds={agentModelKinds[mode]} required />
+    {prototype?.decisionsField("agent", document.readOnly)}
   </div>;
 }
