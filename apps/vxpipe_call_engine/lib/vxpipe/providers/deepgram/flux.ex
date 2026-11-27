@@ -26,9 +26,8 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
 
   def models do
     [
-      Model.new("flux", "Flux", true),
       Model.new("flux-general-en", "Flux General English", false),
-      Model.new("flux-general-multi", "Flux General Multilingual", false)
+      Model.new("flux-general-multi", "Flux General Multilingual", true)
     ]
     |> Enum.map(&Map.put(&1, :options, %{"encoding" => "linear16", "sample_rate" => 48_000}))
   end

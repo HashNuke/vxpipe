@@ -87,24 +87,17 @@ agent defaults to a generated greeting. Explicit first-message modes can overrid
 that behavior. Prompts should refer to destination participant keys when describing
 when to transfer.
 
-### Speech model languages
+### Conversation languages
 
-Put the optional `languages` array beside `model` on a speech selection. Omit it or use an empty array for the model default. Use the model catalog for supported codes, the default and whether the model accepts multiple values. Each recognizer has its own selection, including output transcription.
+In **Call settings → Models**, choose conversation languages in priority order. The call spec stores the complete selection at the top level.
 
 ```json
-{
-  "speech_to_text": {
-    "provider": "deepgram",
-    "model": "flux",
-    "languages": ["en", "es"],
-    "options": {"encoding": "linear16", "sample_rate": 48000}
-  }
-}
+"conversation_languages": ["en-GB", "en-US", "es-MX"]
 ```
 
-For Flux, English alone selects the English model. Automatic uses the multilingual model. Spanish alone or English and Spanish together use the multilingual model with recognition hints. An explicit `flux-general-multi` keeps that model even with English as its only hint.
+Each speech model uses the hints it supports. For example, Scribe receives English as its primary language and Spanish once as a secondary language. A model that accepts a single hint skips unsupported selections and uses the first one it recognizes. Models that support regional tags can receive both English variants. Flux English uses no hints. Flux Multi keeps its multilingual model identity even with just one English hint.
 
-Scribe accepts one expected caller language, such as `["en"]`. Existing Scribe specs using `options.language_code` still work. Gemini Transcribe Live accepts regional hints such as `["en-US", "es-US"]`. On ElevenLabs Realtime one language applies to the conversation, including replies. Supported speech synthesis models take a single language for their output.
+Choose **Automatic** to clear the list and use each provider’s default behavior. Models without language hints and models that recognize none of the selected languages receive no hint. Existing call specs without this field retain their per-model language settings, including Scribe’s legacy `options.language_code`. Setting the call-wide field explicitly overrides those settings, including when the list is empty.
 
 ## Variables
 

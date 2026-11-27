@@ -19,14 +19,15 @@ import type { SourceDocument } from "./types";
 import { pageSnapshot, type EditorScenario } from "./page-fixtures";
 import "../admin.css";
 
-type Props = { theme: "dark" | "light"; scenario: EditorScenario; outcome?: EditorResult; pageStatus?: "loading" | "spec-error" | "catalog-error" };
+type Props = { conversationLanguages?: string[]; theme: "dark" | "light"; scenario: EditorScenario; outcome?: EditorResult; pageStatus?: "loading" | "spec-error" | "catalog-error" };
 // Adapted from Callpipe's flow_editor.stories: whole-page fixtures and real UI actions.
-function FlowEditorStory({ theme, scenario, outcome, pageStatus }: Props) {
+function FlowEditorStory({ theme, scenario, outcome, pageStatus, conversationLanguages }: Props) {
   const [destination, setDestination] = useState<string>();
   const [created, setCreated] = useState<SourceDocument>();
   const [retried, setRetried] = useState(false);
   const [revision, setRevision] = useState(() => pageSnapshot(scenario).saved?.revision ?? 0);
   const snapshot = scenario === "new" && created ? { document: created } : pageSnapshot(scenario);
+  if (conversationLanguages) snapshot.document.source.conversation_languages = conversationLanguages;
   return <StoryNavigationContext value={storyNavigation(`/t/${demoTenant.key}/editor`, setDestination, demoTenant)}><EditorTheme theme={theme}>{destination ? <main className="grid min-h-dvh place-content-center gap-4 bg-background p-6">
     <h1 className="text-lg font-semibold">{destination.endsWith("/dashboard") ? "Dashboard" : destination === "#services" ? "Tenant services" : "Call specs"}</h1>
     <p className="text-sm text-muted-foreground">Navigation confirmed. Return to the editor to continue the prototype.</p>

@@ -232,21 +232,28 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       ) do
     strategy = if Map.has_key?(selection, :vad), do: :vad, else: :manual
 
-    input =
+    {input, secondary} =
       case CapabilitySelection.languages(selection) do
-        [code] -> Map.put(input, "language_code", code)
-        [] -> input
+        [primary | secondary] -> {Map.put(input, "language_code", primary), secondary}
+        [] -> {input, []}
       end
 
     with {:ok, options} <- normalize(input, [:language_code]),
          {:ok, public} <-
-           Scribe.public_options(Keyword.merge(options, model: model, commit_strategy: strategy)) do
+           Scribe.public_options(
+             Keyword.merge(options,
+               model: model,
+               commit_strategy: strategy,
+               secondary_languages: secondary
+             )
+           ) do
       {:ok,
        [
          model: public.model,
          encoding: public.encoding,
          sample_rate: public.sample_rate,
          language_code: public.language_code,
+         secondary_languages: public.secondary_languages,
          commit_strategy: public.commit_strategy
        ]}
     end

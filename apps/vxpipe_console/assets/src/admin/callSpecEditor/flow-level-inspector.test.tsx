@@ -30,3 +30,11 @@ test("outgoing call direction is a read-only header label", () => {
   expect(screen.getByText("Outgoing call")).toBeInTheDocument();
   expect(screen.queryByRole("tab", { name: "Direction" })).not.toBeInTheDocument();
 });
+
+test("Call settings edits the call-wide preference list in priority order", () => {
+  const change = vi.fn();
+  const document = { ...editorFixture, source: { ...editorFixture.source, conversation_languages: ["en-GB", "es-MX"] } };
+  render(<FlowLevelInspector document={document} onChange={change} tab="defaults" catalog={modelCatalogFixture} lookups={lookups} />);
+  fireEvent.click(screen.getByRole("button", {name: /Remove British English/}));
+  expect(change.mock.lastCall?.[0].source.conversation_languages).toEqual(["es-MX"]);
+});

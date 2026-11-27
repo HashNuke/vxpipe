@@ -11,14 +11,21 @@ defmodule Vxpipe.CallEngine.Speech.ModelLanguages do
   def descriptor(:stt, "deepgram", "flux-general-en"), do: field(false, "en", ["en"])
 
   def descriptor(:stt, "deepgram", model) when model in ["flux", "flux-general-multi"],
-    do: field(true, "automatic", @flux)
+    do:
+      field(
+        true,
+        "automatic",
+        Enum.filter(Vxpipe.CallEngine.Speech.ConversationLanguages.supported_tags(), fn tag ->
+          hd(String.split(tag, "-", parts: 2)) in @flux
+        end)
+      )
 
   def descriptor(:stt, "google", "gemini-3.5-transcribe-live"),
     do: field(true, "automatic", Vxpipe.Providers.Google.STT.languages())
 
   def descriptor(:stt, "elevenlabs", model)
       when model in ["scribe_v2_realtime", "scribe_v3_live"],
-      do: field(false, "automatic", @scribe)
+      do: field(true, "automatic", @scribe)
 
   def descriptor(:stt, "cartesia", "ink-2"), do: field(false, "automatic", [])
 

@@ -28,6 +28,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
     :incoming_call,
     :outgoing_call,
     :defaults,
+    :conversation_languages,
     :opening_audio,
     :wait_sounds,
     :media_policy,
@@ -56,7 +57,12 @@ defmodule Vxpipe.CallEngine.CallSpec do
     :max_duration_ms
   ]
   defstruct @enforce_keys ++
-              [wait_sounds: %WaitSounds{}, direction: :incoming, ring_timeout_ms: nil]
+              [
+                wait_sounds: %WaitSounds{},
+                direction: :incoming,
+                ring_timeout_ms: nil,
+                conversation_languages: nil
+              ]
 
   @type t :: %__MODULE__{
           resource_id: String.t(),
@@ -68,6 +74,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
           direction: :incoming | :outgoing,
           ring_timeout_ms: nil | pos_integer(),
           default_capabilities: Capabilities.t(),
+          conversation_languages: nil | [String.t()],
           opening_audio: nil | OpeningAudio.t(),
           wait_sounds: WaitSounds.t(),
           media_policy: MediaPolicy.t(),
@@ -132,7 +139,8 @@ defmodule Vxpipe.CallEngine.CallSpec do
              Map.get(input, :tool_visibility_overrides, %{}),
              participants
            ),
-         {:ok, max_duration_ms} <- limits(Map.get(input, :limits, %{}), code, message) do
+         {:ok, max_duration_ms} <- limits(Map.get(input, :limits, %{}), code, message),
+         {:ok, conversation_languages} <- conversation_languages(input, code, message) do
       {:ok,
        %__MODULE__{
          resource_id: resource_id,
@@ -144,6 +152,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
          direction: direction.kind,
          ring_timeout_ms: direction.ring_timeout_ms,
          default_capabilities: defaults,
+         conversation_languages: conversation_languages,
          opening_audio: opening_audio,
          wait_sounds: wait_sounds,
          media_policy: media_policy,
@@ -457,6 +466,27 @@ defmodule Vxpipe.CallEngine.CallSpec do
           ["participants", call_spec_key, "variable_permissions", section],
           "must not grant write access to a dial-routing section"
         )
+    end
+  end
+
+  defp conversation_languages(input, code, message) do
+    case Map.fetch(input, :conversation_languages) do
+      :error ->
+        {:ok, nil}
+
+      {:ok, values} ->
+        case Vxpipe.CallEngine.Speech.ConversationLanguages.validate(values) do
+          {:ok, tags} when is_list(tags) ->
+            {:ok, tags}
+
+          _ ->
+            CallSpecValidation.invalid(
+              code,
+              message,
+              ["conversation_languages"],
+              "must list distinct supported language tags"
+            )
+        end
     end
   end
 

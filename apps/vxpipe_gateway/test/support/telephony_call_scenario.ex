@@ -148,7 +148,8 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           },
           transfer_policy: Keyword.get(options, :transfer_policy, %{attempt_timeout_ms: 10_000}),
           limits: %{max_duration_ms: 60_000}
-        },
+        }
+        |> Map.merge(Keyword.get(options, :call_settings, %{})),
         resource_id: "telephony-harness-call-spec",
         revision: 1
       )

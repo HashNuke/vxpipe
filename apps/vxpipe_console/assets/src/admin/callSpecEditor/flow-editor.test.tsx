@@ -389,3 +389,33 @@ test("a written opening survives a switch to speech-to-speech and can be saved a
   await waitFor(() => expect(props.execute).toHaveBeenCalledTimes(1));
   expect(props.execute.mock.calls[0]![0]).toMatchObject({ action: "save", source: { opening_audio: document.source.opening_audio } });
 });
+
+test("editing, saving, publishing and reopening an ordered conversation language list", async () => {
+  const props = properties();
+  const initial = structuredClone(snapshot);
+  initial.document.source.conversation_languages = ["en-GB", "es-MX"];
+  const editor = render(<CallSpecEditor {...props} snapshot={initial} />);
+  const openModels = () => fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }), { button: 0 });
+  openModels();
+  fireEvent.click(screen.getByRole("combobox", { name: "Conversation languages" }));
+  const search = screen.getByRole("combobox", {name: "Search languages"});
+  fireEvent.change(search, {target: {value: "fr-CA"}});
+  await screen.findByRole("option", {name: /Canadian French/});
+  fireEvent.keyDown(search, {key: "Enter"});
+  fireEvent.keyDown(search, {key: "Escape"});
+  saveDraft();
+  await screen.findByText("Draft saved");
+  const request = props.execute.mock.calls[0]?.[0];
+  if (request?.action !== "save") throw new Error("Expected a saved draft");
+  expect(request.source.conversation_languages).toEqual(["en-GB", "es-MX", "fr-CA"]);
+  props.execute.mockResolvedValue({ status: 200, revision: 4 });
+  click("Publish");
+  await screen.findByText("Published");
+  editor.unmount();
+  render(<CallSpecEditor {...props} snapshot={{
+    document: { source: request.source, readOnly: true },
+    saved: { callSpecId: "appointments", revision: 4, publishedRevision: 4 },
+  }} />);
+  openModels();
+  expect(screen.getAllByRole("button", {name: /^Remove (British English|Mexican Spanish|Canadian French)/}).map(button => button.parentElement?.textContent?.[0])).toEqual(["1", "2", "3"]);
+});

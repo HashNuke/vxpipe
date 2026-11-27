@@ -225,6 +225,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
       encoding: config.encoding,
       sample_rate: config.sample_rate,
       language_code: config.language_code,
+      secondary_languages: config.secondary_languages,
       commit_strategy: config.commit_strategy
     ]
   end

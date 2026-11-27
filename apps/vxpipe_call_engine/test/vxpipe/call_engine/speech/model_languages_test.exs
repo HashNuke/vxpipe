@@ -11,7 +11,7 @@ defmodule Vxpipe.CallEngine.Speech.ModelLanguagesTest do
           {:speech_to_text, "deepgram", "flux", ["es", "es"]},
           {:speech_to_text, "deepgram", "flux", ["zz"]},
           {:speech_to_text, "deepgram", "flux-general-en", ["fr"]},
-          {:speech_to_text, "elevenlabs", "scribe_v2_realtime", ["en", "es"]},
+          {:speech_to_text, "elevenlabs", "scribe_v2_realtime", ["en", "zz"]},
           {:speech_to_text, "elevenlabs", "scribe_v3_live", "en"},
           {:text_to_speech, "elevenlabs", "eleven_multilingual_v2", ["en"]},
           {:model_inference, "fixture", "test", []}
@@ -83,7 +83,8 @@ defmodule Vxpipe.CallEngine.Speech.ModelLanguagesTest do
 
   test "the model catalog describes the Flux family language options" do
     {:ok, models} = Vxpipe.CallEngine.ModelCatalog.models("deepgram", "speech_to_text")
-    model = Enum.find(models, &(&1.id == "flux"))
+    assert Enum.any?(models, &(&1.id == "flux-general-en"))
+    model = Enum.find(models, &(&1.id == "flux-general-multi"))
     assert %{multiple: true, default: "automatic", values: codes} = model.languages
     assert "es" in codes
   end

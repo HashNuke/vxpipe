@@ -4,12 +4,18 @@ import { validatePolicies } from "./validationPolicies";
 import { validateVariables } from "./validationVariables";
 import { validateParticipant } from "./validationParticipants";
 
-const rootFields = ["schema_version", "name", "incoming_call", "outgoing_call", "entry_caller", "entry_receiver", "participants", "defaults", "opening_audio", "wait_sounds", "media_policy", "call_variables", "transfer_policy", "tool_visibility", "tool_visibility_overrides", "limits"];
+import { conversationLanguageCodes } from "./conversation-language-codes";
+
+const rootFields = ["conversation_languages", "schema_version", "name", "incoming_call", "outgoing_call", "entry_caller", "entry_receiver", "participants", "defaults", "opening_audio", "wait_sounds", "media_policy", "call_variables", "transfer_policy", "tool_visibility", "tool_visibility_overrides", "limits"];
 
 export function validateSource(value: unknown): SourceIssue[] {
   const fields = new Fields();
   const source = fields.object(value, [], rootFields);
   fields.enumeration(source.schema_version, ["schema_version"], ["20261125.01", "20261004.01", "20260915.01"]);
+  const languages = source.conversation_languages;
+  if (languages !== undefined && (!Array.isArray(languages) || languages.some(code => !conversationLanguageCodes.includes(code)) || new Set(languages).size !== languages.length)) {
+    fields.issue(["conversation_languages"], "must list distinct supported language tags");
+  }
   fields.text(source.name, ["name"], 256, true);
   const participants = fields.object(source.participants, ["participants"]);
   if (!Object.keys(participants).length) fields.issue(["participants"], "must be a non-empty object");

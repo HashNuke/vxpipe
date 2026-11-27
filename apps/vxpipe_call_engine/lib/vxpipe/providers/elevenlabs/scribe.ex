@@ -12,7 +12,7 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
   ]
   @enforce_keys [:api_key, :model, :encoding, :sample_rate, :language_code, :commit_strategy]
   @derive {Inspect, only: [:model, :encoding, :sample_rate, :language_code, :commit_strategy]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, secondary_languages: []]
 
   alias Vxpipe.CallEngine.Speech.Model
   alias Vxpipe.Providers.ElevenLabs.STTProtocol
@@ -45,6 +45,7 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
              encoding: :linear16,
              sample_rate: 16_000,
              language_code: nil,
+             secondary_languages: [],
              commit_strategy: :manual
            ),
          model <- Keyword.fetch!(options, :model),
@@ -53,13 +54,15 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
          16_000 <- Keyword.fetch!(options, :sample_rate),
          strategy when strategy in [:manual, :vad] <- Keyword.fetch!(options, :commit_strategy),
          language <- Keyword.fetch!(options, :language_code),
-         true <- valid_language?(language) do
+         secondary <- Keyword.fetch!(options, :secondary_languages),
+         true <- valid_language?(language) and valid_secondary?(language, secondary, model) do
       {:ok,
        %{
          model: model,
          encoding: :linear16,
          sample_rate: 16_000,
          language_code: language,
+         secondary_languages: secondary,
          commit_strategy: strategy
        }}
     else
@@ -83,7 +86,12 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
         else: query
 
     %{
-      url: config.endpoint <> "?" <> URI.encode_query(query),
+      url:
+        config.endpoint <>
+          "?" <>
+          URI.encode_query(
+            query ++ Enum.map(config.secondary_languages, &{:secondary_languages, &1})
+          ),
       headers: [{"xi-api-key", config.api_key}]
     }
   end
@@ -185,6 +193,16 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
 
   defp vad_options(:manual), do: []
   defp vad_options(:vad), do: @vad_profile
+
+  defp valid_secondary?(_primary, [], _model), do: true
+
+  defp valid_secondary?(primary, secondary, model) when is_binary(primary) and is_list(secondary),
+    do:
+      Vxpipe.CallEngine.Speech.ModelLanguages.valid?(:stt, "elevenlabs", model, [
+        primary | secondary
+      ])
+
+  defp valid_secondary?(_, _, _), do: false
 
   defp valid_language?(nil), do: true
 

@@ -106,6 +106,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
           background_tool: context[:background_tool] == true,
           caller_stt: if(context[:caller_recovery], do: :scribe, else: :default),
           recognition_options: context[:recognition_options] || %{},
+          call_settings: context[:call_settings] || %{},
           command_mode: context[:command_mode] || "observer",
           transfer_policy:
             if(context[:recovery_transfer],
@@ -295,11 +296,15 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     end
   end
 
-  for {field, recognition} <- [
-        {"languages", %{languages: ["fr"]}},
-        {"language_code", %{options: %{language_code: "fr"}}}
+  for {field, recognition, settings} <- [
+        {"conversation_languages", %{}, %{conversation_languages: ["fr-FR"]}},
+        {"languages", %{languages: ["fr"]}, %{}},
+        {"language_code", %{options: %{language_code: "fr"}}, %{}}
       ] do
-    @tag initial_outcome: :ready, caller_recovery: true, recognition_options: recognition
+    @tag initial_outcome: :ready,
+         caller_recovery: true,
+         recognition_options: recognition,
+         call_settings: settings
     test "a caller configured for French via #{field} does not receive the English callback recording",
          context do
       {speech, _} = start_recovery_call(context)

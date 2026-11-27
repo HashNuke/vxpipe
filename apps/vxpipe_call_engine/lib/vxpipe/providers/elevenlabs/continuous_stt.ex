@@ -85,7 +85,14 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
              Map.to_list(
                Map.take(
                  config,
-                 [:model, :encoding, :sample_rate, :language_code, :commit_strategy]
+                 [
+                   :model,
+                   :encoding,
+                   :sample_rate,
+                   :language_code,
+                   :secondary_languages,
+                   :commit_strategy
+                 ]
                )
              )
            ),

@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import type { ModelCatalog } from "../modelCatalog";
@@ -13,7 +13,7 @@ import { WaitSoundsPanel } from "./wait-sounds-panel";
 import { AdvancedPanel } from "./advanced-panel";
 import type { EditorLookups, InspectorProps } from "./inspectorTypes";
 
-export const CallModelSettingsContext = createContext<ReactNode>(null);
+import { ConversationLanguages } from "./conversation-languages";
 
 const flowTabs = [
   { id: "connection", label: "Connection" }, { id: "defaults", label: "Models" },
@@ -23,7 +23,6 @@ const flowTabs = [
 export type CallSettingsTab = typeof flowTabs[number]["id"];
 
 export function FlowLevelInspector({ catalog, lookups, tab, onTabChange, ...props }: InspectorProps & { catalog: ModelCatalog; lookups: Pick<EditorLookups, "telephonyServices" | "phoneNumbers">; tab?: CallSettingsTab; onTabChange?: (tab: CallSettingsTab) => void }) {
-  const callModelSettings = useContext(CallModelSettingsContext);
   const [activeTab, setActiveTab] = useState<CallSettingsTab>("connection");
   function selectTab(next: CallSettingsTab) { setActiveTab(next); onTabChange?.(next); }
   const tabBar = useRef<HTMLDivElement>(null);
@@ -41,7 +40,7 @@ export function FlowLevelInspector({ catalog, lookups, tab, onTabChange, ...prop
       </div>
       {flowTabs.map((item) => <TabsContent key={item.id} value={item.id} className="m-0 min-h-0 flex-1 overflow-auto p-4">
         <UnplacedIssues />{item.id === "connection" ? <CallConnectionPanel {...props} lookups={lookups} onOpenModels={() => selectTab("defaults")} />
-          : item.id === "defaults" ? <>{callModelSettings}<DefaultsPanel {...props} catalog={catalog} /></>
+          : item.id === "defaults" ? <><ConversationLanguages {...props} /><DefaultsPanel {...props} catalog={catalog} /></>
           : item.id === "variables" ? <VariablesPanel {...props} />
           : item.id === "media" ? <div className="space-y-6"><MediaPolicyFields {...props} participantKey={null} />
             <section aria-label="Wait sounds" className="space-y-3 border-t pt-4"><h3 className="text-sm font-semibold">Wait sounds</h3><WaitSoundsPanel {...props} /></section>

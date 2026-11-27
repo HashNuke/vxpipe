@@ -149,3 +149,11 @@ test("saved unavailable integrations retain their name and binding without appea
   fireEvent.keyDown(screen.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
   expect((await screen.findAllByRole("option")).map(option => option.textContent)).toEqual(["Not configured"]);
 });
+
+test("replacing a speech model discards legacy hints scoped to its previous model", async () => {
+  const initial = { provider: "other", model: "recommended", languages: ["en-GB"] };
+  render(<Harness initial={initial} />);
+  expect(saved()).toEqual(initial);
+  await choose("Model", "First");
+  expect(saved()).toEqual({ provider: "other", model: "first" });
+});

@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
     ResolvedCallPlan
   }
 
+  alias Vxpipe.CallEngine.Speech.ConversationLanguages
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding, as: TransferBinding
@@ -66,30 +67,48 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
              Keyword.get(options, :tool_visibility, call_spec.tool_visibility),
              participants
            ),
-         {:ok, max_duration_ms} <- DurationLimit.resolve(call_spec.max_duration_ms, options) do
-      {:ok,
-       %ResolvedCallPlan{
-         call_spec_id: call_spec.resource_id,
-         call_spec_revision: call_spec.revision,
-         schema_version: call_spec.schema_version,
-         tenant_id: invocation.tenant_id,
-         actor_id: invocation.actor_id,
-         call_id: invocation.call_id,
-         room_id: invocation.room_id,
-         transport: invocation.transport,
-         entry_caller: call_spec.entry_caller,
-         entry_receiver: call_spec.entry_receiver,
-         direction: call_spec.direction,
-         ring_timeout_ms: call_spec.ring_timeout_ms,
-         opening_audio: opening_audio,
-         wait_sounds: call_spec.wait_sounds,
-         media_policy: media_policy,
-         participants: participants,
-         transfer_policy: call_spec.transfer_policy,
-         call_variables: call_variables,
-         tool_visibility: tool_visibility,
-         max_duration_ms: max_duration_ms
-       }}
+         {:ok, max_duration_ms} <- DurationLimit.resolve(call_spec.max_duration_ms, options),
+         {:ok, conversation_languages} <- resolve_conversation_languages(call_spec) do
+      plan = %ResolvedCallPlan{
+        call_spec_id: call_spec.resource_id,
+        call_spec_revision: call_spec.revision,
+        schema_version: call_spec.schema_version,
+        tenant_id: invocation.tenant_id,
+        actor_id: invocation.actor_id,
+        call_id: invocation.call_id,
+        room_id: invocation.room_id,
+        transport: invocation.transport,
+        entry_caller: call_spec.entry_caller,
+        entry_receiver: call_spec.entry_receiver,
+        direction: call_spec.direction,
+        ring_timeout_ms: call_spec.ring_timeout_ms,
+        opening_audio: opening_audio,
+        wait_sounds: call_spec.wait_sounds,
+        media_policy: media_policy,
+        participants: participants,
+        transfer_policy: call_spec.transfer_policy,
+        call_variables: call_variables,
+        tool_visibility: tool_visibility,
+        max_duration_ms: max_duration_ms
+      }
+
+      {:ok, ConversationLanguages.pin(plan, conversation_languages)}
+    end
+  end
+
+  defp resolve_conversation_languages(call_spec) do
+    case Map.get(call_spec, :conversation_languages) do
+      nil ->
+        {:ok, nil}
+
+      values ->
+        case ConversationLanguages.validate(values) do
+          {:ok, tags} ->
+            {:ok, tags}
+
+          :error ->
+            invalid(["conversation_languages"], "must list distinct supported language tags")
+        end
     end
   end
 

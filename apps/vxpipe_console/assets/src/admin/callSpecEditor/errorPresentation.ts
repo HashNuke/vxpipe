@@ -31,6 +31,7 @@ const participantFields: Record<string, [string, string]> = {
 };
 const settingsFields: Record<string, [string, string]> = {
   schema_version: ["advanced", "Schema version"], participants: ["advanced", "Participants"],
+  conversation_languages: ["defaults", "Conversation languages"],
   defaults: ["defaults", "Models"], call_variables: ["variables", "Variables"],
   media_policy: ["media", "Media"], wait_sounds: ["media", "Wait sounds"],
   tool_visibility: ["advanced", "Tool visibility"], tool_visibility_overrides: ["advanced", "Tool visibility"],

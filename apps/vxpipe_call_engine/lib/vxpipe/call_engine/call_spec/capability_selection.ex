@@ -141,8 +141,11 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
 
     compatible =
       case {kind, selection.provider, codes} do
-        {:stt, "elevenlabs", [code]} -> Map.get(selection.options, "language_code", code) == code
-        _ -> true
+        {:stt, "elevenlabs", [code | _]} ->
+          Map.get(selection.options, "language_code", code) == code
+
+        _ ->
+          true
       end
 
     compatible and

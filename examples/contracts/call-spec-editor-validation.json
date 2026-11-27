@@ -1924,6 +1924,131 @@
         "transfer_policy",
         "recovery_destination"
       ]
+    },
+    {
+      "name": "ordered conversation locales",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "conversation_languages"
+          ],
+          "value": [
+            "en-GB",
+            "en-US",
+            "es-MX"
+          ]
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "automatic conversation languages",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "conversation_languages"
+          ],
+          "value": []
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "duplicate conversation locale",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "conversation_languages"
+          ],
+          "value": [
+            "es-MX",
+            "es-MX"
+          ]
+        }
+      ],
+      "expected_path": [
+        "conversation_languages"
+      ]
+    },
+    {
+      "name": "uncatalogued conversation locale",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "conversation_languages"
+          ],
+          "value": [
+            "fr-XX"
+          ]
+        }
+      ],
+      "expected_path": [
+        "conversation_languages"
+      ]
+    },
+    {
+      "name": "conversation languages must be an array",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "conversation_languages"
+          ],
+          "value": "en-GB"
+        }
+      ],
+      "expected_path": [
+        "conversation_languages"
+      ]
+    },
+    {
+      "name": "conversation languages reject explicit null",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "conversation_languages"
+          ],
+          "value": null
+        }
+      ],
+      "expected_path": [
+        "conversation_languages"
+      ]
+    },
+    {
+      "name": "setting call preferences on an existing Scribe selection",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "conversation_languages"
+          ],
+          "value": [
+            "es-MX",
+            "en-GB"
+          ]
+        },
+        {
+          "path": [
+            "defaults",
+            "capabilities",
+            "speech_to_text"
+          ],
+          "value": {
+            "provider": "elevenlabs",
+            "model": "scribe_v2_realtime",
+            "options": {
+              "language_code": "en"
+            }
+          }
+        }
+      ],
+      "expected_path": null
     }
   ]
 }

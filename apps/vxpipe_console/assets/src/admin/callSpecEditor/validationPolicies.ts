@@ -27,7 +27,11 @@ function capabilities(fields: Fields, value: unknown, path: string[]): void {
 
 function capability(fields: Fields, value: unknown, path: string[]): void {
   const isHumanSTT = path.at(-1) === "speech_to_text";
-  const selection = fields.object(value, path, ["provider", "model", "credential_name", "options", "provider_options", ...(isHumanSTT ? ["vad"] : [])]);
+  const selection = fields.object(value, path, ["provider", "model", "credential_name", "options", "provider_options", ...(path.at(-1) === "model_inference" ? [] : ["languages"]), ...(isHumanSTT ? ["vad"] : [])]);
+  const legacyHints = selection.languages;
+  if (legacyHints !== undefined && (!Array.isArray(legacyHints) || !legacyHints.every(code => typeof code === "string" && /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(code)) || new Set(legacyHints).size !== legacyHints.length)) {
+    fields.issue([...path, "languages"], "must list distinct language tags");
+  }
   if (isHumanSTT && Object.hasOwn(selection, "vad") && typeof selection.vad !== "boolean") fields.issue([...path, "vad"], "must be a boolean");
   fields.text(selection.provider, [...path, "provider"], 256);
   fields.text(selection.model, [...path, "model"], 256);

@@ -4,6 +4,8 @@ import type { CatalogCapability } from "../modelCatalog";
 export type JsonValue = null | boolean | number | bigint | string | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 export type CapabilitySelection = {
+  /** Read compatibility for saved model-specific hints. */
+  languages?: string[];
   provider: string;
   model: string;
   credential_name?: string;
@@ -84,6 +86,7 @@ export type Visibility = "hidden" | "metadata" | "full";
 
 // Optional fields stay omitted until explicitly edited. Parsing never inserts defaults.
 export type CallSpecSource = {
+  conversation_languages?: string[];
   schema_version: "20261125.01" | "20261004.01" | "20260915.01";
   name?: string | null;
   incoming_call?: { caller: string; handled_by: string };

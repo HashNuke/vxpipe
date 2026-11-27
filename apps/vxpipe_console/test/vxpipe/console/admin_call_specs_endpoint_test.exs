@@ -439,7 +439,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       authenticated: auth
     } do
       path = "/admin/api/tenants/#{tenant.key}/call-specs"
-      source = editor_source()
+      source = Map.put(editor_source(), "conversation_languages", ["en-GB", "en-US", "es-MX"])
       created = write(auth, :post, path, %{"source" => source})
       first = json_response(created, 201)["call_spec"]
       assert first["revision"] == 1
@@ -452,7 +452,10 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
 
       published = write(auth, :post, path <> "/#{id}/revisions/1/publish", %{})
       assert json_response(published, 200)["call_spec"]["published"]
-      changed = Map.put(source, "name", "Changed in editor")
+
+      changed =
+        Map.merge(source, %{"name" => "Changed in editor", "conversation_languages" => []})
+
       second = write(auth, :put, path <> "/#{id}", %{"source" => changed})
       assert json_response(second, 201)["call_spec"]["revision"] == 2
       latest = auth |> recycle() |> https_get(path <> "/#{id}") |> json_response(200)
