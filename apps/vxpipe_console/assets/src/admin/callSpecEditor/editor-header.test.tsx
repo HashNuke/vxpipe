@@ -89,7 +89,10 @@ test("toolbar adds participants and exposes icon actions for arranging and Call 
   fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
   fireEvent.click(screen.getByRole("button", { name: "Add human" }));
   fireEvent.click(screen.getByRole("button", { name: "Arrange nodes" }));
-  fireEvent.click(screen.getByRole("button", { name: "Call settings" }));
+  const settingsButton = screen.getByRole("button", { name: "Call settings" });
+  fireEvent.focus(settingsButton);
+  expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  fireEvent.click(settingsButton);
   expect(screen.getByRole("button", { name: "Arrange nodes" })).not.toHaveTextContent("Arrange");
   expect(screen.getByRole("button", { name: "Call settings" })).not.toHaveTextContent("Call settings");
   expect(add.mock.calls).toEqual([["agent"], ["human"]]);

@@ -30,11 +30,9 @@ export function FlowEditorToolbar({ onAddNode, onArrangeNodes, onOpenCallSetting
       <Tooltip><TooltipTrigger asChild>
         <Button variant="ghost" size="icon" className="size-10 rounded-none text-foreground hover:bg-control-hover hover:text-foreground dark:hover:bg-control-hover focus-visible:ring-inset" onClick={onArrangeNodes} aria-label="Arrange nodes"><Workflow className="h-4 w-4" /></Button>
       </TooltipTrigger><TooltipContent side="top" sideOffset={8}>Arrange nodes</TooltipContent></Tooltip>
-      <Tooltip><TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative ml-auto size-10 rounded-none rounded-br-md text-foreground hover:bg-control-hover hover:text-foreground dark:hover:bg-control-hover focus-visible:ring-inset" onClick={onOpenCallSettings} aria-label="Call settings" aria-description={settingsIssues ? `${settingsIssues} ${settingsIssues === 1 ? "issue" : "issues"}` : undefined}>
-          <Settings className="h-4 w-4" /><span className="pointer-events-none absolute right-0.5 top-0.5"><IssueCount count={settingsIssues} /></span>
-        </Button>
-      </TooltipTrigger><TooltipContent side="top" sideOffset={8}>Call settings</TooltipContent></Tooltip>
+      <Button variant="ghost" size="icon" className="relative ml-auto size-10 rounded-none rounded-br-md text-foreground hover:bg-control-hover hover:text-foreground dark:hover:bg-control-hover focus-visible:ring-inset" onClick={onOpenCallSettings} aria-label="Call settings" aria-description={settingsIssues ? `${settingsIssues} ${settingsIssues === 1 ? "issue" : "issues"}` : undefined}>
+        <Settings className="h-4 w-4" /><span className="pointer-events-none absolute right-0.5 top-0.5"><IssueCount count={settingsIssues} /></span>
+      </Button>
     </div></TooltipProvider>
   )
 }
