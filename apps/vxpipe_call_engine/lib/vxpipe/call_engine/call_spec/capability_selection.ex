@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
   alias Vxpipe.CallEngine.{CapabilityCatalog, CallSpecValidation}
 
   @enforce_keys [:kind, :provider, :model, :credential_name, :options, :provider_options]
-  defstruct @enforce_keys ++ [vad: false]
+  defstruct @enforce_keys ++ [vad: false, languages: []]
 
   @type kind ::
           :speech_to_text
@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
           credential_name: String.t() | nil,
           options: map(),
           provider_options: map(),
+          languages: [String.t()],
           vad: boolean()
         }
 
@@ -29,6 +30,8 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
 
   def new(input, kind, path) do
     fields = if kind == :speech_to_text, do: @fields ++ [:vad], else: @fields
+
+    fields = if kind == :model_inference, do: fields, else: [:languages | fields]
 
     with {:ok, input} <- CallSpecValidation.normalize_map(input, fields, @code, @message, path),
          {:ok, provider} <- required_string(input, :provider, path),
@@ -45,29 +48,37 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
            credential_name: credential_name,
            options: options,
            provider_options: provider_options,
+           languages: Map.get(input, :languages, []),
            vad: vad
          },
+         :ok <- validate_legacy_language(input, options, path),
          :ok <- validate(selection, path) do
       {:ok, selection}
     end
   end
 
   def validate(%__MODULE__{} = selection, path) do
-    with true <- valid_shape?(selection),
-         :ok <- CapabilityCatalog.validate(selection) do
-      :ok
-    else
-      _invalid -> invalid(path, "must select a supported provider, model and options")
+    cond do
+      not valid_shape?(selection) ->
+        invalid(path, "must select a supported provider, model and options")
+
+      not valid_languages?(selection) ->
+        invalid(path ++ ["languages"], "must list distinct languages supported by this model")
+
+      CapabilityCatalog.validate(selection) == :ok ->
+        :ok
+
+      true ->
+        invalid(path, "must select a supported provider, model and options")
     end
   end
 
   defp valid_shape?(selection) do
     keys = MapSet.new(Map.keys(selection))
 
-    keys in [
-      MapSet.new([:__struct__ | @enforce_keys]),
-      MapSet.new([:__struct__, :vad | @enforce_keys])
-    ] and valid_vad?(selection) and
+    MapSet.difference(keys, MapSet.new([:vad, :languages])) ==
+      MapSet.new([:__struct__ | @enforce_keys]) and
+      valid_vad?(selection) and
       selection.kind in [
         :speech_to_text,
         :model_inference,
@@ -95,10 +106,52 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
     # Preserve their identity rather than rehashing existing pinned selections.
     selection = if vad?(selection), do: selection, else: Map.delete(selection, :vad)
 
+    selection =
+      if languages(selection) == [], do: Map.delete(selection, :languages), else: selection
+
     {tenant_id, selection}
     |> :erlang.term_to_binary([:deterministic])
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
+  end
+
+  def languages(%__MODULE__{languages: values}), do: values
+  def languages(%__MODULE__{}), do: []
+
+  defp validate_legacy_language(%{languages: []}, %{"language_code" => code}, path)
+       when not is_nil(code),
+       do:
+         invalid(
+           path ++ ["languages"],
+           "automatic conflicts with the explicit language_code option"
+         )
+
+  defp validate_legacy_language(_input, _options, _path), do: :ok
+
+  defp valid_languages?(selection) do
+    kind =
+      case selection.kind do
+        kind when kind in [:speech_to_text, :output_speech_to_text] -> :stt
+        :text_to_speech -> :tts
+        :speech_to_speech -> :sts
+        _ -> nil
+      end
+
+    codes = languages(selection)
+
+    compatible =
+      case {kind, selection.provider, codes} do
+        {:stt, "elevenlabs", [code]} -> Map.get(selection.options, "language_code", code) == code
+        _ -> true
+      end
+
+    compatible and
+      Vxpipe.CallEngine.Speech.ModelLanguages.valid?(
+        kind,
+        selection.provider,
+        selection.model,
+        codes
+      )
   end
 
   def vad?(%__MODULE__{vad: enabled}) when is_boolean(enabled), do: enabled

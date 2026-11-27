@@ -12,7 +12,7 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
 
   @derive {Inspect, only: [:model, :encoding, :sample_rate]}
   @enforce_keys [:api_key, :model, :encoding, :sample_rate]
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, language_hints: []]
 
   @type t :: %__MODULE__{
           api_key: String.t(),
@@ -26,15 +26,16 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
 
   def models do
     [
+      Model.new("flux", "Flux", true),
       Model.new("flux-general-en", "Flux General English", false),
-      Model.new("flux-general-multi", "Flux General Multilingual", true)
+      Model.new("flux-general-multi", "Flux General Multilingual", false)
     ]
     |> Enum.map(&Map.put(&1, :options, %{"encoding" => "linear16", "sample_rate" => 48_000}))
   end
 
   def new(options) when is_list(options) do
     api_key = Keyword.get(options, :api_key)
-    model = Keyword.get(options, :model, "flux-general-en")
+    model = wire_model(options)
     encoding = Keyword.get(options, :encoding)
     sample_rate = Keyword.get(options, :sample_rate)
 
@@ -43,6 +44,7 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
        %__MODULE__{
          api_key: api_key,
          model: model,
+         language_hints: Keyword.get(options, :language_hints, []),
          encoding: encoding,
          sample_rate: sample_rate
        }}
@@ -53,23 +55,51 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
 
   @doc false
   def validate_options(options) do
-    model = Keyword.get(options, :model, "flux-general-en")
+    model = wire_model(options)
     encoding = Keyword.get(options, :encoding)
     sample_rate = Keyword.get(options, :sample_rate)
 
-    if Model.supported?(models(), model) and encoding in @encodings and
+    if model in ["flux-general-en", "flux-general-multi"] and
+         valid_languages?(model, Keyword.get(options, :language_hints, [])) and
+         encoding in @encodings and
          is_integer(sample_rate) and sample_rate > 0,
        do: :ok,
        else: {:error, :invalid_configuration}
   end
 
+  def wire_model(options) do
+    case Keyword.get(options, :model, "flux-general-en") do
+      "flux" -> "flux-general-multi"
+      model -> model
+    end
+  end
+
+  def valid_languages?("flux-general-en", languages), do: languages == []
+
+  def valid_languages?(model, codes)
+      when model in ["flux", "flux-general-multi"] and is_list(codes) do
+    Vxpipe.CallEngine.Speech.ModelLanguages.valid?(:stt, "deepgram", model, codes)
+  end
+
+  def valid_languages?(_model, _codes), do: false
+
+  def public_options(config) do
+    options = [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
+
+    if config.language_hints == [],
+      do: options,
+      else: Keyword.put(options, :language_hints, config.language_hints)
+  end
+
   def connection_options(%__MODULE__{} = config) do
     query =
-      URI.encode_query(%{
-        "encoding" => encoding(config.encoding),
-        "model" => config.model,
-        "sample_rate" => Integer.to_string(config.sample_rate)
-      })
+      URI.encode_query(
+        [
+          encoding: encoding(config.encoding),
+          model: config.model,
+          sample_rate: config.sample_rate
+        ] ++ Enum.map(config.language_hints, &{:language_hint, &1})
+      )
 
     %{
       url: config.endpoint <> "?" <> query,

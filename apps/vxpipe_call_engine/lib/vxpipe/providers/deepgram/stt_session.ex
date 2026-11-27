@@ -23,15 +23,16 @@ defmodule Vxpipe.Providers.Deepgram.STTSession do
 
   @impl true
   def configure(options) do
-    with {:ok, options} <- Keyword.validate(options, [:model, :encoding, :sample_rate]),
+    with {:ok, options} <-
+           Keyword.validate(options, [:model, :encoding, :sample_rate, :language_hints]),
          :ok <- Flux.validate_options(options) do
-      model = Keyword.get(options, :model, "flux-general-en")
+      model = Flux.wire_model(options)
       encoding = Keyword.fetch!(options, :encoding)
       sample_rate = Keyword.fetch!(options, :sample_rate)
 
       Descriptor.new(
         kind: :stt,
-        settings: %{model: model, encoding: encoding, sample_rate: sample_rate},
+        settings: Map.new(Keyword.put(options, :model, model)),
         format: provider_format(%{codec: encoding, sample_rate: sample_rate}),
         usage_identity: %{
           provider: :deepgram,
@@ -282,11 +283,7 @@ defmodule Vxpipe.Providers.Deepgram.STTSession do
   end
 
   defp matching_configuration?(descriptor, config) do
-    descriptor.settings == %{
-      model: config.model,
-      encoding: config.encoding,
-      sample_rate: config.sample_rate
-    } and
+    descriptor.settings == Map.new(Flux.public_options(config)) and
       descriptor.format == provider_format(Flux.media_format(config))
   end
 

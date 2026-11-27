@@ -52,7 +52,7 @@ defmodule Vxpipe.Providers.ElevenLabs.TTSSession do
   @impl true
   def request_configuration(%TTS{} = config) do
     with {:ok, descriptor} <-
-           configure(model: config.model, voice: config.voice, sample_rate: config.sample_rate) do
+           configure(TTS.settings(config)) do
       {:ok, descriptor}
     end
   end

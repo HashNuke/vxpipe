@@ -6,7 +6,7 @@ defmodule Vxpipe.Providers.ElevenLabs.Realtime do
 
   @enforce_keys [:api_key, :model, :voice]
   @derive {Inspect, only: [:model, :voice]}
-  defstruct @enforce_keys ++ [system_prompt: "", tools: []]
+  defstruct @enforce_keys ++ [system_prompt: "", tools: [], language: nil]
 
   def models do
     [
@@ -32,23 +32,28 @@ defmodule Vxpipe.Providers.ElevenLabs.Realtime do
            Keyword.validate(options,
              model: "eleven_realtime_v1_mini",
              voice: "brian",
+             language: nil,
              turn_control: "provider"
            ),
          model = Keyword.fetch!(options, :model),
          true <- Model.supported?(models(), model),
+         language = Keyword.fetch!(options, :language),
+         true <-
+           is_nil(language) or
+             (is_binary(language) and Regex.match?(~r/\A[a-z]{2,3}(-[a-z]{2})?\z/, language)),
          voice = Keyword.fetch!(options, :voice),
          true <-
            is_binary(voice) and byte_size(voice) in 1..64 and
              Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, voice),
          "provider" <- Keyword.fetch!(options, :turn_control) do
       {:ok,
-       %{
+       Map.merge(Map.new(language_options(language)), %{
          model: model,
          voice: voice,
          turn_control: "provider",
          input_sample_rate: 24_000,
          output_sample_rate: 24_000
-       }}
+       })}
     else
       _invalid -> {:error, :invalid_configuration}
     end
@@ -71,6 +76,7 @@ defmodule Vxpipe.Providers.ElevenLabs.Realtime do
          api_key: key,
          model: public.model,
          voice: public.voice,
+         language: Map.get(public, :language),
          system_prompt: prompt,
          tools: tools
        }}
@@ -89,6 +95,9 @@ defmodule Vxpipe.Providers.ElevenLabs.Realtime do
   end
 
   def validate(_config), do: {:error, :invalid_configuration}
+
+  def language_options(nil), do: []
+  def language_options(code), do: [language: code]
 
   def pcm_format do
     %{
@@ -123,7 +132,7 @@ defmodule Vxpipe.Providers.ElevenLabs.Realtime do
       "audio" => %{
         "input" => %{
           "format" => %{"type" => "audio/pcm", "rate" => 24_000},
-          "transcription" => %{},
+          "transcription" => if(config.language, do: %{"language" => config.language}, else: %{}),
           # ElevenLabs owns native turn detection and response generation.
           # Room policy remains the interruption owner.
           "turn_detection" => %{

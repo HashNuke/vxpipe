@@ -49,7 +49,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
     {"list_services",
      "List configured services visible in this tenant. Includes permitted platform connections and saved tenant MCPs. Optionally filter by capability. Native service values are provider IDs (for example telnyx); MCP service values identify tool integrations.",
      @services, ["tenant_key"]},
-    {"list_provider_models", "List public models and voice options without calling a provider.",
+    {"list_provider_models", "List public models and their supported voice and language options.",
      Map.put(@catalog, :provider, %{type: "string", minLength: 1, maxLength: 128}),
      ["tenant_key", "provider", "capability"]}
   ]

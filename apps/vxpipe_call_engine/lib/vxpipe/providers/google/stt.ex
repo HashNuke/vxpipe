@@ -3,13 +3,16 @@ defmodule Vxpipe.Providers.Google.STT do
 
   @endpoint "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
   @model "gemini-3.5-transcribe-live"
+  @languages ~w(af-ZA am-ET ar-EG as-IN az-AZ be-BY bg-BG bn-BD bn-IN bs-BA ca-ES ceb cmn-Hans-CN cs-CZ da-DK de-DE el-GR en-GB en-IN en-US es-419 es-ES es-US et-EE fa-IR fi-FI fil-PH fr-FR gl-ES gu-IN ha-NG he-IL hi-IN hr-HR hu-HU hy-AM id-ID is-IS it-IT ja-JP jv-ID ka-GE kea-CV kk-KZ km-KH kn-IN ko-KR ky-KG ln-CD lt-LT lv-LV mk-MK ml-IN mn-MN mr-IN ms-MY mt-MT my-MM nb-NO ne-NP nl-NL or-IN pa-Guru-IN pa-IN pl-PL pt-BR pt-PT ro-RO ru-RU rup-BG sd-Arab-IN sk-SK sl-SI sr-RS sv-SE sw-KE te-IN tg-TJ th-TH tr-TR uk-UA uz-UZ vi-VN yue-Hant-HK)
+  def languages, do: @languages
+
   @maximum_message_bytes 262_144
   @maximum_audio_bytes 32_000
   @maximum_text_bytes 65_536
 
   @enforce_keys [:api_key, :model, :encoding, :sample_rate]
   @derive {Inspect, only: [:model, :encoding, :sample_rate]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, languages: []]
 
   alias Vxpipe.CallEngine.Speech.Model
 
@@ -36,20 +39,30 @@ defmodule Vxpipe.Providers.Google.STT do
     with {:ok, options} <-
            Keyword.validate(options,
              model: @model,
+             languages: [],
              encoding: :linear16,
              sample_rate: 16_000
            ),
          model <- Keyword.fetch!(options, :model),
          true <- Model.supported?(models(), model),
+         codes <- Keyword.fetch!(options, :languages),
+         true <-
+           is_list(codes) and Enum.all?(codes, &(&1 in @languages)) and codes == Enum.uniq(codes),
          :linear16 <- Keyword.fetch!(options, :encoding),
          16_000 <- Keyword.fetch!(options, :sample_rate) do
-      {:ok, %{model: model, encoding: :linear16, sample_rate: 16_000}}
+      {:ok,
+       Map.new(
+         settings_options(codes) ++ [model: model, encoding: :linear16, sample_rate: 16_000]
+       )}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   end
 
   def public_options(_options), do: {:error, :invalid_configuration}
+
+  def settings_options([]), do: []
+  def settings_options(codes), do: [languages: codes]
 
   def connection_options(%__MODULE__{} = config),
     do: %{url: config.endpoint, headers: [{"x-goog-api-key", config.api_key}]}
@@ -59,7 +72,8 @@ defmodule Vxpipe.Providers.Google.STT do
       "setup" => %{
         "model" => "models/" <> config.model,
         "generationConfig" => %{"responseModalities" => ["TEXT"]},
-        "inputAudioTranscription" => %{}
+        "inputAudioTranscription" =>
+          if(config.languages == [], do: %{}, else: %{"languageCodes" => config.languages})
       }
     }
   end

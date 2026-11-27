@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.Speech.ModelCatalogTest do
 
   test "recommended models retain onboarding choices, with Flux and its voice separate" do
     for {provider, capability, id} <- [
-          {"deepgram", :stt, "flux-general-multi"},
+          {"deepgram", :stt, "flux"},
           {"deepgram", :tts, "flux"},
           {"cartesia", :stt, "ink-2"},
           {"cartesia", :tts, "sonic-3.6"},

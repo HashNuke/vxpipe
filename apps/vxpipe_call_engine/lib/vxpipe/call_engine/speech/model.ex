@@ -1,5 +1,5 @@
 defmodule Vxpipe.CallEngine.Speech.Model do
-  @moduledoc "Public model and voice descriptors shared by speech adapters and authoring catalogs."
+  @moduledoc "Public model, voice and language descriptors shared by speech adapters and authoring catalogs."
 
   @type voice :: %{id: String.t(), name: String.t(), default: boolean()}
   @type voices ::
@@ -11,6 +11,11 @@ defmodule Vxpipe.CallEngine.Speech.Model do
           :name => String.t(),
           :default => boolean(),
           :voices => voices(),
+          optional(:languages) => %{
+            multiple: boolean(),
+            default: String.t(),
+            values: [String.t()]
+          },
           optional(:options) => %{String.t() => String.t() | number() | boolean() | nil}
         }
 

@@ -1,10 +1,12 @@
 defmodule Vxpipe.Providers.ElevenLabs.TTS do
   @moduledoc false
+  alias Vxpipe.CallEngine.Speech.ModelLanguages
+
   @endpoint "https://api.elevenlabs.io/v1/text-to-speech"
   @rates [8_000, 16_000, 24_000, 48_000]
   @enforce_keys [:api_key, :model, :voice, :sample_rate]
   @derive {Inspect, only: [:model, :voice, :sample_rate]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, language: nil]
 
   alias Vxpipe.CallEngine.Speech.Model
 
@@ -43,21 +45,34 @@ defmodule Vxpipe.Providers.ElevenLabs.TTS do
     with true <- Keyword.keyword?(options),
          true <- unique_options?(options),
          {:ok, options} <-
-           Keyword.validate(options, model: "eleven_flash_v2_5", voice: nil, sample_rate: 16_000),
+           Keyword.validate(options,
+             model: "eleven_flash_v2_5",
+             voice: nil,
+             language: nil,
+             sample_rate: 16_000
+           ),
          model <- Keyword.fetch!(options, :model),
          true <- Model.supported?(models(), model),
          true <- websocket_compatible?(model),
          voice when is_binary(voice) <- Keyword.fetch!(options, :voice),
          true <- Regex.match?(~r/\A[A-Za-z0-9_-]{1,128}\z/, voice),
+         code = Keyword.get(options, :language),
+         true <- is_nil(code) or ModelLanguages.valid?(:tts, "elevenlabs", model, [code]),
          rate <- Keyword.fetch!(options, :sample_rate),
          true <- rate in @rates do
-      {:ok, %{model: model, voice: voice, sample_rate: rate}}
+      {:ok,
+       Map.new(ModelLanguages.option(code) ++ [model: model, voice: voice, sample_rate: rate])}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   end
 
   def public_options(_options), do: {:error, :invalid_configuration}
+
+  def settings(config),
+    do:
+      ModelLanguages.option(config.language) ++
+        [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
 
   def validate_text(text) when is_binary(text) do
     if String.valid?(text) and String.trim(text) != "" and byte_size(text) <= 4_000 and
@@ -140,11 +155,13 @@ defmodule Vxpipe.Providers.ElevenLabs.TTS do
   def validate_audio(_audio), do: {:error, :invalid_message}
 
   defp query(config) do
-    URI.encode_query(%{
-      "model_id" => config.model,
-      "output_format" => "pcm_#{config.sample_rate}",
-      "inactivity_timeout" => "180"
-    })
+    URI.encode_query(
+      Map.merge(if(config.language, do: %{"language_code" => config.language}, else: %{}), %{
+        "model_id" => config.model,
+        "output_format" => "pcm_#{config.sample_rate}",
+        "inactivity_timeout" => "180"
+      })
+    )
   end
 
   defp unique_options?(options),

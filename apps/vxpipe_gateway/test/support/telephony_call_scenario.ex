@@ -68,14 +68,12 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
     caller_speech =
       case Keyword.get(options, :caller_stt, :default) do
         :scribe ->
-          language = Keyword.get(options, :language)
-
           %{
             provider: "elevenlabs",
             model: "scribe_v2_realtime",
-            vad: Keyword.get(options, :caller_vad, false),
-            options: if(language, do: %{language_code: language}, else: %{})
+            vad: Keyword.get(options, :caller_vad, false)
           }
+          |> Map.merge(Keyword.get(options, :recognition_options, %{}))
 
         :default ->
           speech_selection(provider)

@@ -1,7 +1,7 @@
 import { setupProviders } from "../setupCatalog";
 import { CredentialNamesContext } from "./credential-names";
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
-import { useContext } from "react";
+import { createContext, useContext, type ComponentType } from "react";
 import { VoiceCatalogContext } from "../voiceCatalog";
 import { VoiceField } from "./voice-field";
 import { Button } from "../components/ui/button";
@@ -22,10 +22,14 @@ type Props = {
   inherited?: CapabilitySelection;
 };
 
+export type CapabilityExtraFieldProps = Pick<Props, "kind" | "value" | "path" | "onChange" | "disabled">;
+export const CapabilityExtraFieldContext = createContext<ComponentType<CapabilityExtraFieldProps> | null>(null);
+
 const providerNames: Record<string, string> = { ...Object.fromEntries(setupProviders.map(({ id, name }) => [id, name])), morse: "MorseCode Local" };
 
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
 export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Not configured", defaultDisabled = false, inherited }: Props) {
+  const ExtraField = useContext(CapabilityExtraFieldContext);
   const credentialNames = useContext(CredentialNamesContext);
   const voiceCatalog = useContext(VoiceCatalogContext);
   const providers = catalog[kind] ?? {};
@@ -59,6 +63,7 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
           }
         }} />
     </div>
+    {ExtraField && value && <ExtraField kind={kind} path={path} value={value} onChange={onChange} disabled={disabled} />}
     {value && <>
       {voices && (voiceCatalog && (kind === "text_to_speech" || kind === "speech_to_speech")
         ? <VoiceField client={voiceCatalog} provider={value.provider} model={value.model} capability={kind} credential_name={value.credential_name} path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled}

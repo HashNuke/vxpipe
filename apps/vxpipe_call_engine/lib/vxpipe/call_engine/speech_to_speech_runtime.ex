@@ -142,7 +142,9 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
          false <- Keyword.has_key?(options, :system_prompt) or Keyword.has_key?(options, :tools),
          {:ok, config} <-
            Realtime.new(options ++ [system_prompt: activation.system_prompt, tools: tools]),
-         public = [model: config.model, voice: config.voice, turn_control: "provider"],
+         public =
+           Realtime.language_options(config.language) ++
+             [model: config.model, voice: config.voice, turn_control: "provider"],
          {:ok, selected, []} <- provider({RealtimeSession, public}, settings) do
       {:ok, selected, [config: config]}
     else

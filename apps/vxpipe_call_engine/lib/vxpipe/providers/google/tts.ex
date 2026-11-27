@@ -1,12 +1,14 @@
 defmodule Vxpipe.Providers.Google.TTS do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Speech.ModelLanguages
+
   @endpoint "https://generativelanguage.googleapis.com/v1beta/interactions"
   @model "gemini-3.1-flash-tts-preview"
 
   @enforce_keys [:api_key, :model, :voice, :sample_rate]
   @derive {Inspect, only: [:model, :voice, :sample_rate]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, language: nil]
 
   alias Vxpipe.CallEngine.Speech.Model
 
@@ -35,19 +37,25 @@ defmodule Vxpipe.Providers.Google.TTS do
   def new(_options), do: {:error, :invalid_configuration}
 
   def public_options(options) when is_list(options) do
-    with {:ok, options} <- Keyword.validate(options, model: @model, voice: "Kore"),
+    with {:ok, options} <- Keyword.validate(options, model: @model, language: nil, voice: "Kore"),
          model <- Keyword.fetch!(options, :model),
+         code = Keyword.get(options, :language),
+         true <- is_nil(code) or ModelLanguages.valid?(:tts, "google", model, [code]),
          true <- Model.supported?(models(), model),
          voice when is_binary(voice) <- Keyword.fetch!(options, :voice),
          true <- byte_size(voice) in 1..128,
          true <- Regex.match?(~r/\A[A-Za-z][A-Za-z0-9_-]*\z/, voice) do
-      {:ok, %{model: model, voice: voice, sample_rate: 24_000}}
+      {:ok,
+       ModelLanguages.put(%{model: model, voice: voice, sample_rate: 24_000}, :language, code)}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   end
 
   def public_options(_options), do: {:error, :invalid_configuration}
+
+  def settings(config),
+    do: ModelLanguages.option(config.language) ++ [model: config.model, voice: config.voice]
 
   def validate_text(text) when is_binary(text) do
     if String.valid?(text) and String.trim(text) != "" and byte_size(text) <= 4_000 and
@@ -63,7 +71,9 @@ defmodule Vxpipe.Providers.Google.TTS do
       model: config.model,
       input: text,
       response_format: %{type: "audio"},
-      generation_config: %{speech_config: [%{voice: config.voice}]},
+      generation_config: %{
+        speech_config: [ModelLanguages.put(%{voice: config.voice}, :language, config.language)]
+      },
       stream: true
     }
   end

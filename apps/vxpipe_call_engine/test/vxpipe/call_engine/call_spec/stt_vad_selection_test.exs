@@ -64,7 +64,7 @@ defmodule Vxpipe.CallEngine.CallSpec.STTVADSelectionTest do
     assert {:ok, enabled} =
              CapabilitySelection.new(Map.put(input, :vad, true), :speech_to_text, @path)
 
-    historical = Map.delete(omitted, :vad)
+    historical = Map.drop(omitted, [:vad, :languages])
 
     expected =
       :crypto.hash(:sha256, :erlang.term_to_binary({"tenant", historical}, [:deterministic]))

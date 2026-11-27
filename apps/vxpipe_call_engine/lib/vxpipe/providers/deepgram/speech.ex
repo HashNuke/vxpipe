@@ -3,6 +3,28 @@ defmodule Vxpipe.Providers.Deepgram.Speech do
 
   alias Vxpipe.Providers.Deepgram
 
+  def selection_options(kind, model, input, []), do: selection_options(kind, model, input)
+
+  def selection_options(:text_to_speech, "flux", input, ["en"]),
+    do: selection_options(:text_to_speech, "flux", input)
+
+  def selection_options(:speech_to_text, model, input, languages) do
+    {wire_model, hints} =
+      case {model, languages} do
+        {"flux", ["en"]} -> {"flux-general-en", []}
+        {"flux-general-en", ["en"]} -> {"flux-general-en", []}
+        {"flux", codes} -> {"flux-general-multi", codes}
+        {id, codes} -> {id, codes}
+      end
+
+    with {:ok, options} <- selection_options(:speech_to_text, wire_model, input) do
+      {:ok, if(hints == [], do: options, else: Keyword.put(options, :language_hints, hints))}
+    end
+  end
+
+  def selection_options(:speech_to_text, "flux", input),
+    do: selection_options(:speech_to_text, "flux-general-multi", input)
+
   def selection_options(:speech_to_text, model, input) when is_map(input) do
     with {:ok, options} <- normalize(input),
          {:ok, encoding} <- encoding(Keyword.get(options, :encoding)) do

@@ -65,7 +65,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
            Keyword.get(settings, :wire_module, Vxpipe.Providers.Deepgram.STTSocket),
          wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
          true <- Keyword.keyword?(wire_options) do
-      public = [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
+      public = Flux.public_options(config)
 
       {:ok, {FluxSession, public},
        [config: config, wire_module: wire_module, wire_options: wire_options]}
@@ -81,7 +81,9 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
            Keyword.get(settings, :wire_module, Vxpipe.Providers.Google.STTSocket),
          wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
          true <- Keyword.keyword?(wire_options) do
-      public = [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
+      public =
+        GoogleSTT.settings_options(config.languages) ++
+          [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
 
       {:ok, {GoogleSTTSession, public},
        [config: config, wire_module: wire_module, wire_options: wire_options]}

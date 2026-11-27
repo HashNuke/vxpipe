@@ -82,7 +82,11 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     descriptor = Keyword.fetch!(options, :descriptor)
 
     with :ok <- Realtime.validate(config),
-         {:ok, ^descriptor} <- configure(model: config.model, voice: config.voice),
+         {:ok, ^descriptor} <-
+           configure(
+             Realtime.language_options(config.language) ++
+               [model: config.model, voice: config.voice]
+           ),
          :ok <- Channel.bind(channel) do
       {:ok,
        %{

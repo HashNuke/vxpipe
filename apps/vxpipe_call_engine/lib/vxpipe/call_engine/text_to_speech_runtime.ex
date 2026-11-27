@@ -67,7 +67,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
            Keyword.get(settings, :wire_module, Vxpipe.Providers.Rime.TTSSocket),
          wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
          true <- Keyword.keyword?(wire_options) do
-      public = [model: config.model, speaker: config.speaker, sample_rate: config.sample_rate]
+      public = TTS.settings(config)
 
       with {:ok, descriptor} <- TTSSession.configure(public) do
         {:ok, {TTSSession, public},
@@ -85,7 +85,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
          nil <- Keyword.get(settings, :wire_options),
          request_module when is_atom(request_module) <-
            Keyword.get(settings, :request_module, Vxpipe.Providers.Google.TTSRequest) do
-      public = [model: config.model, voice: config.voice]
+      public = GoogleTTS.settings(config)
 
       with {:ok, descriptor} <- GoogleTTSSession.configure(public) do
         {:ok, {GoogleTTSSession, public}, [config: config, request_module: request_module],
@@ -103,7 +103,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
            Keyword.get(settings, :wire_module, Vxpipe.CallEngine.Speech.ContextTTSSocket),
          wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
          true <- Keyword.keyword?(wire_options) do
-      public = [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
+      public = CartesiaTTS.settings(config)
 
       with {:ok, descriptor} <- CartesiaTTSSession.configure(public) do
         {:ok, {CartesiaTTSSession, public},
@@ -121,7 +121,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
            Keyword.get(settings, :wire_module, Vxpipe.CallEngine.Speech.ContextTTSSocket),
          wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
          true <- Keyword.keyword?(wire_options) do
-      public = [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
+      public = ElevenLabsTTS.settings(config)
 
       with {:ok, descriptor} <- ElevenLabsTTSSession.configure(public) do
         {:ok, {ElevenLabsTTSSession, public},

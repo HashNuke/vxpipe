@@ -63,7 +63,14 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
          {:ok, adapter} <- Registry.resolve_capability(provider, kind) do
       if kind == :llm,
         do: Vxpipe.AgentRuntime.ModelCatalog.models(provider),
-        else: {:ok, adapter.models()}
+        else: {:ok, Enum.map(adapter.models(), &language_descriptor(&1, kind, provider))}
+    end
+  end
+
+  defp language_descriptor(model, kind, provider) do
+    case Vxpipe.CallEngine.Speech.ModelLanguages.descriptor(kind, provider, model.id) do
+      nil -> model
+      descriptor -> Map.put(model, :languages, descriptor)
     end
   end
 

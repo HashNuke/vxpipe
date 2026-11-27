@@ -186,10 +186,14 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
       %{
         kind: :human,
         capabilities: %{
-          speech_to_text: %{provider: "elevenlabs", model: "scribe_v2_realtime", options: options}
+          speech_to_text:
+            %{provider: "elevenlabs", model: "scribe_v2_realtime", options: options} = recognition
         }
       } ->
-        Map.get(options, "language_code") in [nil, "en", "eng"]
+        case Map.get(recognition, :languages, []) do
+          [] -> Map.get(options, "language_code") in [nil, "en", "eng"]
+          languages -> languages in [["en"], ["eng"]]
+        end
 
       _other ->
         false

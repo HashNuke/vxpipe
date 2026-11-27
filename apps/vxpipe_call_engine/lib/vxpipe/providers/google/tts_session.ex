@@ -49,7 +49,7 @@ defmodule Vxpipe.Providers.Google.TTSSession do
 
   @impl true
   def request_configuration(%TTS{} = config) do
-    with {:ok, descriptor} <- configure(model: config.model, voice: config.voice) do
+    with {:ok, descriptor} <- configure(TTS.settings(config)) do
       {:ok, descriptor, TTSRequest}
     end
   end

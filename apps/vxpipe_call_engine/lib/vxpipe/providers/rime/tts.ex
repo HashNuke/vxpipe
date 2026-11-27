@@ -1,6 +1,8 @@
 defmodule Vxpipe.Providers.Rime.TTS do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Speech.ModelLanguages
+
   @endpoint "wss://users-ws.rime.ai/ws3"
   @sample_rates [8_000, 16_000, 24_000, 48_000]
   @maximum_text_bytes 4_000
@@ -9,7 +11,7 @@ defmodule Vxpipe.Providers.Rime.TTS do
 
   @enforce_keys [:api_key, :model, :speaker, :sample_rate]
   @derive {Inspect, only: [:model, :speaker, :sample_rate]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, language: nil]
 
   alias Vxpipe.CallEngine.Speech.Model
 
@@ -34,14 +36,26 @@ defmodule Vxpipe.Providers.Rime.TTS do
 
   def public_options(options) when is_list(options) do
     with {:ok, options} <-
-           Keyword.validate(options, model: "coda", speaker: "astra", sample_rate: 24_000),
+           Keyword.validate(options,
+             model: "coda",
+             language: nil,
+             speaker: "astra",
+             sample_rate: 24_000
+           ),
          model <- Keyword.fetch!(options, :model),
+         code = Keyword.get(options, :language),
+         true <- is_nil(code) or ModelLanguages.valid?(:tts, "rime", model, [code]),
          true <- Model.supported?(models(), model),
          speaker when is_binary(speaker) <- Keyword.fetch!(options, :speaker),
          true <- byte_size(speaker) in 1..128,
          true <- Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_-]*\z/, speaker),
          sample_rate when sample_rate in @sample_rates <- Keyword.fetch!(options, :sample_rate) do
-      {:ok, %{model: model, speaker: speaker, sample_rate: sample_rate}}
+      {:ok,
+       ModelLanguages.put(
+         %{model: model, speaker: speaker, sample_rate: sample_rate},
+         :language,
+         code
+       )}
     else
       _invalid -> {:error, :invalid_configuration}
     end
@@ -49,15 +63,22 @@ defmodule Vxpipe.Providers.Rime.TTS do
 
   def public_options(_options), do: {:error, :invalid_configuration}
 
+  def settings(config),
+    do:
+      ModelLanguages.option(config.language) ++
+        [model: config.model, speaker: config.speaker, sample_rate: config.sample_rate]
+
   def connection_options(%__MODULE__{} = config) do
     query =
-      URI.encode_query(%{
+      %{
         "speaker" => config.speaker,
         "modelId" => config.model,
         "audioFormat" => "pcm",
         "samplingRate" => Integer.to_string(config.sample_rate),
         "segment" => "never"
-      })
+      }
+      |> ModelLanguages.put("lang", config.language)
+      |> URI.encode_query()
 
     %{
       url: config.endpoint <> "?" <> query,

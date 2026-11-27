@@ -4,6 +4,61 @@ defmodule Vxpipe.Calls.CallSpecsTest do
   alias Vxpipe.Calls.{Administration, CallSpecs}
   alias Vxpipe.Calls.TestMemoryRepository
 
+  test "published sources retain distinct default and participant recognition languages", %{
+    tenant: tenant,
+    options: options
+  } do
+    options =
+      Keyword.put(
+        options,
+        :provider_credential_repository,
+        {__MODULE__, :speech_languages}
+      )
+
+    recognition = %{provider: "elevenlabs", model: "scribe_v2_realtime", languages: ["en"]}
+    caller = %{recognition | languages: ["fr"]}
+
+    source =
+      call_spec_input()
+      |> put_in([:defaults, :capabilities, :speech_to_text], recognition)
+      |> put_in([:participants, "caller", :capabilities], %{speech_to_text: caller})
+
+    assert {:ok, draft} = CallSpecs.save(tenant.key, source, options)
+    assert draft.validation_errors == []
+    assert {:ok, _} = CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
+
+    assert {:ok, stored} =
+             CallSpecs.fetch(tenant.key, draft.call_spec_id, draft.revision, options)
+
+    assert get_in(stored.source, ["defaults", "capabilities", "speech_to_text", "languages"]) == [
+             "en"
+           ]
+
+    assert get_in(stored.source, [
+             "participants",
+             "caller",
+             "capabilities",
+             "speech_to_text",
+             "languages"
+           ]) == ["fr"]
+  end
+
+  def resolve(:speech_languages, tenant_key, "elevenlabs", "default") do
+    {:ok,
+     %Vxpipe.Calls.ResolvedProviderCredential{
+       credential: %Vxpipe.Calls.ProviderCredential{
+         id: "test-scribe",
+         tenant_key: tenant_key,
+         provider: "elevenlabs",
+         name: "default",
+         auth_kind: "api_key"
+       },
+       payload: %{"api_key" => "synthetic-scribe"}
+     }}
+  end
+
+  def with_active(:speech_languages, _tenant_key, _requirements, operation), do: operation.()
+
   test "opening conflicts survive a server draft reload and block publication and preparation until resolved",
        %{tenant: tenant, options: options} do
     for capabilities <- [

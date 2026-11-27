@@ -75,7 +75,7 @@ defmodule Vxpipe.Providers.Rime.TTSSession do
     wire_options = Keyword.get(private, :wire_options, [])
 
     with %TTS{} <- config,
-         {:ok, expected} <- configure(config_options(config)),
+         {:ok, expected} <- configure(TTS.settings(config)),
          true <- descriptor == expected,
          true <- is_atom(wire_module) and is_list(wire_options),
          :ok <- Channel.bind(channel),
@@ -251,9 +251,6 @@ defmodule Vxpipe.Providers.Rime.TTSSession do
 
   defp decode_signal(signal) when is_binary(signal), do: TTS.decode(signal)
   defp decode_signal(signal), do: signal
-
-  defp config_options(config),
-    do: [model: config.model, speaker: config.speaker, sample_rate: config.sample_rate]
 
   defp fail_call(state), do: {:stop, :normal, {:error, :provider_unavailable}, state}
 end

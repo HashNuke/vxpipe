@@ -1,12 +1,14 @@
 defmodule Vxpipe.Providers.Cartesia.TTS do
   @moduledoc false
+  alias Vxpipe.CallEngine.Speech.ModelLanguages
+
   @endpoint "https://api.cartesia.ai/tts/bytes"
   @websocket_endpoint "wss://api.cartesia.ai/tts/websocket"
   @cartesia_version "2026-08-14"
   @rates [8_000, 16_000, 24_000, 48_000]
   @enforce_keys [:api_key, :model, :voice, :sample_rate]
   @derive {Inspect, only: [:model, :voice, :sample_rate]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, language: nil]
 
   alias Vxpipe.CallEngine.Speech.Model
 
@@ -53,20 +55,33 @@ defmodule Vxpipe.Providers.Cartesia.TTS do
 
   def public_options(options) when is_list(options) do
     with {:ok, options} <-
-           Keyword.validate(options, model: "sonic-3.6", voice: nil, sample_rate: 24_000),
+           Keyword.validate(options,
+             model: "sonic-3.6",
+             voice: nil,
+             language: nil,
+             sample_rate: 24_000
+           ),
          model <- Keyword.fetch!(options, :model),
          true <- Model.supported?(models(), model),
          voice when is_binary(voice) <- Keyword.fetch!(options, :voice),
          true <- Regex.match?(~r/\A[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\z/, voice),
+         code = Keyword.get(options, :language),
+         true <- is_nil(code) or ModelLanguages.valid?(:tts, "cartesia", model, [code]),
          rate <- Keyword.fetch!(options, :sample_rate),
          true <- rate in @rates do
-      {:ok, %{model: model, voice: voice, sample_rate: rate}}
+      {:ok,
+       Map.new(ModelLanguages.option(code) ++ [model: model, voice: voice, sample_rate: rate])}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   end
 
   def public_options(_options), do: {:error, :invalid_configuration}
+
+  def settings(config),
+    do:
+      ModelLanguages.option(config.language) ++
+        [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
 
   def validate_text(text) when is_binary(text) do
     if String.valid?(text) and String.trim(text) != "" and byte_size(text) <= 4_000 and
@@ -93,20 +108,26 @@ defmodule Vxpipe.Providers.Cartesia.TTS do
   def open_utterance(%__MODULE__{} = config, context, text)
       when is_binary(context) and is_binary(text) do
     [
-      JSON.encode!(%{
-        "model_id" => config.model,
-        "transcript" => text,
-        "voice" => %{"id" => config.voice},
-        "output_format" => %{
-          "container" => "raw",
-          "encoding" => "pcm_s16le",
-          "sample_rate" => config.sample_rate
-        },
-        "context_id" => context,
-        "continue" => false
-      })
+      JSON.encode!(
+        Map.merge(language_field(config), %{
+          "model_id" => config.model,
+          "transcript" => text,
+          "voice" => %{"id" => config.voice},
+          "output_format" => %{
+            "container" => "raw",
+            "encoding" => "pcm_s16le",
+            "sample_rate" => config.sample_rate
+          },
+          "context_id" => context,
+          "continue" => false
+        })
+      )
     ]
   end
+
+  defp language_field(%{language: nil}), do: %{}
+  defp language_field(%{model: "sonic-3.6" <> _, language: code}), do: %{"locale" => code}
+  defp language_field(%{language: code}), do: %{"language" => code}
 
   def close_utterance(%__MODULE__{}, context) when is_binary(context),
     do: JSON.encode!(%{"context_id" => context, "cancel" => true})

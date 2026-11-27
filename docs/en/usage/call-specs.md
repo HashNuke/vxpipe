@@ -87,6 +87,25 @@ agent defaults to a generated greeting. Explicit first-message modes can overrid
 that behavior. Prompts should refer to destination participant keys when describing
 when to transfer.
 
+### Speech model languages
+
+Put the optional `languages` array beside `model` on a speech selection. Omit it or use an empty array for the model default. Use the model catalog for supported codes, the default and whether the model accepts multiple values. Each recognizer has its own selection, including output transcription.
+
+```json
+{
+  "speech_to_text": {
+    "provider": "deepgram",
+    "model": "flux",
+    "languages": ["en", "es"],
+    "options": {"encoding": "linear16", "sample_rate": 48000}
+  }
+}
+```
+
+For Flux, English alone selects the English model. Automatic uses the multilingual model. Spanish alone or English and Spanish together use the multilingual model with recognition hints. An explicit `flux-general-multi` keeps that model even with English as its only hint.
+
+Scribe accepts one expected caller language, such as `["en"]`. Existing Scribe specs using `options.language_code` still work. Gemini Transcribe Live accepts regional hints such as `["en-US", "es-US"]`. On ElevenLabs Realtime one language applies to the conversation, including replies. Supported speech synthesis models take a single language for their output.
+
 ## Variables
 
 Call variables are named sections, each with an object schema. Agents receive

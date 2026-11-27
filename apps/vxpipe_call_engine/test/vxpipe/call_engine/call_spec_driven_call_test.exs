@@ -1469,7 +1469,21 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     configure_agent_runtime_provider(self())
     configure_speech_runtime()
     room_id = unique_id("room")
-    plan = compile_plan(room_id, speech?: true)
+
+    plan =
+      compile_plan(room_id,
+        speech?: true,
+        call_spec_transform: fn source ->
+          update_in(
+            source,
+            [:participants, "caller", :capabilities, :speech_to_text],
+            fn recognition ->
+              Map.merge(recognition, %{model: "flux", languages: ["es", "en"]})
+            end
+          )
+        end
+      )
+
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
@@ -1486,6 +1500,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                     %{url: stt_url, headers: [{"Authorization", "Token runtime-test-secret"}]}}
 
     assert stt_url =~ "model=flux-general-multi"
+    query = stt_url |> URI.parse() |> Map.fetch!(:query) |> URI.query_decoder()
+    assert for({"language_hint", code} <- query, do: code) == ["es", "en"]
   end
 
   for provider <- [:deepgram, :morse] do

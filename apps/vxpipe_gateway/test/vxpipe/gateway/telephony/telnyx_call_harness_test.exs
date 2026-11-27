@@ -105,7 +105,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
           caller_vad: context[:caller_vad] == true,
           background_tool: context[:background_tool] == true,
           caller_stt: if(context[:caller_recovery], do: :scribe, else: :default),
-          language: context[:language],
+          recognition_options: context[:recognition_options] || %{},
           command_mode: context[:command_mode] || "observer",
           transfer_policy:
             if(context[:recovery_transfer],
@@ -295,18 +295,26 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     end
   end
 
-  @tag initial_outcome: :ready, caller_recovery: true, language: "fr"
-  test "a caller configured for French does not receive the English callback recording",
-       context do
-    {speech, _} = start_recovery_call(context)
+  for {field, recognition} <- [
+        {"languages", %{languages: ["fr"]}},
+        {"language_code", %{options: %{language_code: "fr"}}}
+      ] do
+    @tag initial_outcome: :ready, caller_recovery: true, recognition_options: recognition
+    test "a caller configured for French via #{field} does not receive the English callback recording",
+         context do
+      {speech, _} = start_recovery_call(context)
 
-    [{media, _}] =
-      Registry.lookup(Vxpipe.Gateway.Media.Registry, {:telephony_media_session, @incoming_leg_id})
+      [{media, _}] =
+        Registry.lookup(
+          Vxpipe.Gateway.Media.Registry,
+          {:telephony_media_session, @incoming_leg_id}
+        )
 
-    monitor = Process.monitor(media)
-    GenServer.stop(speech, :normal)
-    assert_receive {:DOWN, ^monitor, :process, ^media, _reason}, 2_000
-    refute_receive {:test_recovery_playback, _, _}
+      monitor = Process.monitor(media)
+      GenServer.stop(speech, :normal)
+      assert_receive {:DOWN, ^monitor, :process, ^media, _reason}, 2_000
+      refute_receive {:test_recovery_playback, _, _}
+    end
   end
 
   @tag initial_outcome: :ready, caller_recovery: true

@@ -96,9 +96,8 @@ defmodule Vxpipe.Providers.Google.STTSession do
     with %STT{} <- config,
          {:ok, expected} <-
            configure(
-             model: config.model,
-             encoding: config.encoding,
-             sample_rate: config.sample_rate
+             STT.settings_options(config.languages) ++
+               [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
            ),
          true <- descriptor == expected,
          true <- is_atom(wire_module) and is_list(wire_options) and Keyword.keyword?(wire_options),

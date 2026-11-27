@@ -153,37 +153,60 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def speech_options(%CapabilitySelection{kind: :output_speech_to_text} = selection),
     do: speech_options(selection |> Map.delete(:vad) |> Map.put(:kind, :speech_to_text))
 
-  def speech_options(%CapabilitySelection{
-        provider: "deepgram",
-        kind: kind,
-        model: model,
-        options: input
-      }) do
-    Deepgram.Speech.selection_options(kind, model, input)
+  def speech_options(
+        %CapabilitySelection{
+          provider: "deepgram",
+          kind: kind,
+          model: model,
+          options: input
+        } = selection
+      ) do
+    Deepgram.Speech.selection_options(
+      kind,
+      model,
+      input,
+      CapabilitySelection.languages(selection)
+    )
   end
 
-  def speech_options(%CapabilitySelection{
-        provider: "google",
-        kind: :speech_to_text,
-        model: "gemini-3.5-transcribe-live",
-        options: input
-      }) do
+  def speech_options(
+        %CapabilitySelection{
+          provider: "google",
+          kind: :speech_to_text,
+          model: "gemini-3.5-transcribe-live",
+          options: input
+        } = selection
+      ) do
+    languages = GoogleSTT.settings_options(CapabilitySelection.languages(selection))
+
     with {:ok, options} <- normalize(input, [:encoding, :sample_rate]),
          {:ok, public} <-
-           GoogleSTT.public_options(Keyword.put(options, :model, "gemini-3.5-transcribe-live")) do
-      {:ok, [model: public.model, encoding: public.encoding, sample_rate: public.sample_rate]}
+           GoogleSTT.public_options(
+             languages ++ Keyword.put(options, :model, "gemini-3.5-transcribe-live")
+           ) do
+      {:ok,
+       languages ++
+         [model: public.model, encoding: public.encoding, sample_rate: public.sample_rate]}
     end
   end
 
-  def speech_options(%CapabilitySelection{
-        provider: "rime",
-        kind: :text_to_speech,
-        model: "coda",
-        options: input
-      }) do
+  def speech_options(
+        %CapabilitySelection{
+          provider: "rime",
+          kind: :text_to_speech,
+          model: "coda",
+          options: input
+        } = selection
+      ) do
+    language =
+      Vxpipe.CallEngine.Speech.ModelLanguages.option(
+        List.first(CapabilitySelection.languages(selection))
+      )
+
     with {:ok, options} <- normalize(input, [:speaker, :sample_rate]),
-         {:ok, public} <- TTS.public_options(Keyword.put(options, :model, "coda")) do
-      {:ok, [model: public.model, speaker: public.speaker, sample_rate: public.sample_rate]}
+         {:ok, public} <- TTS.public_options(language ++ Keyword.put(options, :model, "coda")) do
+      {:ok,
+       language ++ [model: public.model, speaker: public.speaker, sample_rate: public.sample_rate]}
     end
   end
 
@@ -209,6 +232,12 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       ) do
     strategy = if Map.has_key?(selection, :vad), do: :vad, else: :manual
 
+    input =
+      case CapabilitySelection.languages(selection) do
+        [code] -> Map.put(input, "language_code", code)
+        [] -> input
+      end
+
     with {:ok, options} <- normalize(input, [:language_code]),
          {:ok, public} <-
            Scribe.public_options(Keyword.merge(options, model: model, commit_strategy: strategy)) do
@@ -223,40 +252,67 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     end
   end
 
-  def speech_options(%CapabilitySelection{
-        provider: "google",
-        kind: :text_to_speech,
-        model: "gemini-3.1-flash-tts-preview",
-        options: input
-      }) do
+  def speech_options(
+        %CapabilitySelection{
+          provider: "google",
+          kind: :text_to_speech,
+          model: "gemini-3.1-flash-tts-preview",
+          options: input
+        } = selection
+      ) do
+    language =
+      Vxpipe.CallEngine.Speech.ModelLanguages.option(
+        List.first(CapabilitySelection.languages(selection))
+      )
+
     with {:ok, options} <- normalize(input, [:voice]),
          {:ok, public} <-
-           GoogleTTS.public_options(Keyword.put(options, :model, "gemini-3.1-flash-tts-preview")) do
-      {:ok, [model: public.model, voice: public.voice]}
+           GoogleTTS.public_options(
+             language ++ Keyword.put(options, :model, "gemini-3.1-flash-tts-preview")
+           ) do
+      {:ok, language ++ [model: public.model, voice: public.voice]}
     end
   end
 
-  def speech_options(%CapabilitySelection{
-        provider: "cartesia",
-        kind: :text_to_speech,
-        model: model,
-        options: input
-      }) do
+  def speech_options(
+        %CapabilitySelection{
+          provider: "cartesia",
+          kind: :text_to_speech,
+          model: model,
+          options: input
+        } = selection
+      ) do
+    language =
+      Vxpipe.CallEngine.Speech.ModelLanguages.option(
+        List.first(CapabilitySelection.languages(selection))
+      )
+
     with {:ok, options} <- normalize(input, [:voice, :sample_rate]),
-         {:ok, public} <- CartesiaTTS.public_options(Keyword.put(options, :model, model)) do
-      {:ok, [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
+         {:ok, public} <-
+           CartesiaTTS.public_options(language ++ Keyword.put(options, :model, model)) do
+      {:ok,
+       language ++ [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
     end
   end
 
-  def speech_options(%CapabilitySelection{
-        provider: "elevenlabs",
-        kind: :text_to_speech,
-        model: model,
-        options: input
-      }) do
+  def speech_options(
+        %CapabilitySelection{
+          provider: "elevenlabs",
+          kind: :text_to_speech,
+          model: model,
+          options: input
+        } = selection
+      ) do
+    language =
+      Vxpipe.CallEngine.Speech.ModelLanguages.option(
+        List.first(CapabilitySelection.languages(selection))
+      )
+
     with {:ok, options} <- normalize(input, [:voice, :sample_rate]),
-         {:ok, public} <- ElevenLabsTTS.public_options(Keyword.put(options, :model, model)) do
-      {:ok, [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
+         {:ok, public} <-
+           ElevenLabsTTS.public_options(language ++ Keyword.put(options, :model, model)) do
+      {:ok,
+       language ++ [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
     end
   end
 
@@ -284,16 +340,26 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     end
   end
 
-  def speech_options(%CapabilitySelection{
-        kind: :speech_to_speech,
-        provider: "elevenlabs",
-        model: model,
-        options: input
-      }) do
+  def speech_options(
+        %CapabilitySelection{
+          kind: :speech_to_speech,
+          provider: "elevenlabs",
+          model: model,
+          options: input
+        } = selection
+      ) do
+    language =
+      Vxpipe.Providers.ElevenLabs.Realtime.language_options(
+        List.first(CapabilitySelection.languages(selection))
+      )
+
     with {:ok, options} <- normalize(input, [:voice, :turn_control]),
-         {:ok, descriptor} <- RealtimeSession.configure(Keyword.put(options, :model, model)) do
+         {:ok, descriptor} <-
+           RealtimeSession.configure(language ++ Keyword.put(options, :model, model)) do
       public = descriptor.settings
-      {:ok, [model: public.model, voice: public.voice, turn_control: public.turn_control]}
+
+      {:ok,
+       language ++ [model: public.model, voice: public.voice, turn_control: public.turn_control]}
     end
   end
 
