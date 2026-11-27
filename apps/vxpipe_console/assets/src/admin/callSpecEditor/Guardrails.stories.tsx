@@ -22,6 +22,11 @@ export const EveryTurn: Story = { play: async ({ canvasElement }) => {
   await expect(panel.queryByRole("switch")).toBeNull();
   const before = within(panel.getByRole("region", { name: "Before turn" }));
   await expect(panel.queryByText("When blocked")).toBeNull();
+  await expect(before.queryByText("Before the transcript reaches the LLM.")).toBeNull();
+  const hint = before.getByRole("button", { name: "About Before turn" });
+  await userEvent.click(hint);
+  await expect(await page.findByText("Before the transcript reaches the LLM.")).toBeVisible();
+  await userEvent.keyboard("{Escape}");
   await userEvent.click(before.getByRole("button", { name: /^Delete question:/ }));
   const after = within(panel.getByRole("region", { name: "After turn" }));
   await expect(after.getByRole("button", { name: /^Edit question:/ })).toBeVisible();

@@ -1,9 +1,10 @@
 import { Fragment, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, Info } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Item, ItemActions, ItemContent, ItemGroup, ItemSeparator, ItemTitle } from "../components/ui/item";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { Textarea } from "../components/ui/textarea";
 
 export type Question = { id: string; text: string; threshold: string };
@@ -45,14 +46,17 @@ export function QuestionSection({ title, timing, questions, change, unavailable 
 }) {
   const [editing, setEditing] = useState<Question | null>(null);
   return <section aria-label={title} className="space-y-3">
-    <header className="space-y-1">
-      <div className="flex items-center justify-between gap-3">
+    <header className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-1">
         <h3 className="min-w-0 text-sm font-semibold">{title}</h3>
-        {!unavailable && <Button size="sm" variant="outline" onClick={() => setEditing({ id: "", text: "", threshold: "" })}>
-          <Plus />Add question
-        </Button>}
+        <Popover>
+          <PopoverTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={`About ${title}`} className="shrink-0 text-muted-foreground"><Info /></Button></PopoverTrigger>
+          <PopoverContent aria-label={`About ${title}`} align="start" collisionPadding={12} className="w-64 max-w-[calc(100vw-2rem)] p-3 text-sm">{unavailable || timing}</PopoverContent>
+        </Popover>
       </div>
-      <p className="text-xs text-muted-foreground">{unavailable || timing}</p>
+      {!unavailable && <Button size="sm" variant="outline" onClick={() => setEditing({ id: "", text: "", threshold: "" })}>
+          <Plus />Add question
+      </Button>}
     </header>
     {!unavailable && <>
       {questions.length > 0 && <ItemGroup className="rounded-md border border-border/60">
