@@ -85,7 +85,7 @@ jobs:
           bin/patch-ex-mcp
           mix deps.compile ex_mcp --include-children
           bin/patch-req-llm
-          mix deps.compile req_llm
+          mix deps.compile req_llm --include-children
 
       - name: Test dependency preparation
         run: |

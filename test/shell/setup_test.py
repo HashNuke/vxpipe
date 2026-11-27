@@ -336,8 +336,8 @@ assert not list((root / '.vxpipe').glob('.worktree.json.*'))
         result = self.setup(SETUP_COMMAND_LOG=str(log))
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(log.read_text().splitlines()[:9],
-                         ["deps.get", "deps.compile ortex --include-children", "deps.compile ex_mcp --include-children", "deps.compile req_llm",
-                          "deps.compile ortex --include-children", "deps.compile ex_mcp --include-children", "deps.compile req_llm",
+                         ["deps.get", "deps.compile ortex --include-children", "deps.compile ex_mcp --include-children", "deps.compile req_llm --include-children",
+                          "deps.compile ortex --include-children", "deps.compile ex_mcp --include-children", "deps.compile req_llm --include-children",
                           "assets.setup", "assets.build"])
         self.assertIn("bin/dev", result.stdout)
         self.assertIn("mix test", result.stdout)

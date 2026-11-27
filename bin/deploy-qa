@@ -32,7 +32,7 @@ npm run build
 bin/patch-ortex
 MIX_ENV=prod mix deps.compile ortex --include-children
 bin/patch-req-llm
-MIX_ENV=prod mix deps.compile req_llm
+MIX_ENV=prod mix deps.compile req_llm --include-children
 MIX_ENV=prod mix assets.deploy
 MIX_ENV=prod mix release vxpipe --overwrite
 

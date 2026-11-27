@@ -43,7 +43,7 @@ def main():
         for environment in ("dev", "test"):
             run_step(root, environment, ["mix", "deps.compile", "ortex", "--include-children"], f"{environment} patched Ortex dependency")
             run_step(root, environment, ["mix", "deps.compile", "ex_mcp", "--include-children"], f"{environment} patched MCP dependency")
-            run_step(root, environment, ["mix", "deps.compile", "req_llm"], f"{environment} patched ReqLLM dependency")
+            run_step(root, environment, ["mix", "deps.compile", "req_llm", "--include-children"], f"{environment} patched ReqLLM dependency")
         run_step(root, "dev", ["mix", "assets.setup"], "frontend dependencies")
         run_step(root, "dev", ["mix", "assets.build"], "frontend build")
         for environment in ("dev", "test"):
