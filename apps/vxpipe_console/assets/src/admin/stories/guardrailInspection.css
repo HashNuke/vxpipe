@@ -18,3 +18,46 @@
 .guardrail-inspection .vx-transcript:has(> .guardrail-body) .vx-empty { display: none; }
 .guardrail-inspection .vx-message .guardrail-body { padding: 4px 0; }
 .guardrail-inspect { display: block; padding-block: 6px; text-decoration: underline; color: var(--vx-blue); cursor: pointer; }
+
+/* Keep message geometry, speaker identity and timestamps in the existing Conversation component. */
+.guardrail-inspection .vx-conversation-filter-controls > .vx-filter-icons,
+.guardrail-inspection .vx-conversation-filter-controls > .vx-filter-menu-trigger { display: none; }
+.gh-filter-button { display: inline-flex; gap: 5px; align-items: center; color: var(--vx-muted); padding: 5px 4px; font-size: 13px; cursor: pointer; }
+.gh-filter-button:hover, .gh-filter-button:focus-visible { color: var(--vx-ink); }
+.gh-filter-body { padding: 0 20px 18px; font-size: 14px; }
+.gh-presets { display: flex; gap: 2px; margin: 4px 0 12px; padding: 3px; background: var(--admin-bg); border: 1px solid var(--admin-border); border-radius: 7px; }
+.gh-presets button { flex: 1; border-radius: 4px; padding: 4px; color: var(--admin-muted); cursor: pointer; }
+.gh-presets button[aria-pressed=true] { background: var(--admin-panel); color: var(--admin-ink); box-shadow: 0 1px 3px #0002; font-weight: 600; }
+.gh-option, .gh-suboption { display: flex; align-items: center; gap: 9px; min-height: 42px; }
+.gh-option + .gh-option { border-top: 1px solid var(--admin-border); }
+.gh-option svg { width: 16px; height: 16px; color: var(--admin-muted); }
+.gh-option input, .gh-option select, .gh-suboption input, .gh-suboption select { margin-left: auto; }
+.gh-suboption { padding-left: 25px; color: var(--admin-muted); font-size: 13px; }
+.gh-filter-body select { background: var(--admin-panel); color: inherit; padding: 4px; border: 1px solid var(--admin-border); border-radius: 4px; }
+.gh-filter-body input { accent-color: var(--vx-green); }
+.guardrail-inspection .vx-message:has(.gh-annotation[data-blocked=true]), .guardrail-inspection .vx-timeline-activity:has(.gh-annotation[data-blocked=true]) { position: relative; }
+.guardrail-inspection .vx-message:has(.gh-annotation[data-blocked=true])::before, .guardrail-inspection .vx-timeline-activity:has(.gh-annotation[data-blocked=true])::before { content:""; position:absolute; inset-block:0; inset-inline-start:-9px; width:3px; border-radius:3px; background:var(--vx-red, #df5c65); }
+.gh-annotation { min-width:0; max-width: 40rem; }
+.gh-status { font-size: 12px; color:var(--vx-muted); }
+.gh-proposed-tool { margin-top: 4px; font-size:13px; color:var(--vx-muted); }
+.gh-proposed-tool svg { display:inline; vertical-align:middle; }
+.gh-proposed-tool details summary { cursor:pointer; }
+.gh-proposed-tool pre { overflow-wrap:anywhere; white-space:pre-wrap; font:12px var(--vx-mono); margin:4px 0 4px 16px; }
+.gh-card { width:fit-content; max-width:100%; margin:7px 0 2px 8px; padding:6px 10px; background:var(--vx-soft); border:1px solid var(--vx-line); border-radius:6px; }
+.gh-card h3 { margin:0 0 2px; color:var(--vx-muted); line-height:1.5; font-size:11px; font-weight:500; }
+.gh-card ul { list-style:none; margin:0; padding:0; }
+.gh-card li { display:flex; align-items:baseline; gap:5px; color:var(--vx-ink); font-size:13px; line-height:1.6; }
+.gh-card small { color:var(--vx-muted); }
+.gh-result { position:relative; flex:none; }
+.gh-result button { display:inline-grid; place-items:center; vertical-align:middle; width:24px; height:24px; color:var(--vx-muted); cursor:help; }
+.gh-result[data-outcome=Failed] button { color:var(--vx-red,#d25460); }
+.gh-result[data-outcome=Passed] button { color:var(--vx-green); }
+.gh-tooltip { position:absolute; z-index:5; left:0; bottom:100%; width:max-content; max-width:65vw; padding:6px 9px; border-radius:5px; background:var(--vx-ink); color:var(--vx-panel,white); font-size:12px; line-height:1.4; }
+.gh-tooltip > span { display:block; font-variant-numeric:tabular-nums; }
+.gh-threshold { opacity:0.72; }
+.guardrail-inspection .vx-timeline-activity:has(.gh-annotation) { flex-wrap:wrap; }
+.guardrail-inspection .vx-timeline-activity > .gh-annotation { flex-basis:100%; }
+.gh-reset { display:block; margin:0 auto; color:var(--vx-blue); text-decoration:underline; }
+@media (max-width:520px) { .gh-filter-button { font-size:12px; gap:2px; } }
+.guardrail-inspection .vx-transcript:has(.gh-empty) > .vx-empty { display:none; }
+.gh-empty { padding:24px 0; text-align:center; color:var(--vx-muted); }

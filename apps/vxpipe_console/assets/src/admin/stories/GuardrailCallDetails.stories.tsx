@@ -12,8 +12,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const BlockedInput: Story = {};
+export const MixedProposal: Story = { args: { scenario: "mixed-proposal" } };
+export const BeforeAndAfter: Story = { args: { scenario: "before-and-after" } };
 export const Passed: Story = { args: { scenario: "pass" } };
-export const RepairAndTransfer: Story = { args: { scenario: "repair-and-transfer", initialTab: "Metrics" } };
+export const RepairAndTransfer: Story = { args: { scenario: "repair-and-transfer" } };
 export const TransferDenied: Story = { args: { scenario: "transfer-denied" } };
 export const PartialAnswer: Story = { args: { scenario: "partial-answer" } };
 export const RestrictedHistory: Story = { args: { scenario: "restricted-history" } };

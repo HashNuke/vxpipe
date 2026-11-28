@@ -1,10 +1,14 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { createCallDetailsStore, type CallDetailsTimelineEntity, type MetricObservation } from "@vxpipe/core";
+import { createCallDetailsStore, type MetricObservation } from "@vxpipe/core";
 import { CallDetailsPage } from "../CallDetailsPage";
 import { callDetailsFixture } from "../callDetailsFixtures";
 import { StoryCallBreadcrumbs } from "./StoryCallBreadcrumbs";
 import { agents, inspectionFixture, type Agent, type GuardrailCheck, type GuardrailScenario } from "./guardrailInspectionFixtures";
+import { HistoryFilterButton, presets, type HistoryFilters } from "./GuardrailHistoryFilters";
+import { GuardrailQuestionCard } from "./GuardrailQuestionCard";
+import { historyTimeline } from "./guardrailHistoryTimeline";
+import { Wrench } from "lucide-react";
 import "./guardrailInspection.css";
 
 function count(value: number, name: string, plural = name + "s") {
@@ -65,22 +69,21 @@ function CheckDetail({ check, model, inMetrics, showInChat }: {
   </details>;
 }
 
-function storyState(scenario: GuardrailScenario) {
-  const { checks, model, messages } = inspectionFixture(scenario);
+function storyState(scenario: GuardrailScenario, filters: HistoryFilters) {
+  const { checks, model } = inspectionFixture(scenario);
   const base = callDetailsFixture(scenario === "restricted-history" ? "partial-archive" : "ended");
   if (base.status !== "ready") throw new Error("Call Details fixture must be available.");
   const snapshot = base.controller.details.getSnapshot();
   const timestamp = Date.parse(snapshot.call.startedAt ?? snapshot.call.createdAt);
-  const turnsByTime = new Map<string, string>();
-  const timeline: CallDetailsTimelineEntity[] = messages.map((message, index) => {
-    // The preview uses unique fixture timestamps to find rendered rows; checks join on turn ID.
-    const occurredAt = new Date(timestamp + (index + 1) * 1000).toISOString();
-    turnsByTime.set(occurredAt, message.turn);
-    const id = "message-" + message.turn;
-    return { kind: "message", revision: 1, id, value: {
-      id, turnId: message.turn, participantId: message.participantId, occurredAt, state: "final", text: message.text,
-    } };
-  });
+  const {timeline, annotations} = historyTimeline(scenario, timestamp, filters);
+  for (const item of snapshot.timeline) {
+    if (item.kind === "activity" && filters.events && (filters.technical || item.id === "activity-1")) timeline.push(item);
+    if (item.kind === "protocol-event" && filters.logs) timeline.push(item);
+    if (item.kind === "tool-call" && filters.tools && scenario === "repair-and-transfer") {
+      const { request, response, responseStatus, ...summary } = item.value;
+      timeline.push(filters.toolDetails ? item : { ...item, value: summary });
+    }
+  }
 
   const owners = [...new Set(checks.map(check => check.agent))];
   const participants = [...snapshot.participants];
@@ -101,8 +104,7 @@ function storyState(scenario: GuardrailScenario) {
     }
   }
   const details = createCallDetailsStore({ ...snapshot, timeline, participants, metrics });
-  return { state: { ...base, controller: { details } }, turnsByTime, model, owners, checks,
-    unassigned: checks.filter(check => !messages.some(message => message.turn === check.turn)),
+  return { state: { ...base, controller: { details } }, annotations, model, owners, checks,
   };
 }
 
@@ -123,14 +125,22 @@ type Target = { key: string; element: Element };
 export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversation" }: {
   scenario: GuardrailScenario; theme: "light" | "dark"; initialTab?: "Conversation" | "Metrics";
 }) {
-  const page = useMemo(() => storyState(scenario), [scenario]);
+  return <Preview key={scenario} scenario={scenario} theme={theme} initialTab={initialTab} />;
+}
+
+function Preview({ scenario, theme, initialTab }: {
+  scenario: GuardrailScenario; theme: "light" | "dark"; initialTab: "Conversation" | "Metrics";
+}) {
+  const [filters, change] = useState<HistoryFilters>(() =>
+    scenario === "pass" || scenario === "partial-answer" || scenario === "multiple-agents" ? presets.All : presets.Debug);
+  const page = useMemo(() => storyState(scenario, filters), [scenario, filters]);
   const host = useRef<HTMLDivElement>(null);
   const [targets, setTargets] = useState<Target[]>([]);
   const [selected, setSelected] = useState<Agent | null>(null);
   const detailId = useId();
   const detailPanel = useRef<HTMLElement>(null);
   const [chatTarget, setChatTarget] = useState<string | null>(null);
-  useLayoutEffect(() => { setSelected(null); }, [page]);
+  useLayoutEffect(() => { setSelected(null); }, [scenario]);
   useLayoutEffect(() => { if (selected) detailPanel.current?.focus(); }, [selected]);
 
   // The published page has no story slots. Keep this mount bridge local to the preview.
@@ -148,12 +158,24 @@ export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversati
       }
       const transcript = root.querySelector(".vx-transcript");
       if (transcript) {
-        for (const time of transcript.querySelectorAll<HTMLTimeElement>("article time[datetime]")) {
-          const turn = page.turnsByTime.get(time.dateTime);
-          const body = time.closest("header")?.parentElement;
-          if (turn && body) next.push({ key: turn, element: body });
+        const controls = root.querySelector(".vx-conversation-filter-controls");
+        if (controls) {
+          next.push({key: "filters", element: controls});
+          // The story projects its filtered activities into the standard Console renderer.
+          for (const label of ["Events", "Technical events", "Logs"]) {
+            controls.querySelector<HTMLButtonElement>('button[aria-label="Show ' + label + '"]')?.click();
+          }
         }
-        if (page.unassigned.length) next.push({ key: "private", element: transcript });
+        for (const time of transcript.querySelectorAll<HTMLTimeElement>("time[datetime]")) {
+          const annotation = page.annotations.get(time.dateTime);
+          if (!annotation) continue;
+          const body = annotation.anchor === "message" ? time.closest("article")?.querySelector("header")?.parentElement :
+            annotation.anchor === "tool" ? time.closest(".vx-timeline-tool") : time.closest(".vx-timeline-activity");
+          const label = body?.querySelector(annotation.anchor === "message" ? ":scope > p" :
+            annotation.anchor === "tool" ? ".vx-tool-summary strong" : ":scope > span")?.textContent;
+          if (body && label === annotation.label) next.push({ key: time.dateTime, element: body });
+        }
+        if (transcript.querySelector(".vx-empty")) next.push({key: "empty", element: transcript});
       }
       setTargets(prev => prev.length === next.length && prev.every((v, i) => v.element === next[i].element && v.key === next[i].key) ? prev : next);
     }
@@ -165,16 +187,16 @@ export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversati
 
   useLayoutEffect(() => {
     if (!chatTarget) return;
-    const target = host.current?.querySelector<HTMLDetailsElement>(".vx-transcript #evaluation-" + chatTarget);
+    const target = host.current?.querySelector<HTMLElement>(".vx-transcript #evaluation-" + chatTarget);
     if (target) {
-      target.open = true;
-      target.querySelector("summary")?.focus();
+      target.focus();
       target.scrollIntoView?.({ block: "start" });
       setChatTarget(null);
     }
   }, [chatTarget, targets]);
 
   function showInChat(id: string) {
+    change(presets.All);
     const tabs = host.current?.querySelectorAll<HTMLButtonElement>('nav[aria-label="Call views"] button');
     Array.from(tabs ?? []).find(tab => tab.textContent === "Conversation")?.click();
     setChatTarget(id);
@@ -197,12 +219,23 @@ export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversati
       if (agent) return createPortal(<button type="button" className="guardrail-inspect" aria-controls={detailId}
         aria-label={"Inspect Decisions for " + agents[agent]} aria-expanded={selected === agent}
         onClick={() => setSelected(current => current === agent ? null : agent)}>Inspect checks</button>, element, key);
-      const owned = key === "private" ? page.unassigned : page.checks.filter(check => check.turn === key);
-      if (!owned.length) return null;
-      const label = key === "private" ? "Private call activity" : "Decisions";
-      return createPortal(<section className="guardrail-body" aria-label={label}>
-        <h2>{label}</h2>{checkDetails(owned)}
-      </section>, element, key);
+      if (key === "filters") return createPortal(<HistoryFilterButton filters={filters} change={change} />, element, key);
+      if (key === "empty") return createPortal(<div className="gh-empty">
+        <p>No matching history</p><button type="button" className="gh-reset" onClick={() => change(presets.All)}>Show all history</button>
+      </div>, element, key);
+      const row = page.annotations.get(key);
+      if (!row) return null;
+      return createPortal(<div className="gh-annotation" data-blocked={row.blocked}>
+        {row.unsent && <span className="gh-status">Unsent</span>}
+        {row.toolOnly && row.blocked && !row.tools.length && <span className="gh-status">Not run</span>}
+        {row.tools.map(tool => <div className="gh-proposed-tool" key={tool.id}>
+          {filters.toolDetails ? <details><summary><Wrench size={13} /> <strong>{tool.name}</strong> · Not run</summary>
+            <pre>{JSON.stringify(tool.arguments, null, 2)}</pre></details> :
+            <span><Wrench size={13} /> <strong>{tool.name}</strong> · Not run</span>}
+        </div>)}
+        {row.checks.map(check => <GuardrailQuestionCard key={check.id} check={check} all={filters.guardrails === "All"}
+          showAgent={page.owners.length > 1} />)}
+      </div>, element, key);
     })}
   </div>;
 }
