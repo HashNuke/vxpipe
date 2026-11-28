@@ -40,6 +40,14 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
     _exception -> {:error, unsupported_speech_configuration_reason(kind)}
   end
 
+  def usage_provider(tenant, selection, {:ok, identity}) do
+    identity
+    |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, tenant))
+    |> Vxpipe.CallEngine.Usage.ProviderContext.new()
+  end
+
+  def usage_provider(_tenant, _selection, _unavailable), do: {:error, :invalid_usage_identity}
+
   defp configure_provider(provider, options, :speech_to_text) do
     case provider do
       Vxpipe.Providers.Deepgram.STTSession ->

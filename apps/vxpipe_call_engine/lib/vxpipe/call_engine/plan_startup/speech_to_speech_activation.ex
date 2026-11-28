@@ -46,6 +46,18 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation do
          do: ToolRegistry.new(descriptors)
   end
 
+  def remote_mcp(_participant, nil, _options), do: nil
+
+  def remote_mcp(participant, integrations, options) do
+    [
+      tools: participant.tools,
+      integrations: integrations,
+      connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
+      protocol: Keyword.get(options, :remote_mcp_protocol_client)
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+  end
+
   defp native_tools_supported(tools) do
     if Enum.any?(tools, fn
          {_name, %{type: :platform, action: Vxpipe.CallEngine.Tool.Idle}} -> true

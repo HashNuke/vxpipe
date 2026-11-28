@@ -14,7 +14,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
   alias Vxpipe.CallEngine.Tool.InvocationConfig
-  alias Vxpipe.CallEngine.Usage.ProviderContext
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -28,7 +27,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   }
 
   import Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution,
-    only: [resolve_provider: 4, unsupported_speech_configuration_reason: 1]
+    only: [resolve_provider: 4, usage_provider: 3, unsupported_speech_configuration_reason: 1]
 
   @model_providers ~w(google zenmux openai deepseek openrouter fireworks fixture)
 
@@ -473,7 +472,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              media_ingress when is_list(media_ingress) <-
                Keyword.get(settings, :media_ingress),
              {:ok, usage_provider} <-
-               speech_to_text_usage_provider(plan, participant, provider_module, provider_config) do
+               usage_provider(
+                 plan.tenant_id,
+                 participant.capabilities.speech_to_text,
+                 SpeechToTextRuntime.usage_identity(provider_module, provider_config)
+               ) do
           {:ok,
            %SpeechToTextRuntime{
              call_id: plan.call_id,
@@ -500,18 +503,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
       {:error, _reason} ->
         unsupported_speech_configuration(participant, :speech_to_text)
-    end
-  end
-
-  defp speech_to_text_usage_provider(plan, participant, provider_module, provider_config) do
-    selection = participant.capabilities.speech_to_text
-
-    with {:ok, identity} <- SpeechToTextRuntime.usage_identity(provider_module, provider_config) do
-      identity
-      |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
-      |> ProviderContext.new()
-    else
-      _invalid -> {:error, :invalid_usage_identity}
     end
   end
 
@@ -547,11 +538,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              {:ok, {^provider_module, runtime_options} = runtime_provider, provider_private} <-
                SpeechToSpeechRuntime.provider(provider, settings, activation),
              {:ok, usage_provider} <-
-               speech_to_speech_usage_provider(
-                 plan,
-                 participant,
-                 provider_module,
-                 runtime_options
+               usage_provider(
+                 plan.tenant_id,
+                 participant.capabilities.speech_to_speech,
+                 SpeechToSpeechRuntime.usage_identity(provider_module, runtime_options)
                ),
              {:ok, output_speech_to_text, output_speech_to_text_private} <-
                output_speech_to_text_runtime(plan, participant, options) do
@@ -564,7 +554,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              tool_registry: tool_registry,
              tool_invocation_options:
                InvocationConfig.for_participant(plan, participant, tool_settings),
-             remote_mcp: native_remote_mcp(participant, integrations, options),
+             remote_mcp: SpeechToSpeechActivation.remote_mcp(participant, integrations, options),
              provider: runtime_provider,
              provider_private: provider_private,
              usage_provider: usage_provider,
@@ -578,30 +568,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
       {:error, _reason} ->
         unsupported_speech_configuration(participant, :speech_to_speech)
-    end
-  end
-
-  defp native_remote_mcp(_participant, nil, _options), do: nil
-
-  defp native_remote_mcp(participant, integrations, options) do
-    [
-      tools: participant.tools,
-      integrations: integrations,
-      connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
-      protocol: Keyword.get(options, :remote_mcp_protocol_client)
-    ]
-    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-  end
-
-  defp speech_to_speech_usage_provider(plan, participant, provider_module, provider_config) do
-    selection = participant.capabilities.speech_to_speech
-
-    with {:ok, identity} <- SpeechToSpeechRuntime.usage_identity(provider_module, provider_config) do
-      identity
-      |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
-      |> ProviderContext.new()
-    else
-      _invalid -> {:error, :invalid_usage_identity}
     end
   end
 
@@ -698,10 +664,14 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       {:ok, selected_provider, settings} ->
         with maximum_requests when is_integer(maximum_requests) and maximum_requests > 0 <-
                Keyword.get(settings, :maximum_requests),
-             {:ok, provider, provider_private, descriptor} <-
+             {:ok, {provider_module, provider_options} = provider, provider_private, descriptor} <-
                TextToSpeechRuntime.provider(selected_provider, settings),
              {:ok, usage_provider} <-
-               text_to_speech_usage_provider(plan, selection, provider) do
+               usage_provider(
+                 plan.tenant_id,
+                 selection,
+                 TextToSpeechRuntime.usage_identity(provider_module, provider_options)
+               ) do
           {:ok,
            %TextToSpeechRuntime{
              asset_cache_identity:
@@ -726,17 +696,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
       {:error, _reason} ->
         unsupported(path, unsupported_speech_configuration_reason(:text_to_speech))
-    end
-  end
-
-  defp text_to_speech_usage_provider(plan, selection, {provider_module, provider_options}) do
-    with {:ok, identity} <-
-           TextToSpeechRuntime.usage_identity(provider_module, provider_options) do
-      identity
-      |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
-      |> ProviderContext.new()
-    else
-      _invalid -> {:error, :invalid_usage_identity}
     end
   end
 
