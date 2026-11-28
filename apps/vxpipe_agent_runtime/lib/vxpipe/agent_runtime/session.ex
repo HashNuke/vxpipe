@@ -63,7 +63,10 @@ defmodule Vxpipe.AgentRuntime.Session do
   @spec request_guarded(
           server(),
           :caller | :private,
-          String.t() | Input.t() | {:feedback, String.t(), String.t()},
+          String.t()
+          | Input.t()
+          | {:feedback, String.t(), String.t()}
+          | {:feedback, String.t(), String.t(), nil | (-> term())},
           map(),
           (-> boolean()),
           timeout()
@@ -95,7 +98,7 @@ defmodule Vxpipe.AgentRuntime.Session do
           {:ok, Result.t()} | {:error, atom()}
   def request_private(server, input, correlation, timeout \\ :infinity)
       when is_binary(input) and is_map(correlation) do
-    GenServer.call(server, {:request_private, input, correlation, nil}, timeout)
+    GenServer.call(server, {:request_private, input, correlation, nil, nil}, timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -223,10 +226,13 @@ defmodule Vxpipe.AgentRuntime.Session do
             {:request, :caller, input, correlation}
 
           {:private, {:feedback, feedback, trigger}} ->
-            {:request_private, feedback, correlation, trigger}
+            {:request_private, feedback, correlation, trigger, nil}
+
+          {:private, {:feedback, feedback, trigger, callback}} ->
+            {:request_private, feedback, correlation, trigger, callback}
 
           {:private, feedback} ->
-            {:request_private, feedback, correlation, nil}
+            {:request_private, feedback, correlation, nil, nil}
         end
 
       handle_call(message, caller, state)
@@ -241,6 +247,9 @@ defmodule Vxpipe.AgentRuntime.Session do
         %{status: :idle} = state
       ) do
     cond do
+      expired?(state, correlation) ->
+        {:reply, {:error, :request_expired}, state}
+
       host_settled?(state) and map_size(state.outstanding) >= @maximum_outstanding ->
         {:reply, {:error, :busy}, state}
 
@@ -344,7 +353,7 @@ defmodule Vxpipe.AgentRuntime.Session do
             Process.send_after(
               self(),
               {:agent_runtime_request_timeout, token},
-              state.configuration.request_timeout_ms
+              remaining_timeout(state, correlation)
             )
 
           {:noreply,
@@ -364,12 +373,15 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   def handle_call(
-        {:request_private, input, correlation, trigger},
+        {:request_private, input, correlation, trigger, callback},
         caller,
         %{status: :idle} = state
       )
       when is_binary(input) and is_map(correlation) do
     cond do
+      expired?(state, correlation) ->
+        {:reply, {:error, :request_expired}, state}
+
       byte_size(input) > state.configuration.maximum_model_context_bytes ->
         {:reply, {:error, :oversized}, state}
 
@@ -461,6 +473,7 @@ defmodule Vxpipe.AgentRuntime.Session do
             |> Map.put(:retry_tool_result?, false)
             |> Map.put(:transient_messages, transient)
             |> Map.put(:admission_trigger, trigger)
+            |> Map.put(:on_feedback_dispatch, callback)
             |> Map.put(:tool_registry, empty_registry)
 
           task =
@@ -472,7 +485,7 @@ defmodule Vxpipe.AgentRuntime.Session do
             Process.send_after(
               self(),
               {:agent_runtime_request_timeout, token},
-              state.configuration.request_timeout_ms
+              remaining_timeout(state, correlation)
             )
 
           {:noreply,
@@ -491,7 +504,7 @@ defmodule Vxpipe.AgentRuntime.Session do
     end
   end
 
-  def handle_call({:request_private, _input, _correlation, _trigger}, _caller, state) do
+  def handle_call({:request_private, _input, _correlation, _trigger, _callback}, _caller, state) do
     {:reply, {:error, :busy}, state}
   end
 
@@ -671,18 +684,25 @@ defmodule Vxpipe.AgentRuntime.Session do
              :text_delta,
              :model_usage
            ] and is_map(data) do
-    emit(state.configuration.event_destination, Event.new(kind, state.correlation, data))
-
-    send(worker, {:agent_runtime_request_event_emitted, token, event_ref})
-    {:noreply, state}
+    if kind in [:text_delta, :model_attempt_started] and expired?(state, state.correlation) do
+      {:noreply, terminate_active_request(state, :request_timeout)}
+    else
+      emit(state.configuration.event_destination, Event.new(kind, state.correlation, data))
+      send(worker, {:agent_runtime_request_event_emitted, token, event_ref})
+      {:noreply, state}
+    end
   end
 
   def handle_info(
         {:agent_runtime_begin_submission, worker, token},
         %{active_task: %{pid: worker}, active_token: token, submission_phase: :idle} = state
       ) do
-    send(worker, {:agent_runtime_submission_begun, token})
-    {:noreply, %{state | submission_phase: :submitting}}
+    if expired?(state, state.correlation) do
+      {:noreply, terminate_active_request(state, :request_timeout)}
+    else
+      send(worker, {:agent_runtime_submission_begun, token})
+      {:noreply, %{state | submission_phase: :submitting}}
+    end
   end
 
   def handle_info(
@@ -724,7 +744,8 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   def handle_info({reference, run_result}, %{active_task: %{ref: reference}} = state) do
     Process.demonitor(reference, [:flush])
-    {reply, event, state} = normalize_result(run_result, state.correlation, state)
+    result = if expired?(state, state.correlation), do: {:error, :request_timeout}, else: run_result
+    {reply, event, state} = normalize_result(result, state.correlation, state)
     emit(state.configuration.event_destination, event)
     GenServer.reply(state.caller, reply)
     {:noreply, clear_request(state)}
@@ -834,6 +855,24 @@ defmodule Vxpipe.AgentRuntime.Session do
         active_base_entries: nil
     }
   end
+
+  defp remaining_timeout(state, correlation) do
+    timeout = state.configuration.request_timeout_ms
+
+    case admission_deadline(state, correlation) do
+      nil -> timeout
+      deadline -> max(0, min(deadline - System.monotonic_time(:millisecond), timeout))
+    end
+  end
+
+  defp expired?(state, correlation) do
+    deadline = admission_deadline(state, correlation)
+    is_integer(deadline) and System.monotonic_time(:millisecond) >= deadline
+  end
+
+  defp admission_deadline(%{configuration: %{round_admission: nil}}, _correlation), do: nil
+  defp admission_deadline(_, %{deadline_ms: deadline}) when is_integer(deadline), do: deadline
+  defp admission_deadline(_, _), do: nil
 
   defp host_settled?(%{configuration: %{history_mode: :host_settled}}), do: true
   defp host_settled?(_state), do: false

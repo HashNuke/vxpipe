@@ -10,7 +10,11 @@ defmodule Vxpipe.AgentRuntime.RoundAdmission do
   @type bind :: %{required(:invocation_id) => String.t(), optional(atom()) => term()}
   @type failure_detail :: %{event: atom(), messages: [String.t()]}
   @type repair ::
-          %{messages: [String.t()]} | %{messages: [String.t()], failures: [failure_detail()]}
+          %{
+            required(:messages) => [String.t()],
+            optional(:failures) => [failure_detail()],
+            optional(:on_dispatch) => (-> term())
+          }
   @type failure :: :blocked | :error | :cancelled | :stale | :oversized
   @type verdict ::
           {:accept}
@@ -53,8 +57,14 @@ defmodule Vxpipe.AgentRuntime.RoundAdmission do
       {:repair, %{messages: messages} = repair} ->
         failures = Map.get(repair, :failures)
 
-        if valid_repair_lines?(messages) and valid_failures?(failures, messages) do
-          {:repair, %{messages: messages, failures: normalize_failures(failures)}}
+        callback = Map.get(repair, :on_dispatch)
+
+        if valid_repair_lines?(messages) and valid_failures?(failures, messages) and
+             (is_nil(callback) or is_function(callback, 0)) do
+          {:repair,
+           repair
+           |> Map.take([:on_dispatch, :messages])
+           |> Map.put(:failures, normalize_failures(failures))}
         else
           {:failure, :error}
         end

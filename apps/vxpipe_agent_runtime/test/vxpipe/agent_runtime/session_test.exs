@@ -40,7 +40,7 @@ defmodule Vxpipe.AgentRuntime.SessionTest do
       )
 
     assert {:ok, %Result{status: :completed, output: "hello back"}} =
-             Session.request(session, "hello", %{request_id: "req_1"})
+             Session.request(session, "hello", %{request_id: "req_1", deadline_ms: System.monotonic_time(:millisecond) - 1})
 
     assert_receive {:agent_runtime_event,
                     %{kind: :request_started, correlation: %{request_id: "req_1"}}}

@@ -102,10 +102,9 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
             admission_state
           )
 
-        {:repair, %{messages: lines} = repair} ->
+        {:repair, repair} ->
           handle_admission_repair(
-            lines,
-            Map.get(repair, :failures),
+            repair,
             conversation,
             staged_messages,
             output,
@@ -308,8 +307,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   end
 
   defp handle_admission_repair(
-         lines,
-         failures,
+         repair,
          conversation,
          staged_messages,
          output,
@@ -325,7 +323,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     else
       repair_text =
         Vxpipe.AgentRuntime.GuardrailFeedback.encode(
-          failures || [%{event: :after_turn, messages: lines}]
+          repair.failures || [%{event: :after_turn, messages: repair.messages}]
         )
 
       if byte_size(repair_text) > config.maximum_model_context_bytes do
@@ -340,7 +338,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
           round,
           false,
           request,
-          config,
+          Map.put(config, :on_feedback_dispatch, Map.get(repair, :on_dispatch)),
           %{
             repairs_used: admission_state.repairs_used + 1,
             repairs: [repair_message],
@@ -852,9 +850,15 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     if streaming_provider?(config) do
       stream_response(config, model_request, output)
     else
+      confirm_feedback_dispatch(config)
       config.model_provider.generate(config.model, model_request)
     end
   end
+
+  defp confirm_feedback_dispatch(%{on_feedback_dispatch: callback}) when is_function(callback, 0),
+    do: callback.()
+
+  defp confirm_feedback_dispatch(_config), do: :ok
 
   defp streaming_provider?(config) do
     function_exported?(config.model_provider, :stream, 3) and
@@ -871,6 +875,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
         config.maximum_stream_events_per_round,
         stream_emitter(config)
       )
+
+    confirm_feedback_dispatch(config)
 
     response =
       config.model_provider.stream(config.model, model_request, &StreamBudget.emit(budget, &1))

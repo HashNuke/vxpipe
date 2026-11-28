@@ -22,7 +22,28 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionRegressionTest do
       })
 
     assert {:error, :oversized} =
-             Session.request_private(session, feedback, %{request_id: "input-budget"}, 500)
+             Session.request_guarded(
+               session,
+               :private,
+               {:feedback, feedback, "trigger"},
+               %{request_id: "input-budget"},
+               fn -> true end,
+               500
+             )
+
+    owner = self()
+
+    assert {:error, :oversized} =
+             Session.request_guarded(
+               session,
+               :private,
+               {:feedback, feedback, "trigger", fn -> send(owner, :feedback_dispatched) end},
+               %{request_id: "input-budget"},
+               fn -> true end,
+               500
+             )
+
+    refute_received :feedback_dispatched
 
     refute_received {:pending_context_requested, _, _, _}
     refute_received {:model_provider_process, _, _}

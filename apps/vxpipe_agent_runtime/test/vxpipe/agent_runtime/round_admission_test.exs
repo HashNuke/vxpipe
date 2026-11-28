@@ -111,11 +111,11 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
     send(provider, {:test_model_response, {:ok, response}})
 
     # Ordinary must submit first despite model order.
-    assert_receive {:tool_submitted, _, :ordinary, _, _, "ord-1"}, 1_000
+    assert_receive {:tool_submitted, executor, :ordinary, _, _, "ord-1"}, 1_000
     refute_received {:tool_submitted, _, :terminal, _, _, "term-1"}
 
     # Release ordinary worker; terminal may then submit.
-    release_blocked_executor()
+    send(executor, :release_submission)
 
     assert_receive {:tool_submitted, _, :terminal, _, _, "term-1"}, 1_000
     _ = task
@@ -141,10 +141,10 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
 
     send(provider, {:test_model_response, {:ok, response}})
 
-    assert_receive {:tool_submitted, _, :ordinary, _, _, "ord-9"}, 1_000
+    assert_receive {:tool_submitted, executor, :ordinary, _, _, "ord-9"}, 1_000
     refute_received {:tool_submitted, _, :terminal, _, _, "term-9"}
 
-    release_blocked_executor()
+    send(executor, :release_submission)
     assert_receive {:tool_submitted, _, :terminal, _, _, "term-9"}, 1_000
     _ = task
   end
@@ -214,6 +214,38 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
     assert {:ok, %Result{status: :completed, output: "hello"}} = Task.await(task, 2_000)
   end
 
+  test "an approved speech delta queued before expiry cannot escape after the response deadline" do
+    session =
+      start_session([],
+        model_provider: Vxpipe.AgentRuntime.TestStreamingModelProvider,
+        round_admission: {__MODULE__.ControllableAdmission, %{owner: self()}}
+      )
+
+    deadline = System.monotonic_time(:millisecond) + 300
+    correlation = %{request_id: "late_release", deadline_ms: deadline}
+    task = Task.async(fn -> Session.request(session, "Hello", correlation) end)
+    release_pending_context("late_release", [])
+    assert_receive {:model_stream_process, provider, _}
+    send(provider, {:test_stream_delta, "late speech"})
+    {:ok, response} = ModelResponse.new(text: "late speech")
+    send(provider, {:test_stream_response, {:ok, response}})
+
+    assert_receive {:round_admission_requested, _, _, worker}
+    :erlang.trace(worker, true, [:send])
+    :ok = :sys.suspend(session)
+    try do
+      send(worker, {:admission_verdict, {:accept}})
+      assert_receive {:trace, ^worker, :send, {:agent_runtime_request_event, _, _, _, :text_delta, _}, ^session}
+      Process.send_after(self(), :deadline_reached, deadline, abs: true)
+      assert_receive :deadline_reached, 1_000
+    after
+      :sys.resume(session)
+    end
+
+    assert {:ok, %Result{status: :failed, reason: :request_timeout}} = Task.await(task)
+    refute_received {:agent_runtime_event, %{kind: :text_delta}}
+  end
+
   test "interruption during pending admission cancels without effects" do
     session =
       start_session(
@@ -243,7 +275,8 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
       start_session(
         [],
         round_admission:
-          {__MODULE__.AlwaysRepair, %{messages: ["Failed guardrail: Q Required: Yes."]}},
+          {__MODULE__.AlwaysRepair,
+           %{owner: self(), messages: ["Failed guardrail: Q Required: Yes."]}},
         maximum_admission_repairs: 1
       )
 
@@ -257,6 +290,8 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
     release_pending_context("admit_exhaust", [])
     assert_receive {:model_provider_process, provider2, second_request}, 1_000
 
+    assert_receive {:feedback_dispatched, 1}
+
     # Repair context is present on the retry but never committed as history.
     assert Enum.any?(second_request.messages, fn message ->
              message.role == :user and message.content =~ "Failed guardrail"
@@ -267,6 +302,8 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
 
     assert {:ok, %Result{status: :failed, reason: :guardrail_blocked}} =
              Task.await(task, 2_000)
+
+    refute_received {:feedback_dispatched, _}
   end
 
   defmodule ControllableAdmission do
@@ -287,7 +324,12 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
     @behaviour RoundAdmission
 
     @impl true
-    def admit(_candidate, _context, %{messages: messages}), do: {:repair, %{messages: messages}}
+    def admit(candidate, _context, %{owner: owner, messages: messages}) do
+      attempt = candidate.attempt
+
+      {:repair,
+       %{messages: messages, on_dispatch: fn -> send(owner, {:feedback_dispatched, attempt}) end}}
+    end
   end
 
   defp start_session(tools, options \\ []) do
@@ -317,16 +359,6 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
   defp release_pending_context(request_id, invocations) do
     assert_receive {:pending_context_requested, source, %{request_id: ^request_id}, 1_000}
     send(source, {:release, {:ok, invocations}})
-  end
-
-  defp release_blocked_executor do
-    for pid <- Process.list(),
-        {:current_function, {Vxpipe.AgentRuntime.TestExecutor, :await_release, 1}} ==
-          Process.info(pid, :current_function) do
-      send(pid, :release_submission)
-    end
-
-    :ok
   end
 
   defp descriptor!(name, identity, submission, terminal? \\ false) do
