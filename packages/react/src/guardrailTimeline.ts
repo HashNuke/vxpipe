@@ -32,10 +32,6 @@ function ownerMessage(check: GuardrailEvaluation, messages: readonly Message[]) 
       (!turn || message.turnId === turn));
   }
 
-  // Several retries can share an output turn. Only the archive can identify the generated message.
-  if (!input || !participant || !turn) return;
-  const matches = messages.filter(message => message.participantId === participant && message.turnId === turn);
-  if (matches.length === 1) return matches[0];
 }
 
 function attach(map: Map<string, GuardrailEvaluation[]>, id: string, checks: GuardrailEvaluation[]) {
@@ -93,14 +89,15 @@ export function guardrailTimeline(
       }
     }
 
-    const text = [after, transfer].find(check => check && !check.contentUnavailable && check.checkedText)?.checkedText;
+    const evidence = input ? [first] : [after, transfer];
+    const text = evidence.find(check => check && !check.contentUnavailable && check.checkedText)?.checkedText;
     const showText = filters.messages === "Show" && (input || !!after || !!text || !transfer);
     const showTools = filters.tools !== "Hide" && (!!transfer || proposed.size > 0);
     if (!showText && !showTools) continue;
-    const label = stopped && text && showText ? "Unsent" : stopped && showTools ? "Not run" :
+    const label = input && text ? "Checked input" : stopped && text && showText ? "Unsent" : stopped && showTools ? "Not run" :
       !stopped && text && showText ? "Checked candidate" : "Private activity";
     privateRows.push({
-      id, participantId: first.participantId, occurredAt: after?.occurredAt ?? first.occurredAt,
+      id, participantId: input ? first.sourceParticipantId ?? first.participantId : first.participantId, occurredAt: after?.occurredAt ?? first.occurredAt,
       checks: visible, blocked, text: showText ? text : undefined, label,
       tools: showTools ? [...proposed.values()].map(tool =>
         tool.id === invocation && transfer && !transfer.contentUnavailable

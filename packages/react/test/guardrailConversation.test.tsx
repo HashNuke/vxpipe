@@ -146,3 +146,15 @@ test("delivery and transfer status in the Conversation follow actual archive rec
   expect(accepted.queryByText("Delivery confirmed")).toBeNull();
   expect(screen.getByText("Transfer failed")).toBeVisible();
 });
+
+test("a checked input without its own message receipt remains private even if another command reuses the turn", () => {
+  inspect([evaluation("unlinked-input", {event: "before_turn", sourceParticipantId: "caller", sourceTurnId: "turn",
+    checkedText: "Independently retained input."})]);
+  const publicInput = within(screen.getByText("Real input.").closest("article")!);
+  expect(publicInput.queryByText("unlinked-input question?")).toBeNull();
+  const privateInput = within(screen.getByText("Independently retained input.").closest("article")!);
+  expect(privateInput.getByText("Checked input")).toBeVisible();
+  expect(privateInput.getByText("unlinked-input question?")).toBeVisible();
+  expect(privateInput.getByText("Caller")).toBeVisible();
+  expect(privateInput.queryByText("Unsent")).toBeNull();
+});
