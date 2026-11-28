@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
+import type { CallDetailsReader } from "@vxpipe/core";
 import type { HistoryFilters } from "@vxpipe/react";
 import { AlertTriangle } from "lucide-react";
 
@@ -62,16 +63,7 @@ export function CallDetailsPage({
           controller={state.controller}
         />
       ) : null}
-      {state.status === "ready" && state.completeness === "incomplete" ? (
-        <span
-          className="inline-flex shrink-0 items-center gap-1 text-[var(--admin-amber)]"
-          role="status"
-          title="This call history may be incomplete."
-        >
-          <AlertTriangle aria-hidden="true" className="size-3" />
-          Partial history
-        </span>
-      ) : null}
+      {state.status === "ready" && <PartialHistory details={state.controller.details} />}
     </div>
   );
 
@@ -119,4 +111,21 @@ export function CallDetailsPage({
       </main>
     </AdminShell>
   );
+}
+
+
+function PartialHistory({ details }: { details: CallDetailsReader }) {
+  const incomplete = useSyncExternalStore(
+    details.subscribe,
+    () => details.getSnapshot().completeness.state === "incomplete",
+  );
+  if (!incomplete) return null;
+  return <span
+    className="inline-flex shrink-0 items-center gap-1 text-[var(--admin-amber)]"
+    role="status"
+    title="This call history may be incomplete."
+  >
+    <AlertTriangle aria-hidden="true" className="size-3" />
+    Partial history
+  </span>;
 }

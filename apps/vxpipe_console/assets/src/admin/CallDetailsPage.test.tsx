@@ -1,7 +1,8 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
-import type { CallConsoleController } from "@vxpipe/core";
+import { createCallDetailsStore, type CallConsoleController } from "@vxpipe/core";
+import { callDetailsFixture } from "./callDetailsFixtures";
 
 const callConsole = vi.fn();
 vi.mock("@vxpipe/react", () => ({
@@ -26,7 +27,7 @@ import { CallDetailsPage } from "./CallDetailsPage";
 import { CallDetailsStory } from "./CallDetailsStory";
 
 function recordingController(recording: unknown) {
-  const snapshot = { call: { id: "call-1", recording } };
+  const snapshot = { call: { id: "call-1", recording }, completeness: { state: "complete" } };
   return {
     details: {
       getSnapshot: vi.fn(() => snapshot),
@@ -52,7 +53,7 @@ const context = {
   callSpecRevision: 3,
 };
 
-const readySnapshot = { call: { id: "call-1" } };
+const readySnapshot = { call: { id: "call-1" }, completeness: { state: "complete" } };
 
 const controller = {
   details: {
@@ -136,14 +137,17 @@ test("keeps loading, unavailable, and malformed states distinct", () => {
   expect(screen.getByRole("alert")).toHaveTextContent("Invalid participants.");
 });
 
-test("warns when the inspection archive is partial", () => {
-  render(
-    <CallDetailsPage
-      state={{ status: "ready", ...context, controller, completeness: "incomplete" }}
-    />,
-  );
-
+test("clears the partial history warning when the archive gap is filled", () => {
+  const state = callDetailsFixture("partial-archive");
+  if (state.status !== "ready") throw new Error("Expected a ready call");
+  const snapshot = state.controller.details.getSnapshot();
+  const store = createCallDetailsStore(snapshot);
+  render(<CallDetailsPage state={{...state, controller: {details: store}}} />);
   expect(screen.getByRole("status")).toHaveTextContent("Partial history");
+  act(() => { store.replaceBaseline({...snapshot, completeness: {
+    state: "complete", missingSequenceCount: 0, droppedLiveRecords: 0,
+  }}); });
+  expect(screen.queryByText("Partial history")).not.toBeInTheDocument();
 });
 
 test("the individual story return links load working admin previews", () => {
