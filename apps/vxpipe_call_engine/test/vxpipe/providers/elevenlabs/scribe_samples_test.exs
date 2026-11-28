@@ -261,7 +261,12 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSamplesTest do
             recognizer: STTSession,
             recognizer_options: [commit_strategy: :vad],
             recognizer_private: private,
-            activity_options: activity_options
+            activity_options:
+              if(vad,
+                do:
+                  Vxpipe.CallEngine.Speech.SileroPoolFixture.options(__MODULE__, activity_options),
+                else: []
+              )
           ]
         ]
       else

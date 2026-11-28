@@ -5,9 +5,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   alias Vxpipe.CallEngine.Diagnostics.CaptureHandoff
 
   alias Vxpipe.CallEngine.Speech.{
-    ActivityRuntime,
-    ActivitySupervisor,
-    CapabilityTree,
+    Silero.Detector,
     Channel,
     Descriptor,
     Event,
@@ -38,7 +36,6 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     :wire_module,
     :wire_options,
     :activity_options,
-    :activity_tree,
     :runtime,
     :runtime_monitor,
     :model_task,
@@ -160,7 +157,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
          wire_module: Keyword.get(private, :wire_module, ScribeSocket),
          wire_options: Keyword.get(private, :wire_options, []),
          activity_options: Keyword.get(private, :activity_options, []),
-         stream: Silero.new(),
+         stream: Detector.stream(),
          input: ScribeInput.new()
        }, {:continue, :prepare}}
     else
@@ -170,18 +167,6 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
 
   @impl true
   def handle_continue(:prepare, state) do
-    generation = state.allocation.generation
-    runtime = CapabilityTree.address({generation, :scribe_activity_runtime})
-    tasks = CapabilityTree.address({generation, :scribe_activity_tasks})
-
-    activity =
-      Keyword.merge(state.activity_options,
-        name: CapabilityTree.address({generation, :scribe_activity}),
-        tasks: tasks,
-        runtime: runtime,
-        max_jobs: 1
-      )
-
     options = [
       owner: self(),
       connection: Scribe.connection_options(state.config),
@@ -190,11 +175,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
       transport_options: state.wire_options
     ]
 
-    with {:ok, tree} <-
-           DynamicSupervisor.start_child(
-             state.providers,
-             Supervisor.child_spec({ActivitySupervisor, activity}, restart: :temporary)
-           ),
+    with {:ok, detector, deadline} <- Detector.reserve(state.allocation, state.activity_options),
          {:ok, wire} <-
            DynamicSupervisor.start_child(
              state.providers,
@@ -205,25 +186,32 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
                shutdown: :brutal_kill
              }
            ) do
-      load = Keyword.get(state.activity_options, :load, &Silero.ModelCache.fetch/0)
+      activity_options = state.activity_options
 
       task =
         Task.Supervisor.async_nolink(
           SessionTree.commands(state.allocation),
-          fn -> prepare_model(load) end,
+          fn -> Detector.load(detector, activity_options, deadline) end,
           shutdown: :brutal_kill
         )
 
       {:noreply,
        %{
          state
-         | activity_tree: tree,
-           runtime: runtime,
-           runtime_monitor: Process.monitor(GenServer.whereis(runtime)),
+         | runtime: detector,
+           runtime_monitor: Process.monitor(detector.lease.pool),
            wire: wire,
            wire_monitor: Process.monitor(wire),
            model_task: task,
-           setup_timer: Process.send_after(self(), :setup_timeout, @timeout_ms)
+           setup_timer:
+             Process.send_after(
+               self(),
+               :setup_timeout,
+               max(
+                 0,
+                 min(@timeout_ms, state.allocation.deadline - System.monotonic_time(:millisecond))
+               )
+             )
        }}
     else
       _failure -> fail(state)
@@ -252,11 +240,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
 
   def handle_call(:close, _from, state) do
     if state.model_task, do: Task.shutdown(state.model_task, :brutal_kill)
-    if state.inference_ref, do: ActivityRuntime.cancel(state.inference_ref, state.runtime)
     if state.wire, do: DynamicSupervisor.terminate_child(state.providers, state.wire)
-
-    if state.activity_tree,
-      do: DynamicSupervisor.terminate_child(state.providers, state.activity_tree)
 
     {:stop, :normal, :ok, state}
   end
@@ -277,9 +261,9 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     {:noreply, state}
   end
 
-  def handle_info({ref, :ok}, %{model_task: %Task{ref: ref}} = state) do
+  def handle_info({ref, {:ok, detector}}, %{model_task: %Task{ref: ref}} = state) do
     Process.demonitor(ref, [:flush])
-    activate(%{state | model_task: nil, model_ready?: true})
+    activate(%{state | model_task: nil, model_ready?: true, runtime: detector})
   end
 
   def handle_info({ref, _failure}, %{model_task: %Task{ref: ref}} = state), do: fail(state)
@@ -291,11 +275,13 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
       do: activate(%{state | request_id: request_id})
 
   def handle_info(
-        {:vxpipe_speech_activity, ref, {:ok, stream, probabilities}},
+        {:silero_result, ref, {:ok, probability, packed}},
         %{inference_ref: ref} = state
       ) do
+    stream = %{packed: packed, samples: state.stream.samples + 512}
+
     with {:ok, input, actions} <-
-           ScribeInput.push(state.input, state.accepted_audio, probabilities),
+           ScribeInput.push(state.input, state.accepted_audio, [probability]),
          {:ok, state} <-
            acoustic_actions(
              %{state | input: input, stream: stream, inference_ref: nil, accepted_audio: nil},
@@ -309,7 +295,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     end
   end
 
-  def handle_info({:vxpipe_speech_activity, ref, _failure}, %{inference_ref: ref} = state),
+  def handle_info({:silero_result, ref, _failure}, %{inference_ref: ref} = state),
     do: fail(state)
 
   def handle_info(
@@ -393,25 +379,13 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     |> Map.put(:log, [])
   end
 
-  defp prepare_model(load) do
-    case load.() do
-      {:ok, _model} -> :ok
-      _failure -> :error
-    end
-  rescue
-    _error -> :error
-  catch
-    _kind, _reason -> :error
-  end
-
-  defp advance_input(%{inference_ref: ref} = state) when is_reference(ref), do: {:ok, state}
-  defp advance_input(%{pending_audio: ""} = state), do: {:ok, state}
+  defp advance_input(%{inference_ref: ref} = state) when not is_nil(ref), do: {:ok, state}
+  defp advance_input(%{pending_audio: pcm} = state) when byte_size(pcm) < 1024, do: {:ok, state}
 
   defp advance_input(state) do
-    size = min(byte_size(state.pending_audio), 32_000)
-    <<audio::binary-size(size), pending::binary>> = state.pending_audio
+    <<audio::binary-size(1024), pending::binary>> = state.pending_audio
 
-    case ActivityRuntime.submit(state.stream, audio, state.runtime) do
+    case Detector.submit(state.runtime, state.stream, audio, :scribe) do
       {:ok, ref} ->
         {:ok, %{state | inference_ref: ref, accepted_audio: audio, pending_audio: pending}}
 

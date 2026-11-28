@@ -5,6 +5,16 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
   alias Vxpipe.CallEngine.TestElevenLabsScribeTransport, as: Wire
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
 
+  test "manual Scribe holds partial audio locally until a full pool window is ready" do
+    {session, wire} = start_session()
+    ready(session, wire)
+    assert :ok = Session.push_audio(session, <<2, 0>>)
+    state = :sys.get_state(Session.provider(session))
+    assert %Vxpipe.CallEngine.Speech.Silero.Detector{} = state.runtime
+    assert state.pending_audio == <<2, 0>>
+    assert state.inference_ref == nil
+  end
+
   test "configuration advertises local acoustic authority without optional or STS claims" do
     assert {:ok, descriptor} = STTSession.configure([])
     assert :ok = Descriptor.validate_conversational_stt(descriptor)
@@ -60,8 +70,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     assert %Event{kind: :speech_started, turn_ref: first} = next_event(session)
     assert_receive {:scribe_audio, ^wire, ^first_audio}, 1_000
     endpoint(session, wire)
-    assert_receive {:scribe_audio, ^wire, tail}, 1_000
-    assert tail == :binary.copy(<<0, 0>>, 8_192)
+    assert drain_audio(wire) == :binary.copy(<<0, 0>>, 8_192)
     refute_received {:scribe_audio, ^wire, _stale}
     assert :ok = Session.push_audio(session, second_audio)
     assert %Event{kind: :speech_started, turn_ref: second} = next_event(session)
@@ -111,10 +120,10 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     Wire.deliver(wire, {:ready, "synthetic-request"})
     _ = :sys.get_state(Session.provider(session))
     refute_received {:vxpipe_speech, %Event{kind: :ready}}
-    worker_monitor = Process.monitor(worker)
+    # The immutable cache load can complete after its initiating session closes.
     wire_monitor = Process.monitor(wire)
     assert :ok = Session.close(session)
-    assert_receive {:DOWN, ^worker_monitor, :process, ^worker, _reason}, 1_000
+    send(worker, :continue)
     assert_receive {:DOWN, ^wire_monitor, :process, ^wire, _reason}, 1_000
   end
 
@@ -131,7 +140,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
   end
 
-  test "inference admission bounds queued PCM and hard provider death retires its worker" do
+  test "inference admission bounds queued PCM and hard provider death retires its in-flight row" do
     observer = self()
 
     {session, wire} =
@@ -149,11 +158,10 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     for _ <- 1..2, do: assert(:ok = Session.push_audio(session, :binary.copy(<<1, 0>>, 16_000)))
     assert {:error, :busy} = Session.push_audio(session, :binary.copy(<<1, 0>>, 16_000))
     refute_received {:vxpipe_speech, %Event{kind: :speech_started}}
-    monitor = Process.monitor(worker)
     wire_monitor = Process.monitor(wire)
     Process.exit(Session.provider(session), :kill)
     assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
-    assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 1_000
+    send(worker, :continue)
     assert_receive {:DOWN, ^wire_monitor, :process, ^wire, _reason}, 1_000
   end
 
@@ -172,16 +180,17 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
 
     ready(session, wire)
     assert :ok = Session.push_audio(session, first)
-    assert_receive {:queued_scribe_classifying, worker, ^first}, 1_000
+    first_window = binary_part(first, 0, 1024)
+    assert_receive {:queued_scribe_classifying, worker, ^first_window}, 1_000
     assert :ok = Session.push_audio(session, second)
     refute_received {:vxpipe_speech, %Event{kind: :speech_started}}
     send(worker, :continue)
+    finish_windows(binary_part(first, 1024, byte_size(first) - 1024))
     assert %Event{kind: :speech_started} = next_event(session)
     assert_receive {:scribe_audio, ^wire, ^first}, 1_000
-    assert_receive {:queued_scribe_classifying, next_worker, ^second}, 1_000
-    send(next_worker, :continue)
-    assert_receive {:scribe_audio, ^wire, ^second}, 1_000
+    finish_windows(second)
     await_input(session)
+    assert drain_audio(wire) == second
     refute_received {:vxpipe_speech_closed, ^session, _reason}
   end
 
@@ -288,7 +297,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
 
     wire_audio = drain_audio(wire)
 
-    assert %{input: %{pre_roll: retained, pending: pending}} =
+    assert %{input: %{pre_roll: retained, pending: ""}, pending_audio: pending} =
              :sys.get_state(Session.provider(session))
 
     assert first_epoch <> second_epoch <> wire_audio <> retained <> pending ==
@@ -503,10 +512,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
 
   test "packaged acoustic inference drives the session from the existing public PCM fixture" do
     {session, wire} =
-      start_session(
-        load: &Silero.ModelCache.fetch/0,
-        classify: &Silero.push(&2, &1, &3)
-      )
+      start_session(native: true)
 
     ready(session, wire)
     audio = File.read!(Vxpipe.Providers.Deepgram.LiveFixture.pcm_path())
@@ -555,6 +561,13 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     end
   end
 
+  defp finish_windows(audio) do
+    for <<window::binary-size(1024) <- audio>> do
+      assert_receive {:queued_scribe_classifying, worker, ^window}, 1000
+      send(worker, :continue)
+    end
+  end
+
   defp voice, do: :binary.copy(<<1, 0>>, 2_048)
 
   defp drain_audio(wire), do: drain_audio(wire, "")
@@ -580,7 +593,15 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
   defp start_session(options \\ []) do
     tree = start_supervised!({CapabilityTree, owner: self()})
     assert {:ok, config} = Scribe.new(api_key: "synthetic-key")
-    activity = Keyword.merge([load: fn -> {:ok, :model} end, classify: &classify/3], options)
+
+    activity =
+      if options[:native],
+        do: [],
+        else:
+          Vxpipe.CallEngine.Speech.SileroPoolFixture.options(
+            __MODULE__,
+            Keyword.merge([load: fn -> {:ok, :model} end, classify: &classify/3], options)
+          )
 
     assert {:ok, session, :starting} =
              Session.start(CapabilityTree.scope(tree),

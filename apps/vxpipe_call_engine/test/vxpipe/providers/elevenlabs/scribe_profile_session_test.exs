@@ -110,13 +110,14 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeProfileSessionTest do
       config: config,
       wire_module: Wire,
       wire_options: [observer: self()],
-      activity_options: [
-        load: fn -> {:ok, :fixture} end,
-        classify: fn _, stream, pcm ->
-          count = div(byte_size(pcm), 1_024)
-          {:ok, %{stream | samples: stream.samples + count * 512}, List.duplicate(0.8, count)}
-        end
-      ]
+      activity_options:
+        Vxpipe.CallEngine.Speech.SileroPoolFixture.options(__MODULE__,
+          load: fn -> {:ok, :fixture} end,
+          classify: fn _, stream, pcm ->
+            count = div(byte_size(pcm), 1_024)
+            {:ok, %{stream | samples: stream.samples + count * 512}, List.duplicate(0.8, count)}
+          end
+        )
     ]
 
     options =

@@ -19,7 +19,11 @@ defmodule Vxpipe.Providers.ElevenLabs.STTRoomTest do
       enabled: true,
       wire_module: Wire,
       wire_options: [observer: self()],
-      activity_options: [load: fn -> {:ok, :model} end, classify: &classify/3],
+      activity_options:
+        Vxpipe.CallEngine.Speech.SileroPoolFixture.options(__MODULE__,
+          load: fn -> {:ok, :model} end,
+          classify: &classify/3
+        ),
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 262_144,

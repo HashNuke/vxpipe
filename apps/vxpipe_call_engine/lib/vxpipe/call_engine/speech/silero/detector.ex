@@ -7,32 +7,45 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Detector do
   defstruct @enforce_keys
 
   def prepare(allocation, opts) do
-    now = System.monotonic_time(:millisecond)
-    deadline = min(allocation.deadline, now + Keyword.get(opts, :load_timeout_ms, 15_000))
+    with {:ok, detector, deadline} <- reserve(allocation, opts) do
+      case load(detector, opts, deadline) do
+        {:ok, _} = result ->
+          result
+
+        error ->
+          Pool.close(detector.lease)
+          error
+      end
+    end
+  end
+
+  def reserve(allocation, opts) do
+    deadline =
+      min(
+        allocation.deadline,
+        System.monotonic_time(:millisecond) + Keyword.get(opts, :load_timeout_ms, 15_000)
+      )
 
     with {:ok, lease} <-
            Pool.reserve(allocation.generation, deadline, Keyword.get(opts, :pool, Pool)) do
-      cache = Keyword.get(opts, :model_cache, ModelCache)
-      result = ModelCache.fetch(cache, max(0, deadline - System.monotonic_time(:millisecond)))
+      {:ok,
+       %__MODULE__{
+         lease: lease,
+         model: nil,
+         timeout: Keyword.get(opts, :inference_timeout_ms, 2_000)
+       }, deadline}
+    end
+  end
 
-      case result do
-        {:ok, model} ->
-          if System.monotonic_time(:millisecond) < deadline do
-            {:ok,
-             %__MODULE__{
-               lease: lease,
-               model: model,
-               timeout: Keyword.get(opts, :inference_timeout_ms, 2_000)
-             }}
-          else
-            Pool.close(lease)
-            {:error, :model_unavailable}
-          end
+  def load(detector, opts, deadline) do
+    cache = Keyword.get(opts, :model_cache, ModelCache)
 
-        _ ->
-          Pool.close(lease)
-          {:error, :model_unavailable}
-      end
+    with remaining when remaining > 0 <- deadline - System.monotonic_time(:millisecond),
+         {:ok, model} <- ModelCache.fetch(cache, remaining),
+         true <- System.monotonic_time(:millisecond) < deadline do
+      {:ok, %{detector | model: model}}
+    else
+      _ -> {:error, :model_unavailable}
     end
   end
 
