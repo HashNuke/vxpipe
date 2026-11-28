@@ -308,7 +308,6 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
 
   defp question_attributes(report, question, outcome, ordinal, envelope) do
     outcome_map = outcome || %{probability_yes: nil, inferred_answer: nil, outcome: :unavailable}
-    failed? = outcome_map.outcome == :failed
     {feedback, origin} = question_feedback(question, outcome_map, report)
 
     payload = %{
@@ -324,8 +323,8 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
       "outcome" => Atom.to_string(outcome_map.outcome),
       "question" => question_text(question),
       "response" => question_response(question),
-      "feedback" => if(failed?, do: feedback, else: nil),
-      "feedback_origin" => if(failed?, do: origin, else: nil),
+      "feedback" => feedback,
+      "feedback_origin" => origin,
       "feedback_dispatched" => false,
       "content_unavailable" => report.content_unavailable
     }
@@ -510,16 +509,11 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
   defp tool_call_id(_report), do: nil
 
   defp question_feedback(question, %{outcome: :failed}, %{outcome: :blocked}) do
-    response = Map.get(question, :response) || Map.get(question, "response")
-
-    if is_binary(response) and String.trim(response) != "" do
-      {response, "authored"}
-    else
-      text = Map.get(question, :question) || Map.get(question, "question") || ""
-      required = Map.get(question, :required_answer) || Map.get(question, "required_answer")
-      label = if required in [:yes, "yes"], do: "Yes", else: "No"
-      {"Failed guardrail: #{text} Required: #{label}.", "fallback"}
-    end
+    Vxpipe.CallEngine.CallSpec.GuardrailQuestion.feedback(
+      question_text(question),
+      question.required_answer,
+      question_response(question)
+    )
   end
 
   defp question_feedback(_question, _outcome, _report), do: {nil, nil}

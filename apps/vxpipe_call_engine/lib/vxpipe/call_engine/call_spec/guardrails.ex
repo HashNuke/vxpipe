@@ -408,11 +408,9 @@ defmodule Vxpipe.CallEngine.CallSpec.Guardrails do
   defp usable_score(_score), do: :error
 
   defp feedback_line(%GuardrailQuestion{} = question) do
-    if is_binary(question.response) and String.trim(question.response) != "" do
-      question.response
-    else
-      required = if question.required_answer == :yes, do: "Yes", else: "No"
-      "Failed guardrail: #{question.question} Required: #{required}."
-    end
+    {line, _origin} =
+      GuardrailQuestion.feedback(question.question, question.required_answer, question.response)
+
+    line
   end
 end

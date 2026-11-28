@@ -11,4 +11,14 @@ defmodule Vxpipe.CallEngine.CallSpec.GuardrailQuestion do
           threshold_hundredths: 0..100,
           response: nil | String.t()
         }
+
+  @doc "Returns the exact model feedback line and its origin for a failed question."
+  def feedback(text, required_answer, response) do
+    if is_binary(response) and String.trim(response) != "" do
+      {response, "authored"}
+    else
+      required = if required_answer in [:yes, "yes"], do: "Yes", else: "No"
+      {"Failed guardrail: #{text} Required: #{required}.", "fallback"}
+    end
+  end
 end
