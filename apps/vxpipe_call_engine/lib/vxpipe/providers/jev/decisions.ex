@@ -1,7 +1,7 @@
 defmodule Vxpipe.Providers.Jev.Decisions do
   @moduledoc false
 
-  alias Vxpipe.Providers.{DecisionsRequest, DecisionsTransport}
+  alias Vxpipe.Providers.{DecisionsRequest, DecisionsResponse, DecisionsTransport}
 
   @endpoint "https://api.typesafe.ai/v1/systemone"
   @models ["jev-1.14.0", "jev-latest"]
@@ -76,118 +76,10 @@ defmodule Vxpipe.Providers.Jev.Decisions do
   end
 
   defp parse_transport(body, ids) when is_map(body) do
-    request_id = DecisionsTransport.extract_request_id(body)
-    usage = parse_usage(body)
-
-    case fetch_answers(body) do
-      {:ok, answers} ->
-        case parse_nouls_with_partial(answers, ids) do
-          {:ok, probabilities} ->
-            case fetch_model(body) do
-              {:ok, model} ->
-                {:ok,
-                 %{
-                   model: model,
-                   request_id: request_id,
-                   usage: usage,
-                   probabilities: probabilities
-                 }}
-
-              :error ->
-                {:error, :invalid_result,
-                 %{model: nil, request_id: request_id, usage: usage, probabilities: probabilities}}
-            end
-
-          {:partial, probabilities} ->
-            model =
-              case fetch_model(body) do
-                {:ok, model} -> model
-                :error -> nil
-              end
-
-            {:error, :invalid_result,
-             %{model: model, request_id: request_id, usage: usage, probabilities: probabilities}}
-
-          :error ->
-            {:error, :invalid_result,
-             %{model: nil, request_id: request_id, usage: usage, probabilities: nil}}
-        end
-
-      :error ->
-        {:error, :invalid_result,
-         %{model: nil, request_id: request_id, usage: usage, probabilities: nil}}
-    end
+    DecisionsResponse.nouls(body, ids, parse_usage(body))
   end
 
   defp parse_transport(_body, _ids), do: {:error, :invalid_result}
-
-  defp fetch_answers(%{"answers" => answers}) when is_map(answers), do: {:ok, answers}
-  defp fetch_answers(_body), do: :error
-
-  defp fetch_model(%{"model" => model}) when is_binary(model) and byte_size(model) in 1..256,
-    do: {:ok, model}
-
-  defp fetch_model(_body), do: :error
-
-  defp parse_nouls_with_partial(answers, ids) when is_map(answers) and is_list(ids) do
-    keys = Map.keys(answers)
-    trustworthy = trustworthy_nouls(answers, ids)
-
-    if Enum.sort(keys) != Enum.sort(ids) do
-      if trustworthy == %{}, do: :error, else: {:partial, trustworthy}
-    else
-      case parse_nouls(answers, ids) do
-        {:ok, probabilities} -> {:ok, probabilities}
-        :error when trustworthy != %{} -> {:partial, trustworthy}
-        :error -> :error
-      end
-    end
-  end
-
-  defp parse_nouls(answers, ids) do
-    keys = Map.keys(answers)
-
-    if Enum.sort(keys) != Enum.sort(ids) do
-      :error
-    else
-      Enum.reduce_while(ids, {:ok, %{}}, fn id, {:ok, acc} ->
-        case Map.fetch(answers, id) do
-          {:ok, %{"type" => "noul", "noul" => value}} ->
-            case usable_probability(value) do
-              {:ok, probability} -> {:cont, {:ok, Map.put(acc, id, probability)}}
-              :error -> {:halt, :error}
-            end
-
-          _other ->
-            {:halt, :error}
-        end
-      end)
-    end
-  end
-
-  defp trustworthy_nouls(answers, ids) when is_map(answers) and is_list(ids) do
-    Enum.reduce(ids, %{}, fn id, acc ->
-      case Map.fetch(answers, id) do
-        {:ok, %{"type" => "noul", "noul" => value}} ->
-          case usable_probability(value) do
-            {:ok, probability} -> Map.put(acc, id, probability)
-            :error -> acc
-          end
-
-        _other ->
-          acc
-      end
-    end)
-  end
-
-  defp usable_probability(value) when is_integer(value) and value in [0, 1],
-    do: {:ok, value * 1.0}
-
-  defp usable_probability(value) when is_float(value) and value >= 0.0 and value <= 1.0 do
-    if value == value, do: {:ok, value}, else: :error
-  end
-
-  defp usable_probability(_value), do: :error
 
   defp parse_usage(body) do
     DecisionsTransport.reported_usage(body["usage"],

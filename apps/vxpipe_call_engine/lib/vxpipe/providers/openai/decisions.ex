@@ -1,7 +1,7 @@
 defmodule Vxpipe.Providers.OpenAI.Decisions do
   @moduledoc false
 
-  alias Vxpipe.Providers.{DecisionsRequest, DecisionsTransport}
+  alias Vxpipe.Providers.{DecisionsRequest, DecisionsResponse, DecisionsTransport}
 
   @endpoint "https://api.openai.com/v1/decisions"
   @models ["gpt-6-luna"]
@@ -80,164 +80,10 @@ defmodule Vxpipe.Providers.OpenAI.Decisions do
   end
 
   defp parse_transport(body, ids) when is_map(body) do
-    request_id = DecisionsTransport.extract_request_id(body)
-    usage = parse_usage(body)
-
-    case fetch_answers(body) do
-      {:ok, answers} ->
-        case parse_predicates_with_partial(answers, ids) do
-          {:ok, probabilities} ->
-            case fetch_model(body) do
-              {:ok, model} ->
-                {:ok,
-                 %{
-                   model: model,
-                   request_id: request_id,
-                   usage: usage,
-                   probabilities: probabilities
-                 }}
-
-              :error ->
-                {:error, :invalid_result,
-                 %{model: nil, request_id: request_id, usage: usage, probabilities: probabilities}}
-            end
-
-          {:partial, probabilities, :refused} ->
-            model =
-              case fetch_model(body) do
-                {:ok, model} -> model
-                :error -> nil
-              end
-
-            {:error, :refused,
-             %{model: model, request_id: request_id, usage: usage, probabilities: probabilities}}
-
-          {:partial, probabilities, _reason} ->
-            model =
-              case fetch_model(body) do
-                {:ok, model} -> model
-                :error -> nil
-              end
-
-            {:error, :invalid_result,
-             %{model: model, request_id: request_id, usage: usage, probabilities: probabilities}}
-
-          :error ->
-            {:error, :invalid_result,
-             %{model: nil, request_id: request_id, usage: usage, probabilities: nil}}
-        end
-
-      :error ->
-        {:error, :invalid_result,
-         %{model: nil, request_id: request_id, usage: usage, probabilities: nil}}
-    end
+    DecisionsResponse.predicates(body, ids, parse_usage(body))
   end
 
   defp parse_transport(_body, _ids), do: {:error, :invalid_result}
-
-  defp fetch_answers(%{"answers" => answers}) when is_list(answers), do: {:ok, answers}
-  defp fetch_answers(_body), do: :error
-
-  defp fetch_model(%{"model" => model}) when is_binary(model) and byte_size(model) in 1..256,
-    do: {:ok, model}
-
-  defp fetch_model(_body), do: :error
-
-  defp parse_predicates_with_partial(answers, ids) do
-    names =
-      Enum.map(answers, fn
-        %{"name" => name} -> name
-        _other -> :invalid
-      end)
-
-    refused? =
-      Enum.any?(answers, &match?(%{"type" => "refusal", "name" => _}, &1)) or
-        Enum.any?(answers, &match?(%{"type" => "refusal"}, &1))
-
-    trustworthy = trustworthy_predicates(answers, ids)
-
-    cond do
-      length(answers) != length(ids) ->
-        if trustworthy == %{}, do: :error, else: {:partial, trustworthy, :invalid_result}
-
-      Enum.sort(names) != Enum.sort(ids) ->
-        if trustworthy == %{}, do: :error, else: {:partial, trustworthy, :invalid_result}
-
-      length(Enum.uniq(names)) != length(names) ->
-        if trustworthy == %{}, do: :error, else: {:partial, trustworthy, :invalid_result}
-
-      refused? ->
-        {:partial, trustworthy, :refused}
-
-      true ->
-        case collect_probabilities(answers) do
-          {:ok, probabilities} -> {:ok, probabilities}
-          :error when trustworthy != %{} -> {:partial, trustworthy, :invalid_result}
-          :error -> :error
-        end
-    end
-  end
-
-  defp trustworthy_predicates(answers, ids) when is_list(answers) and is_list(ids) do
-    ids_set = MapSet.new(ids)
-    ambiguous = ambiguous_names(answers)
-
-    answers
-    |> Enum.reduce(%{}, fn
-      %{"type" => "predicate", "name" => name, "probability" => probability}, acc
-      when is_binary(name) ->
-        if MapSet.member?(ids_set, name) and not MapSet.member?(ambiguous, name) and
-             not Map.has_key?(acc, name) do
-          case usable_probability(probability) do
-            {:ok, value} -> Map.put(acc, name, value)
-            :error -> acc
-          end
-        else
-          acc
-        end
-
-      _other, acc ->
-        acc
-    end)
-  end
-
-  # Any id occurring more than once across the raw answer list is ambiguous:
-  # with conflicting duplicates we cannot tell which occurrence (if any) is
-  # trustworthy, so every occurrence is excluded from partial scores.
-  defp ambiguous_names(answers) do
-    answers
-    |> Enum.reduce(%{}, fn
-      %{"name" => name}, acc when is_binary(name) -> Map.update(acc, name, 1, &(&1 + 1))
-      _other, acc -> acc
-    end)
-    |> Enum.reduce(MapSet.new(), fn
-      {name, count}, acc when count > 1 -> MapSet.put(acc, name)
-      _entry, acc -> acc
-    end)
-  end
-
-  defp collect_probabilities(answers) do
-    Enum.reduce_while(answers, {:ok, %{}}, fn
-      %{"type" => "predicate", "name" => name, "probability" => probability}, {:ok, acc}
-      when is_binary(name) ->
-        case usable_probability(probability) do
-          {:ok, value} -> {:cont, {:ok, Map.put(acc, name, value)}}
-          :error -> {:halt, :error}
-        end
-
-      _other, _acc ->
-        {:halt, :error}
-    end)
-  end
-
-  defp usable_probability(value) when is_integer(value) and value in [0, 1],
-    do: {:ok, value * 1.0}
-
-  defp usable_probability(value) when is_float(value) and value >= 0.0 and value <= 1.0 do
-    if value == value, do: {:ok, value}, else: :error
-  end
-
-  defp usable_probability(_value), do: :error
 
   defp parse_usage(body) do
     DecisionsTransport.reported_usage(body["usage"],

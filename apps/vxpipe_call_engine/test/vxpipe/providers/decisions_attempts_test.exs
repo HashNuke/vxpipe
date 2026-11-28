@@ -434,6 +434,33 @@ defmodule Vxpipe.Providers.DecisionsAttemptsTest do
     assert finished.usage == %{input_tokens: 7, output_tokens: 1, total_tokens: 8}
   end
 
+  test "complete probabilities are usable without a returned model and retain a model when reported" do
+    nouls = Map.new(@questions, &{&1.id, %{"type" => "noul", "noul" => 0.8}})
+
+    predicates =
+      Enum.map(@questions, &%{"type" => "predicate", "name" => &1.id, "probability" => 0.8})
+
+    for {provider, answers} <- [
+          {OpenAIDecisions, predicates},
+          {JevDecisions, nouls},
+          {GoogleDecisions, nouls}
+        ],
+        actual <- [nil, "returned-model"] do
+      {:ok, config} = provider.new(api_key: "fixture-key", model: hd(provider.models()))
+
+      reply =
+        if actual, do: %{"answers" => answers, "model" => actual}, else: %{"answers" => answers}
+
+      Req.Test.expect(__MODULE__, &Req.Test.json(&1, reply))
+
+      assert {:ok, result} =
+               provider.evaluate(config, "test", @questions, plug: {Req.Test, __MODULE__})
+
+      assert result.model == actual
+      assert result.probabilities == %{"private_request" => 0.8, "private_disclosure" => 0.8}
+    end
+  end
+
   setup do
     Req.Test.verify_on_exit!()
     :ok
