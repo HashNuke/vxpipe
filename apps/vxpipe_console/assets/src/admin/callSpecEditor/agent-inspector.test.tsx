@@ -314,3 +314,13 @@ test("a read-only revision with malformed legacy history explains the fresh tran
   expect(screen.getByText("Agent transfers always start with fresh history.")).toBeVisible();
   expect(screen.queryByText(/Remove the obsolete/)).not.toBeInTheDocument();
 });
+
+test("the agent Models tab names the TypeSafe integration for its inherited Decisions model", () => {
+  const initial = structuredClone(editorFixture);
+  initial.source.defaults = { capabilities: { decisions: { provider: "jev", model: "jev-1.14.0", credential_name: "policy" } } };
+  render(<Harness initial={initial} initialTab="voice" />);
+  const decisions = screen.getByRole("combobox", { name: "Decisions" });
+  expect(decisions).toBeDisabled();
+  expect(decisions).toHaveTextContent("TypeSafe · jev-1.14.0");
+  expect(saved().defaults.capabilities.decisions).toEqual(initial.source.defaults.capabilities?.decisions);
+});

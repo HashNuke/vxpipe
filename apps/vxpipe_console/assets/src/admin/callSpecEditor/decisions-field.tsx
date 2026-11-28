@@ -1,3 +1,4 @@
+import { capabilityProviderName } from "../setupCatalog";
 import type { ModelCatalog } from "../modelCatalog";
 import { CapabilityFields } from "./capability-fields";
 import { ChoiceField } from "./editor-fields";
@@ -19,7 +20,7 @@ export function DecisionsAgentField({ document, issues, participantKey }: Inspec
   const effective = document.source.defaults?.capabilities?.decisions;
   return <ChoiceField label="Decisions" path={["participants", participantKey, "capabilities", "decisions"]}
     issues={issues} disabled value={effective?.model ?? ""}
-    choices={effective ? [{ value: effective.model, label: `${effective.provider} · ${effective.model}` }] : [{ value: "", label: "Not configured", disabled: true }]}
+    choices={effective ? [{ value: effective.model, label: `${capabilityProviderName(effective.provider)} · ${effective.model}` }] : [{ value: "", label: "Not configured", disabled: true }]}
     hint="Change the Decisions model in Call settings → Models."
     onChange={() => {}} />;
 }

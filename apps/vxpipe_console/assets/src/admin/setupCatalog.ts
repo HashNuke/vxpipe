@@ -46,6 +46,13 @@ export const setupProviders: SetupProvider[] = catalog.providers.map((provider) 
   defaultModels: {},
   recommendedModels: {},
 }));
+const providerNames = new Map<string, string>(setupProviders.map(({ id, name }) => [id, name]));
+providerNames.set("morse", "MorseCode Local");
+
+export function capabilityProviderName(id: string): string {
+  return providerNames.get(id) ?? id;
+}
+
 const catalogCapability: Record<VoiceCapability, CatalogCapability> = {
   stt: "speech_to_text", llm: "model_inference", tts: "text_to_speech", s2s: "speech_to_speech",
 };

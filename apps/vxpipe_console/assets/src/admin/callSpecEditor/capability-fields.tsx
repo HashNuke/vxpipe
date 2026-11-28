@@ -1,4 +1,4 @@
-import { setupProviders } from "../setupCatalog";
+import { capabilityProviderName } from "../setupCatalog";
 import { CredentialNamesContext } from "./credential-names";
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { useContext } from "react";
@@ -22,16 +22,14 @@ type Props = {
   inherited?: CapabilitySelection;
 };
 
-const providerNames: Record<string, string> = { ...Object.fromEntries(setupProviders.map(({ id, name }) => [id, name])), morse: "MorseCode Local" };
-
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
 export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Not configured", defaultDisabled = false, inherited }: Props) {
   const credentialNames = useContext(CredentialNamesContext);
   const voiceCatalog = useContext(VoiceCatalogContext);
   const providers = catalog[kind] ?? {};
-  const providerChoices = Object.keys(providers).sort().map(provider => ({ value: provider, label: Object.hasOwn(providerNames, provider) ? providerNames[provider]! : provider }));
+  const providerChoices = Object.keys(providers).sort().map(provider => ({ value: provider, label: capabilityProviderName(provider) }));
   if (value && !Object.hasOwn(providers, value.provider)) {
-    providerChoices.push({ value: value.provider, label: `${Object.hasOwn(providerNames, value.provider) ? providerNames[value.provider] : value.provider} (saved)` });
+    providerChoices.push({ value: value.provider, label: `${capabilityProviderName(value.provider)} (saved)` });
   }
   const models = value && Object.hasOwn(providers, value.provider) ? providers[value.provider]! : [];
   const model = models.find((model) => model.id === value?.model);
