@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
   alias Vxpipe.CallEngine.TranscriptRouter
   alias Vxpipe.CallEngine.TestTenantCredentialSource
 
-  defp guarded_plan(save_transcripts \\ false, variant \\ :single) do
+  defp guarded_plan(save_transcripts \\ false, variant \\ :single, tenant \\ "tenant-guarded") do
     source = %{
       schema_version: "20261128.01",
       name: "Guarded startup",
@@ -173,7 +173,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     {:ok, invocation} =
       CallInvocation.new(
         %{call_spec: %{id: spec.resource_id, revision: 3}, transport: %{type: "web"}},
-        tenant_id: "tenant-guarded",
+        tenant_id: tenant,
         actor_id: "operator"
       )
 
@@ -330,7 +330,9 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     on_exit(fn -> Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings) end)
 
     bindings = %{
-      {plan.tenant_id, "openai", "policy"} => %{"api_key" => "synthetic-policy-key"},
+      {plan.tenant_id, "openai", "policy"} => %{
+        "api_key" => Keyword.get(speech_options, :test_policy_key, "synthetic-policy-key")
+      },
       {plan.tenant_id, "deepgram", "default"} => %{"api_key" => "synthetic-tts-key"},
       {plan.tenant_id, "cartesia", "default"} => %{"api_key" => "synthetic-stt-key"}
     }
@@ -353,12 +355,16 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
       room_id: plan.room_id,
       incarnation_id: room.incarnation_id,
       participant_id: plan.participants["caller"].participant_id,
-      connection_id: "guarded-web",
+      connection_id: Keyword.get(speech_options, :connection_id, "guarded-web"),
       deadline: DateTime.add(DateTime.utc_now(), 5, :second)
     ]
 
     assert {:ok, attach} = AttachConnection.new(identity)
-    output = start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+
+    output =
+      start_supervised!({CallEngine.TestAudioOutputSink, observer: self()},
+        id: {:sink, plan.room_id}
+      )
 
     assert {:ok, _attachment} =
              CallEngine.TestTransferConnection.attach(
@@ -995,10 +1001,18 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     {plan, room, identity, capability, http, invocation}
   end
 
-  defp controlled_decisions(observer) do
+  defp controlled_decisions(observer, scope \\ nil) do
     fn conn ->
       body = JSON.decode!(Req.Test.raw_body(conn))
       input = JSON.decode!(body["input"])
+
+      if scope do
+        identified? =
+          Plug.Conn.get_req_header(conn, "authorization") == ["Bearer synthetic-#{scope}"]
+
+        send(observer, {:scoped_wire, scope, identified?, input})
+      end
+
       send(observer, {:gate, self(), input["participant"], input["current"]["text"]})
 
       receive do
@@ -1637,6 +1651,173 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert_receive {:DOWN, ^wire_monitor, :process, ^wire, _}, 2_000
     assert_receive {:DOWN, ^admission_monitor, :process, ^admission, _}, 2_000
     refute_received {:test_agent_runtime_stream, _, _}
+  end
+
+  test "simultaneous guarded calls isolate reversed verdicts and the surviving tenant's admissions" do
+    a = guarded_plan(true, :single, "tenant-a")
+    b = guarded_plan(true, :single, "tenant-b")
+
+    {room_a, left} =
+      start_guarded_call(a, controlled_decisions(self(), a.tenant_id),
+        connection_id: "web-a",
+        test_policy_key: "synthetic-tenant-a"
+      )
+
+    {room_b, right} =
+      start_guarded_call(b, controlled_decisions(self(), b.tenant_id),
+        connection_id: "web-b",
+        test_policy_key: "synthetic-tenant-b"
+      )
+
+    send_turn(left, "same-turn", "Only tenant A's invoice.")
+    wire_a = scoped_wire(a, "Only tenant A's invoice.")
+    send_turn(right, "same-turn", "Only tenant B's ticket.")
+    wire_b = scoped_wire(b, "Only tenant B's ticket.")
+    refute_received {:test_agent_runtime_stream, _, _}
+    send(wire_b, {:score, 0.99})
+    {provider_b, request_b} = scoped_model(b)
+
+    assert JSON.decode!(List.last(request_b.messages).content)["message"] ==
+             "Only tenant B's ticket."
+
+    refute_received {:test_agent_runtime_stream, _, _}
+
+    send(wire_a, {:score, 0.01})
+    {provider_a, request_a} = scoped_model(a)
+    assert request_a.tools == []
+    assert JSON.decode!(List.last(request_a.messages).content)["type"] == "guardrail_failure"
+    refute Enum.any?(request_a.messages, &String.contains?(&1.content, "tenant"))
+    {evaluation_a, attempt_a} = scoped_archive(a, room_a, "same-turn", "blocked")
+    {evaluation_b, attempt_b} = scoped_archive(b, room_b, "same-turn", "passed")
+    assert evaluation_a != evaluation_b
+    assert attempt_a != attempt_b
+
+    for {model, reply} <- [{provider_a, "A's reply."}, {provider_b, "B's reply."}] do
+      send(
+        model,
+        {:test_agent_runtime_response, Vxpipe.AgentRuntime.ModelResponse.new(text: reply)}
+      )
+    end
+
+    for room <- [room_a, room_b] do
+      incarnation = room.incarnation_id
+
+      assert_receive {:vxpipe_event,
+                      %CallEngine.Event.AgentTurnCompleted{incarnation_id: ^incarnation}},
+                     2_000
+    end
+
+    send_turn(left, "held-at-end", "Closing tenant A.")
+    wire_a = scoped_wire(a, "Closing tenant A.")
+    send_turn(right, "held-at-end", "Continuing tenant B.")
+    wire_b = scoped_wire(b, "Continuing tenant B.")
+    ref = Process.monitor(wire_a)
+    assert :ok = CallEngine.end_call(a.tenant_id, a.room_id, room_a.incarnation_id)
+    assert_receive {:DOWN, ^ref, :process, ^wire_a, _}, 2_000
+    refute_received {:test_agent_runtime_stream, _, _}
+    send(wire_b, {:score, 0.99})
+    {survivor, request} = scoped_model(b)
+    assert JSON.decode!(List.last(request.messages).content)["message"] == "Continuing tenant B."
+    scoped_archive(b, room_b, "held-at-end", "passed")
+
+    send(
+      survivor,
+      {:test_agent_runtime_response, Vxpipe.AgentRuntime.ModelResponse.new(text: "Still here.")}
+    )
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.AgentTurnCompleted{correlation_id: "held-at-end"}},
+                   2_000
+
+    refute_received {:test_agent_runtime_stream, _, _}
+  end
+
+  defp scoped_wire(plan, text) do
+    tenant = plan.tenant_id
+    agent = plan.participants["agent"].participant_id
+    caller = plan.participants["caller"].participant_id
+
+    assert_receive {:scoped_wire, ^tenant, true,
+                    %{
+                      "participant" => ^agent,
+                      "source_participant_id" => ^caller,
+                      "current" => %{"text" => ^text}
+                    } = packet},
+                   2_000
+
+    allowed = [agent, caller]
+    assert Enum.all?(packet["recent_context"]["messages"], &(&1["participant_id"] in allowed))
+    assert_receive {:gate, wire, ^agent, ^text}, 2_000
+    wire
+  end
+
+  defp scoped_model(plan) do
+    tenant = plan.tenant_id
+    room = plan.room_id
+
+    assert_receive {:test_agent_runtime_stream, worker,
+                    %{correlation: %{tool_context: %{tenant_id: ^tenant, room_id: ^room}}} =
+                      request},
+                   2_000
+
+    {worker, request}
+  end
+
+  defp scoped_archive(plan, room, turn, outcome) do
+    tenant = plan.tenant_id
+    call = plan.call_id
+    room_id = plan.room_id
+    incarnation = room.incarnation_id
+    agent = plan.participants["agent"]
+    activation = agent.activation_id
+    participant = agent.participant_id
+
+    assert_receive {:test_archive_fact,
+                    %{
+                      kind: :decisions_evaluation,
+                      tenant_id: ^tenant,
+                      call_id: ^call,
+                      room_id: ^room_id,
+                      incarnation_id: ^incarnation,
+                      participant_id: ^participant,
+                      activation_id: ^activation,
+                      payload: %{
+                        "evaluation_id" => evaluation,
+                        "attempt_ids" => [attempt],
+                        "source_turn_id" => ^turn,
+                        "outcome" => ^outcome
+                      }
+                    }},
+                   2_000
+
+    assert_receive {:test_archive_fact,
+                    %{
+                      kind: :decisions_attempt,
+                      tenant_id: ^tenant,
+                      call_id: ^call,
+                      room_id: ^room_id,
+                      incarnation_id: ^incarnation,
+                      activation_id: ^activation,
+                      payload: %{"evaluation_id" => ^evaluation, "attempt_id" => ^attempt}
+                    }},
+                   2_000
+
+    assert_receive {:test_archive_fact,
+                    %{
+                      kind: :usage_observed,
+                      tenant_id: ^tenant,
+                      call_id: ^call,
+                      room_id: ^room_id,
+                      incarnation_id: ^incarnation,
+                      participant_id: ^participant,
+                      payload: %{
+                        "attempt_id" => ^attempt,
+                        "measurement" => %{"component" => "total_tokens", "quantity" => 7}
+                      }
+                    }},
+                   2_000
+
+    {evaluation, attempt}
   end
 
   test "a provider outage fails the before-turn gate without a conversational reply" do
