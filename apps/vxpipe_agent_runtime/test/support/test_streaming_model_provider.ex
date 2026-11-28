@@ -18,6 +18,10 @@ defmodule Vxpipe.AgentRuntime.TestStreamingModelProvider do
 
   defp await_event(emit) do
     receive do
+      {:test_stream_delta, text, observer} ->
+        send(observer, {:test_stream_delta_result, self(), emit.(text)})
+        await_event(emit)
+
       {:test_stream_delta, text} ->
         _ = emit.(text)
         await_event(emit)
