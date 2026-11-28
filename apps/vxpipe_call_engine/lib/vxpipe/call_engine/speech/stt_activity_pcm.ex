@@ -9,6 +9,19 @@ defmodule Vxpipe.CallEngine.Speech.STTActivityPCM do
   def normalize_payload(pcm, timestamp, rate),
     do: normalize_pcm(pcm, timestamp, rate, 1, byte_size(pcm))
 
+  def normalize_chunk(audio, carry, cursor, rate) do
+    combined = carry <> audio
+    bytes = byte_size(combined) - rem(byte_size(combined), 2)
+    <<pcm::binary-size(bytes), odd::binary>> = combined
+
+    if bytes == 0 do
+      {:ok, "", cursor, odd}
+    else
+      with {:ok, normalized, _} <- normalize_payload(pcm, cursor, rate),
+           do: {:ok, normalized, cursor + div(bytes, 2), odd}
+    end
+  end
+
   def normalize(%AudioFrame{codec: :linear16, activity_pcm: nil} = frame) do
     normalize_pcm(
       frame.payload,

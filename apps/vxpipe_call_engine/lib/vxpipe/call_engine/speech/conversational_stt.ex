@@ -23,6 +23,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     Session,
     SessionTree,
     Silero.Detector,
+    STTActivityPCM,
     STTProvider,
     STTTurnStart
   }
@@ -128,7 +129,6 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          acoustic_source: :unbound,
          acoustic_sequence: 0,
          recognition_epoch: 0,
-         pending_epoch: nil,
          pending_pcm: "",
          odd_pcm: "",
          cursor: 0,
@@ -525,7 +525,6 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
               state.odd_pcm == ""
             ),
           pending_pcm: "",
-          pending_epoch: nil,
           stream: if(state.runtime, do: Detector.stream(), else: nil),
           boundary: if(state.runtime, do: ActivityBoundary.new(), else: nil)
       }
@@ -569,12 +568,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   defp frame_pcm(%{runtime: nil}, _frame), do: {:ok, "", nil}
 
-  defp frame_pcm(_state, frame) do
-    case Vxpipe.CallEngine.Speech.STTActivityPCM.normalize(frame) do
-      {:ok, pcm, timestamp} -> {:ok, pcm, timestamp}
-      _failure -> {:error, :unsupported_audio}
-    end
-  end
+  defp frame_pcm(_state, frame), do: STTActivityPCM.normalize(frame)
 
   defp acoustic_source(%{acoustic_source: :unbound} = state, %{source_epoch: epoch})
        when not is_nil(state.runtime) do
@@ -598,7 +592,6 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
         orphan: nil,
         diagnostic_tap: InferenceTap.reset(state.diagnostic_tap, next, true),
         pending_pcm: "",
-        pending_epoch: nil,
         stream: Detector.stream(),
         boundary: ActivityBoundary.new()
     }
@@ -625,9 +618,6 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
         :ok ->
           state = acoustic_source(state, frame)
 
-          pending_epoch =
-            if state.pending_pcm == "", do: state.recognition_epoch, else: state.pending_epoch
-
           origin =
             if pcm != "" and is_nil(state.acoustic_origin_ms),
               do: (frame && frame.received_at) || System.monotonic_time(:millisecond),
@@ -643,8 +633,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
                        timestamp,
                        div(byte_size(pcm), 2)
                      ),
-                   pending_pcm: state.pending_pcm <> pcm,
-                   pending_epoch: pending_epoch
+                   pending_pcm: state.pending_pcm <> pcm
                }) do
             {:ok, next} -> {:reply, :ok, next}
             _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
@@ -665,17 +654,9 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          %{descriptor: %{format: %{encoding: :linear16, sample_rate: rate}}} = state,
          audio
        ) do
-    combined = state.odd_pcm <> audio
-    bytes = byte_size(combined) - rem(byte_size(combined), 2)
-    <<pcm::binary-size(bytes), odd::binary>> = combined
-
-    result =
-      if pcm == "",
-        do: {:ok, "", state.cursor},
-        else: Vxpipe.CallEngine.Speech.STTActivityPCM.normalize_payload(pcm, state.cursor, rate)
-
-    with {:ok, normalized, _timestamp} <- result,
-         do: {:ok, normalized, %{state | cursor: state.cursor + div(bytes, 2), odd_pcm: odd}}
+    with {:ok, pcm, cursor, odd} <-
+           STTActivityPCM.normalize_chunk(audio, state.odd_pcm, state.cursor, rate),
+         do: {:ok, pcm, %{state | cursor: cursor, odd_pcm: odd}}
   end
 
   defp detector_pcm(_state, _audio), do: {:error, :unsupported_audio}
@@ -702,7 +683,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
               state
               | inference: reference,
                 diagnostic_inference: diagnostic_inference,
-                inference_epoch: state.pending_epoch,
+                inference_epoch: state.recognition_epoch,
                 pending_pcm: pending
             }}
   end
