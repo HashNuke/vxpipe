@@ -5,12 +5,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Correlation do
 
   @derive {Inspect, only: [:command_id, :correlation_id]}
   @enforce_keys [:command_id, :correlation_id, :invocation_registry, :tool_context]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [deadline_ms: nil]
 
   @type t :: %__MODULE__{
           command_id: String.t(),
           correlation_id: String.t(),
           invocation_registry: GenServer.server(),
+          deadline_ms: integer() | nil,
           tool_context: Context.t()
         }
 

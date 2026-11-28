@@ -14,9 +14,13 @@ defmodule Vxpipe.CallEngine.Tool.Context do
   defstruct @enforce_keys ++
               [
                 :agent_request_id,
+                :deadline_ms,
                 :tool_call_id,
                 :source_capability,
                 :request_origin,
+                :source_policy_revision,
+                :agent_policy_revision,
+                structured_caller_input?: false,
                 audio_response: false
               ]
 
@@ -30,9 +34,13 @@ defmodule Vxpipe.CallEngine.Tool.Context do
           command_id: String.t(),
           correlation_id: String.t(),
           agent_request_id: nil | String.t(),
+          deadline_ms: integer() | nil,
           tool_call_id: nil | String.t(),
           source_capability: nil | pid(),
           request_origin: nil | :caller | :engine | :sts,
+          source_policy_revision: non_neg_integer() | nil,
+          agent_policy_revision: non_neg_integer() | nil,
+          structured_caller_input?: boolean(),
           audio_response: boolean()
         }
 end

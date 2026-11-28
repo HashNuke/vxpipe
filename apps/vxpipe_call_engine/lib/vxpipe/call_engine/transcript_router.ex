@@ -38,6 +38,20 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
     safe_call(server, {:project, projection})
   end
 
+  @doc "Checks continuous source-interval access for a receiving participant."
+  @spec permitted?(Projection.t(), String.t()) :: boolean()
+  def permitted?(%Projection{incarnation_id: incarnation} = projection, recipient)
+      when is_binary(incarnation) and is_binary(recipient) do
+    with router when is_pid(router) <- whereis(incarnation),
+         {:ok, decision} <- project(router, projection) do
+      MapSet.member?(decision.recipient_participant_ids, recipient)
+    else
+      _ -> false
+    end
+  end
+
+  def permitted?(_projection, _recipient), do: false
+
   @spec project_current(GenServer.server(), String.t(), MapSet.t(String.t())) ::
           {:ok, Decision.t()} | {:error, term()}
   def project_current(server, source_participant_id, recipient_participant_ids)

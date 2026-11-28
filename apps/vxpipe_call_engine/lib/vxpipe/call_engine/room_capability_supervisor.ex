@@ -39,6 +39,33 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   @impl true
   def init(:ok), do: DynamicSupervisor.init(strategy: :one_for_one)
 
+  def start_guardrail_checks(options, admission_owner) do
+    incarnation = Keyword.fetch!(options, :incarnation_id)
+    tasks = {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {:guardrail_requests, incarnation}}}
+
+    # All guarded activations in this room share the transport supervisor.
+    # It is created on demand and stops together with the room.
+    with :ok <- ensure_guardrail_tasks(incarnation, tasks) do
+      settings =
+        Keyword.merge(options, request_supervisor: tasks, admission_owner: admission_owner)
+
+      child =
+        Supervisor.child_spec({Vxpipe.CallEngine.Guardrails.Participant, settings},
+          restart: :temporary
+        )
+
+      DynamicSupervisor.start_child(via(incarnation), child)
+    end
+  end
+
+  defp ensure_guardrail_tasks(incarnation, tasks) do
+    case DynamicSupervisor.start_child(via(incarnation), {Task.Supervisor, name: tasks}) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
   def start_deterministic_text(incarnation_id, room_authority, participant_id) do
     options = [room_authority: room_authority, participant_id: participant_id]
     DynamicSupervisor.start_child(via(incarnation_id), {DeterministicText, options})
@@ -127,6 +154,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
           Keyword.take(options, [
             :activation_id,
             :remote_mcp,
+            :guardrails,
             :tool_invocation_options,
             :mcp_initialization_deadline,
             :human_id,
