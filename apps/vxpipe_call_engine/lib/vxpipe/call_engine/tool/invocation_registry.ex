@@ -69,6 +69,23 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   def running_execution(_registry, _invocation_id), do: {:error, :unavailable}
 
+  @doc """
+  Observes an ordinary invocation outcome without leasing or consuming it.
+
+  Preserves original correlation and caller-turn admission: unlike `lease_next`,
+  this never changes registry state, so nonblocking continuations still go
+  through the coordinator's completion lease path.
+  """
+  @spec peek_completion(GenServer.server(), String.t()) ::
+          {:ok, :running | {:ok, term()} | {:error, term()} | :consumed}
+          | {:error, :unknown | :unavailable}
+  def peek_completion(registry, invocation_id)
+      when is_binary(invocation_id) and invocation_id != "" and byte_size(invocation_id) <= 256 do
+    safe_call(registry, {:peek_completion, invocation_id})
+  end
+
+  def peek_completion(_registry, _invocation_id), do: {:error, :unavailable}
+
   @doc false
   @spec check_new_id(GenServer.server(), String.t()) :: :ok | {:error, :rejected | :unavailable}
   def check_new_id(registry, invocation_id),
@@ -223,6 +240,28 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
       case State.fetch(state, invocation_id) do
         {:ok, record} -> InvocationRecord.running_execution(record, state.completion_target)
         :error -> {:error, :unavailable}
+      end
+
+    {:reply, reply, state}
+  end
+
+  def handle_call({:peek_completion, invocation_id}, _from, state) do
+    reply =
+      case State.fetch(state, invocation_id) do
+        {:ok, %{status: :running}} ->
+          {:ok, :running}
+
+        {:ok, %{completion: %{outcome: outcome}}} when not is_nil(outcome) ->
+          {:ok, outcome}
+
+        {:ok, _record} ->
+          {:error, :unknown}
+
+        :error ->
+          case Map.fetch(state.consumed, invocation_id) do
+            {:ok, disposition} -> {:ok, disposition}
+            :error -> {:error, :unknown}
+          end
       end
 
     {:reply, reply, state}

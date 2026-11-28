@@ -90,7 +90,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
          _announcements?
        ) do
     with {:ok, binding} <- InvocationBinding.from_resolved(resolved),
-         {:ok, descriptor} <- action_descriptor(action, name, binding) do
+         {:ok, descriptor} <- action_descriptor(action, name, binding, terminal_action?(action)) do
       {:ok, descriptor}
     else
       _invalid -> {:error, :invalid_tool_binding}
@@ -116,7 +116,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
                  parameters,
                  announcements? and action == Vxpipe.CallEngine.Tool.Hangup
                ),
-             binding: binding
+             binding: binding,
+             terminal?: terminal_action?(action)
            ) do
       {:ok, descriptor}
     else
@@ -159,7 +160,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
              description: description,
              input_schema:
                Vxpipe.CallEngine.Tool.Announcement.parameters(parameters, announcements?),
-             binding: binding
+             binding: binding,
+             terminal?: true
            ) do
       {:ok, descriptor}
     else
@@ -191,7 +193,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
       name: name,
       description: remote_description(remote.description, name),
       input_schema: remote.input_schema,
-      binding: binding
+      binding: binding,
+      terminal?: false
     )
   rescue
     _exception -> {:error, :invalid_tool_binding}
@@ -220,7 +223,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   defp variable_descriptor(action, variable_binding) do
     with %Definition{name: name} <- action.definition(),
          {:ok, binding} <- InvocationBinding.from_call_variables(name, variable_binding),
-         {:ok, descriptor} <- action_descriptor(action, name, binding) do
+         {:ok, descriptor} <- action_descriptor(action, name, binding, false) do
       if name in ["update_variable", "update_variables"] do
         rejection = %{binding | handler: {:invalid_variable_arguments, variable_binding}}
         {:ok, %{descriptor | invalid_arguments_binding: rejection}}
@@ -234,17 +237,24 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
     _exception -> {:error, :invalid_tool_binding}
   end
 
-  defp action_descriptor(action, name, binding) do
+  defp action_descriptor(action, name, binding, terminal?) do
     with %Definition{name: ^name, description: description, parameters: parameters} <-
            action.definition() do
       ToolDescriptor.new(
         name: name,
         description: description,
         input_schema: parameters,
-        binding: binding
+        binding: binding,
+        terminal?: terminal? == true
       )
     else
       _invalid -> {:error, :invalid_tool_binding}
     end
   end
+
+  defp terminal_action?(action) when is_atom(action) do
+    action == Vxpipe.CallEngine.Tool.Hangup
+  end
+
+  defp terminal_action?(_action), do: false
 end

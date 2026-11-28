@@ -20,7 +20,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
                 readiness_resource: nil,
                 records: %{},
                 order: [],
-                consumed: MapSet.new(),
+                consumed: %{},
                 consumed_order: []
               ]
 
@@ -41,7 +41,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
 
   @spec consumed?(t(), String.t()) :: boolean()
   def consumed?(%__MODULE__{} = state, invocation_id) do
-    MapSet.member?(state.consumed, invocation_id)
+    Map.has_key?(state.consumed, invocation_id)
   end
 
   @spec fetch(t(), String.t()) :: {:ok, InvocationRecord.t()} | :error
@@ -125,11 +125,18 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
 
   @spec consume(t(), InvocationRecord.t()) :: t()
   def consume(%__MODULE__{} = state, %InvocationRecord{} = record) do
+    # A continuation may consume the completion before its terminal sibling sees it.
+    # Keep the disposition, without retaining tool results or private failure data.
+    disposition =
+      if match?(%{outcome: {:ok, _}}, record.completion),
+        do: :consumed,
+        else: {:error, :tool_failed}
+
     state = %{
       state
       | records: Map.delete(state.records, record.invocation_id),
         order: Enum.reject(state.order, &(&1 == record.invocation_id)),
-        consumed: MapSet.put(state.consumed, record.invocation_id),
+        consumed: Map.put(state.consumed, record.invocation_id, disposition),
         consumed_order: state.consumed_order ++ [record.invocation_id]
     }
 
@@ -165,7 +172,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
 
     if excess > 0 do
       {expired, retained} = Enum.split(state.consumed_order, excess)
-      consumed = Enum.reduce(expired, state.consumed, &MapSet.delete(&2, &1))
+      consumed = Map.drop(state.consumed, expired)
       %{state | consumed: consumed, consumed_order: retained}
     else
       state
