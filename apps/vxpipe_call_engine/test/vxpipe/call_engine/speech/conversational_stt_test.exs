@@ -22,7 +22,10 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
     assert_receive {:loading, loader}
 
     try do
-      refute :sys.get_state(Session.provider(session), 200).ready?
+      provider = Session.provider(session)
+      refute :sys.get_state(provider, 200).ready?
+      assert {:error, :busy} = ConversationalSTT.push_audio(provider, :binary.copy(<<0>>, 1024))
+      assert %{pending_pcm: "", inference: nil} = :sys.get_state(provider)
     after
       send(loader, :finish)
     end

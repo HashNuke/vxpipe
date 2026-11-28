@@ -32,8 +32,9 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
   end
 
   def submit(%Lease{owner: owner} = lease, position, model, {pcm, packed} = row, deadline)
-      when owner == self() and byte_size(pcm) == 1024 and byte_size(packed) == 1280 do
-    ref = {lease.pool, lease.generation, position, make_ref()}
+      when owner == self() and not is_nil(model) and byte_size(pcm) == 1024 and
+             byte_size(packed) == 1280 do
+    ref = {lease.pool, lease.generation, position, make_ref(), deadline}
     remaining = deadline - System.monotonic_time(:millisecond)
 
     cond do
@@ -55,17 +56,37 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
 
   def submit(_, _, _, _, _), do: {:error, :invalid_row}
 
-  def cancel(%Lease{} = lease, ref) do
-    GenServer.call(lease.pool, {:cancel, lease, ref})
+  # The owner issues cancellations serially. Once the wait expires, further
+  # attempts for this row cannot enqueue another call; its original timer retires it.
+  def cancel(
+        %Lease{pool: pool, generation: generation, owner: owner} = lease,
+        {pool, generation, _position, id, deadline} = ref
+      )
+      when owner == self() and is_reference(id) and is_integer(deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining > 0,
+      do: GenServer.call(pool, {:cancel, lease, ref}, remaining),
+      else: {:error, :unknown_job}
   catch
     :exit, _ -> {:error, :unknown_job}
   end
 
-  def close(%Lease{} = lease) do
-    GenServer.call(lease.pool, {:close, lease})
+  def cancel(_, _), do: {:error, :unknown_job}
+
+  # Operational teardown is driven by the owner monitor. Explicit callers can
+  # wait for a cleanup acknowledgement within their own remaining budget.
+  def close(lease, deadline \\ System.monotonic_time(:millisecond) + 2_000)
+
+  def close(%Lease{owner: owner} = lease, deadline) when owner == self() do
+    remaining = max(0, deadline - System.monotonic_time(:millisecond))
+    GenServer.call(lease.pool, {:close, lease}, remaining)
   catch
+    :exit, {:timeout, _} -> {:error, :close_timeout}
     :exit, _ -> {:error, :unknown_lease}
   end
+
+  def close(_, _), do: {:error, :unknown_lease}
 
   @impl true
   def init(opts) do

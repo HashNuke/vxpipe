@@ -130,6 +130,48 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
     refute_received {:silero_result, ^next, _}
   end
 
+  test "an unloaded model cannot claim or dispatch a row" do
+    deadline = System.monotonic_time(:millisecond) + 5000
+    {:ok, lease} = Pool.reserve(make_ref(), deadline, __MODULE__)
+    row = {:binary.copy(<<0>>, 1024), Batch.initial_state()}
+
+    assert {:error, :invalid_row} = Pool.submit(lease, 0, nil, row, deadline)
+    assert %{in_flight: 0, ready: 0} = Pool.status(lease.pool)
+  end
+
+  test "an expired cancellation cannot block the owner or enqueue retries" do
+    {lease, ref} = submit(150)
+    assert_receive {:batch, worker, 1}
+    :sys.suspend(lease.pool)
+
+    try do
+      started = System.monotonic_time(:millisecond)
+      assert {:error, :unknown_job} = Pool.cancel(lease, ref)
+      assert System.monotonic_time(:millisecond) - started < 1000
+
+      for _ <- 1..12, do: assert({:error, :unknown_job} = Pool.cancel(lease, ref))
+      {:messages, messages} = Process.info(lease.pool, :messages)
+      assert Enum.count(messages, &match?({:"$gen_call", _, {:cancel, _, _}}, &1)) <= 1
+    after
+      :sys.resume(lease.pool)
+      send(worker, :finish)
+    end
+  end
+
+  test "a running deadline expires before the worker releases its physical credit" do
+    {lease, ref} = submit(150)
+    assert_receive {:batch, worker, 1}
+
+    assert_receive {:silero_result, ^ref, {:error, :classification_timeout, :await_settlement}},
+                   1000
+
+    assert %{retired: 1, in_flight: 1} = Pool.status(lease.pool)
+    refute_received {:silero_retired, ^ref}
+    send(worker, :finish)
+    assert_receive {:silero_retired, ^ref}
+    assert %{retired: 0, in_flight: 0} = Pool.status(lease.pool)
+  end
+
   test "queued cancellation and allocation closure release their reservation" do
     first = submit()
     assert_receive {:batch, worker, 1}
@@ -159,8 +201,8 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
     refute_received {:silero_result, ^ref, _}
   end
 
-  defp submit do
-    deadline = System.monotonic_time(:millisecond) + 5000
+  defp submit(timeout \\ 5000) do
+    deadline = System.monotonic_time(:millisecond) + timeout
     {:ok, lease} = Pool.reserve(make_ref(), deadline, __MODULE__)
 
     {:ok, ref} =

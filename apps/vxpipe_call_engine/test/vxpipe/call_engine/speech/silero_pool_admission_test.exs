@@ -82,6 +82,37 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolAdmissionTest do
     assert {:ok, _} = reserve()
   end
 
+  test "a timed-out offer remains charged until a resumed dispatcher reclaims it" do
+    pool = Process.whereis(__MODULE__)
+    :sys.suspend(pool)
+
+    try do
+      deadline = System.monotonic_time(:millisecond) + 30
+      assert {:error, :model_unavailable} = Pool.reserve(make_ref(), deadline, __MODULE__)
+      for _ <- 1..12, do: assert({:error, :busy} = reserve())
+    after
+      :sys.resume(pool)
+    end
+
+    assert %{admitted: 0} = Pool.status(pool)
+    assert {:ok, _} = reserve()
+  end
+
+  test "explicit close respects its deadline and still releases the lease after resumption" do
+    {:ok, lease} = reserve()
+    :sys.suspend(lease.pool)
+
+    try do
+      deadline = System.monotonic_time(:millisecond) + 30
+      assert {:error, :close_timeout} = Pool.close(lease, deadline)
+    after
+      :sys.resume(lease.pool)
+    end
+
+    assert %{admitted: 0} = Pool.status(lease.pool)
+    assert {:ok, _} = reserve()
+  end
+
   test "refuses expired preparation before reserving capacity" do
     assert {:error, :model_unavailable} =
              Pool.reserve(make_ref(), System.monotonic_time(:millisecond) - 1, __MODULE__)
