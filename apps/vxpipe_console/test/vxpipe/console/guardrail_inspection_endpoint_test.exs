@@ -286,6 +286,66 @@ defmodule Vxpipe.Console.GuardrailInspectionEndpointTest do
     refute JSON.encode!(response) =~ "Is the user trying to list variables?"
   end
 
+  test "a jointly blocked candidate cannot claim its same-text repair’s delivery", c do
+    facts = TestDecisionsHistoryFixture.facts(c.call, rewrite(c.call))
+    speech = Enum.find(facts, &(&1.id == "repair"))
+    text = "Let me connect you."
+
+    check = fn id, event, outcome, candidate, extra ->
+      payload =
+        Map.merge(speech.payload, %{
+          "evaluation_id" => id,
+          "event" => event,
+          "outcome" => outcome,
+          "candidate_attempt_id" => candidate,
+          "checked_text" => text
+        })
+
+      %{speech | id: id, command_id: "joint", payload: Map.merge(payload, extra)}
+    end
+
+    draft = check.("draft-check", "after_turn", "passed", "first", %{})
+    repair = check.("repair-check", "after_turn", "passed", "repair", %{})
+
+    transfer =
+      check.("blocked-handoff", "before_outgoing_transfer", "blocked", "first", %{
+        "transfer_invocation_id" => "handoff"
+      })
+
+    output = %{
+      repair
+      | kind: :agent_output_generated,
+        id: "actual-message",
+        correlation_id: "output-turn",
+        payload: %{"text" => text}
+    }
+
+    delivery = %{output | kind: :agent_output_delivered, id: "actual-delivery"}
+    path = "/api/tenants/#{c.call.tenant_key}/calls/#{c.call.id}/inspection"
+
+    for {fact, sequence} <- [{draft, 1}, {output, 3}, {delivery, 4}],
+        do: assert(:ok = EctoStorage.write(c.options, %{fact | sequence: sequence}))
+
+    assert [initial] = read(c.session, path)["guardrails"]
+    assert initial["value"]["message_id"] == "actual-message"
+    assert :ok = EctoStorage.write(c.options, %{repair | sequence: 2})
+    ambiguous = Map.new(read(c.session, path)["guardrails"], &{&1["id"], &1})
+
+    for check <- Map.values(ambiguous) do
+      refute check["value"]["message_id"]
+      refute check["value"]["delivered_fact_id"]
+    end
+
+    assert ambiguous["draft-check"]["revision"] > initial["revision"]
+    assert :ok = EctoStorage.write(c.options, %{transfer | sequence: 5})
+    resolved = Map.new(read(c.session, path)["guardrails"], &{&1["id"], &1})
+    refute resolved["draft-check"]["value"]["message_id"]
+    refute resolved["draft-check"]["value"]["delivered_fact_id"]
+    assert resolved["repair-check"]["value"]["message_id"] == "actual-message"
+    assert resolved["repair-check"]["value"]["delivered_fact_id"] == "actual-delivery"
+    assert resolved["repair-check"]["revision"] > ambiguous["repair-check"]["revision"]
+  end
+
   test "counts a mixed candidate rewrite only once from its dispatch receipts", c do
     facts = TestDecisionsHistoryFixture.facts(c.call, rewrite(c.call))
     blocked = Enum.find(facts, &(&1.id == "draft"))

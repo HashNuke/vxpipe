@@ -9,31 +9,48 @@ defmodule Vxpipe.Console.CallInspectionGuardrailLinks do
       |> Enum.flat_map(&records/1)
       |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
 
-    # Identical text can occur in more than one accepted candidate on a turn.
-    # Only a unique candidate can claim its delivery receipt.
+    # Two attempts may produce the same speech. A failed joint gate excludes
+    # that entire candidate from the set that could own a delivery.
+    vetoes =
+      for fact <- evaluations,
+          fact.payload["event"] == "before_outgoing_transfer",
+          fact.payload["outcome"] in ["blocked", "error", "cancelled"],
+          is_binary(fact.command_id) and is_binary(fact.activation_id),
+          is_binary(fact.payload["candidate_attempt_id"]),
+          into: %{},
+          do: {output_key(fact, fact.payload["candidate_attempt_id"]), fact.sequence}
+
     candidates =
       for fact <- evaluations,
           fact.payload["event"] == "after_turn" and fact.payload["outcome"] == "passed",
-          is_binary(fact.payload["checked_text"]),
-          do: {output_key(fact, fact.payload["response_turn_id"]), fact.payload["checked_text"]}
+          is_binary(fact.payload["checked_text"]) do
+        key = {output_key(fact, fact.payload["response_turn_id"]), fact.payload["checked_text"]}
+        veto = vetoes[output_key(fact, fact.payload["candidate_attempt_id"])]
+        {key, {fact.id, fact.sequence, veto}}
+      end
 
-    %{records: records, candidates: Enum.frequencies(candidates)}
+    %{records: records, candidates: Enum.group_by(candidates, &elem(&1, 0), &elem(&1, 1))}
   end
 
   def for_evaluation(evaluation, index) do
     if is_binary(evaluation.command_id),
       do: links(evaluation.payload["event"], evaluation, index),
-      else: {%{}, 0}
+      else: {%{}, []}
   end
 
   defp links("before_turn", fact, index) do
     key =
       {room(fact), fact.source_participant_id, fact.command_id, fact.payload["source_turn_id"]}
 
-    case index.records[{:input, key}] do
-      [%{id: id, sequence: seq}] -> {%{"message_id" => id}, seq}
-      _ -> {%{}, 0}
-    end
+    records = Map.get(index.records, {:input, key}, [])
+
+    fields =
+      case records do
+        [entry] -> %{"message_id" => entry.id}
+        _ -> %{}
+      end
+
+    {fields, sequences(records)}
   end
 
   defp links(
@@ -44,41 +61,51 @@ defmodule Vxpipe.Console.CallInspectionGuardrailLinks do
        when is_binary(text) do
     key = {output_key(fact, fact.payload["response_turn_id"]), text}
 
-    if index.candidates[key] == 1 do
-      Enum.reduce(
-        [{:output, "message_id"}, {:delivered, "delivered_fact_id"}],
-        {%{}, 0},
-        fn {kind, field}, {fields, revision} ->
-          case index.records[{kind, key}] do
-            [%{id: id, sequence: seq}] -> {Map.put(fields, field, id), max(revision, seq)}
-            _ -> {fields, revision}
+    candidates = Map.get(index.candidates, key, [])
+    eligible = for {id, _, nil} <- candidates, do: id
+    related = for {_, seq, veto} <- candidates, value <- [seq, veto], is_integer(value), do: value
+
+    Enum.reduce(
+      [{:output, "message_id"}, {:delivered, "delivered_fact_id"}],
+      {%{}, related},
+      fn {kind, field}, {fields, revisions} ->
+        records = Map.get(index.records, {kind, key}, [])
+
+        fields =
+          case records do
+            [record] when eligible == [fact.id] -> Map.put(fields, field, record.id)
+            _ -> fields
           end
-        end
-      )
-    else
-      {%{}, 0}
-    end
+
+        {fields, sequences(records) ++ revisions}
+      end
+    )
   end
 
   defp links("before_outgoing_transfer", fact, index) do
     key = output_key(fact, fact.payload["transfer_invocation_id"])
 
-    case index.records[{:transfer, key}] do
-      [result] ->
-        outcome =
-          if result.kind == :participant_transfer_completed, do: "completed", else: "failed"
+    records = Map.get(index.records, {:transfer, key}, [])
 
-        {%{
-           "transfer_outcome" => outcome,
-           "destination_participant_id" => result.payload["destination_participant_id"]
-         }, result.sequence}
+    fields =
+      case records do
+        [result] ->
+          %{
+            "transfer_outcome" =>
+              if(result.kind == :participant_transfer_completed, do: "completed", else: "failed"),
+            "destination_participant_id" => result.payload["destination_participant_id"]
+          }
 
-      _ ->
-        {%{}, 0}
-    end
+        _ ->
+          %{}
+      end
+
+    {fields, sequences(records)}
   end
 
-  defp links(_, _, _), do: {%{}, 0}
+  defp links(_, _, _), do: {%{}, []}
+
+  defp sequences(records), do: Enum.map(records, & &1.sequence)
 
   defp records(%{kind: :accepted_input, correlation_id: turn} = fact) when is_binary(turn) do
     case MessagePayload.project(fact.kind, fact.payload, fact.participant_id) do

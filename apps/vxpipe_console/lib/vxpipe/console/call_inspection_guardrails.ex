@@ -27,10 +27,10 @@ defmodule Vxpipe.Console.CallInspectionGuardrails do
     |> Enum.map(fn evaluation ->
       children = Map.fetch!(groups, CallHistory.decision_key(evaluation))
 
-      {link_fields, linked_sequence} =
+      {link_fields, linked_sequences} =
         if is_nil(unavailable(evaluation)),
           do: CallInspectionGuardrailLinks.for_evaluation(evaluation, links),
-          else: {%{}, 0}
+          else: {%{}, []}
 
       {attempts, usage_revision} = attempts(evaluation, children, amounts, observation_sequences)
       id = evaluation.payload["evaluation_id"]
@@ -50,9 +50,10 @@ defmodule Vxpipe.Console.CallInspectionGuardrails do
         |> Map.merge(evidence(evaluation, children))
         |> Map.merge(link_fields)
 
-      sequence = Enum.max([linked_sequence, usage_revision | Enum.map(children, & &1.sequence)])
-      # A lower-sequence child can fill an archive gap after the terminal receipt.
-      %{"id" => id, "revision" => sequence + length(children), "value" => value}
+      sequences = linked_sequences ++ Enum.map(children, & &1.sequence)
+      # Lower-sequence children and links can arrive after a higher-sequence usage receipt.
+      revision = Enum.max([usage_revision | sequences]) + length(sequences)
+      %{"id" => id, "revision" => revision, "value" => value}
     end)
   end
 
