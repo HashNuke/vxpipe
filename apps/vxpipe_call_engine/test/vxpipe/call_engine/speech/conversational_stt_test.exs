@@ -5,6 +5,31 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, ConversationalSTT, Event, Session}
   alias Vxpipe.CallEngine.SpeechOnsetProbe
 
+  test "cold model preparation leaves the allocation responsive" do
+    parent = self()
+
+    load = fn ->
+      send(parent, {:loading, self()})
+
+      receive do
+        :finish -> {:ok, :model}
+      end
+    end
+
+    session =
+      start_session(true, load: load, classify: fn _, stream, _ -> {:ok, stream, [0.0]} end)
+
+    assert_receive {:loading, loader}
+
+    try do
+      refute :sys.get_state(Session.provider(session), 200).ready?
+    after
+      send(loader, :finish)
+    end
+
+    _ = event(session, :ready)
+  end
+
   test "a logical timeout for a retired source waits for native settlement" do
     parent = self()
 

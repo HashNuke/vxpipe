@@ -117,6 +117,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          inner_monitor: nil,
          runtime: nil,
          runtime_monitor: nil,
+         model_task: nil,
          inference: nil,
          diagnostic_tap: nil,
          diagnostic_handoff: nil,
@@ -270,6 +271,29 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     end
   end
 
+  def handle_info({ref, {:ok, detector}}, %{model_task: %Task{ref: ref}} = state) do
+    Process.demonitor(ref, [:flush])
+
+    case Detector.submit(
+           detector,
+           state.stream,
+           :binary.copy(<<0>>, @window_bytes),
+           :warmup,
+           state.allocation.deadline
+         ) do
+      {:ok, inference} ->
+        {:noreply, %{state | runtime: detector, model_task: nil, inference: inference}}
+
+      _ ->
+        fail(state)
+    end
+  end
+
+  def handle_info({ref, _}, %{model_task: %Task{ref: ref}} = state), do: fail(state)
+
+  def handle_info({:DOWN, ref, :process, _, _}, %{model_task: %Task{ref: ref}} = state),
+    do: fail(state)
+
   def handle_info(
         {:silero_result, ref, {:ok, _, _}},
         %{inference: ref, detector_ready?: false} = state
@@ -353,25 +377,16 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   defp prepare_detector(%{detector_ready?: true} = state), do: {:ok, state}
 
   defp prepare_detector(state) do
-    stream = Detector.stream()
+    opts = Keyword.get(state.private, :activity_options, [])
 
-    with {:ok, detector} <-
-           Detector.prepare(state.allocation, Keyword.get(state.private, :activity_options, [])),
-         {:ok, ref} <-
-           Detector.submit(
-             detector,
-             stream,
-             :binary.copy(<<0>>, @window_bytes),
-             :warmup,
-             state.allocation.deadline
-           ) do
+    with {:ok, detector, task} <- Detector.start_load(state.allocation, opts) do
       {:ok,
        %{
          state
          | runtime: detector,
            runtime_monitor: Process.monitor(detector.lease.pool),
-           inference: ref,
-           stream: stream,
+           model_task: task,
+           stream: Detector.stream(),
            boundary: ActivityBoundary.new()
        }}
     end

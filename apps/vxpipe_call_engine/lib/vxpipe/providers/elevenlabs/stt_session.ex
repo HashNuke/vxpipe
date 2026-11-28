@@ -175,7 +175,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
       transport_options: state.wire_options
     ]
 
-    with {:ok, detector, deadline} <- Detector.reserve(state.allocation, state.activity_options),
+    with {:ok, detector, task} <- Detector.start_load(state.allocation, state.activity_options),
          {:ok, wire} <-
            DynamicSupervisor.start_child(
              state.providers,
@@ -186,15 +186,6 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
                shutdown: :brutal_kill
              }
            ) do
-      activity_options = state.activity_options
-
-      task =
-        Task.Supervisor.async_nolink(
-          SessionTree.commands(state.allocation),
-          fn -> Detector.load(detector, activity_options, deadline) end,
-          shutdown: :brutal_kill
-        )
-
       {:noreply,
        %{
          state

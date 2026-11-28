@@ -6,20 +6,18 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Detector do
   @enforce_keys [:lease, :model, :timeout]
   defstruct @enforce_keys
 
-  def prepare(allocation, opts) do
+  def start_load(allocation, opts) do
     with {:ok, detector, deadline} <- reserve(allocation, opts) do
-      case load(detector, opts, deadline) do
-        {:ok, _} = result ->
-          result
+      task =
+        Task.Supervisor.async_nolink(
+          Vxpipe.CallEngine.Speech.SessionTree.commands(allocation),
+          fn -> load(detector, opts, deadline) end, shutdown: :brutal_kill)
 
-        error ->
-          Pool.close(detector.lease)
-          error
-      end
+      {:ok, detector, task}
     end
   end
 
-  def reserve(allocation, opts) do
+  defp reserve(allocation, opts) do
     deadline =
       min(
         allocation.deadline,
@@ -37,7 +35,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Detector do
     end
   end
 
-  def load(detector, opts, deadline) do
+  defp load(detector, opts, deadline) do
     cache = Keyword.get(opts, :model_cache, ModelCache)
 
     with remaining when remaining > 0 <- deadline - System.monotonic_time(:millisecond),
