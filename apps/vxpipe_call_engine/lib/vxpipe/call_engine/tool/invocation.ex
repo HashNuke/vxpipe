@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
   use GenServer
 
   alias Vxpipe.CallEngine.Guardrails.Deadline
+
   alias Vxpipe.CallEngine.Tool.{
     Context,
     InvocationBinding,
@@ -154,7 +155,11 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
     end
   end
 
-  defp execution_context({:participant_transfer, %{guardrails_policy_digest: digest}}, context, timeout)
+  defp execution_context(
+         {:participant_transfer, %{guardrails_policy_digest: digest}},
+         context,
+         timeout
+       )
        when is_binary(digest) do
     %{context | deadline_ms: Deadline.evaluation(context.deadline_ms, timeout)}
   end

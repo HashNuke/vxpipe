@@ -173,13 +173,19 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
   defp put_deadline(correlation, nil), do: correlation
 
   defp put_deadline(correlation, deadline) do
-    %{correlation | deadline_ms: deadline, tool_context: %{correlation.tool_context | deadline_ms: deadline}}
+    %{
+      correlation
+      | deadline_ms: deadline,
+        tool_context: %{correlation.tool_context | deadline_ms: deadline}
+    }
   end
 
   @spec start_completion(CompletionContinuation.t(), keyword()) ::
           {:ok, t()} | {:error, :unavailable}
   def start_completion(%CompletionContinuation{} = continuation, options) do
-    correlation = put_deadline(continuation.correlation, guarded_deadline(continuation.command, options))
+    correlation =
+      put_deadline(continuation.correlation, guarded_deadline(continuation.command, options))
+
     continuation = %{continuation | correlation: correlation}
     session = Keyword.fetch!(options, :session)
 

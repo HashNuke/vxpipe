@@ -164,7 +164,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   end
 
   defp emit_turn_failed(command, reason, connection, state) do
-
     event = %AgentTurnFailed{
       id: Id.generate(:event),
       sequence: state.next_sequence,

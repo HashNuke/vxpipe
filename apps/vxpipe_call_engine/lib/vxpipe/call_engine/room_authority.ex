@@ -78,7 +78,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
                 output,
                 monitor,
                 source_control? \\ false
-              ), to: Client
+              ),
+              to: Client
 
   defdelegate participant_transfer_control(room, command), to: Client
   defdelegate send_text(room, command), to: Client
