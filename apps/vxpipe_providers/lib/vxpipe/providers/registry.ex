@@ -9,6 +9,7 @@ defmodule Vxpipe.Providers.Registry do
     "fireworks" => Vxpipe.Providers.Fireworks,
     "deepgram" => Vxpipe.Providers.Deepgram,
     "google" => Vxpipe.Providers.Google,
+    "jev" => Vxpipe.Providers.Jev,
     "morse" => Vxpipe.Providers.MorseCode,
     "morse_code_api" => Vxpipe.Providers.MorseCodeApi,
     "openai" => Vxpipe.Providers.OpenAI,
