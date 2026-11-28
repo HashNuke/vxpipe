@@ -36,7 +36,7 @@ Compose supplies the checkout's `.env` to the container at runtime. The image
 build context contains only the assembled release. The service files contain
 placeholders resolved from the checkout path and installing user.
 
-The app container has a 1 GiB memory limit and no extra swap allowance. It uses
+The app container has a 2 GiB memory limit and no extra swap allowance. It uses
 host networking to preserve the existing HTTP and voice-media paths, with
 `PORT=4001` behind Caddy. The local PostgreSQL socket is mounted read-only; the
 container uses the checkout owner's UID/GID for peer authentication. These are
