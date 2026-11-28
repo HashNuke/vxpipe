@@ -7,12 +7,18 @@ defmodule Vxpipe.CallEngine.Speech.Silero.CPUBudget do
     affinity = if linux?, do: affinity(read)
     quota = if linux?, do: quota(read)
     logical = count(opts, :logical_processors, :logical_processors_available)
+
+    online =
+      unless linux? or not is_nil(logical),
+        do: count(opts, :online_processors, :logical_processors_online)
+
     dirty = count(opts, :dirty_schedulers, :dirty_cpu_schedulers_online)
 
     availability =
       cond do
         affinity -> [affinity: affinity]
         logical -> [logical_processors: logical]
+        online -> [online_processors: online]
         is_number(quota) -> []
         true -> [fallback: 1]
       end
@@ -28,6 +34,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.CPUBudget do
       limiting: for({name, value} <- limits, value == minimum, do: name),
       affinity: affinity,
       logical_processors: logical,
+      online_processors: online,
       quota: quota,
       dirty_schedulers: dirty
     }
@@ -146,11 +153,12 @@ defmodule Vxpipe.CallEngine.Speech.Silero.CPUBudget do
     )
   end
 
+  defp fraction(quota, _) when quota in ["max", "-1"], do: :unlimited
+
   defp fraction(quota, period) do
     with {p, ""} when p > 0 <- Integer.parse(period) do
       case Integer.parse(quota) do
         {n, ""} when n > 0 -> n / p
-        _ when quota in ["max", "-1"] -> :unlimited
         _ -> nil
       end
     else

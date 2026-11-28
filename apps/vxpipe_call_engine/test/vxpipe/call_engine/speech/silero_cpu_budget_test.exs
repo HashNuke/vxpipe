@@ -59,6 +59,11 @@ defmodule Vxpipe.CallEngine.Speech.Silero.CPUBudgetTest do
     assert %{workers: 4} = resolve(files)
   end
 
+  test "uses online CPUs when a non-Linux runtime cannot discover an affinity count" do
+    assert %{workers: 3} =
+             resolve(%{}, linux?: false, logical_processors: :unknown, online_processors: 3)
+  end
+
   test "dirty schedulers cap the available CPUs and bad inputs do not erase valid limits" do
     files = %{"/proc/self/status" => "Cpus_allowed_list: 0-1,8-9"}
     assert %{workers: 1, limiting: [:dirty_schedulers]} = resolve(files, dirty_schedulers: 1)
