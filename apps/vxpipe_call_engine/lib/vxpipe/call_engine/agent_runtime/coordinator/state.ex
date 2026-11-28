@@ -24,6 +24,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
   defstruct @enforce_keys ++
               [
                 current: nil,
+                pending_literal: nil,
                 history_mode: :generated,
                 reply_protocol: :legacy,
                 awaiting_output: nil,
@@ -33,7 +34,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
                 pending: :queue.new(),
                 idle_pause: nil,
                 idle_invocations: MapSet.new(),
-                completion_deferred?: false
+                completion_deferred?: false,
+                guardrails: nil,
+                request_timeout_ms: nil
               ]
 
   @type t :: %__MODULE__{
@@ -51,7 +54,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
       invocation_registry: state.invocation_registry,
       maximum_output_bytes: state.maximum_output_bytes,
       request_supervisor: state.request_supervisor,
-      session: state.session
+      session: state.session,
+      guardrails: state.guardrails,
+      request_timeout_ms: state.request_timeout_ms
     ]
   end
 

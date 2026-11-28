@@ -77,6 +77,13 @@ defmodule Vxpipe.CallEngine.Command.ContinueAgent do
 
   defp outcome_payload({:ok, %PlatformResult{result: result}}), do: outcome_payload({:ok, result})
   defp outcome_payload({:ok, result}), do: %{"status" => "completed", "result" => result}
+
+  # A guardrail transfer denial reaches the originating model without the
+  # private lines: the actionable feedback travels via admission repair on
+  # the LLM path and via the native tool result payload on the STS path.
+  # History events carry only the :transfer_denied atom.
+  defp outcome_payload({:error, :transfer_denied}), do: %{"status" => "denied"}
+  defp outcome_payload({:error, {:transfer_denied, _lines}}), do: %{"status" => "denied"}
   defp outcome_payload({:error, :unknown}), do: %{"status" => "unknown"}
   defp outcome_payload({:error, _reason}), do: %{"status" => "failed"}
 end

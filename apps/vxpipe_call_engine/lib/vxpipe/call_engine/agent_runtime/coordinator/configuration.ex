@@ -32,6 +32,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
       :activation_id,
       :agent_participant_id,
       :call_id,
+      :tenant_id,
+      :room_id,
       :session,
       :invocation_registry,
       :request_supervisor,
@@ -43,7 +45,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
       :usage_provider,
       :maximum_completed_requests,
       :maximum_output_bytes,
-      :maximum_pending_requests
+      :maximum_pending_requests,
+      :request_timeout_ms,
+      :guardrails
     ])
   end
 
@@ -75,7 +79,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
            Keyword.get(options, :maximum_output_bytes),
          maximum_pending_requests
          when is_integer(maximum_pending_requests) and maximum_pending_requests > 0 <-
-           Keyword.get(options, :maximum_pending_requests) do
+           Keyword.get(options, :maximum_pending_requests),
+         {:ok, guardrails} <- validate_guardrails(Keyword.get(options, :guardrails)) do
       {:ok,
        %{
          activation_id: activation_id,
@@ -92,12 +97,21 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
          usage_provider: usage_provider,
          maximum_completed_requests: maximum_completed_requests,
          maximum_output_bytes: maximum_output_bytes,
-         maximum_pending_requests: maximum_pending_requests
+         maximum_pending_requests: maximum_pending_requests,
+         guardrails: guardrails,
+         request_timeout_ms: Keyword.get(options, :request_timeout_ms)
        }}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   end
+
+  defp validate_guardrails(nil), do: {:ok, nil}
+  defp validate_guardrails(server) when is_pid(server), do: {:ok, server}
+  defp validate_guardrails(server) when is_atom(server), do: {:ok, server}
+  defp validate_guardrails({_, _} = server) when is_tuple(server), do: {:ok, server}
+  defp validate_guardrails({_, _, _} = server) when is_tuple(server), do: {:ok, server}
+  defp validate_guardrails(_invalid), do: {:error, :invalid_configuration}
 
   defp build_state(values) do
     %State{
@@ -117,7 +131,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
       usage_rounds: UsageRounds.new(),
       history: History.new(values.maximum_completed_requests),
       maximum_output_bytes: values.maximum_output_bytes,
-      maximum_pending_requests: values.maximum_pending_requests
+      maximum_pending_requests: values.maximum_pending_requests,
+      guardrails: values.guardrails,
+      request_timeout_ms: values.request_timeout_ms
     }
   end
 end

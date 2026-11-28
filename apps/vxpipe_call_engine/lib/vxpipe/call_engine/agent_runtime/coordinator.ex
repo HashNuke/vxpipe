@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
-  alias Vxpipe.AgentRuntime.{Event, Session}
+  alias Vxpipe.AgentRuntime.Event
 
   alias Vxpipe.CallEngine.AgentRuntime.{
     CompletionContinuation,
@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     History,
     IdlePause,
     Interruption,
+    LiteralOutput,
     ModelUsage,
     OutputSettlement,
     RequestOutcome,
@@ -177,6 +178,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     {:reply, OutputSettlement.in_flight_description(state, correlation), state}
   end
 
+  def handle_call({:respond, command}, _from, %State{pending_literal: literal} = state)
+      when not is_nil(literal), do: enqueue(command, state)
+
   def handle_call({:respond, command}, _from, %State{awaiting_output: pending} = state)
       when not is_nil(pending), do: enqueue(command, state)
 
@@ -229,7 +233,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   def handle_call(
         {:generated_greeting, command},
         _from,
-        %State{current: nil, awaiting_output: nil} = state
+        %State{current: nil, awaiting_output: nil, pending_literal: nil} = state
       ) do
     case ActiveRequest.start_greeting(command, State.request_options(state)) do
       {:ok, current} -> {:reply, :ok, put_current(state, current)}
@@ -244,25 +248,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   def handle_call(
         {:fixed_greeting, command, text},
         _from,
-        %State{current: nil, awaiting_output: nil} = state
+        %State{current: nil, awaiting_output: nil, pending_literal: nil} = state
       ) do
-    correlation = ActiveRequest.correlation(command, State.request_options(state))
-
-    case Session.record_assistant(state.session, text, correlation) do
-      :ok ->
-        send(state.owner, {:vxpipe_capability_text, self(), command, text})
-        send(state.owner, {:vxpipe_capability_text_complete, self(), command})
-        history = History.record(state.history, command, correlation)
-
-        awaiting =
-          if state.history_mode == :host_settled,
-            do: OutputSettlement.pending(command, correlation, text),
-            else: nil
-
-        {:reply, :ok, %{state | history: history, awaiting_output: awaiting}}
-
-      {:error, _reason} ->
-        {:reply, {:error, :unavailable}, state}
+    case LiteralOutput.start(state, command, text, :greeting) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _} -> {:reply, {:error, :unavailable}, state}
     end
   end
 
@@ -273,7 +263,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   def handle_call(
         {:caller_idle, command},
         _from,
-        %State{current: nil, awaiting_output: nil} = state
+        %State{current: nil, awaiting_output: nil, pending_literal: nil} = state
       ) do
     case ActiveRequest.start_caller_idle(command, State.request_options(state)) do
       {:ok, current} -> {:reply, :ok, put_current(state, current)}
@@ -332,6 +322,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         (is_nil(connection_id) or command.connection_id == connection_id)
     end
 
+    state =
+      if state.pending_literal && retired?.(state.pending_literal.command),
+        do: LiteralOutput.cancel(state),
+        else: state
+
     pending = :queue.filter(&(not retired?.(&1)), state.pending)
     state = %{state | pending: pending}
 
@@ -381,7 +376,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         enqueue(command, state)
 
       :hold ->
-        emit_holding_response(command, state)
+        {:ok, state} =
+          LiteralOutput.start(state, command, ConversationAdmission.holding_response(), :hold)
+
         {:reply, :ok, state}
 
       {:error, :unavailable} ->
@@ -507,6 +504,48 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     {:noreply, ModelUsage.complete(state, correlation, usage_outcome(kind))}
   end
 
+  def handle_info({:timeout, timer, :deferred_hold_deadline}, %State{pending_literal: %{timer: timer}} = state) do
+    {:noreply, state |> LiteralOutput.finish({:error, :timeout}) |> start_next()}
+  end
+
+  def handle_info({ref, verdict}, %State{pending_literal: %{task: %Task{ref: ref}}} = state) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, state |> LiteralOutput.finish(verdict) |> start_next()}
+  end
+
+  def handle_info(
+        {:DOWN, ref, :process, _, _},
+        %State{pending_literal: %{task: %Task{ref: ref}}} = state
+      ) do
+    {:noreply, state |> LiteralOutput.finish({:error, :unavailable}) |> start_next()}
+  end
+
+  def handle_info(
+        {reference, verdict},
+        %State{
+          current: %ActiveRequest{phase: :before_turn, task: %Task{ref: reference}} = request
+        } = state
+      ) do
+    Process.demonitor(reference, [:flush])
+
+    case ActiveRequest.submit_checked(request, verdict, State.request_options(state)) do
+      {:ok, current} -> {:noreply, %{state | current: current}}
+      {:error, :unavailable} -> finish_or_hold(state, {:result, {:error, :guardrail_unavailable}})
+    end
+  end
+
+  def handle_info(
+        {reference, {:error, reason}},
+        %State{current: %ActiveRequest{phase: :session, task: %Task{ref: reference}}} = state
+      )
+      when reason in [:input_revoked, :request_expired] do
+    Process.demonitor(reference, [:flush])
+    # Session rejected the request before admitting input or creating a history receipt.
+    state = put_in(state.current.phase, :before_turn)
+    failure = if reason == :request_expired, do: :provider_timeout, else: :guardrail_unavailable
+    finish_or_hold(state, {:failure, failure})
+  end
+
   def handle_info(
         {reference, result},
         %State{current: %ActiveRequest{task: %Task{ref: reference}}} = state
@@ -553,6 +592,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       {:error, :unavailable} = error -> error
     end
   end
+
+  defp start_next(%State{current: nil, held_output: nil, awaiting_output: nil,
+                          pending_literal: %{timer: _}} = state) do
+    case LiteralOutput.resume_hold(state) do
+      %State{pending_literal: nil} = expired -> start_next(expired)
+      checking -> checking
+    end
+  end
+
+  defp start_next(%State{pending_literal: literal} = state) when not is_nil(literal), do: state
 
   defp start_next(
          %State{
@@ -682,7 +731,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         start_request(command, state)
 
       :hold ->
-        emit_holding_response(command, state)
+        {:ok, state} =
+          LiteralOutput.start(state, command, ConversationAdmission.holding_response(), :hold)
+
         {:held, state}
 
       {:error, :unavailable} ->
@@ -696,15 +747,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     else
       {:reply, {:error, :queue_full}, state}
     end
-  end
-
-  defp emit_holding_response(command, state) do
-    send(
-      state.owner,
-      {:vxpipe_capability_text, self(), command, ConversationAdmission.holding_response()}
-    )
-
-    send(state.owner, {:vxpipe_capability_text_complete, self(), command})
   end
 
   defp transition(:advance, state),

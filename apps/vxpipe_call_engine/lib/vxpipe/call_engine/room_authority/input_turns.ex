@@ -51,7 +51,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   end
 
   defp accept_authorized_text(command, capability, state) do
-    command = with_model_input(command, TurnState.mode(state))
+    source_policy = EventPublisher.transcript_source_policy(state, command.participant_id)
+    command = with_model_input(command, TurnState.mode(state), source_policy)
     state = CallerIdle.activity(state)
 
     case AgentOutput.interrupt(command, state) do
@@ -376,15 +377,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       {:ok, command}
       when state.text_capability != nil and state.speech_to_speech_runtime == nil and
              state.speech_to_speech_capability == nil ->
-        command = with_model_input(command, turn.agent_mode)
+        source_policy =
+          transcript_source_policy(state, command.participant_id, turn.policy_revision)
+
+        command = with_model_input(command, turn.agent_mode, source_policy)
 
         case AgentOutput.interrupt(command, state) do
           {:ok, state} ->
             case FirstMessage.respond(state.text_capability, command, state) do
               {:ok, state} ->
-                source_policy =
-                  transcript_source_policy(state, command.participant_id, turn.policy_revision)
-
                 archive_recorder =
                   ArchiveRecorder.accepted_input(
                     state.archive_recorder,
@@ -471,9 +472,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
   defp valid_activity_signal?(_mode, _origin, _signal), do: false
 
-  defp transcript_source_policy(state, participant_id, nil) do
-    EventPublisher.transcript_source_policy(state, participant_id)
-  end
+  defp transcript_source_policy(_state, _participant_id, nil), do: %{}
 
   defp transcript_source_policy(state, participant_id, policy_revision) do
     EventPublisher.transcript_source_policy(state, participant_id, policy_revision)
@@ -515,14 +514,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       )
 
     state = EventPublisher.publish(state, connection.pid, started)
-    source_policy = EventPublisher.transcript_source_policy(state, command.participant_id)
 
     archive_recorder =
       ArchiveRecorder.accepted_input(
         state.archive_recorder,
         command,
         :text,
-        source_policy
+        command.source_transcript_policy
       )
 
     state = %{state | archive_recorder: archive_recorder}
@@ -539,10 +537,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     )
   end
 
-  defp with_model_input(command, mode) do
+  defp with_model_input(command, mode, source_policy) do
     {:ok, input} =
       Vxpipe.AgentRuntime.Input.participant(command.participant_id, command.content, mode)
 
-    %{command | model_input: input}
+    %{command | model_input: input, source_transcript_policy: source_policy}
   end
 end

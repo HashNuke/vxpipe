@@ -118,6 +118,10 @@ The call-spec JSON stores each question inside the participant. A new question c
 
 The backend assigns each new question an `id` when saving the call spec. Keep the returned ID when editing or reordering an existing question. The API accepts numeric thresholds from 0 through 1 in increments of 0.01. An omitted threshold defaults to 0.70.
 
+When a check blocks, each failed question contributes one private line to the conversational model, in the order shown in the editor. Your response is passed verbatim. A blank response produces a line such as `Failed guardrail: Is the caller requesting someone else's account details? Required: No.` The response guides the model when it composes its reply. Rejected input, drafts and temporary feedback stay out of its subsequent conversation history. A checker error ends the affected response without releasing speech or tools.
+
+When speech, an ordinary tool and a transfer are proposed together, the speech and transfer checks run together. Both must pass before any part of the proposal runs. Transfer and hangup wait for earlier ordinary tool work in the batch to finish, including non-blocking tools.
+
 ### Conversation languages
 
 In **Call settings → Models**, choose conversation languages in priority order. The call spec stores the complete selection at the top level.

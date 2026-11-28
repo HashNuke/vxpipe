@@ -35,7 +35,8 @@ defmodule Vxpipe.CallEngine.Command.SendText do
     :deadline
   ]
   # Populated only by trusted room admission, never from command options.
-  defstruct @enforce_keys ++ [schema_version: @schema_version, model_input: nil]
+  defstruct @enforce_keys ++
+              [schema_version: @schema_version, model_input: nil, source_transcript_policy: nil]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -49,6 +50,7 @@ defmodule Vxpipe.CallEngine.Command.SendText do
           correlation_id: String.t(),
           content: String.t(),
           model_input: Vxpipe.AgentRuntime.Input.t() | nil,
+          source_transcript_policy: map() | nil,
           run_immediately: boolean(),
           audio_response: boolean(),
           deadline: DateTime.t()

@@ -66,6 +66,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
     fail_uncommitted(request, failure_reason(reason), options)
   end
 
+  def finish(%ActiveRequest{} = request, {:error, :guardrail_unavailable}, options) do
+    fail_uncommitted(request, :guardrail_unavailable, options)
+  end
+
   def finish(%ActiveRequest{} = request, _invalid, options) do
     fail_uncommitted(request, :provider_unavailable, options)
   end

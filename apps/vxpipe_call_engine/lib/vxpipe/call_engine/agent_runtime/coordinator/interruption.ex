@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{
     ActiveRequest,
     History,
+    LiteralOutput,
     OutputSettlement,
     State
   }
@@ -22,6 +23,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
     current = state.current
     held = state.held_output
     interrupted = interrupted_commands(state)
+
+    interrupted =
+      if state.pending_literal,
+        do: [state.pending_literal.command | interrupted],
+        else: interrupted
+
+    state = LiteralOutput.cancel(state)
     report_interruption(current, state)
     state = cancel_current(state, timeout)
     state = drop_held(state, held, timeout)

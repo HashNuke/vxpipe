@@ -5,6 +5,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.OutputSettlement do
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.State
 
   @spec await(State.t()) :: State.t()
+  # A caller held at the before-turn gate has no conversational history to settle.
+  def await(%State{current: %{phase: :before_turn}} = state), do: state
+
   def await(%State{history_mode: :host_settled, current: current} = state)
       when not is_nil(current) do
     %{
