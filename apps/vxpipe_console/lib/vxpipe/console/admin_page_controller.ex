@@ -3,6 +3,8 @@ defmodule Vxpipe.Console.AdminPageController do
 
   use Phoenix.Controller, formats: [:html]
 
+  alias Vxpipe.Console.Endpoint
+
   def login(conn, params) do
     backend =
       Application.get_env(:vxpipe_console, :user_identity_backend, Vxpipe.Console.UserIdentity)
@@ -27,11 +29,11 @@ defmodule Vxpipe.Console.AdminPageController do
           <meta name="color-scheme" content="dark" />
           <meta name="csrf-token" content="#{csrf_token}" />
           <link rel="icon" href="data:," />
-          <link rel="stylesheet" href="/assets/admin.css" />
-          <link rel="stylesheet" href="/assets/admin-ui.css" />
+          <link rel="stylesheet" href="#{Endpoint.static_path("/assets/admin.css")}" />
+          <link rel="stylesheet" href="#{Endpoint.static_path("/assets/admin-ui.css")}" />
           <title>Admin · Vxpipe</title>
         </head>
-        <body><div id="admin-root"></div><script type="module" src="/assets/admin.js"></script></body>
+        <body><div id="admin-root"></div><script type="module" src="#{Endpoint.static_path("/assets/admin.js")}"></script></body>
       </html>
       """
     )

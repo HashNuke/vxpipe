@@ -193,6 +193,32 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
     :ok
   end
 
+  test "the Console shell references assets from the deployed manifest" do
+    manifest = "priv/static/assets/admin-manifest-#{System.unique_integer([:positive])}.json"
+    file = Application.app_dir(:vxpipe_console, manifest)
+    previous = @endpoint.config(:cache_static_manifest)
+
+    latest =
+      Map.new(~w(admin.js admin.css admin-ui.css), fn name ->
+        {"assets/" <> name, "assets/release-" <> name}
+      end)
+
+    File.mkdir_p!(Path.dirname(file))
+    File.write!(file, JSON.encode!(%{latest: latest, digests: %{}}))
+    Phoenix.Config.put(@endpoint, :cache_static_manifest, manifest)
+    @endpoint.config_change([], [])
+
+    on_exit(fn ->
+      Phoenix.Config.put(@endpoint, :cache_static_manifest, previous)
+      @endpoint.config_change([], [])
+      File.rm!(file)
+    end)
+
+    assert @endpoint.static_path("/assets/admin.js") == "/assets/release-admin.js?vsn=d"
+    body = build_conn() |> get("https://localhost/auth/login") |> html_response(200)
+    for name <- Map.values(latest), do: assert(body =~ "/#{name}?vsn=d")
+  end
+
   test "the public status route reports first-run setup" do
     response = get(build_conn(), "https://localhost/auth/api/status")
     assert json_response(response, 200) == %{"status" => "pending_first_run"}
