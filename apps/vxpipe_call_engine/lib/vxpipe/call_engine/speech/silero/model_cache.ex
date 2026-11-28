@@ -5,20 +5,27 @@ defmodule Vxpipe.CallEngine.Speech.Silero.ModelCache do
   alias Vxpipe.CallEngine.Speech.Silero.Model
 
   def start_link(options),
-    do: GenServer.start_link(__MODULE__, :not_loaded, name: Keyword.fetch!(options, :name))
+    do:
+      GenServer.start_link(__MODULE__, Keyword.get(options, :load, &Model.load/0),
+        name: Keyword.fetch!(options, :name)
+      )
 
   # Only the public immutable model resource crosses this cache. PCM, recurrent
   # stream state, inference tasks and speech allocation authority remain local.
-  def fetch, do: GenServer.call(__MODULE__, :fetch, 5_000)
+  def fetch(server \\ __MODULE__, timeout \\ 5_000) do
+    GenServer.call(server, :fetch, timeout)
+  catch
+    :exit, _ -> {:error, :model_unavailable}
+  end
 
   @impl true
-  def init(:not_loaded), do: {:ok, nil}
+  def init(loader), do: {:ok, {:unloaded, loader}}
 
   @impl true
-  def handle_call(:fetch, _from, nil) do
-    case Model.load() do
+  def handle_call(:fetch, _from, {:unloaded, loader} = state) do
+    case loader.() do
       {:ok, model} -> {:reply, {:ok, model}, model}
-      failure -> {:reply, failure, nil}
+      failure -> {:reply, failure, state}
     end
   end
 
@@ -27,7 +34,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.ModelCache do
   @impl true
   def format_status(status) do
     status
-    |> Map.put(:state, %{model_loaded?: not is_nil(status.state)})
+    |> Map.put(:state, %{model_loaded?: match?(%Model{}, status.state)})
     |> Map.put(:message, :redacted)
     |> Map.put(:reason, :redacted)
     |> Map.put(:log, [])
