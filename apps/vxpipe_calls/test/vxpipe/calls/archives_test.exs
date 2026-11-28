@@ -357,6 +357,107 @@ defmodule Vxpipe.Calls.ArchivesTest do
     assert history.transcript == []
   end
 
+  test "denied decisions facts keep only safe metadata through archive restore" do
+    alias Vxpipe.CallEngine.Archive.Fact, as: EngineFact
+    alias Vxpipe.Calls.{CallHistory, EngineArchiveProjection}
+
+    denied_policy = %{"revision" => 1, "save_transcripts" => false}
+
+    engine_question =
+      EngineFact.new!(
+        id: "decisions-question-1",
+        kind: :decisions_question_result,
+        sequence: 1,
+        tenant_id: "AAAAAAAAAAAAAAAA",
+        call_id: "44444444-4444-4444-8444-444444444444",
+        room_id: "55555555-5555-4555-8555-555555555555",
+        incarnation_id: "rinc_archive-test",
+        occurred_at: ~U[2026-09-09 11:41:00.000000Z],
+        source_policy: denied_policy,
+        payload: %{
+          "evaluation_id" => "eval-1",
+          "question_id" => "account_scope",
+          "ordinal" => 0,
+          "required_answer" => "yes",
+          "threshold_hundredths" => 70,
+          "outcome" => "failed",
+          "probability_yes" => 0.3,
+          "inferred_answer" => "no",
+          "policy_revision" => 1,
+          "policy_digest" => "sha256:abc",
+          "question" => "Is the caller asking about their own account?",
+          "response" => "I can only help with your own account.",
+          "evidence" => [%{"candidate" => "private draft"}]
+        }
+      )
+
+    engine_attempt =
+      EngineFact.new!(
+        id: "decisions-attempt-1",
+        kind: :decisions_attempt,
+        sequence: 2,
+        tenant_id: "AAAAAAAAAAAAAAAA",
+        call_id: "44444444-4444-4444-8444-444444444444",
+        room_id: "55555555-5555-4555-8555-555555555555",
+        incarnation_id: "rinc_archive-test",
+        occurred_at: ~U[2026-09-09 11:41:01.000000Z],
+        source_policy: denied_policy,
+        payload: %{
+          "evaluation_id" => "eval-1",
+          "attempt_id" => "attempt-1",
+          "event" => "before_turn",
+          "outcome" => "succeeded",
+          "ordinal" => 0,
+          "policy_digest" => "sha256:abc",
+          "question" => "private"
+        }
+      )
+
+    assert {:ok, question} = EngineArchiveProjection.project(engine_question)
+    assert {:ok, attempt} = EngineArchiveProjection.project(engine_attempt)
+
+    for fact <- [question, attempt] do
+      assert fact.payload["content_unavailable"] == %{"reason" => "denied"}
+      refute JSON.encode!(fact.payload) =~ "private"
+      refute JSON.encode!(fact.payload) =~ "own account"
+    end
+
+    assert question.payload["probability_yes"] == nil
+    assert question.payload["inferred_answer"] == nil
+
+    history =
+      CallHistory.new(
+        [question, attempt],
+        %Vxpipe.Calls.VariableSnapshotHistory{snapshots: [], latest: nil}
+      )
+
+    assert Enum.map(history.decisions, & &1.kind) == [
+             :decisions_question_result,
+             :decisions_attempt
+           ]
+
+    assert history.transcript == []
+
+    permitted = %{"revision" => 2, "save_transcripts" => true}
+
+    assert {:ok, restored} =
+             Vxpipe.Calls.CallFact.new(
+               id: question.id,
+               kind: question.kind,
+               sequence: question.sequence,
+               tenant_key: question.tenant_key,
+               call_id: question.call_id,
+               room_id: question.room_id,
+               incarnation_id: question.incarnation_id,
+               occurred_at: question.occurred_at,
+               source_policy: permitted,
+               payload: question.payload
+             )
+
+    assert restored.payload["content_unavailable"] == %{"reason" => "denied"}
+    refute JSON.encode!(restored.payload) =~ "private"
+  end
+
   test "enforces baseline and update attribution without exposing private sections in inspect" do
     baseline = baseline_snapshot()
     refute inspect(baseline) =~ "private-value"

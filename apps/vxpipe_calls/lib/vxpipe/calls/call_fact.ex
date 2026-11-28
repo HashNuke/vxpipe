@@ -30,6 +30,9 @@ defmodule Vxpipe.Calls.CallFact do
     :participant_transfer_completed,
     :participant_transfer_failed,
     :usage_observed,
+    :decisions_evaluation,
+    :decisions_question_result,
+    :decisions_attempt,
     :outgoing_dial_submitted,
     :outgoing_call_answered,
     :outgoing_dial_ended,
@@ -106,6 +109,11 @@ defmodule Vxpipe.Calls.CallFact do
          {:ok, attributes} <- canonicalize_json(attributes),
          :ok <-
            Vxpipe.Calls.OutgoingCallFact.validate(
+             Keyword.fetch!(attributes, :kind),
+             Keyword.fetch!(attributes, :payload)
+           ),
+         :ok <-
+           Vxpipe.CallEngine.Archive.DecisionsFact.validate(
              Keyword.fetch!(attributes, :kind),
              Keyword.fetch!(attributes, :payload)
            ) do

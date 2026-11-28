@@ -10,6 +10,7 @@ defmodule Vxpipe.Calls.CallHistory do
              :timeline,
              :transcript,
              :tool_history,
+             :decisions,
              :variable_snapshots,
              :archive_status
            ]}
@@ -18,6 +19,7 @@ defmodule Vxpipe.Calls.CallHistory do
     :timeline,
     :transcript,
     :tool_history,
+    :decisions,
     :variable_snapshots,
     :archive_status
   ]
@@ -28,6 +30,7 @@ defmodule Vxpipe.Calls.CallHistory do
           timeline: [Vxpipe.Calls.CallTimelineEntry.t()],
           transcript: [Vxpipe.Calls.CallFact.t()],
           tool_history: [Vxpipe.Calls.CallFact.t()],
+          decisions: [Vxpipe.Calls.CallFact.t()],
           variable_snapshots: VariableSnapshotHistory.t(),
           archive_status: ArchiveStatus.t()
         }
@@ -38,6 +41,11 @@ defmodule Vxpipe.Calls.CallHistory do
     :tool_call_failed,
     :tool_call_cancelled
   ]
+  @decisions_kinds [
+    :decisions_evaluation,
+    :decisions_question_result,
+    :decisions_attempt
+  ]
 
   @spec new([Vxpipe.Calls.CallFact.t()], VariableSnapshotHistory.t()) :: t()
   def new(facts, %VariableSnapshotHistory{} = variable_snapshots) when is_list(facts) do
@@ -46,6 +54,7 @@ defmodule Vxpipe.Calls.CallHistory do
       timeline: CallTimeline.project(facts, variable_snapshots.snapshots),
       transcript: Enum.filter(facts, &transcript_fact?/1),
       tool_history: Enum.filter(facts, &(&1.kind in @tool_kinds)),
+      decisions: Enum.filter(facts, &(&1.kind in @decisions_kinds)),
       variable_snapshots: variable_snapshots,
       archive_status: ArchiveStatus.from_facts(facts)
     }

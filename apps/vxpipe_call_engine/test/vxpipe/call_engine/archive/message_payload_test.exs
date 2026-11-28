@@ -145,6 +145,40 @@ defmodule Vxpipe.CallEngine.Archive.MessagePayloadTest do
              payload
   end
 
+  test "denied decisions strip nested private fields and filter attempts" do
+    payload = %{
+      "evaluation_id" => "eval-1",
+      "question" => "private",
+      :response => "private",
+      "nested" => [%{"feedback" => "private", "id" => "kept"}]
+    }
+
+    denied = %{"save_transcripts" => false}
+
+    filtered =
+      Policy.filter_payload(:decisions_evaluation, payload, denied)
+
+    assert filtered["content_unavailable"] == %{"reason" => "denied"}
+    assert filtered["evaluation_id"] == "eval-1"
+    assert filtered["nested"] == [%{"id" => "kept"}]
+    refute JSON.encode!(filtered) =~ "private"
+
+    attempt =
+      Policy.filter_payload(
+        :decisions_attempt,
+        %{"evaluation_id" => "eval-1", "attempt_id" => "a", "question" => "private"},
+        denied
+      )
+
+    assert attempt["content_unavailable"] == %{"reason" => "denied"}
+    assert attempt["attempt_id"] == "a"
+    refute JSON.encode!(attempt) =~ "private"
+
+    assert Policy.filter_payload(:decisions_evaluation, payload, %{
+             "save_transcripts" => true
+           }) == payload
+  end
+
   test "bounds decoded content as well as encoded JSON, including escaped text" do
     for text <- [
           String.duplicate("x", 16 * 1_024 * 1_024 + 1),
