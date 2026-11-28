@@ -93,6 +93,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.LiteralOutput do
 
   def cancel(state) do
     literal = state.pending_literal
+
     case literal do
       %{timer: timer} -> Process.cancel_timer(timer)
       %{task: task} -> Task.shutdown(task, :brutal_kill)

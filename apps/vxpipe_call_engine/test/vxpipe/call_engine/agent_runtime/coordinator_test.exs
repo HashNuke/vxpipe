@@ -43,34 +43,78 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
   test "blocked caller input produces private tool-free model feedback and stays out of later turns" do
     owner = self()
-    {:ok, policy} = Vxpipe.CallEngine.CallSpec.Guardrails.new(%{
-      "before_turn" => [%{"id" => "scope", "question" => "Is this supported?", "required_answer" => "yes", "response" => "Ask about a supported product."}]
-    }, [])
-    supervisor = start_supervised!({Task.Supervisor, name: {:global, {:guardrail_tasks, make_ref()}}}, id: :guardrail_tasks)
+
+    {:ok, policy} =
+      Vxpipe.CallEngine.CallSpec.Guardrails.new(
+        %{
+          "before_turn" => [
+            %{
+              "id" => "scope",
+              "question" => "Is this supported?",
+              "required_answer" => "yes",
+              "response" => "Ask about a supported product."
+            }
+          ]
+        },
+        []
+      )
+
+    supervisor =
+      start_supervised!({Task.Supervisor, name: {:global, {:guardrail_tasks, make_ref()}}},
+        id: :guardrail_tasks
+      )
+
     adapter = fn req ->
       send(owner, {:guardrail_request, self(), req})
+
       receive do
         {:score, p} -> {:ok, %{scores: %{"scope" => p}}}
       end
     end
-    service = start_supervised!({Vxpipe.CallEngine.Guardrails.Participant, policy: policy, request_supervisor: supervisor, adapter: adapter})
-    runtime = start_runtime(guardrails: service, tools: [runtime_tool_descriptor(:blocking)], executor: InvocationExecutor, history_mode: :host_settled)
+
+    service =
+      start_supervised!(
+        {Vxpipe.CallEngine.Guardrails.Participant,
+         policy: policy, request_supervisor: supervisor, adapter: adapter}
+      )
+
+    runtime =
+      start_runtime(
+        guardrails: service,
+        tools: [runtime_tool_descriptor(:blocking)],
+        executor: InvocationExecutor,
+        history_mode: :host_settled
+      )
+
     first = command("blocked", "original blocked content")
     assert :ok = Coordinator.respond(runtime.coordinator, first)
-    assert_receive {:guardrail_request, worker, %{evidence: %{"text" => "original blocked content"}}}
+
+    assert_receive {:guardrail_request, worker,
+                    %{evidence: %{"text" => "original blocked content"}}}
+
     refute_received {:test_agent_runtime_stream, _, _}
     send(worker, {:score, 0.1})
     assert_receive {:test_agent_runtime_stream, provider, request}
     assert request.tools == []
+
     assert JSON.decode!(List.last(request.messages).content) == %{
-      "type" => "guardrail_failure", "status" => "blocked",
-      "failures" => [%{"event" => "before_turn", "messages" => ["Ask about a supported product."]}]
-    }
+             "type" => "guardrail_failure",
+             "status" => "blocked",
+             "failures" => [
+               %{"event" => "before_turn", "messages" => ["Ask about a supported product."]}
+             ]
+           }
+
     assert {:ok, response} = ModelResponse.new(text: "Which product are you using?")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:vxpipe_capability_text_complete, _, ^first}
-    assert :ok = Coordinator.settle_output(runtime.coordinator, first, "Which product are you using?")
-    assert :ok = Coordinator.respond(runtime.coordinator, command("allowed", "A supported product"))
+
+    assert :ok =
+             Coordinator.settle_output(runtime.coordinator, first, "Which product are you using?")
+
+    assert :ok =
+             Coordinator.respond(runtime.coordinator, command("allowed", "A supported product"))
+
     assert_receive {:guardrail_request, worker, _}
     send(worker, {:score, 0.99})
     assert_receive {:test_agent_runtime_stream, _, following}
@@ -83,18 +127,41 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     @literal_kind kind
     test "checks a fixed #{@literal_kind} before delivery and suppresses a blocked line" do
       owner = self()
-      questions = %{"after_turn" => [%{"id" => "safe", "question" => "Appropriate?", "required_answer" => "yes"}]}
+
+      questions = %{
+        "after_turn" => [
+          %{"id" => "safe", "question" => "Appropriate?", "required_answer" => "yes"}
+        ]
+      }
+
       {:ok, policy} = Vxpipe.CallEngine.CallSpec.Guardrails.new(questions, [])
-      tasks = start_supervised!({Task.Supervisor, name: {:global, {:literal_tasks, make_ref()}}}, id: :literal_tasks)
+
+      tasks =
+        start_supervised!({Task.Supervisor, name: {:global, {:literal_tasks, make_ref()}}},
+          id: :literal_tasks
+        )
+
       adapter = fn request ->
         send(owner, {:literal_check, self(), request.evidence["text"]})
+
         receive do
           {:score, p} -> {:ok, %{scores: %{"safe" => p}}}
         end
       end
-      checker = start_supervised!({Vxpipe.CallEngine.Guardrails.Participant, policy: policy, adapter: adapter, request_supervisor: tasks})
+
+      checker =
+        start_supervised!(
+          {Vxpipe.CallEngine.Guardrails.Participant,
+           policy: policy, adapter: adapter, request_supervisor: tasks}
+        )
+
       runtime = start_runtime(guardrails: checker, completion_target: self())
-      line = if @literal_kind == :hold, do: "Please hold while I finish the current request.", else: "Welcome to the call."
+
+      line =
+        if @literal_kind == :hold,
+          do: "Please hold while I finish the current request.",
+          else: "Welcome to the call."
+
       if @literal_kind == :hold do
         assert {:accepted, :blocking} = submit_invocation(runtime, :blocking, "literal-blocking")
         assert_receive {:submitted_host_tool_started, _, "literal-blocking"}
@@ -102,13 +169,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
       for {suffix, score} <- [{"blocked", 0.2}, {"approved", 0.9}] do
         input = command("literal-" <> suffix, "Hello")
+
         case @literal_kind do
           :hold -> assert :ok = Coordinator.respond(runtime.coordinator, input)
           :greeting -> assert :ok = Coordinator.fixed_greeting(runtime.coordinator, input, line)
         end
+
         assert_receive {:literal_check, worker, ^line}, 500
         refute_received {:vxpipe_capability_text, _, ^input, _}
         send(worker, {:score, score})
+
         if score < 0.7 do
           assert_receive {:vxpipe_capability_failed, _, ^input, _}
           refute_received {:vxpipe_capability_text, _, ^input, _}
@@ -116,6 +186,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
           assert_receive {:vxpipe_capability_text, _, ^input, ^line}
           assert_receive {:vxpipe_capability_text_complete, _, ^input}
         end
+
         refute_received {:test_agent_runtime_stream, _, _}
       end
     end
@@ -135,10 +206,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
       if @hold_timing == :during_generation do
         assert :ok = Coordinator.respond(runtime.coordinator, later)
-        refute_receive {:after_turn_check, _, "Please hold while I finish the current request."}, 50
+
+        refute_receive {:after_turn_check, _, "Please hold while I finish the current request."},
+                       50
       end
+
       send(model, {:test_agent_runtime_response, {:ok, response}})
       assert_receive {:after_turn_check, current_check, "Checking now."}
+
       if @hold_timing == :during_check do
         assert :ok = Coordinator.respond(runtime.coordinator, later)
         refute_receive {:vxpipe_capability_failed, _, ^later, _}, 50
@@ -146,10 +221,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
       send(current_check, :allow)
       assert_receive {:vxpipe_capability_text_complete, _, ^current}
-      assert_receive {:after_turn_check, hold_check, "Please hold while I finish the current request."}
+
+      assert_receive {:after_turn_check, hold_check,
+                      "Please hold while I finish the current request."}
+
       refute_received {:vxpipe_capability_text, _, ^later, _}
       send(hold_check, :allow)
-      assert_receive {:vxpipe_capability_text, _, ^later, "Please hold while I finish the current request."}
+
+      assert_receive {:vxpipe_capability_text, _, ^later,
+                      "Please hold while I finish the current request."}
+
       assert_receive {:vxpipe_capability_text_complete, _, ^later}
       refute_received {:vxpipe_capability_failed, _, _, _}
       refute_received {:test_agent_runtime_stream, _, _}
@@ -163,7 +244,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:test_agent_runtime_stream, _, _}
     assert {:accepted, :blocking} = submit_invocation(runtime, :blocking, "hold-at-timeout")
     assert_receive {:submitted_host_tool_started, _, "hold-at-timeout"}
-    expired = %{command("short-hold", "Hello") | deadline: DateTime.add(DateTime.utc_now(), 70, :millisecond)}
+
+    expired = %{
+      command("short-hold", "Hello")
+      | deadline: DateTime.add(DateTime.utc_now(), 70, :millisecond)
+    }
+
     assert :ok = Coordinator.respond(runtime.coordinator, expired)
     assert_receive {:vxpipe_capability_failed, _, ^expired, :guardrail_unavailable}, 500
     refute_received {:after_turn_check, _, _}
@@ -535,6 +621,30 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
     assert_receive {:vxpipe_capability_text, ^coordinator, ^queued, "Done."}
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^queued}
+  end
+
+  test "a held guardrail leaves the caller queue bounded and advances its single waiting request" do
+    coordinator = guarded_overlap_runtime(1).coordinator
+    first = command("held", "First")
+    waiting = command("waiting", "Second")
+    overflow = command("overflow", "Third")
+
+    assert :ok = Coordinator.respond(coordinator, first)
+    assert_receive {:test_agent_runtime_stream, provider, _}
+    send(provider, {:test_agent_runtime_response, ModelResponse.new(text: "Pending approval.")})
+    assert_receive {:after_turn_check, checker, "Pending approval."}
+    assert :ok = Coordinator.respond(coordinator, waiting)
+    assert {:error, :queue_full} = Coordinator.respond(coordinator, overflow)
+    refute_received {:test_agent_runtime_stream, _, _}
+    send(checker, :allow)
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^first}
+    assert_receive {:test_agent_runtime_stream, second, request}
+    assert List.last(request.messages).content == "Second"
+    send(second, {:test_agent_runtime_response, ModelResponse.new(text: "Second reply.")})
+    assert_receive {:after_turn_check, checker, "Second reply."}
+    send(checker, :allow)
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^waiting}
+    refute_received {:test_agent_runtime_stream, _, _}
   end
 
   test "bounds the caller queue and advances it after the active request deadline" do
@@ -1074,22 +1184,53 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
   end
 
-  defp guarded_overlap_runtime do
-      owner = self()
-      {:ok, policy} = Vxpipe.CallEngine.CallSpec.Guardrails.new(
-        %{"after_turn" => [%{"id" => "safe", "question" => "Appropriate?", "required_answer" => "yes"}]}, [])
-      tasks = start_supervised!({Task.Supervisor, name: {:global, {:overlap_tasks, make_ref()}}}, id: :overlap_tasks)
-      adapter = fn request ->
-        send(owner, {:after_turn_check, self(), request.evidence["text"]})
-        receive do
-          :allow -> {:ok, %{scores: %{"safe" => 0.9}}}
-        end
+  defp guarded_overlap_runtime(maximum_pending_requests \\ 2) do
+    owner = self()
+
+    {:ok, policy} =
+      Vxpipe.CallEngine.CallSpec.Guardrails.new(
+        %{
+          "after_turn" => [
+            %{"id" => "safe", "question" => "Appropriate?", "required_answer" => "yes"}
+          ]
+        },
+        []
+      )
+
+    tasks =
+      start_supervised!({Task.Supervisor, name: {:global, {:overlap_tasks, make_ref()}}},
+        id: :overlap_tasks
+      )
+
+    adapter = fn request ->
+      send(owner, {:after_turn_check, self(), request.evidence["text"]})
+
+      receive do
+        :allow -> {:ok, %{scores: %{"safe" => 0.9}}}
       end
-      checker = start_supervised!({Vxpipe.CallEngine.Guardrails.Participant,
-        policy: policy, adapter: adapter, request_supervisor: tasks})
-      admission = {Vxpipe.CallEngine.Guardrails.RuntimeAdmission,
-        %{guardrails: checker, after_questions: policy.after_turn, transfer_questions: [], terminal_kinds: %{}}}
-      start_runtime(guardrails: checker, round_admission: admission, completion_target: self())
+    end
+
+    checker =
+      start_supervised!(
+        {Vxpipe.CallEngine.Guardrails.Participant,
+         policy: policy, adapter: adapter, request_supervisor: tasks}
+      )
+
+    admission =
+      {Vxpipe.CallEngine.Guardrails.RuntimeAdmission,
+       %{
+         guardrails: checker,
+         after_questions: policy.after_turn,
+         transfer_questions: [],
+         terminal_kinds: %{}
+       }}
+
+    start_runtime(
+      guardrails: checker,
+      round_admission: admission,
+      completion_target: self(),
+      maximum_pending_requests: maximum_pending_requests
+    )
   end
 
   defp start_runtime(options \\ []) do
@@ -1105,18 +1246,20 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     coordinator =
       start_supervised!(
         {Coordinator,
-         [activation_id: activation_id,
-         agent_participant_id: "participant-agent",
-         call_id: "call-demo",
-         session: session_name,
-         invocation_registry: registry_name,
-         request_supervisor: request_supervisor_name,
-         owner: self(),
-         provider: Keyword.get(options, :provider, :local_fixture),
-         usage_provider: usage_provider_context(),
-         maximum_output_bytes: Keyword.get(options, :maximum_output_bytes, 4_096),
-         maximum_pending_requests: Keyword.get(options, :maximum_pending_requests, 2),
-         history_mode: Keyword.get(options, :history_mode, :generated)] ++ Keyword.take(options, [:guardrails])}
+         [
+           activation_id: activation_id,
+           agent_participant_id: "participant-agent",
+           call_id: "call-demo",
+           session: session_name,
+           invocation_registry: registry_name,
+           request_supervisor: request_supervisor_name,
+           owner: self(),
+           provider: Keyword.get(options, :provider, :local_fixture),
+           usage_provider: usage_provider_context(),
+           maximum_output_bytes: Keyword.get(options, :maximum_output_bytes, 4_096),
+           maximum_pending_requests: Keyword.get(options, :maximum_pending_requests, 2),
+           history_mode: Keyword.get(options, :history_mode, :generated)
+         ] ++ Keyword.take(options, [:guardrails])}
       )
 
     invocation_supervisor =
