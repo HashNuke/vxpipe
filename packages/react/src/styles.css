@@ -684,7 +684,7 @@
 .vx-guardrail-activity header strong { color: var(--vx-ink); }
 .vx-guardrail-activity header time { margin-inline-start: auto; }
 .vx-guardrail-tool { margin-top: 4px; color: var(--vx-muted); font-size: 13px; }
-.vx-guardrail-tool svg { vertical-align: middle; }
+.vx-guardrail-tool svg { display: inline; vertical-align: middle; }
 .vx-guardrail-card {
   width: fit-content;
   max-width: 100%;

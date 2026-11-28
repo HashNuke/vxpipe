@@ -73,17 +73,19 @@ test("a blocked mixed proposal shares its checks and disappears with guardrails 
 
 test("a Decisions row opens its agent’s evaluations and retry attempts", async () => {
   render(<GuardrailCallDetails scenario="repair-and-transfer" theme="dark" initialTab="Metrics" />);
-  const row = (await screen.findByRole("rowheader", {name: "Decisions, Routing agent"})).closest("tr")!;
-  const action = within(row).getByRole("button", {name: "Inspect Decisions for Routing agent"});
+  const row = (await screen.findByRole("rowheader", {name: "Decisions, Routing agent, OpenAI · gpt-6-luna"})).closest("tr")!;
+  const action = within(row).getByRole("button", {name: /Inspect checks.*Routing agent/});
   fireEvent.click(action);
-  const detail = screen.getByRole("region", {name: "Routing agent Decisions"});
+  const detail = screen.getByRole("region", {name: "Routing agent · OpenAI · gpt-6-luna"});
   expect(within(detail).getByText("Before outgoing transfer")).toBeDefined();
   expect(within(detail).queryByText("After turn")).toBeNull();
   const summary = within(detail).getByText("Before outgoing transfer").closest("summary")!;
-  expect(summary.textContent).toContain("Routing agent · Before outgoing transfer · Passed");
+  expect(summary.textContent).toContain("Before outgoing transfer · Passed");
   fireEvent.click(summary);
-  expect(within(detail).getByText(/Rate limited.*85 ms/)).toBeDefined();
-  expect(within(detail).getByText(/Answered.*183 ms/)).toBeDefined();
+  const attempts = Array.from(detail.querySelectorAll("ol li")).filter(item => item.textContent?.startsWith("Attempt"));
+  expect(attempts).toHaveLength(2);
+  expect(attempts[0]).toHaveTextContent("Failed · Rate limited · API duration 85 ms");
+  expect(attempts[1]).toHaveTextContent("Retry · Succeeded · API duration 183 ms");
 });
 
 
@@ -99,11 +101,13 @@ test("All exposes a threshold equality and an unavailable answer stays neutral",
   expect(screen.getByRole("tooltip").textContent).toContain("P(Yes) unavailable");
 });
 
-test("restricted evidence stays scoped to the second caller row after showing all guardrails", async () => {
+test("restricted evidence stays private when neither identical caller message is linked", async () => {
   render(<GuardrailCallDetails scenario="restricted-history" theme="light" />);
   const repeated = await screen.findAllByText("Can you help me with an account question?", {selector:"article p"});
-  expect(within(repeated[1].closest("article")!).getByText("Question details unavailable")).toBeDefined();
-  expect(within(repeated[0].closest("article")!).queryByText("Question details unavailable")).toBeNull();
+  for (const message of repeated) {
+    expect(within(message.closest("article")!).queryByText("Question details unavailable")).toBeNull();
+  }
+  expect(screen.getByText("Question details unavailable").closest("article")).toBeNull();
   await filters();
   await chooseFilter("Guardrails", "All");
   fireEvent.click(screen.getByRole("button", {name: "Close dialog"}));
@@ -112,8 +116,9 @@ test("restricted evidence stays scoped to the second caller row after showing al
 
 test("an exact Metrics link opens its checked attempt and focuses the question card", async () => {
   render(<GuardrailCallDetails scenario="repair-and-transfer" theme="light" initialTab="Metrics" />);
-  fireEvent.click(await screen.findByRole("button", {name:"Inspect Decisions for Assistant"}));
-  const check = document.getElementById("evaluation-check-draft")!;
+  fireEvent.click(await screen.findByRole("button", {name:/Inspect checks.*Assistant/}));
+  const agent = within(screen.getByRole("region", {name: "Assistant · OpenAI · gpt-6-luna"}));
+  const check = agent.getByText("Withheld draft · I can look up the other account for you.").closest("details")!;
   fireEvent.click(check.querySelector("summary")!);
   fireEvent.click(within(check).getByRole("button", {name:"Show evaluation in conversation"}));
   const draft = (await screen.findByText("I can look up the other account for you.")).closest("article")!;
@@ -238,4 +243,15 @@ test("Escape dismisses the Events menu before closing the filter dialog", async 
   fireEvent.keyDown(events, {key: "Escape"});
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(filterButton).toHaveFocus();
+});
+
+test("the repair story shows actual delivery separately from the private rejected attempt", async () => {
+  render(<GuardrailCallDetails scenario="repair-and-transfer" theme="light" />);
+  await filters();
+  await chooseFilter("Guardrails", "All");
+  fireEvent.click(screen.getByRole("button", {name: "Close dialog"}));
+  const replacement = within(screen.getByText("I can help with your own account.").closest("article")!);
+  expect(replacement.getByText("Delivery confirmed")).toBeVisible();
+  const rejected = within(screen.getByText("I can look up the other account for you.").closest("article")!);
+  expect(rejected.queryByText("Delivery confirmed")).toBeNull();
 });
