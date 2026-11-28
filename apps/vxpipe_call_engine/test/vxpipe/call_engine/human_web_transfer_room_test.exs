@@ -271,10 +271,79 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert_receive {:test_agent_runtime_stream, _, _}, 2_000
   end
 
-  defp start_announced_action(action, siblings \\ []) do
+  test "a guarded web handoff consumes its single verdict before the announcement and reaches the human" do
+    owner = self()
+    settings = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
+
+    plug = fn conn ->
+      body = JSON.decode!(Req.Test.raw_body(conn))
+      [question] = body["questions"]
+      send(owner, {:transfer_decision, self(), JSON.decode!(body["input"])})
+
+      receive do
+        :allow ->
+          Req.Test.json(conn, %{
+            answers: [%{name: question["name"], type: "predicate", probability: 1.0}]
+          })
+      end
+    end
+
+    credentials = %{
+      {"tenant-human-transfer", "openai", "policy"} => %{"api_key" => "synthetic-decisions-key"},
+      {"tenant-human-transfer", "deepgram", "default"} => %{"api_key" => "synthetic-speech-key"}
+    }
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      CallEngine.Application,
+      settings
+      |> Keyword.update!(:agent_runtime, &Keyword.put(&1, :decisions_http_plug, plug))
+      |> Keyword.put(
+        :credential_source,
+        {CallEngine.TestTenantCredentialSource, {self(), credentials}}
+      )
+    )
+
+    {plan, room, _caller, voice, caller_sink, _} = start_announced_action("transfer", [], true)
+    assert_receive {:transfer_decision, http, %{"event" => "before_outgoing_transfer"}}, 2_000
+    refute_received {:test_tts_control, ^voice, _}
+    refute_received {:test_archive_fact, %Fact{kind: :participant_transfer_started}}
+    send(http, :allow)
+    finish_private_briefing(voice, caller_sink, "One moment.")
+    assert_receive {:test_audio_output_drain, ^caller_sink}, 2_000
+    assert :ok = GenServer.call(caller_sink, :complete_drain)
+    assert :ok = GenServer.call(caller_sink, {:defer_drain, false})
+    assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+    support = plan.participants["human-support"]
+    sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :guarded_support_sink)
+
+    assert {:ok, %{transfer_attempt_id: attempt}} =
+             attach_ready(plan, room, support, "support-connection", sink)
+
+    assert :ok =
+             TestTransferConnection.control(
+               transfer_control(plan, room, support, attempt, :media_ready)
+             )
+
+    finish_private_briefing(briefing, sink)
+    assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt}, 2_000
+
+    assert :ok =
+             TestTransferConnection.control(
+               transfer_control(plan, room, support, attempt, :accept)
+             )
+
+    assert_receive {:vxpipe_transfer_active, ^attempt}, 2_000
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "action-one"}}, 2_000
+    refute_received {:transfer_decision, _, _}
+    refute_received {:vxpipe_event, %ToolCallCompleted{tool_call_id: "action-one"}}
+  end
+
+  defp start_announced_action(action, siblings \\ [], guarded? \\ false) do
     plan =
       compile_plan(
         wait_sounds: nil,
+        guarded?: guarded?,
         tools: %{
           "end_call" => %{type: "platform", tool: "hangup"},
           "clock" => %{type: "platform", tool: "get_current_time"}
@@ -2560,7 +2629,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                    }
                  },
                  limits: %{max_duration_ms: 60_000}
-               },
+               }
+               |> with_transfer_rule(Keyword.get(options, :guarded?, false)),
                resource_id: "human-transfer-call-spec",
                revision: 1
              )
@@ -2584,6 +2654,28 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              })
 
     plan
+  end
+
+  defp with_transfer_rule(source, false), do: source
+
+  defp with_transfer_rule(source, true) do
+    source
+    |> Map.drop([:entry_caller, :entry_receiver])
+    |> Map.merge(%{
+      schema_version: CallSpec.schema_version(),
+      name: "Guarded human handoff",
+      incoming_call: %{caller: "caller", handled_by: "reception"}
+    })
+    |> put_in([:defaults, :capabilities, :decisions], %{
+      provider: "openai",
+      model: "gpt-6-luna",
+      credential_name: "policy"
+    })
+    |> put_in([:participants, "reception", :guardrails], %{
+      before_outgoing_transfer: [
+        %{id: "allowed", question: "Is a human handoff allowed?", required_answer: "yes"}
+      ]
+    })
   end
 
   defp attach(plan, room, participant, connection_id, output_sink) do
