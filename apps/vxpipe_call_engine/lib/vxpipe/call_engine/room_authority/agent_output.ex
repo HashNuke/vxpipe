@@ -15,6 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     TextOutput
   }
 
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Verdicts
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator, as: AgentRuntimeCoordinator
   alias Vxpipe.CallEngine.{Id, TextToSpeechRequest, TurnInterrupter}
 
@@ -163,6 +164,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   end
 
   defp emit_turn_failed(command, reason, connection, state) do
+
     event = %AgentTurnFailed{
       id: Id.generate(:event),
       sequence: state.next_sequence,
@@ -304,7 +306,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
       state =
         Enum.reduce(turns, state, fn turn, state ->
-          state = ToolCalls.cancel_active(state, turn)
+          state =
+            state |> Verdicts.drop_for_command(turn.command.id) |> ToolCalls.cancel_active(turn)
 
           emit_turn_interrupted(
             turn.command,

@@ -148,10 +148,13 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
     case Vxpipe.CallEngine.RoomAuthority.take_transfer_verdict(
            request.tenant_id,
            request.room_id,
-           request.tool_call_id
+           {request.command_id, request.tool_call_id}
          ) do
       {:ok, _entry} ->
         {:ok, request}
+
+      :empty when request.request_origin in [:caller, :engine] ->
+        {:error, :transfer_unavailable}
 
       :empty ->
         fresh_transfer_check(binding, request, deadline)
@@ -185,6 +188,8 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
           checked_at_ms: System.monotonic_time(:millisecond),
           incarnation_id: request.incarnation_id,
           invocation_id: request.tool_call_id,
+          command_id: request.command_id,
+          expires_at_ms: deadline,
           source_participant_id: request.source_participant_id,
           source_activation_id: request.source_activation_id,
           destination_call_spec_key: request.destination_call_spec_key

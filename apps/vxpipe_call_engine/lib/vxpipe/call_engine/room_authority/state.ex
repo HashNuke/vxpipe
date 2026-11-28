@@ -84,7 +84,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           pending_participant_transfer:
             nil
             | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending.t(),
-          transfer_verdicts: %{optional(String.t()) => map()},
+          transfer_verdicts: %{optional({String.t(), String.t()}) => map()},
           pending_agent_teardowns: %{optional(pid()) => map()},
           pending_connection_promotions: %{optional(String.t()) => map()},
           participant_monitors: %{optional(reference()) => String.t()},

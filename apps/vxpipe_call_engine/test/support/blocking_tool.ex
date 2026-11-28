@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.TestBlockingTool do
 
     receive do
       :release_test_tool -> {:ok, %{"released" => true}}
+      :fail_test_tool -> {:error, :tool_failed}
     end
   end
 end

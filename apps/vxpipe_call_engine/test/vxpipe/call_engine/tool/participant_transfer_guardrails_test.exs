@@ -44,7 +44,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.GuardrailsTest do
     end
 
     @impl true
-    def handle_call({:take_transfer_verdict, invocation_id}, _from, state) do
+    def handle_call({:take_transfer_verdict, {_command, invocation_id}}, _from, state) do
       send(state.owner, {:room_take, invocation_id})
 
       case Map.get(state.script, :take, :empty) do
@@ -115,7 +115,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.GuardrailsTest do
       agent_request_id: "request-1",
       tool_call_id: tool_call_id,
       source_capability: self(),
-      request_origin: :engine
+      request_origin: :sts
     }
   end
 
@@ -271,6 +271,19 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.GuardrailsTest do
                     }}
 
     assert request.transfer_admission == nil
+  end
+
+  test "a conversational worker cannot recreate a missing joint admission after interruption" do
+    ids = ids()
+    start_room(ids)
+    start_guardrails(ids)
+    context = %{context_for(ids) | request_origin: :caller}
+
+    assert {:error, :transfer_unavailable} =
+             ParticipantTransfer.execute(transfer_binding(ids), arguments(), context)
+
+    refute_received {:guardrail_check, _, _, _, _}
+    refute_received {:room_transfer, _}
   end
 
   test "a matched policy denies without announcement, preparation or dial" do

@@ -11,10 +11,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Verdicts do
   # source participant, destination, policy revision and digest, then deletes the entry.
   # Permission authorization stays with Authorizer at begin/resume time.
 
-  alias Vxpipe.CallEngine.Guardrails.TransferAdmission
+  alias Vxpipe.CallEngine.Guardrails.{Deadline, TransferAdmission}
 
   @type entry :: %{
           invocation_id: String.t(),
+          command_id: String.t(),
+          expires_at_ms: integer(),
           verdict: :passed,
           source_activation_id: String.t(),
           source_participant_id: String.t(),
@@ -26,24 +28,38 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Verdicts do
           source: :bound | :checked
         }
 
-  @spec bind(map(), entry()) :: map()
-  def bind(%{transfer_verdicts: verdicts} = state, %{invocation_id: id, verdict: :passed} = entry)
-      when is_binary(id) and id != "" do
-    if valid_entry?(entry) do
-      %{state | transfer_verdicts: Map.put(verdicts, id, entry)}
+  def bind(%{transfer_verdicts: _} = state, %{verdict: :passed} = entry) do
+    if valid_entry?(entry) and open?(entry) do
+      key = {entry.command_id, entry.invocation_id}
+
+      state =
+        drop_matching(state, fn existing ->
+          existing.source_activation_id == entry.source_activation_id and
+            existing.command_id != entry.command_id
+        end)
+
+      state = delete_entry(state, key)
+      delay = max(entry.expires_at_ms - System.monotonic_time(:millisecond), 0)
+      timer = :erlang.start_timer(delay, self(), {:transfer_verdict, key})
+      entry = Map.put(entry, :expiry_timer, timer)
+      {:ok, %{state | transfer_verdicts: Map.put(state.transfer_verdicts, key, entry)}}
     else
-      state
+      {:error, :invalid_verdict}
     end
   end
 
-  def bind(%{} = state, _entry), do: state
+  def bind(_state, _entry), do: {:error, :invalid_verdict}
 
   @spec consume(map(), map()) ::
           {:ok, map(), map()} | {:error, :stale | :unchecked, map()}
   def consume(%{} = state, %{} = request) do
     case current_policy(state, request) do
       nil ->
-        {:ok, request, state}
+        key = {request.command_id, request.tool_call_id}
+
+        if get_entry(state, key),
+          do: {:error, :stale, delete_entry(state, key)},
+          else: {:ok, request, state}
 
       policy ->
         consume_guarded(state, request, policy)
@@ -57,89 +73,81 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Verdicts do
         {:error, :unchecked}
 
       policy ->
-        case get_entry(state, request.tool_call_id) do
+        case get_entry(state, {request.command_id, request.tool_call_id}) do
           nil ->
             {:error, :unchecked}
 
           stored ->
-            if entry_fresh?(stored, request, policy), do: {:ok, stored}, else: {:error, :stale}
+            if open?(stored) and entry_fresh?(stored, request, policy),
+              do: {:ok, stored},
+              else: {:error, :stale}
         end
     end
   end
 
-  @spec delete(map(), String.t()) :: map()
-  def delete(%{transfer_verdicts: verdicts} = state, invocation_id)
-      when is_binary(invocation_id) do
-    %{state | transfer_verdicts: Map.delete(verdicts, invocation_id)}
+  def drop_for_source(state, activation),
+    do: drop_matching(state, &(&1.source_activation_id == activation))
+
+  def drop_for_participant(state, participant),
+    do: drop_matching(state, &(&1.source_participant_id == participant))
+
+  def drop_for_command(state, command), do: drop_matching(state, &(&1.command_id == command))
+
+  defp drop_matching(state, predicate) do
+    Enum.reduce(state.transfer_verdicts, state, fn {key, entry}, acc ->
+      if predicate.(entry), do: delete_entry(acc, key), else: acc
+    end)
   end
 
-  def delete(%{} = state, _invocation_id), do: state
-
-  @spec drop_for_source(map(), String.t()) :: map()
-  def drop_for_source(%{transfer_verdicts: verdicts} = state, activation_id)
-      when is_binary(activation_id) do
-    kept =
-      Map.reject(verdicts, fn {_id, entry} ->
-        match?(%{source_activation_id: ^activation_id}, entry)
-      end)
-
-    %{state | transfer_verdicts: kept}
-  end
-
-  def drop_for_source(%{} = state, _activation_id), do: state
-
-  @spec drop_for_participant(map(), String.t() | nil) :: map()
-  def drop_for_participant(%{transfer_verdicts: verdicts} = state, participant_id)
-      when is_binary(participant_id) do
-    kept =
-      Map.reject(verdicts, fn {_id, entry} ->
-        match?(%{source_participant_id: ^participant_id}, entry)
-      end)
-
-    %{state | transfer_verdicts: kept}
-  end
-
-  def drop_for_participant(%{} = state, _participant_id), do: state
-
-  @spec peek(map(), String.t()) :: {:ok, entry()} | :empty
-  def peek(%{} = state, invocation_id) when is_binary(invocation_id) do
-    case get_entry(state, invocation_id) do
-      nil -> :empty
-      entry -> {:ok, entry}
+  def peek(state, key) do
+    with %{} = entry <- get_entry(state, key),
+         true <- open?(entry) do
+      {:ok, Map.delete(entry, :expiry_timer)}
+    else
+      _ -> :empty
     end
   end
 
-  def peek(_state, _invocation_id), do: :empty
+  def expire(state, key, timer) do
+    case get_entry(state, key) do
+      %{expiry_timer: ^timer} -> delete_entry(state, key)
+      _ -> state
+    end
+  end
 
   defp consume_guarded(state, request, policy) do
-    invocation_id = request.tool_call_id
-    stored = get_entry(state, invocation_id)
+    key = {request.command_id, request.tool_call_id}
 
-    cond do
-      stored != nil and entry_fresh?(stored, request, policy) ->
-        state = delete_entry(state, invocation_id)
-        {:ok, stamp_request(request, stored), state}
-
-      stored != nil ->
-        {:error, :stale, delete_entry(state, invocation_id)}
-
-      true ->
+    case get_entry(state, key) do
+      nil ->
         {:error, :unchecked, state}
+
+      entry ->
+        state = delete_entry(state, key)
+
+        if open?(entry) and entry_fresh?(entry, request, policy),
+          do: {:ok, stamp_request(request, Map.delete(entry, :expiry_timer)), state},
+          else: {:error, :stale, state}
     end
   end
 
-  defp get_entry(%{transfer_verdicts: verdicts}, invocation_id) when is_binary(invocation_id) do
-    Map.get(verdicts, invocation_id)
-  end
+  defp get_entry(state, key), do: Map.get(state.transfer_verdicts, key)
+  defp open?(entry), do: System.monotonic_time(:millisecond) < entry.expires_at_ms
 
-  defp get_entry(_state, _invocation_id), do: nil
+  defp delete_entry(state, key) do
+    case Map.pop(state.transfer_verdicts, key) do
+      {nil, _} ->
+        state
 
-  defp delete_entry(%{transfer_verdicts: verdicts} = state, invocation_id) do
-    %{state | transfer_verdicts: Map.delete(verdicts, invocation_id)}
+      {%{expiry_timer: timer}, remaining} ->
+        Process.cancel_timer(timer)
+        %{state | transfer_verdicts: remaining}
+    end
   end
 
   defp entry_fresh?(%{verdict: :passed} = entry, request, {revision, digest}) do
-    entry.incarnation_id == request.incarnation_id and
+    entry.command_id == request.command_id and
+      entry.incarnation_id == request.incarnation_id and
       entry.source_activation_id == request.source_activation_id and
       entry.source_participant_id == request.source_participant_id and
       entry.destination_call_spec_key == request.destination_call_spec_key and
@@ -182,13 +190,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Verdicts do
   defp guardrails_before_transfer(_guardrails), do: []
 
   defp valid_entry?(entry) do
-    is_binary(entry[:source_activation_id]) and
-      is_binary(entry[:source_participant_id]) and
-      is_binary(entry[:destination_call_spec_key]) and
+    identifiers = [
+      :command_id,
+      :invocation_id,
+      :source_activation_id,
+      :source_participant_id,
+      :destination_call_spec_key,
+      :incarnation_id
+    ]
+
+    Enum.all?(identifiers, fn key -> is_binary(entry[key]) and byte_size(entry[key]) > 0 end) and
       is_binary(entry[:policy_digest]) and
       is_integer(entry[:policy_revision]) and entry.policy_revision >= 0 and
-      is_binary(entry[:incarnation_id]) and
-      is_integer(entry[:checked_at_ms]) and
+      is_integer(entry[:checked_at_ms]) and is_integer(entry[:expires_at_ms]) and
+      entry.expires_at_ms <= Deadline.response(%{}) and
       entry[:source] in [:bound, :checked]
   end
 end

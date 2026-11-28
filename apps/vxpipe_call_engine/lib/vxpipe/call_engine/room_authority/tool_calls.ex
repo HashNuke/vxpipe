@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ToolCalls do
     ToolCallStarted
   }
 
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Verdicts
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.Tool.{Call, Context}
 
@@ -100,9 +101,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ToolCalls do
 
   @spec failed(State.t(), pid(), struct(), Call.t(), atom()) :: State.t()
   def failed(%State{} = state, capability, command, %Call{} = call, reason) do
-    stopped(state, capability, command, call, reason, fn fields, value ->
-      struct!(ToolCallFailed, Map.put(fields, :reason, value))
-    end)
+    next =
+      stopped(state, capability, command, call, reason, fn fields, value ->
+        struct!(ToolCallFailed, Map.put(fields, :reason, value))
+      end)
+
+    if next.next_sequence > state.next_sequence,
+      do: Verdicts.drop_for_command(next, command_id(command)),
+      else: next
   end
 
   @spec cancel_active(State.t(), map()) :: State.t()

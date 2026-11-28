@@ -10,8 +10,9 @@ defmodule Vxpipe.AgentRuntime.Session do
     Message,
     Readiness,
     Request,
-    RequestRunner,
     Result,
+    Session.OutstandingOutputs,
+    Session.RequestWorker,
     SessionConfiguration,
     ToolRegistry
   }
@@ -36,7 +37,6 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   @type server :: GenServer.server()
   @maximum_recorded_assistant_bytes 64 * 1_024
-  @maximum_outstanding 2
 
   @doc "Pins compactor instructions and reply recovery policy into the restartable child specification."
   def child_spec(options) do
@@ -250,14 +250,7 @@ defmodule Vxpipe.AgentRuntime.Session do
       expired?(state, correlation) ->
         {:reply, {:error, :request_expired}, state}
 
-      host_settled?(state) and map_size(state.outstanding) >= @maximum_outstanding ->
-        {:reply, {:error, :busy}, state}
-
-      host_settled?(state) and map_size(state.outstanding) > 0 and
-          not overlap_allowed?(state, origin) ->
-        {:reply, {:error, :busy}, state}
-
-      host_settled?(state) and Map.has_key?(state.outstanding, correlation) ->
+      OutstandingOutputs.busy?(state, origin, correlation) ->
         {:reply, {:error, :busy}, state}
 
       true ->
@@ -265,107 +258,7 @@ defmodule Vxpipe.AgentRuntime.Session do
 
         with {:ok, request} <- Request.new(input, correlation, origin: request_origin) do
           state = admit_input(state, request)
-          # Snapshot the authoritative base after admitting this request's input.
-          # Worker commits merge against this base so late playback receipts
-          # appended while the worker runs are never clobbered.
-          state = %{
-            state
-            | active_base_entries: state.conversation.entries
-          }
-
-          emit(state.configuration.event_destination, Event.new(:request_started, correlation))
-          session = self()
-          token = make_ref()
-
-          begin_submission = fn ->
-            begin_submission(session, token, state.configuration.commit_timeout_ms)
-          end
-
-          commit = fn conversation ->
-            commit_conversation(
-              session,
-              token,
-              conversation,
-              state.configuration.commit_timeout_ms
-            )
-          end
-
-          emit_text_delta = fn text ->
-            emit_request_event(
-              session,
-              token,
-              :text_delta,
-              %{text: text},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          emit_model_usage = fn usage, provider_metadata, outcome ->
-            emit_request_event(
-              session,
-              token,
-              :model_usage,
-              %{usage: usage, provider_metadata: provider_metadata, outcome: outcome},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          emit_model_attempt = fn kind ->
-            emit_request_event(
-              session,
-              token,
-              kind,
-              %{},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          emit_context_compaction_usage = fn usage, provider_metadata, outcome ->
-            emit_request_event(
-              session,
-              token,
-              :context_compaction_usage,
-              %{usage: usage, provider_metadata: provider_metadata, outcome: outcome},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          callbacks = %{
-            begin_submission: begin_submission,
-            commit: commit,
-            emit_context_compaction_usage: emit_context_compaction_usage,
-            emit_model_attempt: emit_model_attempt,
-            emit_model_usage: emit_model_usage,
-            emit_text_delta: emit_text_delta
-          }
-
-          runner_options =
-            state.configuration
-            |> SessionConfiguration.runner_options(callbacks)
-            |> Map.put(:retry_tool_result?, origin == :tool_result)
-
-          task =
-            Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
-              RequestRunner.run(state.conversation, request, runner_options)
-            end)
-
-          request_timer =
-            Process.send_after(
-              self(),
-              {:agent_runtime_request_timeout, token},
-              remaining_timeout(state, correlation)
-            )
-
-          {:noreply,
-           %{
-             state
-             | status: :busy,
-               active_task: task,
-               active_token: token,
-               caller: caller,
-               correlation: correlation,
-               request_timer: request_timer
-           }}
+          start_request(state, request, caller, %{retry_tool_result?: origin == :tool_result})
         else
           {:error, reason} -> {:reply, {:error, reason}, state}
         end
@@ -385,119 +278,20 @@ defmodule Vxpipe.AgentRuntime.Session do
       byte_size(input) > state.configuration.maximum_model_context_bytes ->
         {:reply, {:error, :oversized}, state}
 
-      host_settled?(state) and map_size(state.outstanding) >= @maximum_outstanding ->
-        {:reply, {:error, :busy}, state}
-
-      host_settled?(state) and map_size(state.outstanding) > 0 ->
-        {:reply, {:error, :busy}, state}
-
-      host_settled?(state) and Map.has_key?(state.outstanding, correlation) ->
+      OutstandingOutputs.busy?(state, :private, correlation) ->
         {:reply, {:error, :busy}, state}
 
       true ->
         with {:ok, request} <- Request.new(input, correlation, origin: :engine),
              {:ok, empty_registry} <- ToolRegistry.new([]),
              {:ok, state} <- admit_private_input(state, request) do
-          state = %{state | active_base_entries: state.conversation.entries}
-          emit(state.configuration.event_destination, Event.new(:request_started, correlation))
-          session = self()
-          token = make_ref()
-
-          begin_submission = fn ->
-            begin_submission(session, token, state.configuration.commit_timeout_ms)
-          end
-
-          commit = fn conversation ->
-            commit_conversation(
-              session,
-              token,
-              conversation,
-              state.configuration.commit_timeout_ms
-            )
-          end
-
-          emit_text_delta = fn text ->
-            emit_request_event(
-              session,
-              token,
-              :text_delta,
-              %{text: text},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          emit_model_usage = fn usage, provider_metadata, outcome ->
-            emit_request_event(
-              session,
-              token,
-              :model_usage,
-              %{usage: usage, provider_metadata: provider_metadata, outcome: outcome},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          emit_model_attempt = fn kind ->
-            emit_request_event(
-              session,
-              token,
-              kind,
-              %{},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          emit_context_compaction_usage = fn usage, provider_metadata, outcome ->
-            emit_request_event(
-              session,
-              token,
-              :context_compaction_usage,
-              %{usage: usage, provider_metadata: provider_metadata, outcome: outcome},
-              state.configuration.event_handoff_timeout_ms
-            )
-          end
-
-          callbacks = %{
-            begin_submission: begin_submission,
-            commit: commit,
-            emit_context_compaction_usage: emit_context_compaction_usage,
-            emit_model_attempt: emit_model_attempt,
-            emit_model_usage: emit_model_usage,
-            emit_text_delta: emit_text_delta
-          }
-
-          transient = [Message.user(request.input, :engine)]
-
-          runner_options =
-            state.configuration
-            |> SessionConfiguration.runner_options(callbacks)
-            |> Map.put(:retry_tool_result?, false)
-            |> Map.put(:transient_messages, transient)
-            |> Map.put(:admission_trigger, trigger)
-            |> Map.put(:on_feedback_dispatch, callback)
-            |> Map.put(:tool_registry, empty_registry)
-
-          task =
-            Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
-              RequestRunner.run(state.conversation, request, runner_options)
-            end)
-
-          request_timer =
-            Process.send_after(
-              self(),
-              {:agent_runtime_request_timeout, token},
-              remaining_timeout(state, correlation)
-            )
-
-          {:noreply,
-           %{
-             state
-             | status: :busy,
-               active_task: task,
-               active_token: token,
-               caller: caller,
-               correlation: correlation,
-               request_timer: request_timer
-           }}
+          start_request(state, request, caller, %{
+            retry_tool_result?: false,
+            transient_messages: [Message.user(request.input, :engine)],
+            admission_trigger: trigger,
+            on_feedback_dispatch: callback,
+            tool_registry: empty_registry
+          })
         else
           {:error, reason} -> {:reply, {:error, reason}, state}
         end
@@ -557,7 +351,7 @@ defmodule Vxpipe.AgentRuntime.Session do
       ) do
     if valid_assistant_message?(text) do
       if state.configuration.history_mode == :host_settled do
-        case put_outstanding(state, correlation, nil) do
+        case OutstandingOutputs.open(state, correlation, nil) do
           {:ok, state} ->
             conversation =
               Conversation.append_exchange(state.conversation, [], correlation, :discardable)
@@ -621,7 +415,7 @@ defmodule Vxpipe.AgentRuntime.Session do
           conversation = Conversation.settle_delivery(state.conversation, settled, correlation)
 
           state = %{state | conversation: conversation}
-          state = delete_outstanding(state, correlation)
+          state = OutstandingOutputs.delete(state, correlation)
           {:reply, :ok, state}
         else
           {:reply, {:error, :invalid_message}, state}
@@ -660,6 +454,8 @@ defmodule Vxpipe.AgentRuntime.Session do
     do: {:reply, {:error, :idle}, state}
 
   def handle_call(:cancel, caller, %{submission_phase: :submitting} = state) do
+    send(state.active_task.pid, :agent_runtime_abort_barrier)
+
     {:noreply,
      %{
        state
@@ -706,6 +502,19 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   def handle_info(
+        {:agent_runtime_begin_submission, worker, token},
+        %{active_task: %{pid: worker}, active_token: token, submission_phase: :submitting} = state
+      ) do
+    outcome =
+      if state.termination_reason || expired?(state, state.correlation),
+        do: :agent_runtime_submission_aborted,
+        else: :agent_runtime_submission_begun
+
+    send(worker, {outcome, token})
+    {:noreply, state}
+  end
+
+  def handle_info(
         {:agent_runtime_commit, worker, token, %Conversation{} = conversation},
         %{active_task: %{pid: worker}, active_token: token} = state
       ) do
@@ -730,6 +539,8 @@ defmodule Vxpipe.AgentRuntime.Session do
         {:agent_runtime_request_timeout, token},
         %{active_token: token, submission_phase: :submitting} = state
       ) do
+    send(state.active_task.pid, :agent_runtime_abort_barrier)
+
     {:noreply,
      %{
        state
@@ -744,7 +555,10 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   def handle_info({reference, run_result}, %{active_task: %{ref: reference}} = state) do
     Process.demonitor(reference, [:flush])
-    result = if expired?(state, state.correlation), do: {:error, :request_timeout}, else: run_result
+
+    result =
+      if expired?(state, state.correlation), do: {:error, :request_timeout}, else: run_result
+
     {reply, event, state} = normalize_result(result, state.correlation, state)
     emit(state.configuration.event_destination, event)
     GenServer.reply(state.caller, reply)
@@ -772,6 +586,33 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   def handle_info(_message, state), do: {:noreply, state}
 
+  defp start_request(state, request, caller, overrides) do
+    correlation = request.correlation
+    emit(state.configuration.event_destination, Event.new(:request_started, correlation))
+
+    {task, token} =
+      RequestWorker.start(state.configuration, state.conversation, request, overrides)
+
+    timer =
+      Process.send_after(
+        self(),
+        {:agent_runtime_request_timeout, token},
+        remaining_timeout(state, correlation)
+      )
+
+    {:noreply,
+     %{
+       state
+       | status: :busy,
+         active_task: task,
+         active_token: token,
+         caller: caller,
+         correlation: correlation,
+         request_timer: timer,
+         active_base_entries: state.conversation.entries
+     }}
+  end
+
   defp normalize_result(
          {:ok, output, %Conversation{} = conversation,
           %Vxpipe.AgentRuntime.PendingReplyReplay{} = pending},
@@ -779,7 +620,7 @@ defmodule Vxpipe.AgentRuntime.Session do
          state
        ) do
     {reply, event, state} = normalize_result({:ok, output, conversation}, correlation, state)
-    {reply, event, put_replay(state, correlation, pending)}
+    {reply, event, OutstandingOutputs.put_replay(state, correlation, pending)}
   end
 
   defp normalize_result({:ok, output, %Conversation{} = conversation}, correlation, state)
@@ -810,7 +651,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   defp valid_settled_message?(message, maximum), do: Message.valid_spoken?(message, maximum)
 
   defp admit_input(%{configuration: %{history_mode: :host_settled}} = state, request) do
-    case put_outstanding(state, request.correlation, nil) do
+    case OutstandingOutputs.open(state, request.correlation, nil) do
       {:ok, state} ->
         conversation =
           Conversation.append_exchange(
@@ -830,7 +671,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   defp admit_input(state, _request), do: state
 
   defp admit_private_input(%{configuration: %{history_mode: :host_settled}} = state, request) do
-    case put_outstanding(state, request.correlation, nil) do
+    case OutstandingOutputs.open(state, request.correlation, nil) do
       {:ok, state} -> {:ok, state}
       {:error, :busy} -> {:error, :busy}
     end
@@ -874,97 +715,11 @@ defmodule Vxpipe.AgentRuntime.Session do
   defp admission_deadline(_, %{deadline_ms: deadline}) when is_integer(deadline), do: deadline
   defp admission_deadline(_, _), do: nil
 
-  defp host_settled?(%{configuration: %{history_mode: :host_settled}}), do: true
-  defp host_settled?(_state), do: false
-
-  # Only modern structured completions may overlap earlier audio. Unrelated
-  # ordinary requests and legacy sessions keep the original single-outstanding gate.
-  defp overlap_allowed?(
-         %{configuration: %{history_mode: :host_settled, reply_protocol: :mode_message_v1}},
-         :tool_result
-       ),
-       do: true
-
-  defp overlap_allowed?(_state, _origin), do: false
-
-  defp put_outstanding(state, correlation, replay) when is_map(correlation) do
-    cond do
-      Map.has_key?(state.outstanding, correlation) ->
-        # Distinct admissions must not overwrite each other's pending replay.
-        # Completion results update replay through put_replay/3 only.
-        {:error, :busy}
-
-      map_size(state.outstanding) >= @maximum_outstanding ->
-        {:error, :busy}
-
-      true ->
-        entry = %{correlation: correlation, replay: replay}
-
-        {:ok,
-         %{
-           state
-           | outstanding: Map.put(state.outstanding, correlation, entry)
-         }}
-    end
-  end
-
-  defp put_replay(state, correlation, replay) when is_map(correlation) do
-    case Map.fetch(state.outstanding, correlation) do
-      {:ok, entry} ->
-        %{state | outstanding: Map.put(state.outstanding, correlation, %{entry | replay: replay})}
-
-      :error ->
-        state
-    end
-  end
-
-  defp delete_outstanding(state, correlation) when is_map(correlation) do
-    if Map.has_key?(state.outstanding, correlation) do
-      %{
-        state
-        | outstanding: Map.delete(state.outstanding, correlation)
-      }
-    else
-      state
-    end
-  end
-
   defp apply_worker_commit(state, worker) do
     conversation =
       Conversation.WorkerCommit.merge(state.conversation, state.active_base_entries, worker)
 
     %{state | conversation: conversation, active_base_entries: worker.entries}
-  end
-
-  defp begin_submission(session, token, timeout_ms) do
-    send(session, {:agent_runtime_begin_submission, self(), token})
-
-    receive do
-      {:agent_runtime_submission_begun, ^token} -> :ok
-    after
-      timeout_ms -> {:error, :commit_unavailable}
-    end
-  end
-
-  defp commit_conversation(session, token, conversation, timeout_ms) do
-    send(session, {:agent_runtime_commit, self(), token, conversation})
-
-    receive do
-      {:agent_runtime_committed, ^token} -> :ok
-    after
-      timeout_ms -> {:error, :commit_unavailable}
-    end
-  end
-
-  defp emit_request_event(session, token, kind, data, timeout_ms) do
-    event_ref = make_ref()
-    send(session, {:agent_runtime_request_event, self(), token, event_ref, kind, data})
-
-    receive do
-      {:agent_runtime_request_event_emitted, ^token, ^event_ref} -> :ok
-    after
-      timeout_ms -> {:error, :event_unavailable}
-    end
   end
 
   defp terminate_active_request(state, reason) do

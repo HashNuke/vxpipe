@@ -1022,8 +1022,16 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     command
   end
 
-  for outcome <- [:mixed_approved, :approved_repair, :exhausted_repairs, :exhausted_http] do
+  for outcome <- [
+        :mixed_approved,
+        :approved_repair,
+        :exhausted_repairs,
+        :exhausted_http,
+        :ordinary_failure,
+        :caller_interrupt
+      ] do
     @outcome outcome
+    @tag :physical_guarded_round
     test "the physical TTS sink releases only admitted mixed-round speech: #{@outcome}" do
       check_mixed_audio(@outcome)
     end
@@ -1082,7 +1090,60 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
                    2_000
 
     assert_audio_withheld(voice)
-    finish_mixed_audio(outcome, transfer_gate, voice)
+
+    if outcome in [:ordinary_failure, :caller_interrupt] do
+      send(transfer_gate, {:score, 0.99})
+      assert_receive {:test_blocking_tool_started, ordinary}, 2_000
+      command_id = command.id
+      key = {command_id, "proposed-transfer"}
+
+      assert {:ok, _} =
+               CallEngine.RoomAuthority.take_transfer_verdict(plan.tenant_id, plan.room_id, key)
+
+      case outcome do
+        :ordinary_failure ->
+          send(ordinary, :fail_test_tool)
+
+          assert_receive {:vxpipe_event,
+                          %CallEngine.Event.ToolCallFailed{tool_call_id: "proposed-lookup"}},
+                         2_000
+
+        :caller_interrupt ->
+          {:ok, next} =
+            SendText.new(
+              identity ++
+                [correlation_id: "replace-mixed", content: "Stop.", audio_response: false]
+            )
+
+          assert :ok = CallEngine.TestTransferConnection.send_text(next)
+
+          assert_receive {:vxpipe_event,
+                          %CallEngine.Event.AgentTurnInterrupted{command_id: ^command_id}},
+                         2_000
+
+          next_id = next.id
+
+          assert_receive {:test_agent_runtime_stream, _,
+                          %{correlation: %{command_id: ^next_id}, messages: messages}},
+                         2_000
+
+          results =
+            for %{role: :tool, tool_call_id: id, content: content} <- messages,
+                into: %{},
+                do: {id, JSON.decode!(content)}
+
+          assert results["proposed-lookup"]["status"] == "running"
+          assert results["proposed-transfer"] == %{"status" => "rejected", "reason" => "stale"}
+          send(ordinary, :release_test_tool)
+      end
+
+      assert :empty =
+               CallEngine.RoomAuthority.take_transfer_verdict(plan.tenant_id, plan.room_id, key)
+
+      refute_received {:test_archive_fact, %{kind: :participant_transfer_started}}
+    else
+      finish_mixed_audio(outcome, transfer_gate, voice)
+    end
   end
 
   defp finish_mixed_audio(:mixed_approved, transfer, voice) do

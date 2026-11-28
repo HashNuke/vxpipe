@@ -254,6 +254,7 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
 
           current = %{
             "text" => candidate.text,
+            "correlation" => turn_correlation(context.correlation, candidate.speech?, host),
             "recent_context" =>
               Evidence.recent(Map.get(context, :recent_dialogue), host[:agent_participant_id]),
             "triggering_input" =>
@@ -299,6 +300,18 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
     Task.async(fn ->
       {event, proposal, run_check(check, guardrails, event, proposal, evidence, deadline_ms)}
     end)
+  end
+
+  defp turn_correlation(correlation, speech?, host) do
+    turn = Map.get(correlation, :correlation_id)
+    caller? = match?(%{tool_context: %{request_origin: :caller}}, correlation)
+
+    %{
+      "command_id" => Map.get(correlation, :command_id),
+      "source_participant_id" => host[:agent_participant_id],
+      "source_turn_id" => if(caller?, do: turn),
+      "response_turn_id" => if(speech?, do: turn)
+    }
   end
 
   defp response_admitted?(%{response_deadline_ms: :infinity}), do: :ok
@@ -412,6 +425,8 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
       |> Enum.map(fn %ToolCall{id: call_id} ->
         %{
           invocation_id: call_id,
+          command_id: Map.get(candidate.correlation, :command_id),
+          expires_at_ms: host[:response_deadline_ms],
           verdict: :passed,
           source_activation_id: host[:activation_id],
           source_participant_id: host[:agent_participant_id],

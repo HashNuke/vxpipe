@@ -271,6 +271,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert_receive {:test_agent_runtime_stream, _, _}, 2_000
   end
 
+  @tag :guarded_human_handoff
   test "a guarded web handoff consumes its single verdict before the announcement and reaches the human" do
     owner = self()
     settings = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)

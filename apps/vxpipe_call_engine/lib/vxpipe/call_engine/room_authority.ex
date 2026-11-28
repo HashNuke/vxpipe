@@ -9,12 +9,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
 
   alias Vxpipe.CallEngine.Command.{
-    AttachConnection,
     ContinueAgent,
     CreateRoom,
-    JoinParticipant,
-    ParticipantTransferControl,
-    SendText
+    ParticipantTransferControl
   }
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -36,6 +33,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     AgentOutput,
     ParticipantTransfer,
     CallerIdle,
+    Client,
     ConnectionLifecycle,
     DiagnosticInputs,
     EndCall,
@@ -62,224 +60,43 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   import Vxpipe.CallEngine.RoomAuthority.Playback,
     only: [handle_text_to_speech_playback: 4, handle_asset_opening_audio_playback: 4]
 
-  @call_timeout 5_000
-  @transfer_timeout 122_000
-
   def start_link(options) do
     {tenant_id, room_id} = room_identity(options)
-    name = via(tenant_id, room_id)
+    name = Client.via(tenant_id, room_id)
     GenServer.start_link(__MODULE__, options, name: name)
   end
 
-  def snapshot(tenant_id, room_id) do
-    GenServer.call(via(tenant_id, room_id), :snapshot, @call_timeout)
-  end
+  defdelegate snapshot(tenant_id, room_id), to: Client
+  defdelegate input_admission(tenant_id, room_id), to: Client
+  defdelegate readiness_binding(room, timeout \\ 1_000), to: Client
+  defdelegate join_participant(room, command, incarnation \\ nil), to: Client
 
-  def input_admission(tenant_id, room_id) do
-    GenServer.call(via(tenant_id, room_id), :input_admission, @call_timeout)
-  end
+  defdelegate attach_connection(
+                room,
+                command,
+                subscriber,
+                output,
+                monitor,
+                source_control? \\ false
+              ), to: Client
 
-  @doc "Captures current resource bindings without querying their dependencies."
-  def readiness_binding(room_authority, timeout \\ 1_000) do
-    GenServer.call(room_authority, :readiness_binding, timeout)
-  end
-
-  def join_participant(room_authority, %JoinParticipant{} = command, incarnation \\ nil) do
-    GenServer.call(room_authority, {:join_participant, command, incarnation}, @call_timeout)
-  end
-
-  def attach_connection(
-        room_authority,
-        %AttachConnection{} = command,
-        subscriber,
-        output_sink,
-        room_monitor,
-        source_control? \\ false
-      )
-      when is_pid(subscriber) and is_reference(room_monitor) and is_boolean(source_control?) do
-    GenServer.call(
-      room_authority,
-      {:attach_connection, command, subscriber, output_sink, room_monitor, source_control?},
-      @call_timeout
-    )
-  end
-
-  @spec participant_transfer_control(pid(), ParticipantTransferControl.t()) ::
-          :ok | {:error, Error.t()}
-  def participant_transfer_control(room_authority, %ParticipantTransferControl{} = command) do
-    GenServer.call(room_authority, {:participant_transfer_control, command}, @call_timeout)
-  end
-
-  def send_text(room_authority, %SendText{} = command) do
-    GenServer.call(room_authority, {:send_text, command}, @call_timeout)
-  end
-
-  @spec transfer(TransferRequest.t()) ::
-          {:ok, map()} | {:error, :rejected | :unavailable}
-  def transfer(%TransferRequest{} = request) do
-    GenServer.call(
-      via(request.tenant_id, request.room_id),
-      {:transfer_participant, request},
-      @transfer_timeout +
-        if(request.announcement, do: Vxpipe.CallEngine.Tool.Announcement.budget_ms(), else: 0)
-    )
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  @spec announce_hangup(ToolContext.t(), String.t()) :: :ok | {:error, :rejected | :unavailable}
-  def announce_hangup(context, text) do
-    GenServer.call(
-      via(context.tenant_id, context.room_id),
-      {:announce_hangup, context, text},
-      Vxpipe.CallEngine.Tool.Announcement.budget_ms() + @call_timeout
-    )
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  @spec terminal_submission_admission(ToolContext.t()) ::
-          :ok | {:error, :caller_answer_pending | :unavailable}
-  def terminal_submission_admission(%ToolContext{} = context) do
-    GenServer.call(
-      via(context.tenant_id, context.room_id),
-      {:terminal_submission_admission, context},
-      500
-    )
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  @doc """
-  Records a Decisions evaluation report from the owning participant activation.
-  Trusted scope, stale activation and source-interval privacy are enforced
-  room-side; untrusted or stale reports are dropped. Never blocks the caller.
-  """
-  @spec record_decisions(String.t(), String.t(), map()) :: :ok
-  def record_decisions(tenant_id, room_id, report)
-      when is_binary(tenant_id) and is_binary(room_id) and is_map(report) do
-    case GenServer.whereis(via(tenant_id, room_id)) do
-      pid when is_pid(pid) -> send(pid, {:decisions_report, report})
-      _unregistered -> :ok
-    end
-
-    :ok
-  catch
-    :exit, _reason -> :ok
-  end
-
-  @doc """
-  Records late billable Decisions usage without reopening the gate.
-  """
-  @spec record_decisions_usage(String.t(), String.t(), [struct()]) :: :ok
-  def record_decisions_usage(tenant_id, room_id, observations)
-      when is_binary(tenant_id) and is_binary(room_id) and is_list(observations) do
-    case GenServer.whereis(via(tenant_id, room_id)) do
-      pid when is_pid(pid) -> send(pid, {:decisions_late_usage, observations})
-      _unregistered -> :ok
-    end
-
-    :ok
-  catch
-    :exit, _reason -> :ok
-  end
-
-  @doc """
-  Records an invocation-bound Before-outgoing-transfer verdict produced by
-  joint admission. Passed-only entries are stored; the room consumes each
-  entry once when the terminal tool executes.
-  """
-  @spec bind_transfer_verdict(GenServer.server(), map()) :: :ok | {:error, :unavailable}
-  def bind_transfer_verdict(room_authority, entry) when is_map(entry) do
-    GenServer.call(room_authority, {:bind_transfer_verdict, entry}, @call_timeout)
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  def bind_transfer_verdict(tenant_id, room_id, entry) do
-    bind_transfer_verdict(via(tenant_id, room_id), entry)
-  end
-
-  @doc """
-  Peeks at the bound verdict for an invocation without consuming it.
-  Consumption happens once at transfer begin with identity revalidation.
-  """
-  @spec take_transfer_verdict(String.t(), String.t(), String.t()) ::
-          {:ok, map()} | :empty | {:error, :unavailable}
-  def take_transfer_verdict(tenant_id, room_id, invocation_id)
-      when is_binary(tenant_id) and is_binary(room_id) and is_binary(invocation_id) do
-    GenServer.call(
-      via(tenant_id, room_id),
-      {:take_transfer_verdict, invocation_id},
-      @call_timeout
-    )
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  @doc """
-  Records a guardrail policy denial for a transfer that never reached the
-  preparation. The request identifies the originating activation and invocation.
-  """
-  @spec note_transfer_denial(String.t(), String.t(), map()) :: :ok
-  def note_transfer_denial(tenant_id, room_id, note)
-      when is_binary(tenant_id) and is_binary(room_id) and is_map(note) do
-    case GenServer.whereis(via(tenant_id, room_id)) do
-      pid when is_pid(pid) -> send(pid, {:note_transfer_denial, note})
-      _unregistered -> :ok
-    end
-
-    :ok
-  catch
-    :exit, _reason -> :ok
-  end
-
-  @spec idle(IdleRequest.t()) :: {:ok, map()} | {:error, :rejected | :unavailable}
-  def idle(%IdleRequest{} = request) do
-    GenServer.call(
-      via(request.context.tenant_id, request.context.room_id),
-      {:idle, request},
-      IdleRequest.execution_timeout_ms(request)
-    )
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  def speech_to_text_configuration(room_authority, %AttachConnection{} = command) do
-    GenServer.call(room_authority, {:speech_to_text_configuration, command}, @call_timeout)
-  end
-
-  def prepare_transfer_speech_to_text(room_authority, %AttachConnection{} = command, attempt_id) do
-    GenServer.call(
-      room_authority,
-      {:prepare_transfer_speech_to_text, command, attempt_id},
-      @call_timeout
-    )
-  end
-
-  def prepare_transfer_media(room_authority, %AttachConnection{} = command, attempt_id) do
-    GenServer.call(room_authority, {:prepare_transfer_media, command, attempt_id}, @call_timeout)
-  end
-
-  def bind_speech_to_text(
-        room_authority,
-        %AttachConnection{} = command,
-        subscriber,
-        capability,
-        ingress
-      )
-      when is_pid(subscriber) and is_pid(capability) and is_pid(ingress) do
-    GenServer.call(
-      room_authority,
-      {:bind_speech_to_text, command, subscriber, capability, ingress},
-      @call_timeout
-    )
-  end
-
-  def detach_connection(room_authority, %AttachConnection{} = command, subscriber)
-      when is_pid(subscriber) do
-    GenServer.call(room_authority, {:detach_connection, command, subscriber}, @call_timeout)
-  end
+  defdelegate participant_transfer_control(room, command), to: Client
+  defdelegate send_text(room, command), to: Client
+  defdelegate transfer(request), to: Client
+  defdelegate announce_hangup(context, text), to: Client
+  defdelegate terminal_submission_admission(context), to: Client
+  defdelegate record_decisions(tenant_id, room_id, report), to: Client
+  defdelegate record_decisions_usage(tenant_id, room_id, observations), to: Client
+  defdelegate bind_transfer_verdict(room, entry), to: Client
+  defdelegate bind_transfer_verdict(tenant_id, room_id, entry), to: Client
+  defdelegate take_transfer_verdict(tenant_id, room_id, key), to: Client
+  defdelegate note_transfer_denial(tenant_id, room_id, note), to: Client
+  defdelegate idle(request), to: Client
+  defdelegate speech_to_text_configuration(room, command), to: Client
+  defdelegate prepare_transfer_speech_to_text(room, command, attempt_id), to: Client
+  defdelegate prepare_transfer_media(room, command, attempt_id), to: Client
+  defdelegate bind_speech_to_text(room, command, subscriber, capability, ingress), to: Client
+  defdelegate detach_connection(room, command, subscriber), to: Client
 
   @impl true
   def init(options) do
@@ -474,12 +291,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_call({:bind_transfer_verdict, entry}, _from, %State{} = state) when is_map(entry) do
-    {:reply, :ok, TransferVerdicts.bind(state, entry)}
+    case TransferVerdicts.bind(state, entry) do
+      {:ok, next} -> {:reply, :ok, next}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
   end
 
-  def handle_call({:take_transfer_verdict, invocation_id}, _from, %State{} = state)
-      when is_binary(invocation_id) do
-    {:reply, TransferVerdicts.peek(state, invocation_id), state}
+  def handle_call({:take_transfer_verdict, key}, _from, %State{} = state) do
+    {:reply, TransferVerdicts.peek(state, key), state}
   end
 
   def handle_call({:announce_hangup, context, text}, from, state),
@@ -885,6 +704,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       Vxpipe.CallEngine.RoomAuthority.ProcessDown.handle(monitor, reason, state)
       |> Diagnostics.notify()
 
+  def handle_info({:timeout, timer, {:transfer_verdict, key}}, state),
+    do: {:noreply, TransferVerdicts.expire(state, key, timer)}
+
   def handle_info(_message, state), do: {:noreply, state}
 
   defp room_source(options) do
@@ -900,9 +722,5 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp room_identity(options) do
     source = room_source(options)
     {source.tenant_id, source.room_id}
-  end
-
-  defp via(tenant_id, room_id) do
-    {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {tenant_id, room_id}}}
   end
 end
