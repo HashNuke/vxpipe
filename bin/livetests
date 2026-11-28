@@ -19,6 +19,9 @@ Commands:
                             every live_providers test in the integration lanes.
                             Telephony selections start this machine's public
                             test endpoint and stop it afterwards.
+  decisions PROVIDER TENANT CONNECTION
+                            Run hosted Guardrails checks through a saved integration.
+                            PROVIDER is openai, google (Gemini), or jev (TypeSafe).
   release                   Release this branch's reservation after its work
                             and live activity have finished.
   tools:up                  Start this machine's vxp-test-<machine> Tailscale
@@ -43,7 +46,8 @@ Commands:
                             --all-calls targets the configured accounts instead.
   help                      Show this help.
 
-Credentials are read from ~/.config/vxpipe/live_providers.env (override with
+The decisions command uses the installation database and keyring. Other live provider
+credentials are read from ~/.config/vxpipe/live_providers.env (override with
 VXPIPE_LIVE_PROVIDERS_ENV_FILE) only inside the runner and its child processes.
 See config/live_providers.env.example and docs/development/live-telephony-harness.md.
 USAGE
@@ -60,7 +64,7 @@ exec 3>&2
 # The file is loaded only in this child process. Ignore ambient credentials
 # that may have been loaded by an interactive dotenv hook.
 credential_names=(
-  OPENAI_API_KEY GEMINI_API_KEY TYPESAFE_API_KEY ZENMUX_API_KEY DEEPGRAM_API_KEY
+  OPENAI_API_KEY GEMINI_API_KEY ZENMUX_API_KEY DEEPGRAM_API_KEY
   DEEPSEEK_API_KEY OPENROUTER_API_KEY FIREWORKS_API_KEY
   CARTESIA_API_KEY ELEVENLABS_API_KEY
   TELEPHONY_TEST_PUBLIC_URL
@@ -587,6 +591,16 @@ telephony_selected() {
 }
 
 run_tests() {
+  local argument provider
+  for argument in "$@"; do
+    case "${argument#--only=}" in
+      live_openai_decisions) provider=openai ;;
+      live_gemini_decisions) provider=google ;;
+      live_jev_guardrails) provider=jev ;;
+      *) continue ;;
+    esac
+    die "use bin/livetests decisions $provider TENANT CONNECTION for hosted Guardrails checks"
+  done
   load_credentials
   export VXPIPE_LIVETESTS_RUNNER=1
   cd -- "$repo_root"
@@ -631,13 +645,25 @@ command="${1:-}"
 
 # Check ownership before loading credentials or performing any live operation.
 case "$command" in
-  run|tools:up|tools:down|telephony:provision|telephony:hangup|telnyx:hangup|twilio:hangup)
+  run|decisions|tools:up|tools:down|telephony:provision|telephony:hangup|telnyx:hangup|twilio:hangup)
     claim_owner ;;
 esac
 
 case "$command" in
   release) release_owner ;;
   run) run_tests "$@" ;;
+  decisions)
+    [[ $# == 3 ]] || die "usage: bin/livetests decisions PROVIDER TENANT CONNECTION"
+    case "$1" in openai|google|jev) ;; *) die "unknown Decisions provider (use openai, google or jev)" ;; esac
+    cd -- "$repo_root"
+    # Use the same installation configuration as bin/dev and QA.
+    if [[ -f .env ]]; then
+      set -a
+      source .env
+      set +a
+    fi
+    MIX_ENV=dev exec "$mix_bin" run --no-start scripts/qa/guardrail_decisions.exs "$@"
+    ;;
   tools:up)
     load_credentials
     tools_up
