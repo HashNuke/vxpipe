@@ -126,7 +126,7 @@ defmodule Vxpipe.Providers.RegistryTest do
              "google" => [:credential, :credential_validation, :llm, :sts, :stt, :tts],
              "morse" => [:sts, :stt, :tts],
              "morse_code_api" => [:credential, :credential_validation, :stt, :tts],
-             "openai" => [:credential, :credential_validation, :llm, :sts],
+             "openai" => [:credential, :credential_validation, :decisions, :llm, :sts],
              "rime" => [:credential, :credential_validation, :tts],
              "telnyx" => [:credential, :credential_validation, :telephony],
              "twilio" => [:credential, :credential_validation, :telephony],

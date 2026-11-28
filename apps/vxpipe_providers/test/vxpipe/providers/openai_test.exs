@@ -12,7 +12,8 @@ defmodule Vxpipe.Providers.OpenAITest do
              credential: Credential,
              credential_validation: CredentialValidation,
              llm: Vxpipe.AgentRuntime.Provider.ReqLLM,
-             sts: Vxpipe.Providers.OpenAI.GPTLiveSession
+             sts: Vxpipe.Providers.OpenAI.GPTLiveSession,
+             decisions: Vxpipe.Providers.OpenAI.Decisions
            }
 
     assert {:ok, OpenAI} = Registry.fetch("openai")

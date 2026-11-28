@@ -11,7 +11,8 @@ defmodule Vxpipe.Providers.OpenAI do
       llm: Vxpipe.AgentRuntime.Provider.ReqLLM,
       credential: Vxpipe.Providers.OpenAI.Credential,
       credential_validation: Vxpipe.Providers.OpenAI.CredentialValidation,
-      sts: Vxpipe.Providers.OpenAI.GPTLiveSession
+      sts: Vxpipe.Providers.OpenAI.GPTLiveSession,
+      decisions: Vxpipe.Providers.OpenAI.Decisions
     }
   end
 end
