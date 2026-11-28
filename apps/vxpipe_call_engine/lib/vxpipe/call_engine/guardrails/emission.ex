@@ -74,6 +74,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
       report = %{
         evaluation_id: evaluation_id,
         event: event,
+        checked_text: Map.get(attrs, :checked_text),
         outcome: outcome,
         error_code: Map.get(attrs, :error_code),
         participant_id: Map.get(attrs, :participant_id),
@@ -212,6 +213,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
           "content_unavailable" => report.content_unavailable
         }
         |> maybe_put_transfer(report)
+        |> put_checked_text(report, envelope)
 
       {:ok,
        [
@@ -228,6 +230,15 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
        ]}
     end
   end
+
+  defp put_checked_text(payload, %{checked_text: text, event: event}, %{
+         source_policy: %{"save_transcripts" => true}
+       })
+       when event in [:before_turn, :after_turn] and is_binary(text) and
+              byte_size(text) in 1..8192,
+       do: Map.put(payload, "checked_text", text)
+
+  defp put_checked_text(payload, _report, _envelope), do: payload
 
   @doc "Builds one question fact per question in authored order."
   @spec question_facts(map(), map()) :: {:ok, [{atom(), keyword()}]} | {:error, term()}

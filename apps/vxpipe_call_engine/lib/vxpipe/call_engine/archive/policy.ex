@@ -55,7 +55,7 @@ defmodule Vxpipe.CallEngine.Archive.Policy do
   defp text_field?(key) when is_atom(key), do: Atom.to_string(key) in @text_fields
   defp text_field?(key), do: key in @text_fields
 
-  @decisions_text_fields ~w(question response feedback messages evidence candidate draft
+  @decisions_text_fields ~w(question response feedback messages evidence candidate draft checked_text
     evaluated_draft accepted_replacement rejected_input rejected_draft proposed_calls)
 
   # A denied interval strips decisions text and any smuggled transcript text

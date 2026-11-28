@@ -351,6 +351,27 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
           "feedback_dispatched" => true
         }
       })
+
+      Repo.insert!(%StoredFact{
+        public_id: "evaluation-#{ordinal}",
+        call_id: call.id,
+        room_id: @room_id,
+        incarnation_id: @incarnation_id,
+        kind: "decisions_evaluation",
+        sequence: 30 + ordinal,
+        occurred_at: @started_at,
+        participant_id: context.call.plan.participants["assistant"].participant_id,
+        source_policy: policy,
+        payload: %{
+          "evaluation_id" => "evaluation-#{ordinal}",
+          "event" => "after_turn",
+          "outcome" => "blocked",
+          "attempt_ids" => ["attempt-#{ordinal}"],
+          "policy_revision" => 1,
+          "policy_digest" => "sha256:" <> String.duplicate("a", 64),
+          "checked_text" => "Unsent draft #{ordinal}."
+        }
+      })
     end
 
     options = publication_options(context)
@@ -361,6 +382,12 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     assert {:ok, doc} =
              Calls.fetch_call_details(context.principal, @call_id, publication_id, options)
 
+    document = JSON.decode!(doc.contents)
+    assert doc.contents =~ "Unsent draft 0."
+    refute doc.contents =~ "Unsent draft 1."
+    refute doc.contents =~ "Unsent draft 2."
+    refute JSON.encode!(document["transcript"]) =~ "Unsent draft"
+    refute JSON.encode!(document["usage"]) =~ "Unsent draft"
     assert doc.contents =~ "Private response 0."
     refute doc.contents =~ "Private response 1."
     refute doc.contents =~ "Private response 2."

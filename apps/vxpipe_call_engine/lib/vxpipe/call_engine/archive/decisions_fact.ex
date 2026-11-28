@@ -18,7 +18,8 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
     decisions_feedback_dispatched: @common ++ ~w(question_ids),
     decisions_evaluation:
       @common ++
-        @timing ++ @evaluation_ids ++ ~w(event outcome error_code attempt_ids question_ids),
+        @timing ++
+        @evaluation_ids ++ ~w(event outcome error_code attempt_ids question_ids checked_text),
     decisions_question_result:
       @common ++
         @question_content ++
@@ -47,7 +48,7 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
     p["event"] in @events and
       p["outcome"] in ~w(passed blocked error cancelled skipped_empty not_applicable) and
       nonnegative?(p["policy_revision"]) and p["error_code"] in [nil | @errors] and
-      optional_ids?(p, @evaluation_ids) and valid_timing?(p) and
+      optional_ids?(p, @evaluation_ids) and valid_timing?(p) and valid_checked_text?(p) and
       (p["event"] != "before_outgoing_transfer" or id?(p["transfer_invocation_id"])) and
       id_list?(attempts) and (p["outcome"] not in ["passed", "blocked"] or attempts != []) and
       (is_nil(p["question_ids"]) or id_list?(p["question_ids"]))
@@ -80,6 +81,13 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
       (is_nil(p["policy_revision"]) or nonnegative?(p["policy_revision"])) and
       optional_ids?(p, @attempt_ids) and valid_timing?(p)
   end
+
+  defp valid_checked_text?(%{"checked_text" => text} = p) do
+    p["event"] in ["before_turn", "after_turn"] and is_nil(p["content_unavailable"]) and
+      is_binary(text) and byte_size(text) in 1..8192 and String.valid?(text)
+  end
+
+  defp valid_checked_text?(_), do: true
 
   defp valid_marker?(nil), do: true
 
