@@ -29,7 +29,7 @@ function requestIds(check: GuardrailEvaluation) {
 }
 
 export function failedQuestions(check: GuardrailEvaluation) {
-  if (check.outcome !== "blocked" && check.outcome !== "passed") return 0;
+  if (check.outcome !== "blocked") return 0;
   const questions = questionsFor(check);
   if (check.contentUnavailable || !questions.length || check.questionIds?.some(id => !questions.some(q => q.id === id))
     || questions.some(q => q.outcome === "unavailable")) return undefined;
@@ -63,7 +63,9 @@ function groupMetrics(group: DecisionsGroup, additional: Metric[]) {
   for (const [key, label] of [["inputTokens", "Input tokens"], ["outputTokens", "Output tokens"], ["totalTokens", "Total tokens"]] as const) {
     const reported = new Map(attempts.flatMap(attempt => attempt[key] === undefined ? [] : [[attempt.id, attempt[key]] as const]));
     for (const metric of additional) {
-      if (metric.label === label && metric.attemptId && metric.value !== null) reported.set(metric.attemptId, metric.value);
+      if (metric.label === label && metric.attemptId && metric.value !== null && !attempts.some(a => a.id === metric.attemptId)) {
+        reported.set(metric.attemptId, metric.value);
+      }
     }
     const amounts = [...reported.values()];
     if (amounts.length) summary(label, amounts.length === requests ? amounts.reduce((a, b) => a + b, 0) : null,
@@ -79,9 +81,12 @@ function groupMetrics(group: DecisionsGroup, additional: Metric[]) {
 
 /** Keep unmatched settlement rows visible when the archive has no corresponding evaluation. */
 export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metrics: readonly Metric[]) {
-  const checks = distinct(evaluations).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
+  const checks = distinct(evaluations).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
   const groups = new Map<string, DecisionsGroup>();
   const byAttempt = new Map<string, DecisionsGroup>();
+  const linkedAttempts = new Set<string>();
+  const ownership = (id: string, participant: string, activation?: string, turn?: string) =>
+    JSON.stringify([id, participant, activation, turn]);
   for (const check of checks) {
     const provider = check.selectedProvider ?? check.actualProvider;
     const modelName = check.selectedModel ?? check.actualModel;
@@ -90,17 +95,23 @@ export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metr
     const group: DecisionsGroup = groups.get(key) ?? { key, model, participantId: check.participantId, checks: [], metrics: new Map() };
     group.checks.push(check);
     groups.set(key, group);
-    for (const id of requestIds(check)) byAttempt.set(id, group);
+    const turn = check.event === "before_turn" ? check.sourceTurnId :
+      check.event === "after_turn" ? check.responseTurnId : check.responseTurnId ?? check.sourceTurnId;
+    for (const id of requestIds(check)) {
+      byAttempt.set(ownership(id, check.participantId, check.activationId, turn), group);
+      linkedAttempts.add(id);
+    }
   }
   const otherMetrics: Metric[] = [];
   const perGroup = new Map<DecisionsGroup, Metric[]>();
   const unlinkedRequests = new Set<string>();
   for (const metric of metrics) {
-    const group = metric.attemptId && byAttempt.get(metric.attemptId);
+    const group = metric.attemptId && metric.scope.kind === "participant-capability" &&
+      byAttempt.get(ownership(metric.attemptId, metric.scope.participantId, metric.activationId, metric.turnId));
     if (!group || metric.scope.kind !== "participant-capability" || metric.scope.capability !== "Decisions" ||
       metric.scope.participantId !== group.participantId) {
       otherMetrics.push(metric);
-      if (metric.attemptId && !byAttempt.has(metric.attemptId) && "capability" in metric.scope &&
+      if (metric.attemptId && !linkedAttempts.has(metric.attemptId) && "capability" in metric.scope &&
         metric.scope.capability === "Decisions" && metric.label === "Requests" && metric.value === 1) {
         unlinkedRequests.add(metric.attemptId);
       }

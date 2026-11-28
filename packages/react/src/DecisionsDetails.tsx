@@ -62,7 +62,7 @@ function Check({ check, onShowGuardrail }: { check: GuardrailEvaluation; onShowG
 function TurnChecks({ checks, onShowGuardrail }: { checks: GuardrailEvaluation[]; onShowGuardrail?: (id: string) => void }) {
   const byOwner = new Map<string, GuardrailEvaluation[]>();
   for (const check of checks) {
-    const turn = check.responseTurnId ?? check.sourceTurnId;
+    const turn = check.event === "before_turn" ? check.sourceTurnId : check.responseTurnId ?? check.sourceTurnId;
     const owner = turn ? "Turn " + turn : check.transferInvocationId ? "Transfer " + check.transferInvocationId : "Unassigned checks";
     const entries = byOwner.get(owner) ?? [];
     entries.push(check);

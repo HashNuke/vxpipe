@@ -103,3 +103,34 @@ test("missing private facts preserve authoritative request IDs, effective token 
   expect(within(screen.getByRole("rowheader", { name: "LLM, Assistant" }).closest("tr")!)
     .getByRole("button", { name: /^Rewrites .*: 1 rewrites/ })).toBeVisible();
 });
+
+test("a reused physical ID on a different activation or turn cannot supplement this model's tokens", () => {
+  const labeled = evaluation("owner", { activationId: "activation-a", responseTurnId: "response", attempts: [attempt("shared", { inputTokens: 3 })] });
+  const metric = (activationId: string, turnId: string) => ({
+    attemptId: "shared", label: "Input tokens", unit: "tokens", source: "fixture", description: "Input tokens",
+    value: 97, activationId, turnId,
+    scope: { kind: "participant-capability", participantId: "assistant", capability: "Decisions" } as const,
+  });
+  const metrics = [metric("activation-b", "response"), metric("activation-a", "other-turn")];
+  render(<Metrics theme="light" snapshot={{ ...snapshot, metrics, guardrails: [labeled] }} />);
+  const model = screen.getByRole("rowheader", { name: "Decisions, Assistant, fixture · policy-a" }).closest("tr")!;
+  expect(within(model).getByRole("button", { name: /^Input tokens .*: 3 tokens/ })).toBeVisible();
+  const usageOnly = screen.getByRole("rowheader", { name: "Decisions, Assistant" }).closest("tr")!;
+  expect(within(usageOnly).getByRole("group", { name: /^Input tokens summary/ })).toHaveTextContent("194");
+});
+
+test("a restricted passing input belongs to its source turn and preserves the count of permitted failures", () => {
+  const checks = [
+    evaluation("input", { event: "before_turn", sourceTurnId: "input-turn", responseTurnId: "reply-turn",
+      contentUnavailable: "denied", questions: [] }),
+    evaluation("draft", { outcome: "blocked", sourceTurnId: "input-turn", responseTurnId: "reply-turn",
+      questions: [question("restricted-account", "failed", 0)] }),
+  ];
+  render(<Metrics theme="dark" snapshot={{ ...snapshot, guardrails: checks }} />);
+  expect(screen.getByText("1 failed question")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: /Inspect checks/ }));
+  expect(within(screen.getByRole("region", { name: "Turn input-turn" })).getByText("Before turn")).toBeVisible();
+  expect(within(screen.getByRole("region", { name: "Turn reply-turn" })).getByText("After turn")).toBeVisible();
+  const turns = [...document.querySelectorAll(".vx-decisions-owner")];
+  expect(turns.map(item => item.getAttribute("aria-label"))).toEqual(["Turn input-turn", "Turn reply-turn"]);
+});
