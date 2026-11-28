@@ -11,7 +11,9 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Detector do
       task =
         Task.Supervisor.async_nolink(
           Vxpipe.CallEngine.Speech.SessionTree.commands(allocation),
-          fn -> load(detector, opts, deadline) end, shutdown: :brutal_kill)
+          fn -> load(detector, opts, deadline) end,
+          shutdown: :brutal_kill
+        )
 
       {:ok, detector, task}
     end

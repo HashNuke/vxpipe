@@ -1566,6 +1566,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           )
 
           assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+
           if c.vad do
             for <<window::binary-size(1024) <- pcm>> do
               assert_receive {:matrix_inference, :operational, _, ^window}, 2_000
