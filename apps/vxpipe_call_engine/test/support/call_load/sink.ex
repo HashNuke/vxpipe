@@ -10,7 +10,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
 
   @impl true
   def init(options) do
-    {:ok, config} = Config.new(unit_duration_ms: 20)
+    {:ok, config} = Config.new(unit_duration_ms: 20, sample_rate: 48_000)
 
     {:ok,
      %{
@@ -41,7 +41,9 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
     now = state.clock.()
     active = state.active || new_turn(frame, state.config, now)
 
-    with true <- frame.codec == :linear16 and frame.sample_rate == 16_000 and frame.channels == 1,
+    with true <-
+           frame.codec == :linear16 and frame.sample_rate == state.config.sample_rate and
+             frame.channels == 1,
          true <- active.turn == frame.correlation_id,
          {:ok, ledger} <-
            Playback.accept(active.ledger, byte_size(frame.payload), frame.sample_rate, now),

@@ -22,9 +22,9 @@ defmodule Vxpipe.CallEngine.Speech.CallLoadSinkTest do
         Map.merge(Map.from_struct(AudioOutputFrame.__struct__()), %{
           correlation_id: "turn",
           reply_to: self(),
-          payload: :binary.copy(<<0>>, 6_400),
+          payload: :binary.copy(<<0>>, 19_200),
           codec: :linear16,
-          sample_rate: 16_000,
+          sample_rate: 48_000,
           channels: 1
         })
         |> Map.delete(:__struct__)

@@ -313,7 +313,11 @@ the model. Keep each model's scope and uncovered cases explicit.
 `bin/sts-call-load smoke` runs the comparative local lane; `measured` requires a
 quiet window without competing compiles/tests. It compares real compiled room
 paths with synthetic model/audio workloads, including overlapping turns, failure
-isolation and cleanup. Keep latency samples, drop counts and host/scheduler details.
+isolation and cleanup. The LLM + TTS scenario feeds prerecorded speech and silence to
+the human caller’s real Silero VAD and uses a local Scribe transport fixture for
+transcription. The two Morse speech-to-speech scenarios supply native transcripts.
+Duplex models continuous output with provider-owned overlap. Turn-based speech
+models room-owned playback interruption. Keep latency samples, drop counts and host/scheduler details.
 
 These measurements are regression evidence, not hosted model latency, production
 capacity or carrier audibility. A small sample's p99 may simply be its maximum.

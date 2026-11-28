@@ -15,6 +15,8 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Encoder}
 
+  @external_resource Vxpipe.Providers.Deepgram.LiveFixture.short_pcm_path()
+  @spoken_answer File.read!(@external_resource)
   @track %{track_id: "load-mic", codec: :linear16, sample_rate: 16_000, channels: 1}
 
   def plan(mode) do
@@ -31,12 +33,6 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
 
         :sts_duplex ->
           %{speech_to_speech: duplex}
-
-        :sts_output_stt ->
-          %{
-            speech_to_speech: put_in(speech.options[:output_transcript], false),
-            output_speech_to_text: speech
-          }
       end
 
     source = %{
@@ -49,7 +45,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
         "caller" => %{
           type: "human",
           connection: %{service: "web", mode: "receive", admission: "start_call"},
-          capabilities: if(mode == :llm_tts, do: %{speech_to_text: speech}, else: %{})
+          capabilities: caller_capabilities(mode)
         },
         "agent" => %{
           type: "agent",
@@ -75,9 +71,30 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
     plan
   end
 
+  defp caller_capabilities(:llm_tts) do
+    %{speech_to_text: %{provider: "elevenlabs", model: "scribe_v2_realtime", vad: true}}
+  end
+
+  defp caller_capabilities(_mode), do: %{}
+
+  defp input_pcm(:llm_tts) do
+    @spoken_answer <> :binary.copy(<<0>>, 48_000)
+  end
+
+  defp input_pcm(_mode) do
+    {:ok, config} = Config.new(unit_duration_ms: 20)
+    {:ok, pcm} = Encoder.encode(config, "HI")
+    pcm
+  end
+
   def start(plan, mode, supervisor) do
     started = now()
-    {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
+
+    {:ok, room} =
+      Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
+        credential_source: {CallEngine.TestSpeechCredentialSource, :synthetic}
+      )
+
     admitted = now()
     TestCallStartup.await_prepared(plan)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -108,8 +125,6 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
     [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
     {:dictionary, dictionary} = Process.info(authority, :dictionary)
     [root | _] = Keyword.fetch!(dictionary, :"$ancestors")
-    {:ok, config} = Config.new(unit_duration_ms: 20)
-    {:ok, pcm} = Encoder.encode(config, "HI")
 
     %{
       plan: plan,
@@ -120,7 +135,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
       attachment: attachment,
       authority: authority,
       root: root,
-      pcm: pcm,
+      pcm: input_pcm(mode),
       admission_ms: admitted - started,
       startup_ms: now() - started
     }

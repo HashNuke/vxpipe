@@ -3,6 +3,11 @@ defmodule Vxpipe.CallEngine.Speech.CallLoadContractTest do
 
   alias Vxpipe.CallEngine.CallLoad.{Metrics, Playback}
 
+  test "LLM and TTS benchmark measures local VAD on the human caller" do
+    plan = Vxpipe.CallEngine.CallLoad.Room.plan(:llm_tts)
+    assert plan.participants[plan.entry_caller].capabilities.speech_to_text.vad
+  end
+
   test "percentiles preserve missing evidence and use nearest measured ranks" do
     assert Metrics.percentiles([]) == %{count: 0, p50: nil, p95: nil, p99: nil}
     assert Metrics.percentiles(Enum.to_list(1..100)) == %{count: 100, p50: 50, p95: 95, p99: 99}

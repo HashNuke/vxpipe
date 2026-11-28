@@ -14,7 +14,9 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
     TextOutput
   }
 
-  alias Vxpipe.Providers.MorseCode.{DuplexSTSSession, STSSession, STTSession, TTSSession}
+  alias Vxpipe.Providers.MorseCode.{DuplexSTSSession, STSSession, TTSSession}
+
+  alias Vxpipe.Providers.ElevenLabs.STTSession
 
   @measurements [
     :admission_ms,
@@ -59,6 +61,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
         providers: %{
           STTSession => [
             enabled: true,
+            wire_module: CallEngine.CallLoad.ScribeWire,
             media_ingress: [
               owner: observer,
               maximum_frames: 25,
@@ -278,7 +281,9 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
           validate_event!(state.context, event, :agent)
           observe(state, :public, event.correlation_id, now(), :agent_speech_onset_ms)
 
-        {:vxpipe_event, %ParticipantTranscription{final: true, text: "HI"}} ->
+        {:vxpipe_event, %ParticipantTranscription{final: true, text: text}}
+        when (state.context.mode == :llm_tts and text == "Yes") or
+               (state.context.mode != :llm_tts and text == "HI") ->
           Map.update!(state, :caller_transcripts, &(&1 + 1))
 
         {:vxpipe_event, %TextOutput{text: text}} ->

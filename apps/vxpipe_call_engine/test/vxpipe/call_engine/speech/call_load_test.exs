@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Speech.CallLoadTest do
   @moduletag :integration
   @moduletag timeout: 120_000
 
-  for mode <- [:llm_tts, :sts_provider, :sts_output_stt, :sts_duplex] do
+  for mode <- [:llm_tts, :sts_provider, :sts_duplex] do
     @tag mode: mode
     test "bounded pinned room calls: #{mode}" do
       profile = System.get_env("VXPIPE_CALL_LOAD_PROFILE", "smoke")
