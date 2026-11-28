@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
 
       receive do
         :finish -> {:ok, Enum.map(rows, fn {_pcm, state} -> {0.5, state} end)}
+        :bad_shape -> {:ok, []}
       end
     end
 
@@ -90,6 +91,56 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
     end
 
     assert %{ready: 0, in_flight: 0} = Pool.status(__MODULE__)
+  end
+
+  test "cancelling one live batch row preserves neighbors, FIFO order and the cap of sixteen" do
+    first = submit()
+    assert_receive {:batch, worker, 1}
+    [{lease, ref} | neighbors] = for _ <- 1..17, do: submit()
+    send(worker, :finish)
+    assert_result(first)
+    assert_receive {:batch, ^worker, 16}
+    assert {:error, :unknown_job} = Task.async(fn -> Pool.cancel(lease, ref) end) |> Task.await()
+    assert :ok = Pool.cancel(lease, ref)
+    assert %{ready: 1, in_flight: 16, retired: 1} = Pool.status(__MODULE__)
+    send(worker, :finish)
+    assert_receive {:silero_retired, ^ref}
+    Enum.each(Enum.take(neighbors, 15), &assert_result/1)
+    assert_receive {:batch, ^worker, 1}
+    send(worker, :finish)
+    assert_result(List.last(neighbors))
+    refute_received {:silero_result, ^ref, _}
+  end
+
+  test "recovers after a worker exit and fails malformed results once" do
+    {_lease, ref} = submit()
+    assert_receive {:batch, worker, 1}
+    Process.exit(worker, :kill)
+    assert_receive {:silero_result, ^ref, {:error, :classification_failed}}
+    {_lease, next} = submit()
+    assert_receive {:batch, replacement, 1}
+    refute replacement == worker
+    send(replacement, :bad_shape)
+    assert_receive {:silero_result, ^next, {:error, :classification_failed}}
+    live = submit()
+    assert_receive {:batch, ^replacement, 1}
+    send(replacement, :finish)
+    assert_result(live)
+    refute_received {:silero_result, ^ref, _}
+    refute_received {:silero_result, ^next, _}
+  end
+
+  test "queued cancellation and allocation closure release their reservation" do
+    first = submit()
+    assert_receive {:batch, worker, 1}
+    {lease, ref} = submit()
+    assert :ok = Pool.cancel(lease, ref)
+    assert_receive {:silero_retired, ^ref}
+    assert :ok = Pool.close(lease)
+    assert %{ready: 0, admitted: 1} = Pool.status(__MODULE__)
+    send(worker, :finish)
+    assert_result(first)
+    refute_received {:batch, ^worker, _}
   end
 
   defp submit do
