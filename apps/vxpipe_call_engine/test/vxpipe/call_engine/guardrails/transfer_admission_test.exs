@@ -321,6 +321,48 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmissionTest do
              TransferAdmission.joint_admit(candidate(calls()), %{}, host(%{check: check}))
   end
 
+  test "structured rounds check only speaker text and omit listener content from tool-only transfers" do
+    observer = self()
+
+    check = fn _server, event, _proposal, evidence, _deadline ->
+      send(observer, {:checked_text, event, evidence["text"]})
+      :passed
+    end
+
+    structured = %{context() | reply_protocol: :mode_message_v1}
+
+    for {mode, message, checked} <- [
+          {"speaker", "Caller-facing draft.", "Caller-facing draft."},
+          {"listener", nil, ""},
+          {"listener", "Private listener note.", ""}
+        ] do
+      envelope =
+        JSON.encode!(%{
+          type: "participant_message",
+          participant_id: "support",
+          agent_mode: mode,
+          message: message
+        })
+
+      candidate =
+        RoundCandidate.new(envelope,
+          tool_calls: calls(),
+          reply_protocol: structured.reply_protocol
+        )
+
+      assert {:accept, %{binds: [_]}} =
+               TransferAdmission.joint_admit(candidate, structured, host(%{check: check}))
+
+      assert_received {:checked_text, :before_outgoing_transfer, ^checked}
+
+      if mode == "speaker" do
+        assert_received {:checked_text, :after_turn, ^checked}
+      else
+        refute_received {:checked_text, :after_turn, _}
+      end
+    end
+  end
+
   test "transfer evidence carries destination and invocation but no hidden payloads" do
     parent = self()
 

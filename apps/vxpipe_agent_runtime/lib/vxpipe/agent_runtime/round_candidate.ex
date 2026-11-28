@@ -4,7 +4,8 @@ defmodule Vxpipe.AgentRuntime.RoundCandidate do
 
   The runtime builds one candidate per model generation, ahead of both the
   text-only and tool-bearing branches. Streamed text is buffered under the
-  session byte/turn bounds; proposed calls are permitted structured evidence.
+  session byte/turn bounds. Candidate text is the proposed caller-facing speech;
+  structured reply envelopes and listener messages stay private.
   """
 
   alias Vxpipe.AgentRuntime.{Dialogue, ToolCall}
@@ -48,11 +49,12 @@ defmodule Vxpipe.AgentRuntime.RoundCandidate do
          reply_protocol when reply_protocol in [:legacy, :mode_message_v1] <-
            Keyword.get(options, :reply_protocol, :legacy),
          true <- Enum.all?(tool_calls, &ToolCall.valid?/1) do
-      speech? = speech_text?(text, reply_protocol, maximum_bytes)
+      speech = speech_text(text, reply_protocol, maximum_bytes)
+      speech? = String.trim(speech) != ""
       tool_only? = tool_calls != [] and not speech?
 
       %__MODULE__{
-        text: text,
+        text: speech,
         tool_calls: tool_calls,
         speech?: speech?,
         tool_only?: tool_only?,
@@ -66,14 +68,12 @@ defmodule Vxpipe.AgentRuntime.RoundCandidate do
     end
   end
 
-  defp speech_text?(text, :legacy, _maximum) do
-    String.trim(text) != ""
-  end
+  defp speech_text(text, :legacy, _maximum), do: text
 
-  defp speech_text?(text, :mode_message_v1, maximum) do
+  defp speech_text(text, :mode_message_v1, maximum) do
     case Dialogue.decode(text, maximum) do
-      {:ok, %{agent_mode: :speaker, message: message}} when is_binary(message) -> true
-      _invalid -> false
+      {:ok, %Dialogue{agent_mode: :speaker, message: message}} -> message
+      _silent_or_invalid -> ""
     end
   end
 end

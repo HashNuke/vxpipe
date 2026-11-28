@@ -493,6 +493,10 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
 
   defp turn_id(%{event: :before_turn} = report), do: report.source_turn_id
   defp turn_id(%{event: :after_turn} = report), do: report.response_turn_id
+
+  defp turn_id(%{event: :before_outgoing_transfer} = report),
+    do: report.response_turn_id || report.source_turn_id
+
   defp turn_id(_report), do: nil
 
   defp correlation_id(%{event: :before_turn} = report), do: report.source_turn_id

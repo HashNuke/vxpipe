@@ -624,7 +624,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
                    2000
 
     assert_receive {:vxpipe_event, %CallEngine.Event.AgentTurnCompleted{}}, 2000
-    send_turn(identity, "two", "Next caller text.")
+    %{id: command_id} = send_turn(identity, "two", "Next caller text.")
     second = %{"participant_id" => agent, "text" => "Permitted reply."}
 
     assert_receive {:evidence,
@@ -697,13 +697,31 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
       assert_receive {:test_archive_fact,
                       %{
                         kind: :decisions_evaluation,
-                        payload: %{
-                          "event" => ^event,
-                          "outcome" => "blocked",
-                          "evaluation_id" => evaluation
-                        }
+                        command_id: ^command_id,
+                        payload:
+                          %{
+                            "event" => ^event,
+                            "outcome" => "blocked",
+                            "source_turn_id" => "two",
+                            "response_turn_id" => "two",
+                            "candidate_attempt_id" => "two:1",
+                            "evaluation_id" => evaluation
+                          } = payload
                       }},
                      1000
+
+      if event == "before_outgoing_transfer" do
+        assert payload["transfer_invocation_id"] == "route-2"
+
+        assert_receive {:test_archive_fact,
+                        %{
+                          kind: :usage_observed,
+                          payload: %{
+                            "attribution" => %{"turn_id" => "two", "tool_call_id" => "route-2"}
+                          }
+                        }},
+                       1_000
+      end
 
       assert_receive {:test_archive_fact,
                       %{
