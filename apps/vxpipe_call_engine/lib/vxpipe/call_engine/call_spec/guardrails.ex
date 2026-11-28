@@ -318,7 +318,7 @@ defmodule Vxpipe.CallEngine.CallSpec.Guardrails do
   defp threshold(1.0, _code, _message, _path), do: {:ok, 100}
 
   defp threshold(value, code, message, path) when is_float(value) do
-    if value >= 0.0 and value <= 1.0 and value == value and
+    if value >= 0.0 and value <= 1.0 and
          Regex.match?(@threshold_pattern, Float.to_string(value)) do
       {:ok, decimal_to_hundredths(Float.to_string(value))}
     else
@@ -399,11 +399,7 @@ defmodule Vxpipe.CallEngine.CallSpec.Guardrails do
     end
   end
 
-  defp usable_score(score) when is_integer(score) and score >= 0 and score <= 1, do: {:ok, score}
-
-  defp usable_score(score) when is_float(score) and score >= 0.0 and score <= 1.0 do
-    if score == score, do: {:ok, score}, else: :error
-  end
+  defp usable_score(score) when is_number(score) and score >= 0 and score <= 1, do: {:ok, score}
 
   defp usable_score(_score), do: :error
 

@@ -234,7 +234,7 @@ defmodule Vxpipe.Providers.DecisionsTransport do
   defp safe_partial_probabilities(%{probabilities: probs}) when is_map(probs) do
     filtered =
       Enum.filter(probs, fn
-        {k, v} when is_binary(k) and is_float(v) -> v >= 0.0 and v <= 1.0 and v == v
+        {k, v} when is_binary(k) and is_float(v) -> v >= 0.0 and v <= 1.0
         {k, v} when is_binary(k) and is_integer(v) -> v in [0, 1]
         _ -> false
       end)
