@@ -1,4 +1,4 @@
-import { editSource } from "./editSource";
+import { editSource, guardrailsSchemaVersion } from "./editSource";
 import { agent } from "./edits";
 import type { GuardrailEvent, GuardrailQuestion, SourceDocument } from "./types";
 
@@ -17,6 +17,7 @@ export function setGuardrailQuestions(
   questions: GuardrailQuestion[],
 ): SourceDocument {
   return editSource(document, (source) => {
+    if (questions.length) source.schema_version = guardrailsSchemaVersion;
     const target = agent(source, participantKey);
     const guardrails = (target.guardrails ??= {});
     if (questions.length) guardrails[event] = questions;

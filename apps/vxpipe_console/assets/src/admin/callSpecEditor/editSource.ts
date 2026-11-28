@@ -1,6 +1,7 @@
 import type { CallSpecSource, SourceDocument } from "./types";
 
-export const editableSchemaVersions = ["20261128.01", "20261125.01"];
+export const guardrailsSchemaVersion = "20261128.01";
+export const editableSchemaVersions = [guardrailsSchemaVersion, "20261125.01"];
 
 export function editSource(document: SourceDocument, change: (source: CallSpecSource) => void): SourceDocument {
   if (document.readOnly || !editableSchemaVersions.includes(document.source.schema_version)) {

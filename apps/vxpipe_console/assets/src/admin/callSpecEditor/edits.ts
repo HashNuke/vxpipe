@@ -1,5 +1,5 @@
 import type { CatalogCapability } from "../modelCatalog";
-import { editSource } from "./editSource";
+import { guardrailsSchemaVersion, editSource } from "./editSource";
 import type { AgentParticipant, CallSpecSource, CapabilitySelection, FirstMessage, MediaPolicy, Participant, SourceDocument, ToolSelection, WaitSounds } from "./types";
 
 export function participant(source: CallSpecSource, key: string): Participant {
@@ -15,6 +15,7 @@ export function agent(source: CallSpecSource, key: string): AgentParticipant {
 
 export function setCapability(document: SourceDocument, key: string | null, kind: CatalogCapability, selection: CapabilitySelection | undefined): SourceDocument {
   return editSource(document, (source) => {
+    if (key === null && kind === "decisions" && selection) source.schema_version = guardrailsSchemaVersion;
     const owner = key === null ? (source.defaults ??= {}) : participant(source, key);
     const capabilities = owner.capabilities ??= {};
     if (selection === undefined) delete capabilities[kind];

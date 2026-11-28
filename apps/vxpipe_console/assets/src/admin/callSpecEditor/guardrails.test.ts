@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { parseSource, serializeSource } from "./source";
 import { validateSource } from "./validation";
+import { setCapability } from "./edits";
 import { renameParticipant } from "./participants";
 import { formatThreshold, moveGuardrailQuestion, parseThreshold, passPreview, setGuardrailQuestions } from "./guardrails";
 
@@ -180,4 +181,18 @@ test("question lists are bounded", () => {
   expect(validateSource(document.source)).toEqual(
     expect.arrayContaining([expect.objectContaining({ path: ["participants", "intake", "guardrails", "before_turn"] })]),
   );
+});
+
+test("adding guardrails to a retained editable revision upgrades only the new draft", () => {
+  const source = baseSource("20261125.01");
+  delete (source.participants.intake as Record<string, unknown>).guardrails;
+  delete (source.defaults as Record<string, unknown>).capabilities;
+  const retained = parseSource(JSON.stringify(source));
+  const selected = setCapability(retained, null, "decisions", { provider: "openai", model: "gpt-6-luna" });
+  const questions = [{ question: "Is this in scope?", required_answer: "yes" as const }];
+  const edited = setGuardrailQuestions(retained, "intake", "before_turn", questions);
+  expect(selected.source.schema_version).toBe("20261128.01");
+  expect(edited.source.schema_version).toBe("20261128.01");
+  expect(validateSource(setGuardrailQuestions(selected, "intake", "before_turn", questions).source)).toEqual([]);
+  expect(retained.source).toEqual(source);
 });
