@@ -239,19 +239,29 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionRegressionTest do
     # Repair retry is tool-free.
     assert retry_request.tools == []
 
-    # Disobedient provider still returns a tool: host may even accept, but the
-    # runtime rejects without submit/commit/delta effects.
     {:ok, disobedient} =
       ModelResponse.new(text: "still tool", tool_calls: [tool_call("d1", "check_balance")])
 
     send(provider2, {:test_model_response, {:ok, disobedient}})
 
-    assert_receive {:round_admission_requested, _candidate2, _context2, admission_pid2}, 1_000
-    send(admission_pid2, {:admission_verdict, {:accept}})
-
     assert {:ok, %Result{status: :failed, reason: :guardrail_blocked}} =
              Task.await(task, 2_000)
 
+    refute_received {:round_admission_requested, _, _, _}
+
+    refute_received {:tool_submitted, _, _, _, _, _}
+  end
+
+  test "a tool proposed in response to private input feedback never reaches admission" do
+    session =
+      start_session([], round_admission: {__MODULE__.ControllableAdmission, %{owner: self()}})
+
+    task = private_request(session, "private-tool")
+    assert_receive {:model_provider_process, provider, %{tools: []}}
+    {:ok, response} = ModelResponse.new(text: "Wait.", tool_calls: [tool_call("d2", "transfer")])
+    send(provider, {:test_model_response, {:ok, response}})
+    assert {:ok, %Result{status: :failed, reason: :guardrail_blocked}} = Task.await(task)
+    refute_received {:round_admission_requested, _, _, _}
     refute_received {:tool_submitted, _, _, _, _, _}
   end
 

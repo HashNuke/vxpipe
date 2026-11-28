@@ -74,6 +74,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          :ok <- config.emit_model_attempt.(:model_attempt_started),
          {:ok, response, buffered_deltas} <-
            admitted_model_response(config, model_request, output, round),
+         :ok <- validate_feedback_response(response, admission_state, config),
          {:ok, verdict} <-
            admit_candidate(config, response, request, admission_state, conversation) do
       case verdict do
@@ -171,24 +172,27 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          request,
          admission_state
        ) do
-    # A repaired round must come back tool-free; a disobedient provider tool
-    # is rejected without submit/commit/delta effects.
-    if admission_state.repairs_used > 0 and response.tool_calls != [] do
-      {:error, :guardrail_blocked}
-    else
-      with :ok <- flush_admitted_deltas(config, buffered_deltas, response) do
-        handle_response(
-          response,
-          prepared_conversation,
-          staged_messages,
-          output,
-          round,
-          request,
-          config,
-          admission_state
-        )
-      end
+    with :ok <- flush_admitted_deltas(config, buffered_deltas, response) do
+      handle_response(
+        response,
+        prepared_conversation,
+        staged_messages,
+        output,
+        round,
+        request,
+        config,
+        admission_state
+      )
     end
+  end
+
+  defp validate_feedback_response(%ModelResponse{tool_calls: []}, _admission_state, _config),
+    do: :ok
+
+  defp validate_feedback_response(_response, admission_state, config) do
+    if admission_state.repairs_used > 0 or transient_messages(config) != [],
+      do: {:error, :guardrail_blocked},
+      else: :ok
   end
 
   defp flush_admitted_deltas(_config, [], _response), do: :ok
