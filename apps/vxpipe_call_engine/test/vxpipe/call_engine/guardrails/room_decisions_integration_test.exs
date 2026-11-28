@@ -892,6 +892,27 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
 
     refute_received {:test_archive_fact, %{kind: :participant_transfer_started}}
     refute_received {:test_archive_fact, %{kind: :decisions_feedback_dispatched}}
+
+    assert :ok = SpeechToSpeech.push_text(capability, ~s(TOOL transfer {"destination":"billing"}))
+    assert_receive {:gate, next_http, ^agent, ""}, 2_000
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.ToolCallStarted{tool_call_id: next_invocation}},
+                   2_000
+
+    refute next_invocation == invocation
+    refute_received {:test_archive_fact, %{kind: :participant_transfer_started}}
+    send(next_http, {:score, 0.99})
+
+    assert_receive {:test_archive_fact,
+                    %{
+                      kind: :participant_transfer_completed,
+                      tool_call_id: ^next_invocation,
+                      payload: %{"destination_call_spec_key" => "billing"}
+                    }},
+                   2_000
+
+    refute_received {:test_archive_fact, %{kind: :participant_transfer_completed}}
   end
 
   test "a replayed native transfer with a changed allowed destination commits the original handoff once" do
@@ -1053,6 +1074,53 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
 
     assert :ok = CallEngine.TestTransferConnection.send_text(command)
     command
+  end
+
+  @tag :physical_guarded_round
+  test "a model round with two guarded transfers fails as invalid_response before any sibling starts" do
+    :ok = CallEngine.TestVoiceToolRoom.configure()
+    Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
+    on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
+    plan = guarded_plan(true, :mixed_audio)
+    {_room, identity} = start_guarded_call(plan, controlled_audio_decisions(self()))
+    assert_receive {:test_tts_transport_started, voice, _}, 2_000
+
+    {:ok, command} =
+      SendText.new(
+        identity ++
+          [correlation_id: "duplicate-transfer", content: "Connect me.", audio_response: true]
+      )
+
+    assert :ok = CallEngine.TestTransferConnection.send_text(command)
+    assert_receive {:test_agent_runtime_stream, model, _}, 2_000
+    alias Vxpipe.AgentRuntime.ToolCall
+    {:ok, ordinary} = ToolCall.new(id: "ordinary", name: "wait_for_test", arguments: %{})
+
+    transfers =
+      for {id, reason} <- [{"first", "First reason"}, {"second", "Different reason"}] do
+        {:ok, call} =
+          ToolCall.new(
+            id: id,
+            name: "transfer",
+            arguments: %{"destination" => "billing", "reason" => reason}
+          )
+
+        call
+      end
+
+    send_audio_candidate(model, "One moment.", [ordinary | transfers])
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.AgentTurnFailed{
+                      correlation_id: "duplicate-transfer",
+                      reason: :invalid_response
+                    }},
+                   2_000
+
+    refute_received {:audio_gate, _, _}
+    refute_received {:test_archive_fact, %{kind: :participant_transfer_started}}
+    refute_received {:test_agent_runtime_stream, _, _}
+    assert_audio_withheld(voice)
   end
 
   for outcome <- [
