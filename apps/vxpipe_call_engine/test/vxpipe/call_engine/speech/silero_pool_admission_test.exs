@@ -53,6 +53,35 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolAdmissionTest do
     end
   end
 
+  test "a blocked dispatcher's outstanding offer stays charged after owner death" do
+    pool = Process.whereis(__MODULE__)
+    :sys.suspend(pool)
+
+    try do
+      # Offer a slot from the worker and acknowledge the point just before call submission.
+      parent = self()
+
+      owner =
+        spawn(fn ->
+          {:ok, lease} = Vxpipe.CallEngine.Speech.Silero.Lease.offer(__MODULE__, make_ref())
+          send(parent, {:offered, self()})
+          GenServer.call(pool, {:adopt, lease, System.monotonic_time(:millisecond) + 5_000})
+        end)
+
+      assert_receive {:offered, ^owner}
+      monitor = Process.monitor(owner)
+      Process.exit(owner, :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^owner, :killed}
+      for _ <- 1..20, do: assert({:error, :busy} = reserve())
+    after
+      :sys.resume(pool)
+    end
+
+    send(pool, :sweep_offers)
+    _ = Pool.status(pool)
+    assert {:ok, _} = reserve()
+  end
+
   test "refuses expired preparation before reserving capacity" do
     assert {:error, :model_unavailable} =
              Pool.reserve(make_ref(), System.monotonic_time(:millisecond) - 1, __MODULE__)

@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolSupervisor do
   use Supervisor
   require Logger
 
-  alias Vxpipe.CallEngine.Speech.Silero.{CPUBudget, Pool, Worker}
+  alias Vxpipe.CallEngine.Speech.Silero.{Batch, CPUBudget, Pool, Worker}
 
   def start_link(opts),
     do: Supervisor.start_link(__MODULE__, opts, name: Keyword.fetch!(opts, :name))
@@ -13,9 +13,11 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolSupervisor do
     budget = CPUBudget.detect(Keyword.get(opts, :budget_options, []))
     pool = Keyword.get(opts, :dispatcher, Pool)
 
+    run = Keyword.get(opts, :run, &Batch.run/2)
+
     workers =
       for slot <- 1..budget.workers do
-        Supervisor.child_spec({Worker, pool}, id: {Worker, slot})
+        Supervisor.child_spec({Worker, {pool, run}}, id: {Worker, slot})
       end
 
     worker_tree = %{

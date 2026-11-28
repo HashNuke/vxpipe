@@ -13,19 +13,23 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Lease do
 
   def offer(server, generation) do
     table = :ets.whereis(server)
-    [{:capacity, capacity, pool}] = :ets.lookup(table, :capacity)
-    first = :erlang.phash2(self(), capacity)
 
-    lease = %__MODULE__{
-      table: table,
-      pool: pool,
-      owner: self(),
-      generation: generation,
-      slot: first,
-      token: make_ref()
-    }
+    with [{:capacity, capacity, pool}] <- :ets.lookup(table, :capacity) do
+      first = :erlang.phash2(self(), capacity)
 
-    take_slot(lease, capacity, capacity)
+      lease = %__MODULE__{
+        table: table,
+        pool: pool,
+        owner: self(),
+        generation: generation,
+        slot: first,
+        token: make_ref()
+      }
+
+      take_slot(lease, capacity, capacity)
+    else
+      [] -> {:error, :model_unavailable}
+    end
   rescue
     ArgumentError -> {:error, :model_unavailable}
   end
@@ -45,18 +49,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Lease do
     if :ets.insert_new(lease.table, entry(lease, :offered)) do
       {:ok, lease}
     else
-      # An owner can exit between its reservation and the dispatcher's monitor.
-      case :ets.lookup(lease.table, lease.slot) do
-        [{_, pid, _, :offered} = orphan] ->
-          unless Process.alive?(pid), do: :ets.delete_object(lease.table, orphan)
-
-        _ ->
-          :ok
-      end
-
-      if :ets.insert_new(lease.table, entry(lease, :offered)),
-        do: {:ok, lease},
-        else: take_slot(%{lease | slot: rem(lease.slot + 1, capacity)}, capacity, left - 1)
+      take_slot(%{lease | slot: rem(lease.slot + 1, capacity)}, capacity, left - 1)
     end
   end
 
