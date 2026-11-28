@@ -36,8 +36,9 @@ def main():
     states = [
         ({name: hashes['original'] for name, hashes in manifest['files'].items()}, [patch, batch_patch]),
         ({name: hashes['patched'] for name, hashes in manifest['files'].items()}, [batch_patch]),
-        (previous['files'], [upgrade, batch_patch]),
     ]
+    if previous:
+        states.append((previous['files'], [upgrade, batch_patch]))
     for known, steps in states:
         if actual == known:
             for step in steps:
@@ -48,7 +49,7 @@ def main():
         raise ValueError('Ortex sources differ from reviewed states; preserve changes and review the patch')
     if any(digest(dependency / name) != expected for name, expected in batch['files'].items()):
         raise ValueError('Ortex batch patch result failed checksum verification')
-    print('Ortex session-thread patch applied and verified')
+    print('Ortex CPU and batch patch applied and verified')
 
 
 if __name__ == '__main__':

@@ -59,6 +59,14 @@ class OrtexPatchTest(unittest.TestCase):
         self.assertNotEqual(self.apply().returncode, 0)
         self.assertEqual(source.read_bytes(), before)
 
+    def test_install_without_obsolete_upgrade(self):
+        manifest = self.root / 'patches/ortex/session-threads.json'
+        data = json.loads(manifest.read_text())
+        del data['previous']
+        manifest.write_text(json.dumps(data))
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_wrong_revision_is_rejected(self):
         import json
         manifest = self.root / 'patches/ortex/session-threads.json'
