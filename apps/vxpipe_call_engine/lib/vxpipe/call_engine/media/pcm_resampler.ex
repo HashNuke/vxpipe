@@ -17,6 +17,11 @@ defmodule Vxpipe.CallEngine.Media.PCMResampler do
 
   def resample(<<>>, timestamp, from, to), do: {<<>>, ceil_div(timestamp * to, from)}
 
+  def resample(<<first::little-signed-16, rest::binary>>, timestamp, 16_000, 48_000)
+      when is_integer(timestamp) and timestamp >= 0 do
+    {upsample_16k(first, rest, <<>>), timestamp * 3}
+  end
+
   def resample(pcm, timestamp, from, to)
       when is_binary(pcm) and is_integer(timestamp) and timestamp >= 0 and
              is_integer(from) and from > 0 and is_integer(to) and to > 0 do
@@ -36,6 +41,23 @@ defmodule Vxpipe.CallEngine.Media.PCMResampler do
       end
 
     {payload, first}
+  end
+
+  defp upsample_16k(current, <<next::little-signed-16, rest::binary>>, output) do
+    difference = next - current
+    one_third = current + div(difference, 3)
+    two_thirds = current + div(2 * difference, 3)
+
+    upsample_16k(
+      next,
+      rest,
+      <<output::binary, current::little-signed-16, one_third::little-signed-16,
+        two_thirds::little-signed-16>>
+    )
+  end
+
+  defp upsample_16k(last, _trailing_bytes, output) do
+    <<output::binary, last::little-signed-16, last::little-signed-16, last::little-signed-16>>
   end
 
   defp ceil_div(numerator, denominator), do: div(numerator + denominator - 1, denominator)
