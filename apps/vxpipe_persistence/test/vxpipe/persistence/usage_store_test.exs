@@ -311,6 +311,36 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     assert Decimal.equal?(totals[{:currency, "USD"}], Decimal.new("0.0046"))
   end
 
+  test "published Decisions charges retain their currencies and exact decimal values on replay",
+       context do
+    charges = [{"USD", "0.00012345"}, {"USD", "0.00020001"}, {"EUR", "0.00310007"}]
+
+    for {{currency, quantity}, sequence} <- Enum.with_index(charges, 1) do
+      charge =
+        observation("charge-#{sequence}", "decisions-#{sequence}", quantity, sequence, :final,
+          component: "cost",
+          unit: {:currency, currency},
+          provenance: :billing_lookup
+        )
+
+      delivery = engine_fact(%{charge | capability: :decisions}, sequence)
+      assert :ok = EctoStorage.write(context.options, delivery)
+      assert :ok = EctoStorage.write(context.options, delivery)
+    end
+
+    assert {:ok, observations} = UsageStore.fetch_usage_observations(Repo, @tenant_key, @call_id)
+    assert {:ok, amounts} = UsageStore.fetch_usage_amounts(Repo, @tenant_key, @call_id)
+
+    assert {:ok, %{"totals" => totals, "amounts" => published}} =
+             Vxpipe.Persistence.CallDetailsUsageProjection.project(observations, amounts)
+
+    assert length(published) == 3
+    assert Enum.all?(published, &(&1["capability"] == "decisions"))
+
+    assert Map.new(totals, &{&1["unit"]["currency"], {&1["quantity"], &1["amount_count"]}}) ==
+             %{"USD" => {"0.00032346", 2}, "EUR" => {"0.00310007", 1}}
+  end
+
   test "real timed-out STS recognition persists its own provider, rate and failed outcome",
        context do
     alias Vxpipe.CallEngine.Capability.SpeechToSpeech

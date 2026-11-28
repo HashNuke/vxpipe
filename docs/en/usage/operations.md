@@ -40,6 +40,14 @@ connection plus a `room` track, all aligned to the same room-clock zero. Calls
 without a recording show **Not recorded**, and calls whose spec requested a
 recording the installation could not store show **Recording unavailable**.
 
+## Inspect a guardrail failure
+
+The published call-details JSON includes a private `decisions` section for calls with guardrail evidence. Find the evaluation by its source turn, candidate attempt or transfer invocation. Its outcome tells you whether the questions passed, a rule blocked the proposal, the provider returned an error, or the check was cancelled. A checker error can contain some scores and leave others unavailable.
+
+For a blocked evaluation, match the question results by `evaluation_id` and read them in `ordinal` order. Each result records the question ID, required answer, threshold, P(Yes) when available, and the exact feedback line for a failed question. A separate dispatch receipt identifies the lines the model received. The transcript and delivery events show which response reached the caller. When storage permission was denied or unknown, the private content has a `content_unavailable` reason. An older publication can lack Decisions evidence.
+
+Count each evaluation once and each provider request by its physical attempt ID. A retried request can belong to the same evaluation. The repaired reply is a separate conversational model attempt. Decisions usage includes provider-reported token counts when available. Keep inclusive total tokens separate from their input and output components.
+
 ## Passive latency diagnostics
 
 Collection is off by default. In **Installation → Diagnostics**, built-in Admin
