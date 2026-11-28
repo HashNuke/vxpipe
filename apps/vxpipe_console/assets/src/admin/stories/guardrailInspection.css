@@ -1,0 +1,20 @@
+.guardrail-inspection { height: 100dvh; }
+.guardrail-body { padding: 16px; color: var(--vx-ink); min-width: 0; }
+.guardrail-body h2, .guardrail-body h3 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+.guardrail-body small, .guardrail-evidence > p { color: var(--vx-muted); }
+.guardrail-check { border-bottom: 1px solid var(--vx-line); font-size: 14px; }
+.guardrail-check summary { cursor: pointer; line-height: 1.6; padding-block: 10px; }
+.guardrail-check summary span:last-child, .guardrail-check code { font-family: var(--vx-mono); font-size: 12px; }
+.guardrail-check summary span:last-child { white-space: nowrap; }
+.guardrail-evidence { padding: 0 12px 8px; overflow-wrap: anywhere; }
+.guardrail-evidence ol { padding: 0; list-style: none; }
+.guardrail-evidence li { padding: 10px 0; border-top: 1px solid var(--vx-line); }
+.guardrail-evidence p { margin: 6px 0; }
+.guardrail-feedback { margin-top: 6px; }
+.guardrail-feedback p { margin: 0; }
+.guardrail-totals { display: flex; flex-wrap: wrap; gap: 6px 20px; padding-block: 8px; font-variant-numeric: tabular-nums; }
+.guardrail-check[data-status="Blocked"] summary strong,
+.guardrail-check[data-status="Error"] summary strong { color: var(--admin-amber); }
+.guardrail-inspection .vx-transcript:has(> .guardrail-body) .vx-empty { display: none; }
+.guardrail-inspection .vx-message .guardrail-body { padding: 4px 0; }
+.guardrail-inspect { display: block; padding-block: 6px; text-decoration: underline; color: var(--vx-blue); cursor: pointer; }
