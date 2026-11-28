@@ -123,7 +123,7 @@ defmodule Vxpipe.Providers.RegistryTest do
              "openrouter" => [:credential, :credential_validation, :llm],
              "fireworks" => [:credential, :llm],
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
-             "google" => [:credential, :credential_validation, :llm, :sts, :stt, :tts],
+             "google" => [:credential, :credential_validation, :decisions, :llm, :sts, :stt, :tts],
              "morse" => [:sts, :stt, :tts],
              "morse_code_api" => [:credential, :credential_validation, :stt, :tts],
              "openai" => [:credential, :credential_validation, :decisions, :llm, :sts],

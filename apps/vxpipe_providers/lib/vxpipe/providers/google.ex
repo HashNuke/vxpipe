@@ -13,7 +13,8 @@ defmodule Vxpipe.Providers.Google do
       credential_validation: Vxpipe.Providers.Google.CredentialValidation,
       stt: Vxpipe.Providers.Google.STTSession,
       sts: Vxpipe.Providers.Google.STSSession,
-      tts: Vxpipe.Providers.Google.TTSSession
+      tts: Vxpipe.Providers.Google.TTSSession,
+      decisions: Vxpipe.Providers.Google.Decisions
     }
   end
 end
