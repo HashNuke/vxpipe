@@ -358,6 +358,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     refute_received {:vxpipe_event, _}
   end
 
+  test "provider cancellation before denied tool-result handoff leaves feedback undelivered",
+       context do
+    call = make_ref()
+    evidence = tool_evidence(context.state, call, 1)
+    state = tool_event(context.state, context.capability, evidence)
+    assert_receive {:vxpipe_event, %ToolCallStarted{}}
+    cancel = %{evidence | event: %{evidence.event | kind: :tool_cancelled, sequence: 2}}
+    state = tool_event(state, context.capability, cancel)
+    owner = self()
+
+    denial =
+      {:error,
+       {:transfer_denied,
+        %{messages: ["Private correction"], on_dispatch: fn -> send(owner, :dispatched) end}}}
+
+    assert catch_exit(Tools.handle_tool_executed(state, context.capability, call, denial)) ==
+             :tool_result_unavailable
+
+    refute_received :dispatched
+    refute_received {:provider_tool_result, _, _}
+  end
+
   test "provider cancellation retains only its matching admitted invocation after epoch change",
        context do
     call = make_ref()

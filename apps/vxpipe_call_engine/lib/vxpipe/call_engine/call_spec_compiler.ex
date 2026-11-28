@@ -61,7 +61,7 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
              participant_ids(base_participants),
              ["media_policy"]
            ),
-         {:ok, participants} <- resolve_transfer_bindings(base_participants),
+         {:ok, participants} <- resolve_transfer_bindings(base_participants, call_spec.revision),
          {:ok, tool_visibility} <-
            resolve_tool_visibility(
              Keyword.get(options, :tool_visibility, call_spec.tool_visibility),
@@ -286,11 +286,11 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
     end
   end
 
-  defp resolve_transfer_bindings(participants) do
+  defp resolve_transfer_bindings(participants, revision) do
     participants
     |> Enum.sort_by(fn {call_spec_key, _participant} -> call_spec_key end)
     |> Enum.reduce_while({:ok, participants}, fn {call_spec_key, participant}, {:ok, acc} ->
-      case transfer_binding(participant, participants) do
+      case transfer_binding(participant, participants, revision) do
         {:ok, nil} ->
           {:cont, {:ok, acc}}
 
@@ -322,10 +322,10 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
     end)
   end
 
-  defp transfer_binding(%ResolvedCallPlan.Participant{transfers: []}, _participants),
+  defp transfer_binding(%ResolvedCallPlan.Participant{transfers: []}, _participants, _revision),
     do: {:ok, nil}
 
-  defp transfer_binding(%ResolvedCallPlan.Participant{} = source, participants) do
+  defp transfer_binding(%ResolvedCallPlan.Participant{} = source, participants, revision) do
     targets =
       Map.new(source.transfers, fn call_spec_key ->
         destination = Map.fetch!(participants, call_spec_key)
@@ -344,9 +344,18 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
        source_call_spec_key: source.call_spec_key,
        source_participant_id: source.participant_id,
        source_activation_id: source.activation_id,
-       targets: targets
+       targets: targets,
+       guardrails_policy_revision: revision,
+       guardrails_policy_digest:
+         Vxpipe.CallEngine.Guardrails.TransferAdmission.policy_digest(transfer_questions(source))
      }}
   end
+
+  defp transfer_questions(%{guardrails: %{before_outgoing_transfer: questions}})
+       when is_list(questions),
+       do: questions
+
+  defp transfer_questions(_source), do: []
 
   defp validate_initial_variables(sections, initial_variables) do
     Enum.reduce_while(initial_variables, :ok, fn

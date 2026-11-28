@@ -312,6 +312,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
        ),
        do: exit(:tool_result_unavailable)
 
+  defp settle_executed_tool(
+         state,
+         capability,
+         pending,
+         call_ref,
+         {:error, {:transfer_denied, lines}}
+       )
+       when is_list(lines), do: deliver_denial(state, capability, pending, call_ref, lines, nil)
+
+  defp settle_executed_tool(
+         state,
+         capability,
+         pending,
+         call_ref,
+         {:error, {:transfer_denied, %{messages: lines, on_dispatch: callback}}}
+       ) do
+    deliver_denial(state, capability, pending, call_ref, lines, callback)
+  end
+
   defp settle_executed_tool(state, capability, pending, call_ref, outcome) do
     case pending_connection(state, pending) do
       {:ok, connection} ->
@@ -386,6 +405,46 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       Evidence.tool_scope_current?(state, scope.evidence)
   end
 
+  defp deliver_denial(state, capability, pending, call_ref, lines, callback) do
+    case pending_connection(state, pending) do
+      {:ok, connection} ->
+        event =
+          struct!(
+            ToolCallFailed,
+            Map.merge(agent_fields(state, connection, pending.turn), %{
+              tool_call_id: pending.tool_call_id,
+              name: pending.name,
+              reason: :transfer_denied
+            })
+          )
+
+        case deliver_provider_tool_result(
+               capability,
+               call_ref,
+               {:error, {:transfer_denied, lines}}
+             ) do
+          :ok ->
+            if callback, do: callback.()
+            state = EventPublisher.publish(state, connection.pid, event)
+
+            %{
+              state
+              | next_sequence: state.next_sequence + 1,
+                sts_tool_calls: Map.delete(state.sts_tool_calls, call_ref)
+            }
+
+          {:error, :held} ->
+            state
+
+          {:error, _reason} ->
+            exit(:tool_result_unavailable)
+        end
+
+      :error ->
+        exit(:tool_result_unavailable)
+    end
+  end
+
   defp queue_platform_effect(
          capability,
          pending,
@@ -420,6 +479,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   defp deliver_provider_tool_result(capability, call_ref, {:ok, result}) do
     try do
       Capability.send_tool_result(capability, call_ref, result)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
+  defp deliver_provider_tool_result(capability, call_ref, {:error, {:transfer_denied, lines}})
+       when is_list(lines) do
+    try do
+      Capability.send_tool_result(capability, call_ref, %{
+        "error" => "transfer_denied",
+        "messages" => lines
+      })
     catch
       :exit, _reason -> {:error, :unavailable}
     end

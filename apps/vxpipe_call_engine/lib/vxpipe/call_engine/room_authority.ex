@@ -55,6 +55,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     UsageObservations
   }
 
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Verdicts, as: TransferVerdicts
+
   alias Vxpipe.CallEngine.RoomAuthority.STSSourceCutover
 
   import Vxpipe.CallEngine.RoomAuthority.Playback,
@@ -146,6 +148,90 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     )
   catch
     :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc """
+  Records a Decisions evaluation report from the owning participant activation.
+  Trusted scope, stale activation and source-interval privacy are enforced
+  room-side; untrusted or stale reports are dropped. Never blocks the caller.
+  """
+  @spec record_decisions(String.t(), String.t(), map()) :: :ok
+  def record_decisions(tenant_id, room_id, report)
+      when is_binary(tenant_id) and is_binary(room_id) and is_map(report) do
+    case GenServer.whereis(via(tenant_id, room_id)) do
+      pid when is_pid(pid) -> send(pid, {:decisions_report, report})
+      _unregistered -> :ok
+    end
+
+    :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
+  @doc """
+  Records late billable Decisions usage without reopening the gate.
+  """
+  @spec record_decisions_usage(String.t(), String.t(), [struct()]) :: :ok
+  def record_decisions_usage(tenant_id, room_id, observations)
+      when is_binary(tenant_id) and is_binary(room_id) and is_list(observations) do
+    case GenServer.whereis(via(tenant_id, room_id)) do
+      pid when is_pid(pid) -> send(pid, {:decisions_late_usage, observations})
+      _unregistered -> :ok
+    end
+
+    :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
+  @doc """
+  Records an invocation-bound Before-outgoing-transfer verdict produced by
+  joint admission. Passed-only entries are stored; the room consumes each
+  entry once when the terminal tool executes.
+  """
+  @spec bind_transfer_verdict(GenServer.server(), map()) :: :ok | {:error, :unavailable}
+  def bind_transfer_verdict(room_authority, entry) when is_map(entry) do
+    GenServer.call(room_authority, {:bind_transfer_verdict, entry}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  def bind_transfer_verdict(tenant_id, room_id, entry) do
+    bind_transfer_verdict(via(tenant_id, room_id), entry)
+  end
+
+  @doc """
+  Peeks at the bound verdict for an invocation without consuming it.
+  Consumption happens once at transfer begin with identity revalidation.
+  """
+  @spec take_transfer_verdict(String.t(), String.t(), String.t()) ::
+          {:ok, map()} | :empty | {:error, :unavailable}
+  def take_transfer_verdict(tenant_id, room_id, invocation_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(invocation_id) do
+    GenServer.call(
+      via(tenant_id, room_id),
+      {:take_transfer_verdict, invocation_id},
+      @call_timeout
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc """
+  Records a guardrail policy denial for a transfer that never reached the
+  preparation. The request identifies the originating activation and invocation.
+  """
+  @spec note_transfer_denial(String.t(), String.t(), map()) :: :ok
+  def note_transfer_denial(tenant_id, room_id, note)
+      when is_binary(tenant_id) and is_binary(room_id) and is_map(note) do
+    case GenServer.whereis(via(tenant_id, room_id)) do
+      pid when is_pid(pid) -> send(pid, {:note_transfer_denial, note})
+      _unregistered -> :ok
+    end
+
+    :ok
+  catch
+    :exit, _reason -> :ok
   end
 
   @spec idle(IdleRequest.t()) :: {:ok, map()} | {:error, :rejected | :unavailable}
@@ -387,6 +473,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  def handle_call({:bind_transfer_verdict, entry}, _from, %State{} = state) when is_map(entry) do
+    {:reply, :ok, TransferVerdicts.bind(state, entry)}
+  end
+
+  def handle_call({:take_transfer_verdict, invocation_id}, _from, %State{} = state)
+      when is_binary(invocation_id) do
+    {:reply, TransferVerdicts.peek(state, invocation_id), state}
+  end
+
   def handle_call({:announce_hangup, context, text}, from, state),
     do: ActionAnnouncement.hangup(context, text, from, state)
 
@@ -402,6 +497,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   @impl true
   def handle_info({:announcement_deadline, id}, state), do: ActionAnnouncement.deadline(id, state)
+
+  def handle_info({:decisions_report, report}, %State{} = state) when is_map(report) do
+    {:noreply, Vxpipe.CallEngine.RoomAuthority.DecisionsPublication.record(state, report)}
+  end
+
+  def handle_info({:decisions_late_usage, observations}, %State{} = state)
+      when is_list(observations) do
+    {:noreply,
+     Vxpipe.CallEngine.RoomAuthority.DecisionsPublication.record_usage(state, observations)}
+  end
+
+  def handle_info({:note_transfer_denial, note}, %State{} = state) when is_map(note) do
+    {:noreply, ParticipantTransfer.note_denied(state, note)}
+  end
 
   def handle_info(
         {[:alias | id], _} = message,

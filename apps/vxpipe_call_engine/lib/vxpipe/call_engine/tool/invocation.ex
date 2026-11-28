@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.Guardrails.Deadline
   alias Vxpipe.CallEngine.Tool.{
     Context,
     InvocationBinding,
@@ -57,12 +58,14 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
   end
 
   def handle_call(:begin, _from, %{task: nil} = state) do
+    context = execution_context(state.binding.handler, state.context, state.timeout_ms)
+
     task =
       Task.async(fn ->
         InvocationExecution.run(
           state.binding,
           state.arguments,
-          state.context,
+          context,
           state.maximum_result_bytes
         )
       end)
@@ -151,6 +154,13 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
     end
   end
 
+  defp execution_context({:participant_transfer, %{guardrails_policy_digest: digest}}, context, timeout)
+       when is_binary(digest) do
+    %{context | deadline_ms: Deadline.evaluation(context.deadline_ms, timeout)}
+  end
+
+  defp execution_context(_, context, _), do: context
+
   defp report(outcome, state) do
     completion = %InvocationCompletion{
       invocation_id: state.invocation_id,
@@ -166,6 +176,13 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
   defp normalize_outcome({:ok, _result} = outcome), do: outcome
   defp normalize_outcome({:error, :invalid_result} = outcome), do: outcome
   defp normalize_outcome({:error, :unknown} = outcome), do: outcome
+  defp normalize_outcome({:error, :rejected} = outcome), do: outcome
+  defp normalize_outcome({:error, :transfer_denied} = outcome), do: outcome
+  defp normalize_outcome({:error, :transfer_unavailable} = outcome), do: outcome
+
+  defp normalize_outcome({:error, {:transfer_denied, _}} = outcome),
+    do: outcome
+
   defp normalize_outcome(_outcome), do: {:error, :tool_failed}
 
   defp stop_task(nil), do: :ok

@@ -56,6 +56,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationLifecycle do
           {:vxpipe_capability_tool_completed, capability, completion.context, call, result}
         )
 
+      {:error, {:transfer_denied, _lines}} ->
+        send(
+          target,
+          {:vxpipe_capability_tool_failed, capability, completion.context, call, :transfer_denied}
+        )
+
       {:error, reason} ->
         send(
           target,

@@ -109,8 +109,44 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
     end
   end
 
-  defp normalize({:error, _reason}, _maximum_result_bytes), do: {:error, :tool_failed}
+  defp normalize({:error, _reason} = error, _maximum_result_bytes),
+    do: normalize_execution_error(error)
+
   defp normalize(_result, _maximum_result_bytes), do: {:error, :invalid_result}
+
+  # Guardrail transfer verdicts travel as typed errors so the room, history
+  # and model channels can distinguish disallowed destinations (:rejected),
+  # matched policy questions (:transfer_denied, with private lines for the
+  # originating model only) and checker outages (:transfer_unavailable).
+  # Anything else stays a generic tool failure.
+  defp normalize_execution_error({:error, reason} = error)
+       when reason in [:rejected, :transfer_denied, :transfer_unavailable],
+       do: error
+
+  defp normalize_execution_error(
+         {:error, {:transfer_denied, %{messages: lines, on_dispatch: callback} = receipt}} = error
+       )
+       when map_size(receipt) == 2 and is_function(callback, 0) do
+    if denied_lines_valid?(lines), do: error, else: {:error, :tool_failed}
+  end
+
+  defp normalize_execution_error({:error, {:transfer_denied, lines}} = error)
+       when is_list(lines) do
+    if denied_lines_valid?(lines), do: error, else: {:error, :tool_failed}
+  end
+
+  defp normalize_execution_error({:error, _reason}), do: {:error, :tool_failed}
+
+  # Denial lines are service-authored feedback for the originating model only.
+  # Never forward unvalidated payloads toward history-adjacent channels.
+  defp denied_lines_valid?(lines) when is_list(lines) and lines != [] do
+    Enum.all?(lines, &(is_binary(&1) and &1 != "")) and
+      byte_size(JSON.encode!(lines)) <= 4_096
+  rescue
+    _exception -> false
+  end
+
+  defp denied_lines_valid?(_lines), do: false
 
   defp normalize_platform(
          {:ok, %PlatformResult{effect: effect, result: result} = platform_result},

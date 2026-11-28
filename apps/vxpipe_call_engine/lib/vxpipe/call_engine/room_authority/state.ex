@@ -29,6 +29,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 participant_transfer_runtime: nil,
                 activated_agent_participant_ids: MapSet.new(),
                 pending_participant_transfer: nil,
+                transfer_verdicts: %{},
                 action_announcement: nil,
                 agent_turns: %{},
                 idle_wait: nil,
@@ -83,6 +84,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           pending_participant_transfer:
             nil
             | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending.t(),
+          transfer_verdicts: %{optional(String.t()) => map()},
           pending_agent_teardowns: %{optional(pid()) => map()},
           pending_connection_promotions: %{optional(String.t()) => map()},
           participant_monitors: %{optional(reference()) => String.t()},

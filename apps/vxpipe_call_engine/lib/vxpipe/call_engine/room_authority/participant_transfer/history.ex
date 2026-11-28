@@ -17,7 +17,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
     :destination_text_to_speech_unavailable,
     :preparation_process_down,
     :preparation_supervisor_unavailable,
-    :source_authority_changed
+    :source_authority_changed,
+    :transfer_guardrail_blocked
   ]
 
   @type failure_cause ::
@@ -32,6 +33,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
           | :preparation_process_down
           | :preparation_supervisor_unavailable
           | :source_authority_changed
+          | :transfer_guardrail_blocked
 
   @type restoration_outcome :: :not_required | :completed | :failed | :timed_out
 

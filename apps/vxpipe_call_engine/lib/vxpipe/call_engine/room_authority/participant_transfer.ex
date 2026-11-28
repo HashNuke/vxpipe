@@ -18,7 +18,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     HumanPreparation,
     Pending,
     Preparation,
-    Progress
+    Progress,
+    Verdicts
   }
 
   @spec room_failed(term(), State.t()) :: State.t()
@@ -49,10 +50,34 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   def begin(%Request{}, _from, %State{action_announcement: pending} = state)
       when not is_nil(pending), do: {:reply, {:error, :rejected}, state}
 
-  def begin(%Request{announcement: text} = request, from, state) when is_binary(text),
-    do: Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement.transfer(request, from, state)
+  def begin(%Request{} = request, from, %State{} = state) do
+    case Verdicts.consume(state, request) do
+      {:ok, admitted, state} -> begin_admitted(admitted, from, state)
+      {:error, _fence, state} -> {:reply, {:error, :rejected}, state}
+    end
+  end
 
-  def begin(%Request{} = request, from, %State{pending_participant_transfer: nil} = state) do
+  def resume_after_announcement(%Request{} = request, from, %State{} = state) do
+    if Verdicts.current_after_announcement?(state, request) do
+      begin_admitted(%{request | announcement: nil}, from, state)
+    else
+      {:reply, {:error, :rejected}, state}
+    end
+  end
+
+  defp begin_admitted(
+         %Request{announcement: text} = request,
+         from,
+         %State{} = state
+       )
+       when is_binary(text),
+       do: Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement.transfer(request, from, state)
+
+  defp begin_admitted(
+         %Request{} = request,
+         from,
+         %State{pending_participant_transfer: nil} = state
+       ) do
     with :ok <- Authorizer.authorize(request, state) do
       timeout_ms = state.participant_transfer_runtime.plan.transfer_policy.attempt_timeout_ms
       deadline_ms = System.monotonic_time(:millisecond) + timeout_ms
@@ -62,9 +87,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     end
   end
 
-  def begin(%Request{}, _from, %State{} = state) do
-    {:reply, {:error, :rejected}, state}
-  end
+  defp begin_admitted(_request, _from, state), do: {:reply, {:error, :rejected}, state}
 
   defp start_preparation(request, from, deadline_ms, state) do
     attempt_id = Vxpipe.CallEngine.Id.generate(:transfer_attempt)
@@ -295,6 +318,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   @spec teardown_source(State.t(), pid(), Context.t()) :: State.t()
   def teardown_source(%State{} = state, capability, %Context{} = context)
       when is_pid(capability) do
+    state = Verdicts.drop_for_participant(state, context.agent_participant_id)
+
     state =
       if state.speech_to_speech_capability != nil and
            state.speech_to_speech_capability.pid == capability do
@@ -318,6 +343,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         state
     end
   end
+
+  @spec note_denied(State.t(), map()) :: State.t()
+  def note_denied(%State{} = state, %Request{} = request) do
+    if Authorizer.authorize(request, state) == :ok do
+      History.failed(state, request, :transfer_guardrail_blocked)
+    else
+      state
+    end
+  end
+
+  def note_denied(%State{} = state, _note), do: state
 
   @spec promote_connection_after_source_exit(State.t(), String.t()) :: State.t()
   def promote_connection_after_source_exit(%State{} = state, participant_id)

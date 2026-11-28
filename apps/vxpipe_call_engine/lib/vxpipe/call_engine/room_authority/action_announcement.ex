@@ -244,7 +244,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ActionAnnouncement do
   end
 
   defp perform({:transfer, request, from}, state) do
-    case ParticipantTransfer.begin(%{request | announcement: nil}, from, state) do
+    case ParticipantTransfer.resume_after_announcement(request, from, state) do
       {:reply, result, state} ->
         GenServer.reply(from, result)
         {:noreply, CallerIdle.reconcile(state)}

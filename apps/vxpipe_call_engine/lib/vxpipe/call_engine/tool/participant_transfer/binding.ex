@@ -8,7 +8,14 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding do
     :source_activation_id,
     :targets
   ]
-  defstruct @enforce_keys
+  # Digest of the sender's before_outgoing_transfer questions at plan time
+  # (nil when none are configured). The execution gate fails closed when a
+  # digest is present but no verdict can be produced or consumed.
+  defstruct @enforce_keys ++
+              [
+                guardrails_policy_digest: nil,
+                guardrails_policy_revision: nil
+              ]
 
   @type target :: %{
           required(:call_spec_key) => String.t(),
@@ -21,6 +28,8 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding do
           source_call_spec_key: String.t(),
           source_participant_id: String.t(),
           source_activation_id: String.t(),
-          targets: %{required(String.t()) => target()}
+          targets: %{required(String.t()) => target()},
+          guardrails_policy_digest: nil | binary(),
+          guardrails_policy_revision: nil | non_neg_integer()
         }
 end
