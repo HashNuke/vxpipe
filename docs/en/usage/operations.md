@@ -42,11 +42,13 @@ recording the installation could not store show **Recording unavailable**.
 
 ## Inspect a guardrail failure
 
-The published call-details JSON includes a private `decisions` section for calls with guardrail evidence. Find the evaluation by its source turn, candidate attempt or transfer invocation. Its outcome tells you whether the questions passed, a rule blocked the proposal, the provider returned an error, or the check was cancelled. A checker error can contain some scores and leave others unavailable.
+Open the call’s **Conversation** tab. A failed caller input stays in its original position. An unsent response and its proposed tools appear together with a red edge. Each indented card shows the questions that failed at that stage. Hover, focus or tap a result icon to see the recorded probability of Yes, its comparison with the configured threshold, and the required answer. At the threshold the inferred answer is Yes.
 
-For a blocked evaluation, match the question results by `evaluation_id` and read them in `ordinal` order. Each result records the question ID, required answer, threshold, P(Yes) when available, and the exact feedback line for a failed question. A separate dispatch receipt identifies the lines the model received. The transcript and delivery events show which response reached the caller. When storage permission was denied or unknown, the private content has a `content_unavailable` reason. An older publication can lack Decisions evidence.
+Open **Filters** to change the view. By default, Conversation shows messages, tool calls and failed checks. **Guardrails → All** includes passing questions. **Guardrails → Hide** hides withheld proposals and their unexecuted tools while keeping permitted caller transcripts and executed tools. **Tools → With details** expands the information available for executed calls. Logs and events have their own controls. **Reset to defaults** restores the initial selections.
 
-Count each evaluation once and each provider request by its physical attempt ID. A retried request can belong to the same evaluation. The repaired reply is a separate conversational model attempt. Decisions usage includes provider-reported token counts when available. Keep inclusive total tokens separate from their input and output components.
+Open **Metrics** and expand the participant’s **Decisions** row to inspect a check and its provider attempts. An evaluation can block a proposal even when its API request succeeded. A transport retry adds a request to the same check. A rewritten reply contributes to the conversational LLM. Gate delay and API request duration are measured separately. Reported tokens and settled costs appear when available, with costs in their original currency. Use the evaluation’s conversation link to return to its message or private activity.
+
+The published call-details JSON includes private `decisions` facts. Match question results, feedback dispatches and attempts by their recorded identities. The dispatch receipt records which feedback lines reached the model. The delivery record identifies the response that reached the caller. A denied or unknown storage interval withholds the question text, scores, feedback and draft. Older call histories can lack these records.
 
 ## Passive latency diagnostics
 

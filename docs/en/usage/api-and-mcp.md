@@ -190,7 +190,9 @@ read responses, and are separate from telephony metadata. MCP updates carry the
 observed generation; refresh uses `{generation,refresh_tools:true}`. See
 [Integrations](integrations.md) for reconnect and readiness semantics.
 
-The authorized call-detail artifact includes a `decisions` array of private evaluation, question-result, feedback-dispatch and physical-attempt facts. Join their payloads by `evaluation_id`; use `attempt_id` to match `usage.observations` with capability `decisions`. A transfer can have a tool invocation ID without a source turn. Historical clients should accept a missing array. [Inspect a guardrail failure](operations.md#inspect-a-guardrail-failure).
+The authorized call-detail artifact includes a `decisions` array of private evaluation, question-result, feedback-dispatch and physical-attempt facts. Join their payloads by `evaluation_id` within the same call incarnation and participant activation. Match a Decisions usage observation by its `attempt_id` and recorded owner, turn or tool invocation. A transfer can have a tool invocation ID without a source turn. Historical clients should accept a missing array.
+
+The authorized `GET /api/tenants/:tenant_key/calls/:call_id/inspection` response groups those facts into versioned `guardrails` entries. Each entry contains an evaluation, ordered question results and physical attempts. The optional `message_id` identifies the owning transcript entry. Check `content_unavailable` before rendering private details, and treat an absent token count, cost or actual model as unknown. [Inspect a guardrail failure](operations.md#inspect-a-guardrail-failure).
 
 Call inspection is PostgreSQL-backed and reports archive completeness honestly.
 The call-level `GET T/calls/:call_id/recording.mka` download requires a Console
