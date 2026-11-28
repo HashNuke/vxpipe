@@ -10,8 +10,14 @@ cat > "$scratch/bin/mix" <<'MIX'
 #!/usr/bin/env bash
 {
   printf 'directory=%s\n' "$PWD"
+  printf 'runner=%s\n' "${VXPIPE_LIVETESTS_RUNNER:-missing}"
   printf 'openai=%s\n' "${OPENAI_API_KEY:-missing}"
   printf 'gemini=%s\n' "${GEMINI_API_KEY:-missing}"
+  if [[ "${TYPESAFE_API_KEY:-}" == "test-typesafe" ]]; then
+    echo "jev=configured"
+  elif [[ -z "${TYPESAFE_API_KEY:-}" ]]; then
+    echo "jev=missing"
+  fi
   for name in DEEPSEEK_API_KEY OPENROUTER_API_KEY FIREWORKS_API_KEY CARTESIA_API_KEY ELEVENLABS_API_KEY; do
     printf '%s=%s\n' "$name" "${!name:-missing}"
   done
@@ -32,6 +38,7 @@ CARTESIA_API_KEY=todo
 ELEVENLABS_API_KEY=test-elevenlabs
 OPENAI_API_KEY=test-only-key
 GEMINI_API_KEY=todo
+TYPESAFE_API_KEY=test-typesafe
 TELNYX_API_KEY=todo
 TELEPHONY_TEST_PUBLIC_URL=https://todo
 ENV
@@ -40,6 +47,7 @@ export VXPIPE_LIVETESTS_STATE_DIR="$scratch/state"
 export VXPIPE_LIVE_RUNNER_TEST_OUTPUT="$scratch/output"
 export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/live_providers.env"
 export VXPIPE_LIVE_PROVIDERS_MIX_BIN="$scratch/bin/mix"
+export TYPESAFE_API_KEY=ambient-test-only-key
 export TELNYX_API_KEY=ambient-test-only-key
 export TELNYX_PUBLIC_KEY=ambient-test-only-key
 export TAILSCALE_CLIENT_SECRET=ambient-test-only-key
@@ -51,6 +59,8 @@ export ELEVENLABS_API_KEY=ambient-test-only-key
   apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs
 
 rg -q -F "directory=$repo_root" "$scratch/output"
+rg -q -F 'runner=1' "$scratch/output"
+rg -q -F 'jev=configured' "$scratch/output"
 rg -q -F 'openai=test-only-key' "$scratch/output"
 rg -q -F 'DEEPSEEK_API_KEY=test-deepseek' "$scratch/output"
 rg -q -F 'OPENROUTER_API_KEY=test-openrouter' "$scratch/output"
@@ -77,6 +87,7 @@ TELEPHONY_TEST_PUBLIC_URL=https://voice.example.test
 ENV
 
 "$repo_root/bin/livetests" run
+rg -q -F 'jev=missing' "$scratch/output" || { echo "Jev credential leaked from ambient environment" >&2; exit 1; }
 for name in CARTESIA_API_KEY ELEVENLABS_API_KEY; do
   if ! rg -q -F "$name=missing" "$scratch/output"; then
     printf '%s leaked from the ambient environment\n' "$name" >&2

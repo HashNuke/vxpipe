@@ -60,7 +60,7 @@ exec 3>&2
 # The file is loaded only in this child process. Ignore ambient credentials
 # that may have been loaded by an interactive dotenv hook.
 credential_names=(
-  OPENAI_API_KEY GEMINI_API_KEY ZENMUX_API_KEY DEEPGRAM_API_KEY
+  OPENAI_API_KEY GEMINI_API_KEY TYPESAFE_API_KEY ZENMUX_API_KEY DEEPGRAM_API_KEY
   DEEPSEEK_API_KEY OPENROUTER_API_KEY FIREWORKS_API_KEY
   CARTESIA_API_KEY ELEVENLABS_API_KEY
   TELEPHONY_TEST_PUBLIC_URL
@@ -588,6 +588,7 @@ telephony_selected() {
 
 run_tests() {
   load_credentials
+  export VXPIPE_LIVETESTS_RUNNER=1
   cd -- "$repo_root"
 
   local mix_arguments=("$@")

@@ -86,6 +86,10 @@ With no selection, the runner runs all live provider tests. Live modules carry `
 and provider tags; they do not use the ordinary integration tag. A broad
 `--include integration` must not unexpectedly contact paid providers.
 
+Each hosted Guardrails scenario uses a compiled call with synthetic caller input, a scripted conversational model, and local speech. The selected Decisions provider receives the checks. Run a provider with `bin/livetests run --only live_openai_decisions`, `live_gemini_decisions`, or `live_jev_guardrails`. The runner marks its test process after acquiring the branch reservation. Direct Mix selections can exercise the local HTTP fixtures by running `mix test test/integration/guardrail_decisions_hosted_test.exs` from `apps/vxpipe_call_engine`.
+
+The hosted report groups gate latency by event and includes sample count, p50, p95, reported model and per-attempt token data. The scripted repair and its time to first local audio are reported separately from Decisions latency.
+
 Distinguish three kinds of evidence:
 
 | Lane | What it proves |
