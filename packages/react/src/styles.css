@@ -1902,3 +1902,26 @@ button.vx-tool-summary:hover {
   .vx-latency-evidence dl { grid-template-columns: 1fr; }
 }
 .vx-metric-summary dd .vx-metric-unavailable { color: var(--vx-muted); font: 400 11px var(--vx-mono); }
+
+.vx-metrics-with-decisions { display: block; overflow-y: auto; }
+.vx-metrics-with-decisions .vx-metric-table-scroll { max-height: 62vh; }
+.vx-decisions-details { padding: 16px; color: var(--vx-ink); font-variant-numeric: tabular-nums; }
+.vx-decisions-details h2, .vx-decisions-details h3, .vx-decisions-details h4 { margin: 12px 0 6px; font-size: 14px; font-weight: 600; }
+.vx-decisions-details h2 { margin-top: 0; }
+.vx-decisions-totals { display: flex; flex-wrap: wrap; gap: 6px 20px; padding-block: 4px 8px; font-size: 14px; }
+.vx-decisions-check { border-bottom: 1px solid var(--vx-line); font-size: 14px; }
+.vx-decisions-check summary { cursor: pointer; line-height: 1.6; padding-block: 10px; }
+.vx-decisions-evidence { padding: 0 12px 8px; overflow-wrap: anywhere; }
+.vx-decisions-evidence p, .vx-decisions-counts p { margin: 4px 0; color: var(--vx-muted); }
+.vx-decisions-counts, .vx-decisions-owner > p { font-size: 12px; }
+.vx-decisions-owner > p { margin: 0; color: var(--vx-muted); }
+.vx-decisions-owner h4 { overflow-wrap: anywhere; }
+.vx-decisions-check:is([data-outcome="blocked"], [data-outcome="error"]) summary strong { color: var(--admin-amber, var(--vx-red)); }
+.vx-decisions-list { padding: 0; list-style: none; }
+.vx-decisions-list li { border-top: 1px solid var(--vx-line); padding-block: 8px; }
+.vx-decisions-link { display: block; margin-block: 3px; padding: 5px 0; border: 0; background: transparent; text-decoration: underline; color: var(--vx-blue); text-align: start; font: inherit; cursor: pointer; }
+.vx-decisions-link:focus-visible, .vx-decisions-check summary:focus-visible, .vx-decisions-details section:focus-visible { outline: 2px solid var(--vx-ink); outline-offset: 2px; }
+@media (pointer: coarse), (max-width: 520px) {
+  .vx-decisions-link, .vx-decisions-check summary { min-height: 44px; }
+  .vx-decisions-details { padding: 12px; }
+}

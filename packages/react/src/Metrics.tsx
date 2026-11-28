@@ -8,6 +8,8 @@ import { MetricSummary } from "./MetricSummary.js";
 import { participantDisplayName } from "./participantDisplayName.js";
 import { LatencyRowDetails, LatencySummaryCell, LatencyTurnCells } from "./LatencyCells.js";
 import { bargeInLabel, endOfTurnLabel, latencyColumnDescriptions, latencyRows, type LatencyRow } from "./latencyRows.js";
+import { DecisionsDetails } from "./DecisionsDetails.js";
+import { groupDecisions, type DecisionsGroup } from "./decisionsMetrics.js";
 import { useLatencyRows } from "./useLatencyRows.js";
 
 /** Optional authorized diagnostics shown as VAD rows; failures never hide the call's metrics. */
@@ -19,6 +21,8 @@ export interface MetricsLatency {
 
 const metricOrder = [
   "Call duration",
+  "Evaluations",
+  "API requests",
   "Turn duration",
   "Request duration",
   "Final transcript latency",
@@ -76,6 +80,7 @@ interface MetricRow {
   participantName?: string;
   metrics: Map<string, Metric[]>;
   latency?: LatencyRow;
+  decisions?: DecisionsGroup;
 }
 
 function scopeKey(scope: MetricScope) {
@@ -117,9 +122,9 @@ function rowIdentity(scope: MetricScope, snapshot: ConsoleSnapshot) {
   };
 }
 
-function metricRows(snapshot: ConsoleSnapshot) {
+function metricRows(snapshot: ConsoleSnapshot, metrics: readonly Metric[], groups: readonly DecisionsGroup[]) {
   const rows = new Map<string, MetricRow>();
-  snapshot.metrics.forEach((metric) => {
+  metrics.forEach((metric) => {
     const key = scopeKey(metric.scope);
     const current = rows.get(key);
     if (current) {
@@ -135,6 +140,12 @@ function metricRows(snapshot: ConsoleSnapshot) {
       metrics: new Map([[metric.label, [metric]]]),
     });
   });
+  for (const group of groups) {
+    const scope = { kind: "participant-capability", participantId: group.participantId, capability: "Decisions" } as const;
+    const identity = rowIdentity(scope, snapshot);
+    rows.set(group.key, { ...identity, scope, key: group.key, target: "Decisions", accessibleName: identity.accessibleName + ", " + group.model,
+      decisions: group, metrics: group.metrics });
+  }
   return [...rows.values()].sort((left, right) => {
     const scopeDifference =
       scopeOrder.indexOf(left.scope.kind) - scopeOrder.indexOf(right.scope.kind);
@@ -181,16 +192,23 @@ export function Metrics({
   snapshot,
   theme,
   latency,
+  onShowGuardrail,
 }: {
   snapshot: ConsoleSnapshot;
   theme: "light" | "dark";
   latency?: MetricsLatency;
+  onShowGuardrail?: (evaluationId: string) => void;
 }) {
   const diagnostics = useLatencyRows(latency?.loader, latency?.live ?? false);
   const latencyData = useMemo(() => latencyRows(diagnostics.runs, diagnostics.turns, diagnostics.truncatedRuns),
     [diagnostics.runs, diagnostics.turns, diagnostics.truncatedRuns]);
-  const columns = metricColumns(snapshot.metrics, latencyData.length > 0);
-  const rows = withLatencyRows(metricRows(snapshot), latencyData, snapshot);
+  const decisions = useMemo(() => groupDecisions(snapshot.guardrails ?? [], snapshot.metrics), [snapshot.guardrails, snapshot.metrics]);
+  const columns = metricColumns([...decisions.otherMetrics, ...decisions.groups.flatMap(group => [...group.metrics.values()].flat())],
+    latencyData.length > 0);
+  const rows = withLatencyRows(metricRows(snapshot, decisions.otherMetrics, decisions.groups), latencyData, snapshot);
+  const [selected, setSelected] = useState<{ callId: string; key: string } | null>(null);
+  const selectedGroup = selected?.callId === snapshot.callId ? decisions.groups.find(group => group.key === selected.key) : undefined;
+  const detailId = useId();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const tableId = useId();
   const participantName = (id: string) => {
@@ -204,7 +222,7 @@ export function Metrics({
   const anyExpanded = expandable.some((row) => expanded.has(row.key));
   const allExpanded = expandable.every((row) => expanded.has(row.key));
 
-  if (latencyData.length === 0 && (snapshot.metricsAvailability === "unavailable" || snapshot.metrics.length === 0)) {
+  if (decisions.groups.length === 0 && latencyData.length === 0 && (snapshot.metricsAvailability === "unavailable" || snapshot.metrics.length === 0)) {
     return (
       <section className="vx-metrics vx-metrics-empty" aria-label="Call metrics">
         <p>{snapshot.metricsAvailability === "unavailable" ? "Metrics unavailable." : "No metrics recorded."}</p>
@@ -214,7 +232,7 @@ export function Metrics({
   }
 
   return (
-    <section className="vx-metrics" aria-label="Call metrics">
+    <section className={decisions.groups.length ? "vx-metrics vx-metrics-with-decisions" : "vx-metrics"} aria-label="Call metrics">
       {latencyStatus}
       {expandable.length > 0 && <div className="vx-metric-toolbar">
         <span>{anyExpanded ? (allExpanded ? "Individual measurements" : "Summary + individual measurements") :
@@ -257,6 +275,7 @@ export function Metrics({
                     <LatencyRowDetails row={row.latency} target={row.accessibleName}
                       participantName={row.participantName ?? row.latency.participantId} theme={theme} /></span> :
                     <strong>{row.target}</strong>}
+                  {row.decisions && <small>{row.decisions.model}</small>}
                   {row.participantName ? (
                     <span className="vx-metric-participant-badge">
                       {row.participantName}
@@ -264,6 +283,11 @@ export function Metrics({
                   ) : (
                     <small>{row.scopeLabel}</small>
                   )}
+                  {row.decisions && <button type="button" className="vx-decisions-link"
+                    aria-label={`Inspect checks for ${row.accessibleName}`} aria-controls={detailId}
+                    aria-expanded={selectedGroup?.key === row.key}
+                    onClick={() => setSelected(selectedGroup?.key === row.key ? null : { callId: snapshot.callId, key: row.key })}>
+                    Inspect checks</button>}
                   </div>
                   {expandable.includes(row) && <button type="button" className="vx-metric-row-toggle"
                     aria-label={`${expanded.has(row.key) ? "Collapse" : "Expand"} metrics for ${row.accessibleName}`}
@@ -308,6 +332,8 @@ export function Metrics({
           </tbody>
         </table>
       </div>
+      {decisions.groups.length > 0 && <DecisionsDetails checks={decisions.checks} unlinkedRequests={decisions.unlinkedRequests} rewrites={decisions.rewrites} group={selectedGroup} id={detailId}
+        participantName={selectedGroup && participantName(selectedGroup.participantId)} onShowGuardrail={onShowGuardrail} />}
     </section>
   );
 }

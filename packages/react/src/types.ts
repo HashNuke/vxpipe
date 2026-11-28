@@ -1,5 +1,6 @@
 import type {
   ActivityEvent,
+  GuardrailEvaluation,
   Message,
   Metric,
   Participant,
@@ -12,6 +13,7 @@ import type {
 export interface ConsoleSnapshot {
   /** Canonical cross-kind order supplied by the details store. */
   timelineOrder?: readonly string[];
+  guardrails?: readonly GuardrailEvaluation[];
   callId: string;
   state: "ready" | "connected" | "ended" | "failed";
   duration: string | null;
