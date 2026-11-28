@@ -28,6 +28,8 @@ defmodule Vxpipe.CallEngine.Application do
       {Task.Supervisor, name: Vxpipe.CallEngine.ReadinessTaskSupervisor},
       {Vxpipe.CallEngine.Speech.Silero.ModelCache,
        name: Vxpipe.CallEngine.Speech.Silero.ModelCache},
+      {Vxpipe.CallEngine.Speech.Silero.PoolSupervisor,
+       name: Vxpipe.CallEngine.Speech.Silero.PoolSupervisor},
       {DynamicSupervisor,
        name: Vxpipe.CallEngine.Recording.PreparedWriterSupervisor, strategy: :one_for_one},
       Vxpipe.CallEngine.Archive.Supervisor,
