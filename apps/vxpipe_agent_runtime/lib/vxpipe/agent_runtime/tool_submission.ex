@@ -4,13 +4,17 @@ defmodule Vxpipe.AgentRuntime.ToolSubmission do
   alias Vxpipe.AgentRuntime.{Executor, ToolRegistry}
 
   def submit(calls, request, config) do
-    with :ok <- validate_call_count(calls, config.maximum_tool_calls_per_round),
-         :ok <- validate_unique_call_ids(calls),
+    with :ok <- validate_batch(calls, config.maximum_tool_calls_per_round),
          {:ok, resolved_calls} <- resolve_calls(calls, config.tool_registry),
          {:ok, preflight_rejections} <- preflight_resolved_calls(resolved_calls, request, config),
          :ok <- config.begin_submission.() do
       submit_resolved_calls(resolved_calls, preflight_rejections, request, config)
     end
+  end
+
+  @doc false
+  def validate_batch(calls, maximum) do
+    with :ok <- validate_call_count(calls, maximum), do: validate_unique_call_ids(calls)
   end
 
   defp validate_call_count(calls, maximum) do

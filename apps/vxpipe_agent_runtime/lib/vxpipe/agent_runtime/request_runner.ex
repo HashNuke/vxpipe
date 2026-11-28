@@ -75,6 +75,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          {:ok, response, buffered_deltas} <-
            admitted_model_response(config, model_request, output, round),
          :ok <- validate_feedback_response(response, admission_state, config),
+         :ok <-
+           ToolSubmission.validate_batch(response.tool_calls, config.maximum_tool_calls_per_round),
          {:ok, verdict} <-
            admit_candidate(config, response, request, admission_state, conversation) do
       case verdict do
@@ -241,10 +243,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp config_round_admission(_config), do: nil
 
   defp admit_candidate(config, response, request, admission_state, conversation) do
-    # Validation before guard checks: malformed or policy-violating shapes
-    # fail closed without spending guardrail I/O.
-    with :ok <- validate_round_shape(config, response),
-         {:ok, candidate} <- build_candidate(config, response, request, admission_state) do
+    with {:ok, candidate} <- build_candidate(config, response, request, admission_state) do
       context = %{
         correlation: request.correlation,
         tool_registry: config.tool_registry,
@@ -267,32 +266,6 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
       {:failure, _reason} = failure -> {:ok, failure}
       _invalid -> {:ok, {:failure, :error}}
     end
-  end
-
-  defp validate_round_shape(config, response) do
-    maximum_calls = Map.get(config, :maximum_tool_calls_per_round, 32)
-
-    cond do
-      not is_list(response.tool_calls) ->
-        {:failure, :error}
-
-      length(response.tool_calls) > maximum_calls ->
-        {:failure, :error}
-
-      not Enum.all?(response.tool_calls, &Vxpipe.AgentRuntime.ToolCall.valid?/1) ->
-        {:failure, :error}
-
-      duplicate_tool_ids?(response.tool_calls) ->
-        {:failure, :error}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp duplicate_tool_ids?(tool_calls) do
-    ids = Enum.map(tool_calls, & &1.id)
-    length(ids) != length(Enum.uniq(ids))
   end
 
   defp build_candidate(config, response, request, admission_state) do
