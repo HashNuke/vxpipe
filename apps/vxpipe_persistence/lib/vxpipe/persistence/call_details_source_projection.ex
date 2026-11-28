@@ -30,6 +30,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceProjection do
              transcript: fact_sections.transcript,
              tools: fact_sections.tools,
              transfers: fact_sections.transfers,
+             decisions: fact_sections.decisions,
              usage: usage,
              variables: CallDetailsVariablesProjection.project(read.variable_snapshots),
              artifacts: CallDetailsArtifactProjection.project(artifacts)

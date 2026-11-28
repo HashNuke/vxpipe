@@ -2,6 +2,7 @@ defmodule Vxpipe.Calls.CallDetailsSource do
   @moduledoc "A permitted persisted-fact projection used to construct call details."
 
   @fields [:call, :participants, :transcript, :tools, :transfers, :usage, :variables, :artifacts]
+  @optional_fields [:decisions]
   @list_fields [:participants, :transcript, :tools, :transfers, :artifacts]
   @map_fields [:call, :usage, :variables]
   @identity_fields [
@@ -22,18 +23,21 @@ defmodule Vxpipe.Calls.CallDetailsSource do
     "terminal_reason"
   ]
 
-  @derive {Inspect, except: @fields}
+  @derive {Inspect, except: @fields ++ @optional_fields}
   @enforce_keys @fields
-  defstruct @fields
+  defstruct @fields ++ @optional_fields
 
   @type t :: %__MODULE__{}
 
   @spec new(keyword()) :: {:ok, t()} | {:error, :invalid_call_details_source}
   def new(attributes) when is_list(attributes) do
-    with {:ok, attributes} <- Keyword.validate(attributes, @fields),
+    with {:ok, attributes} <-
+           Keyword.validate(attributes, @fields ++ @optional_fields),
          true <- Enum.all?(@fields, &Keyword.has_key?(attributes, &1)),
          true <- Enum.all?(@list_fields, &(attributes |> Keyword.fetch!(&1) |> is_list())),
          true <- Enum.all?(@map_fields, &(attributes |> Keyword.fetch!(&1) |> is_map())),
+         attributes = Keyword.put_new(attributes, :decisions, []),
+         true <- is_list(Keyword.fetch!(attributes, :decisions)),
          {:ok, attributes} <- canonicalize(attributes),
          :ok <- validate_call(Keyword.fetch!(attributes, :call)) do
       {:ok, struct!(__MODULE__, attributes)}
@@ -52,6 +56,7 @@ defmodule Vxpipe.Calls.CallDetailsSource do
       "transcript" => source.transcript,
       "tools" => source.tools,
       "transfers" => source.transfers,
+      "decisions" => source.decisions || [],
       "usage" => source.usage,
       "variables" => source.variables,
       "artifacts" => source.artifacts

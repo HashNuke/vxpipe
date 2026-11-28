@@ -183,10 +183,14 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   end
 
   defp deduplicate_fact(stored, fact, tenant_key, call_id) do
-    case to_call_fact(stored, tenant_key, call_id) do
-      {:ok, ^fact} -> {:ok, stored}
-      {:ok, _different} -> {:error, :call_fact_conflict}
-      {:error, _reason} = error -> error
+    with {:ok, archived} <- to_call_fact(stored, tenant_key, call_id) do
+      # PostgreSQL returns six fractional digits even when the producer used milliseconds.
+      if DateTime.compare(archived.occurred_at, fact.occurred_at) == :eq and
+           %{archived | occurred_at: fact.occurred_at} === fact do
+        {:ok, stored}
+      else
+        {:error, :call_fact_conflict}
+      end
     end
   end
 

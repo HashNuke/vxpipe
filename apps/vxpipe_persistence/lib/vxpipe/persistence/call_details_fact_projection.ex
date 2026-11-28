@@ -35,13 +35,19 @@ defmodule Vxpipe.Persistence.CallDetailsFactProjection do
     :connection_attached,
     :connection_detached
   ]
+  @decisions_kinds [
+    :decisions_evaluation,
+    :decisions_question_result,
+    :decisions_attempt
+  ]
 
   @spec sections([CallFact.t()]) :: map()
   def sections(facts) when is_list(facts) do
     %{
       transcript: selected(facts, @transcript_kinds),
       tools: selected(facts, @tool_kinds),
-      transfers: selected(facts, @transfer_kinds)
+      transfers: selected(facts, @transfer_kinds),
+      decisions: selected(facts, @decisions_kinds)
     }
   end
 

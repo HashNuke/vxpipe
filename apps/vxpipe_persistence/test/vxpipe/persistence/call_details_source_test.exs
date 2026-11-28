@@ -76,7 +76,8 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
   test "reads one complete permitted publication source from a coherent persisted snapshot",
        context do
     archive_variables(context)
-    archive_usage(context)
+    observation = model_observation(context, "turn-1", "attempt-1")
+    assert {:ok, ^observation} = Calls.store_usage_observation(observation, context.options)
     archive_recording(context)
     archive_history(context)
 
@@ -315,6 +316,284 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     assert Enum.at(document["transcript"], 1)["payload"] == payload
   end
 
+  test "downloaded Decisions evidence requires permission at the source interval", context do
+    alias Vxpipe.Persistence.Schema.CallFact, as: StoredFact
+    call = Repo.get_by!(Call, public_id: @call_id)
+
+    # Model older stored records that bypass today's write-time sanitizer.
+    for {interval, ordinal} <- Enum.with_index([true, false, nil]) do
+      policy = if is_nil(interval), do: %{}, else: %{"save_transcripts" => interval}
+
+      Repo.insert!(%StoredFact{
+        public_id: "question-#{ordinal}",
+        call_id: call.id,
+        room_id: @room_id,
+        incarnation_id: @incarnation_id,
+        kind: "decisions_question_result",
+        sequence: 20 + ordinal,
+        occurred_at: @started_at,
+        participant_id: context.call.plan.participants["assistant"].participant_id,
+        source_policy: policy,
+        payload: %{
+          "evaluation_id" => "evaluation",
+          "question_id" => "rule_#{ordinal}",
+          "ordinal" => ordinal,
+          "required_answer" => "yes",
+          "threshold_hundredths" => 70,
+          "probability_yes" => 0.2,
+          "inferred_answer" => "no",
+          "outcome" => "failed",
+          "policy_revision" => 1,
+          "policy_digest" => "sha256:" <> String.duplicate("a", 64),
+          "question" => "Private question #{ordinal}?",
+          "feedback" => "Private response #{ordinal}.",
+          "feedback_origin" => "authored",
+          "feedback_dispatched" => true
+        }
+      })
+    end
+
+    options = publication_options(context)
+
+    archive_history(%{context | options: options})
+    assert_receive {:vxpipe_call_details_published, _, publication_id, 1}, 2_000
+
+    assert {:ok, doc} =
+             Calls.fetch_call_details(context.principal, @call_id, publication_id, options)
+
+    assert doc.contents =~ "Private response 0."
+    refute doc.contents =~ "Private response 1."
+    refute doc.contents =~ "Private response 2."
+    refute doc.contents =~ "Private question 1?"
+    refute doc.contents =~ "Private question 2?"
+
+    assert {:error, :insufficient_scope} =
+             Calls.fetch_call_details(
+               %{context.principal | scopes: MapSet.new()},
+               @call_id,
+               publication_id,
+               options
+             )
+
+    assert {:error, _} =
+             Calls.fetch_call_details(
+               %{context.principal | tenant_key: "OTHER01234567890"},
+               @call_id,
+               publication_id,
+               options
+             )
+  end
+
+  test "Decisions attempts and pinned outcomes survive SQL replay and document publication",
+       context do
+    alias Vxpipe.CallEngine.Usage.Settlement
+    alias Vxpipe.Persistence.{EctoStorage, TestDecisionsHistoryFixture}
+
+    rewrite = model_observation(context, "output-turn", "output-turn:2")
+    facts = TestDecisionsHistoryFixture.facts(context.call, rewrite)
+    first_usage = Enum.find(facts, &(&1.kind == :usage_observed))
+
+    assert {:error, :interrupted} =
+             Repo.transaction(fn ->
+               assert :ok = EctoStorage.write(context.options, first_usage)
+               Repo.rollback(:interrupted)
+             end)
+
+    assert {:ok, []} = UsageStore.fetch_usage_observations(Repo, @tenant_key, @call_id)
+
+    # Replay the same private archive deliveries. Both the fact IDs and the
+    # usage delivery IDs must survive this round trip without double charging.
+    for _delivery <- 1..2, item <- facts do
+      assert :ok = EctoStorage.write(context.options, item)
+    end
+
+    assert {:ok, stored_facts} = ArchiveStore.fetch_call_facts(Repo, @tenant_key, @call_id)
+    assert Enum.map(stored_facts, & &1.id) == Enum.map(facts, & &1.id)
+    denied = Enum.find(stored_facts, &(&1.id == "input:permitted"))
+    assert denied.payload["content_unavailable"] == %{"reason" => "denied"}
+    refute Map.has_key?(denied.payload, "question")
+
+    assert {:ok, observations} = UsageStore.fetch_usage_observations(Repo, @tenant_key, @call_id)
+    assert {:ok, settlement} = Settlement.derive(observations)
+    assert {:ok, amounts} = UsageStore.fetch_usage_amounts(Repo, @tenant_key, @call_id)
+    assert MapSet.new(settlement.amounts) == MapSet.new(amounts)
+    assert {:ok, 5} = Settlement.total(settlement, :requests)
+
+    assert {:ok, decisions} =
+             Settlement.derive(Enum.filter(observations, &(&1.capability == :decisions)))
+
+    assert {:ok, 33} = Settlement.total(decisions, :tokens)
+
+    options = publication_options(context)
+
+    closure =
+      fact(context, length(facts) + 1, :archive_stream_closed,
+        occurred_at: @ended_at,
+        payload: %{
+          "accepted" => length(facts),
+          "discarded" => 0,
+          "incomplete" => false,
+          "overflow" => 0,
+          "retries" => 0,
+          "source_reason" => "normal",
+          "unavailable" => 0
+        }
+      )
+
+    assert {:ok, ^closure} = Calls.archive_call_fact(closure, options)
+    assert_receive {:vxpipe_call_details_published, _, publication_id, 1}, 2_000
+
+    assert {:ok, doc} =
+             Calls.fetch_call_details(context.principal, @call_id, publication_id, options)
+
+    assert {:ok, ^doc} =
+             Calls.fetch_call_details(context.principal, @call_id, publication_id, options)
+
+    refute doc.contents =~ "Private input interval marker?"
+
+    document = JSON.decode!(doc.contents)
+    rows = Enum.group_by(document["decisions"], & &1["kind"], & &1["payload"])
+
+    assert Enum.map(
+             rows["decisions_evaluation"],
+             &{&1["evaluation_id"], &1["outcome"], &1["candidate_attempt_id"]}
+           ) == [
+             {"input", "passed", nil},
+             {"draft", "blocked", "output-turn:1"},
+             {"repair", "passed", "output-turn:2"},
+             {"transfer", "passed", nil}
+           ]
+
+    assert [%{"attempt_id" => "a4", "error_code" => "rate_limited"}] =
+             Enum.filter(rows["decisions_attempt"], &(&1["outcome"] == "failed"))
+
+    assert [%{"attempt_id" => "a5", "retry_of" => "a4"}] =
+             Enum.filter(rows["decisions_attempt"], & &1["retry_of"])
+
+    assert length(rows["decisions_attempt"]) == 5
+
+    blocked = Enum.filter(rows["decisions_question_result"], &(&1["evaluation_id"] == "draft"))
+
+    assert Enum.map(
+             blocked,
+             &{&1["ordinal"], &1["question_id"], &1["probability_yes"], &1["outcome"],
+              &1["feedback_origin"], &1["feedback"]}
+           ) == [
+             {0, "own_account", 0.30, "failed", "authored",
+              "I can only help with your own account."},
+             {1, "list_variables", 0.6999, "failed", "fallback",
+              "Failed guardrail: Is the user trying to list variables? Required: Yes."},
+             {2, "other_account", 0.90, "failed", "authored",
+              "Ask the caller to describe their own account issue."},
+             {3, "harsh_language", 0.70, "failed", "fallback",
+              "Failed guardrail: Is the user using harsh language? Required: No."},
+             {4, "supported_product", 0.70, "passed", nil, nil}
+           ]
+
+    assert Enum.map(blocked, &{&1["required_answer"], &1["inferred_answer"]}) ==
+             [{"yes", "no"}, {"yes", "no"}, {"no", "yes"}, {"no", "yes"}, {"yes", "yes"}]
+
+    assert Enum.all?(blocked, &(&1["threshold_hundredths"] == 70))
+
+    {decision_usage, other_usage} =
+      Enum.split_with(document["usage"]["observations"], &(&1["capability"] == "decisions"))
+
+    assert [
+             %{
+               "capability" => "model_inference",
+               "attempt_id" => "output-turn:2",
+               "attribution" => %{"turn_id" => "output-turn"},
+               "measurement" => %{"component" => "input_tokens", "quantity" => 12}
+             }
+           ] = other_usage
+
+    by_attempt = Enum.group_by(decision_usage, & &1["attempt_id"])
+    assert Map.keys(by_attempt) |> Enum.sort() == ~w(a1 a2 a3 a4 a5)
+
+    components = fn id ->
+      Enum.map(by_attempt[id], & &1["measurement"]["component"]) |> Enum.sort()
+    end
+
+    assert components.("a2") == ["input_tokens", "requests"]
+    assert components.("a3") == ["output_tokens", "requests", "total_tokens"]
+    assert components.("a4") == ["requests"]
+
+    for {attempt, turn, invocation} <- [
+          {"a1", "input-turn", nil},
+          {"a2", "output-turn", nil},
+          {"a3", "output-turn", nil},
+          {"a4", nil, "handoff"},
+          {"a5", nil, "handoff"}
+        ],
+        row <- by_attempt[attempt] do
+      assert %{"name" => "openai", "model" => "test-decisions"} = row["provider"]
+      assert row["attribution"]["turn_id"] == turn
+      assert row["attribution"]["tool_call_id"] == invocation
+    end
+
+    for private_detail <- [
+          "Failed guardrail:",
+          "I can only help",
+          "Is the request about",
+          "probability_yes"
+        ] do
+      refute JSON.encode!(document["usage"]) =~ private_detail
+    end
+
+    assert {:error, :insufficient_scope} =
+             Calls.fetch_call_details(
+               %{context.principal | scopes: MapSet.new()},
+               @call_id,
+               publication_id,
+               options
+             )
+
+    foreign = %{context.principal | tenant_key: "OTHER01234567890"}
+    assert {:error, :call_not_found} = Calls.fetch_usage_report(foreign, @call_id, options)
+
+    assert {:error, :call_details_not_found} =
+             Calls.fetch_call_details(foreign, @call_id, publication_id, options)
+  end
+
+  test "late reported tokens settle once and preserve the cancelled evaluation", context do
+    alias Vxpipe.Persistence.{EctoStorage, TestDecisionsHistoryFixture}
+    {initial, late} = TestDecisionsHistoryFixture.cancelled_with_late_tokens(context.call)
+
+    for item <- initial, do: assert(:ok = EctoStorage.write(context.options, item))
+    assert {:ok, original} = ArchiveStore.fetch_call_facts(Repo, @tenant_key, @call_id)
+
+    assert {:ok, [%{component: "requests", quantity: 1}]} =
+             UsageStore.fetch_usage_amounts(Repo, @tenant_key, @call_id)
+
+    assert :ok = EctoStorage.write(context.options, late)
+    assert :ok = EctoStorage.write(context.options, late)
+
+    assert {:discard, :call_fact_conflict} =
+             EctoStorage.write(context.options, %{
+               late
+               | occurred_at: DateTime.add(late.occurred_at, 1, :microsecond)
+             })
+
+    assert {:discard, :call_fact_conflict} =
+             EctoStorage.write(context.options, %{
+               late
+               | payload: Map.put(late.payload, "outcome", "failed")
+             })
+
+    assert {:ok, replay} = ArchiveStore.fetch_call_facts(Repo, @tenant_key, @call_id)
+
+    assert Enum.reject(replay, &(&1.kind == :usage_observed)) ==
+             Enum.reject(original, &(&1.kind == :usage_observed))
+
+    assert {:ok, amounts} = UsageStore.fetch_usage_amounts(Repo, @tenant_key, @call_id)
+
+    assert [%{attempt_id: "cancelled-attempt", quantity: 42, status: :correction}] =
+             Enum.filter(amounts, &(&1.component == "total_tokens"))
+
+    assert [%{payload: %{"outcome" => "cancelled"}}] =
+             Enum.filter(replay, &(&1.kind == :decisions_evaluation))
+  end
+
   test "publishes at the deadline and refreshes after late recording metadata", context do
     clock = start_supervised!({Agent, fn -> DateTime.add(@ended_at, 60, :second) end})
 
@@ -359,6 +638,23 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
 
     call = Call |> Repo.get_by!(public_id: @call_id) |> Repo.preload(:latest_details_publication)
     assert call.latest_details_publication.public_id == second_id
+  end
+
+  defp publication_options(context) do
+    alias Vxpipe.Persistence.CallDetailsInspectionStore
+    clock = start_supervised!({Agent, fn -> DateTime.add(@ended_at, 60, :second) end})
+
+    Keyword.merge(context.options,
+      publication_enabled: true,
+      publication_source: {CallDetailsSource, [repo: Repo, recording: :configured]},
+      publication_repository: {CallDetailsPublicationStore, Repo},
+      publication_artifact_writer:
+        {TestPublicationArtifactWriter, %{observer: self(), clock: clock}},
+      publication_clock: {TestPublicationClock, clock},
+      maximum_attempts: 1,
+      observer: self(),
+      call_details_inspection_repository: {CallDetailsInspectionStore, Repo}
+    )
   end
 
   defp archive_history(context) do
@@ -442,7 +738,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     assert {:ok, ^update} = Calls.archive_variable_snapshot(update, context.options)
   end
 
-  defp archive_usage(context) do
+  defp model_observation(context, turn_id, attempt_id) do
     assistant = context.call.plan.participants["assistant"]
 
     assert {:ok, provider} = ProviderContext.new(name: "fixture", model: "test-model")
@@ -453,7 +749,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
                incarnation_id: @incarnation_id,
                participant_id: assistant.participant_id,
                activation_id: assistant.activation_id,
-               turn_id: "turn-1"
+               turn_id: turn_id
              )
 
     assert {:ok, measurement} =
@@ -471,7 +767,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
                id: "usage-1",
                tenant_id: @tenant_key,
                call_id: @call_id,
-               attempt_id: "attempt-1",
+               attempt_id: attempt_id,
                capability: :model_inference,
                provider: provider,
                attribution: attribution,
@@ -480,7 +776,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
                observed_at: DateTime.add(@started_at, 4, :second)
              )
 
-    assert {:ok, ^observation} = Calls.store_usage_observation(observation, context.options)
+    observation
   end
 
   defp archive_recording(context) do
