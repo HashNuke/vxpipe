@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
       "lucide-react": fileURLToPath(import.meta.resolve("lucide-react")),
+      "@radix-ui/react-select": fileURLToPath(import.meta.resolve("@radix-ui/react-select")),
       "@floating-ui/react": fileURLToPath(import.meta.resolve("@floating-ui/react")),
     },
   },

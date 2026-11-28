@@ -25,16 +25,18 @@
 .gh-filter-button { display: inline-flex; gap: 5px; align-items: center; color: var(--vx-muted); padding: 5px 4px; font-size: 13px; cursor: pointer; }
 .gh-filter-button:hover, .gh-filter-button:focus-visible { color: var(--vx-ink); }
 .gh-filter-body { padding: 0 20px 18px; font-size: 14px; }
-.gh-presets { display: flex; gap: 2px; margin: 4px 0 12px; padding: 3px; background: var(--admin-bg); border: 1px solid var(--admin-border); border-radius: 7px; }
-.gh-presets button { flex: 1; border-radius: 4px; padding: 4px; color: var(--admin-muted); cursor: pointer; }
-.gh-presets button[aria-pressed=true] { background: var(--admin-panel); color: var(--admin-ink); box-shadow: 0 1px 3px #0002; font-weight: 600; }
-.gh-option, .gh-suboption { display: flex; align-items: center; gap: 9px; min-height: 42px; }
-.gh-option + .gh-option { border-top: 1px solid var(--admin-border); }
-.gh-option svg { width: 16px; height: 16px; color: var(--admin-muted); }
-.gh-option input, .gh-option select, .gh-suboption input, .gh-suboption select { margin-left: auto; }
-.gh-suboption { padding-left: 25px; color: var(--admin-muted); font-size: 13px; }
-.gh-filter-body select { background: var(--admin-panel); color: inherit; padding: 4px; border: 1px solid var(--admin-border); border-radius: 4px; }
-.gh-filter-body input { accent-color: var(--vx-green); }
+.gh-option { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, 12rem); align-items: center; gap: 12px; padding-block: 7px; }
+.gh-option + .gh-option { border-top: 1px solid var(--vx-line); }
+.gh-option-label { display: inline-flex; align-items: center; gap: 9px; }
+.gh-option-label svg { width: 16px; height: 16px; color: var(--vx-muted); }
+.gh-option .gh-option-trigger { min-height: 36px; padding: 6px 10px; font-size: 13px; text-align: left; }
+.gh-option-menu { z-index: 100; max-width: min(16rem, calc(100vw - 24px)); }
+.gh-option-menu .vx-select-item[data-state="checked"] { font-weight: 600; }
+.gh-choice-description { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--vx-select-muted); }
+@media (max-width: 420px) {
+  .gh-filter-body { padding-inline: 0; }
+  .gh-option { gap: 8px; }
+}
 .guardrail-inspection .vx-message:has(.gh-annotation[data-blocked=true]), .guardrail-inspection .vx-timeline-activity:has(.gh-annotation[data-blocked=true]) { position: relative; }
 .guardrail-inspection .vx-message:has(.gh-annotation[data-blocked=true])::before, .guardrail-inspection .vx-timeline-activity:has(.gh-annotation[data-blocked=true])::before { content:""; position:absolute; inset-block:0; inset-inline-start:-9px; width:3px; border-radius:3px; background:var(--vx-red, #df5c65); }
 .gh-annotation { min-width:0; max-width: 40rem; }

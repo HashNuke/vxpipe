@@ -32,15 +32,15 @@ export function historyTimeline(scenario: GuardrailScenario, start: number, filt
       const group = owned.filter(check => check.proposalId === proposal);
       const visible = whenVisible(group);
       const evidence = group.find(c => c.evidence?.rejectedDraft)?.evidence;
-      const tools = filters.tools ? group.find(c => c.evidence?.proposedTools)?.evidence?.proposedTools ?? [] : [];
-      const speech = filters.messages && evidence?.rejectedDraft;
+      const tools = filters.tools !== "Hide" ? group.find(c => c.evidence?.proposedTools)?.evidence?.proposedTools ?? [] : [];
+      const speech = filters.messages === "Show" && evidence?.rejectedDraft;
       if (!visible.length || (!speech && !tools.length)) continue;
       const at = time(4 * i + 2 + ordinal / 10);
       if (speech) message(proposal, msg.turn, msg.participantId, speech, at);
       else toolActivity(proposal, at, "Proposed tools");
       annotations.set(at, {anchor: speech ? "message" : "activity", label: speech || "Proposed tools", checks: visible, tools, unsent: !!speech, toolOnly: !speech, blocked: true});
     }
-    if (filters.messages) {
+    if (filters.messages === "Show") {
       const at = time(4 * i + 3);
       message(msg.id, msg.turn, msg.participantId, msg.text, at);
       const visible = whenVisible(owned.filter(c => !c.proposalId));
@@ -48,14 +48,14 @@ export function historyTimeline(scenario: GuardrailScenario, start: number, filt
     }
   }
   for (const [i, check] of checks.filter(c => c.turn === null && c.transfer).entries()) {
-    if (!filters.tools || (!check.completedTransfer && !whenVisible([check]).length)) continue;
+    if (filters.tools === "Hide" || (!check.completedTransfer && !whenVisible([check]).length)) continue;
     const at = time(4 * messages.length + 3 + i);
     const visible = whenVisible([check]);
     const transfer = check.transfer!;
     if (check.completedTransfer) {
       timeline.push({kind: "tool-call", revision: 1, id: transfer.id, value: {
         id: transfer.id, name: "transfer", occurredAt: at, status: "completed",
-        ...(filters.toolDetails && {request: {destination: transfer.destination}, response: check.completedTransfer}),
+        ...(filters.tools === "With details" && {request: {destination: transfer.destination}, response: check.completedTransfer}),
       }});
       if (visible.length) annotations.set(at, {anchor: "tool", label: "transfer", checks: visible, tools: [], blocked: false});
     } else {

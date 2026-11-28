@@ -1,3 +1,4 @@
+import { isTechnicalEvent } from "../../../../../../packages/react/src/conversationFilters";
 import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createCallDetailsStore, type MetricObservation } from "@vxpipe/core";
@@ -5,7 +6,7 @@ import { CallDetailsPage } from "../CallDetailsPage";
 import { callDetailsFixture } from "../callDetailsFixtures";
 import { StoryCallBreadcrumbs } from "./StoryCallBreadcrumbs";
 import { agents, inspectionFixture, type Agent, type GuardrailCheck, type GuardrailScenario } from "./guardrailInspectionFixtures";
-import { HistoryFilterButton, presets, type HistoryFilters } from "./GuardrailHistoryFilters";
+import { HistoryFilterButton, type HistoryFilters } from "./GuardrailHistoryFilters";
 import { GuardrailQuestionCard } from "./GuardrailQuestionCard";
 import { historyTimeline } from "./guardrailHistoryTimeline";
 import { Wrench } from "lucide-react";
@@ -77,11 +78,12 @@ function storyState(scenario: GuardrailScenario, filters: HistoryFilters) {
   const timestamp = Date.parse(snapshot.call.startedAt ?? snapshot.call.createdAt);
   const {timeline, annotations} = historyTimeline(scenario, timestamp, filters);
   for (const item of snapshot.timeline) {
-    if (item.kind === "activity" && filters.events && (filters.technical || item.id === "activity-1")) timeline.push(item);
-    if (item.kind === "protocol-event" && filters.logs) timeline.push(item);
-    if (item.kind === "tool-call" && filters.tools && scenario === "repair-and-transfer") {
+    if (item.kind === "activity" && filters.events !== "Hide" &&
+        (filters.events === "Call + technical events" || !isTechnicalEvent(item.value.eventKind))) timeline.push(item);
+    if (item.kind === "protocol-event" && filters.logs === "Show") timeline.push(item);
+    if (item.kind === "tool-call" && filters.tools !== "Hide" && scenario === "repair-and-transfer") {
       const { request, response, responseStatus, ...summary } = item.value;
-      timeline.push(filters.toolDetails ? item : { ...item, value: summary });
+      timeline.push(filters.tools === "With details" ? item : { ...item, value: summary });
     }
   }
 
@@ -128,11 +130,19 @@ export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversati
   return <Preview key={scenario} scenario={scenario} theme={theme} initialTab={initialTab} />;
 }
 
+const allHistory: HistoryFilters = {
+  messages: "Show", logs: "Show", events: "Call + technical events", tools: "With details", guardrails: "All",
+};
+
+const failureHistory: HistoryFilters = {
+  ...allHistory, logs: "Hide", events: "Call events", guardrails: "Only failures",
+};
+
 function Preview({ scenario, theme, initialTab }: {
   scenario: GuardrailScenario; theme: "light" | "dark"; initialTab: "Conversation" | "Metrics";
 }) {
   const [filters, change] = useState<HistoryFilters>(() =>
-    scenario === "pass" || scenario === "partial-answer" || scenario === "multiple-agents" ? presets.All : presets.Debug);
+    scenario === "pass" || scenario === "partial-answer" || scenario === "multiple-agents" ? allHistory : failureHistory);
   const page = useMemo(() => storyState(scenario, filters), [scenario, filters]);
   const host = useRef<HTMLDivElement>(null);
   const [targets, setTargets] = useState<Target[]>([]);
@@ -196,7 +206,7 @@ function Preview({ scenario, theme, initialTab }: {
   }, [chatTarget, targets]);
 
   function showInChat(id: string) {
-    change(presets.All);
+    change(allHistory);
     const tabs = host.current?.querySelectorAll<HTMLButtonElement>('nav[aria-label="Call views"] button');
     Array.from(tabs ?? []).find(tab => tab.textContent === "Conversation")?.click();
     setChatTarget(id);
@@ -219,9 +229,9 @@ function Preview({ scenario, theme, initialTab }: {
       if (agent) return createPortal(<button type="button" className="guardrail-inspect" aria-controls={detailId}
         aria-label={"Inspect Decisions for " + agents[agent]} aria-expanded={selected === agent}
         onClick={() => setSelected(current => current === agent ? null : agent)}>Inspect checks</button>, element, key);
-      if (key === "filters") return createPortal(<HistoryFilterButton filters={filters} change={change} />, element, key);
+      if (key === "filters") return createPortal(<HistoryFilterButton filters={filters} change={change} theme={theme} />, element, key);
       if (key === "empty") return createPortal(<div className="gh-empty">
-        <p>No matching history</p><button type="button" className="gh-reset" onClick={() => change(presets.All)}>Show all history</button>
+        <p>No matching history</p><button type="button" className="gh-reset" onClick={() => change(allHistory)}>Show all history</button>
       </div>, element, key);
       const row = page.annotations.get(key);
       if (!row) return null;
@@ -229,7 +239,7 @@ function Preview({ scenario, theme, initialTab }: {
         {row.unsent && <span className="gh-status">Unsent</span>}
         {row.toolOnly && row.blocked && !row.tools.length && <span className="gh-status">Not run</span>}
         {row.tools.map(tool => <div className="gh-proposed-tool" key={tool.id}>
-          {filters.toolDetails ? <details><summary><Wrench size={13} /> <strong>{tool.name}</strong> · Not run</summary>
+          {filters.tools === "With details" ? <details><summary><Wrench size={13} /> <strong>{tool.name}</strong> · Not run</summary>
             <pre>{JSON.stringify(tool.arguments, null, 2)}</pre></details> :
             <span><Wrench size={13} /> <strong>{tool.name}</strong> · Not run</span>}
         </div>)}
