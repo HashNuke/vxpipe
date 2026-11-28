@@ -23,6 +23,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
          owner when is_pid(owner) <- Keyword.get(options, :owner),
          settings when is_list(settings) <- Keyword.get(options, :agent_runtime),
          {:ok, model} <- AgentModel.resolve(model_selection, plan.tenant_id, options),
+         {:ok, guardrails} <-
+           Vxpipe.CallEngine.PlanStartup.Guardrails.options(plan, receiver, options),
          {:ok, variable_binding} <- variable_binding(plan, receiver, options),
          {:ok, mcp_integrations} <- mcp_integrations(receiver, options),
          {:ok, activation_options} <-
@@ -37,7 +39,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
              options,
              settings
            ) do
-      {:ok, activation_options}
+      {:ok, activation_options ++ guardrails}
     else
       {:error, %Error{}} = error -> error
       _unsupported -> unsupported_model(receiver)
@@ -106,6 +108,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     base = [
       activation_id: receiver.activation_id,
       agent_participant_id: receiver.participant_id,
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
       call_id: plan.call_id,
       owner: owner,
       system_prompt: receiver.prompt,
@@ -124,6 +128,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
 
     base
     |> Keyword.merge(InvocationConfig.for_participant(plan, receiver, settings))
+    |> put_optional(:incarnation_id, Keyword.get(options, :incarnation_id))
     |> put_optional(
       :model_context_source,
       ModelContextSource.new(variable_binding, Keyword.get(options, :transfer_reason))

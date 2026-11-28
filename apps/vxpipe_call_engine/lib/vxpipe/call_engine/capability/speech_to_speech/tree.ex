@@ -89,6 +89,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
 
     children =
       children ++
+        guardrail_children(options, output_tasks) ++
         remote_mcp_children(options) ++
         invocation_children(options) ++
         [
@@ -101,6 +102,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
         ]
 
     Supervisor.init(children, strategy: :one_for_all, auto_shutdown: :any_significant)
+  end
+
+  defp guardrail_children(options, tasks) do
+    case Keyword.get(options, :guardrails) do
+      nil ->
+        []
+
+      settings ->
+        activation_id = Keyword.fetch!(options, :activation_id)
+
+        child =
+          Vxpipe.CallEngine.Guardrails.Participant.activation_child(
+            activation_id,
+            tasks,
+            settings
+          )
+
+        [Supervisor.child_spec(child, restart: :temporary, significant: true)]
+    end
   end
 
   defp remote_mcp_children(options) do

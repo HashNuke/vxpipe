@@ -14,7 +14,15 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     ToolDescriptors
   }
 
-  alias Vxpipe.CallEngine.Tool.{InvocationRegistry, InvocationSupervisor}
+  alias Vxpipe.AgentRuntime.ToolDescriptor
+  alias Vxpipe.CallEngine.Guardrails.RuntimeAdmission
+
+  alias Vxpipe.CallEngine.Tool.{
+    Hangup,
+    InvocationBinding,
+    InvocationRegistry,
+    InvocationSupervisor
+  }
 
   @spec children(keyword()) ::
           {:ok, [Supervisor.child_spec()]} | {:error, :invalid_configuration}
@@ -39,6 +47,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
            ) do
       {:ok,
        [request_supervisor_child(request_supervisor)] ++
+         guardrail_children(activation_id, request_supervisor, options) ++
          remote_mcp_children(activation_id, remote_mcp_owner, options) ++
          [
            coordinator_child(
@@ -86,6 +95,22 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
       id: :request_supervisor,
       restart: :permanent
     )
+  end
+
+  defp guardrail_children(activation_id, request_supervisor, options) do
+    case Keyword.fetch(options, :guardrails) do
+      :error ->
+        []
+
+      {:ok, settings} ->
+        [
+          Vxpipe.CallEngine.Guardrails.Participant.activation_child(
+            activation_id,
+            request_supervisor,
+            settings
+          )
+        ]
+    end
   end
 
   defp remote_mcp_owner(activation_id, options) do
@@ -148,10 +173,19 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
        maximum_completed_requests: Keyword.fetch!(options, :maximum_completed_requests),
        maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
        maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
+       guardrails: coordinator_guardrails(activation_id, options),
+       request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
        name: coordinator},
       id: :coordinator,
       restart: :permanent
     )
+  end
+
+  defp coordinator_guardrails(activation_id, options) do
+    case Keyword.fetch(options, :guardrails) do
+      {:ok, _settings} -> child_ref(activation_id, :guardrails)
+      :error -> nil
+    end
   end
 
   defp invocation_supervisor_child(activation_id, invocation_supervisor, options) do
@@ -206,6 +240,8 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   end
 
   defp session_child(coordinator, invocation_registry, session, tools, instructions, options) do
+    activation_id = Keyword.fetch!(options, :activation_id)
+
     session_options = [
       instructions: instructions,
       history_mode: Keyword.get(options, :history_mode, :generated),
@@ -222,6 +258,8 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
       maximum_pending_invocations: Keyword.fetch!(options, :maximum_tool_invocations),
       request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
       event_destination: coordinator,
+      round_admission: round_admission(activation_id, tools, options),
+      maximum_admission_repairs: Keyword.get(options, :maximum_admission_repairs, 2),
       name: session
     ]
 
@@ -268,4 +306,51 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
 
   defp put_optional(options, _key, nil), do: options
   defp put_optional(options, key, value), do: Keyword.put(options, key, value)
+
+  # Actual engine host bridge: `nil` without guardrails, otherwise a
+  # domain-neutral `RoundAdmission` callback into participant guardrails.
+  # Terminal kinds come from `%InvocationBinding{}` handlers (binding-derived),
+  # never from hardcoded tool names.
+  defp round_admission(activation_id, tools, options) do
+    case Keyword.fetch(options, :guardrails) do
+      :error ->
+        nil
+
+      {:ok, settings} when is_list(settings) ->
+        policy = Keyword.fetch!(settings, :policy)
+
+        {RuntimeAdmission,
+         %{
+           guardrails: AgentActivationSupervisor.child_ref(activation_id, :guardrails),
+           activation_id: activation_id,
+           agent_participant_id: Keyword.get(options, :agent_participant_id),
+           incarnation_id: Keyword.get(options, :incarnation_id, activation_id),
+           room_authority: room_authority(options),
+           after_questions: policy.after_turn,
+           transfer_questions: policy.before_outgoing_transfer,
+           policy_revision: Keyword.get(settings, :policy_revision),
+           terminal_kinds: terminal_kinds(tools),
+           maximum_feedback_bytes: Keyword.get(options, :maximum_model_context_bytes, 256 * 1_024)
+         }}
+    end
+  end
+
+  defp room_authority(options) do
+    with tenant when is_binary(tenant) and tenant != "" <- Keyword.get(options, :tenant_id),
+         room when is_binary(room) and room != "" <- Keyword.get(options, :room_id) do
+      {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {tenant, room}}}
+    else
+      _missing -> nil
+    end
+  end
+
+  defp terminal_kinds(tools) when is_list(tools) do
+    Map.new(tools, fn %ToolDescriptor{} = descriptor ->
+      {descriptor.name, terminal_kind(descriptor.binding)}
+    end)
+  end
+
+  defp terminal_kind(%InvocationBinding{handler: {:participant_transfer, _}}), do: :transfer
+  defp terminal_kind(%InvocationBinding{handler: {:platform, Hangup}}), do: :hangup
+  defp terminal_kind(_binding), do: :ordinary
 end

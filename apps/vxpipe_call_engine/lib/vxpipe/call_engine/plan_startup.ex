@@ -76,11 +76,22 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          :ok <- OutputSTTFormat.validate_participant(entries.receiver),
          {:ok, _integrations} <-
            AgentActivationOptions.mcp_integrations(entries.receiver, options) do
-      for participant <- [entries.caller, entries.receiver],
-          kind <- [:speech_to_text, :text_to_speech, :speech_to_speech, :output_speech_to_text],
-          reduce: :ok do
-        :ok -> supported_speech(participant, kind, options)
-        error -> error
+      with :ok <-
+             (for participant <- [entries.caller, entries.receiver],
+                  kind <- [
+                    :speech_to_text,
+                    :text_to_speech,
+                    :speech_to_speech,
+                    :output_speech_to_text
+                  ],
+                  reduce: :ok do
+                :ok -> supported_speech(participant, kind, options)
+                error -> error
+              end) do
+        # Decisions is call-wide; validate from the plan via entries' participants' guardrails?
+        # The plan is not directly available here, so decisions support is validated
+        # in validate_planned_selections/1 and at credential planning time.
+        :ok
       end
     end
   end
@@ -524,7 +535,13 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       {:ok, {provider_module, _provider_config} = provider, settings} ->
         tool_settings = Keyword.get_lazy(options, :agent_runtime, &InvocationConfig.defaults/0)
 
-        with {:ok, integrations} <- AgentActivationOptions.mcp_integrations(participant, options),
+        with {:ok, guardrail_options} <-
+               Vxpipe.CallEngine.PlanStartup.Guardrails.options(
+                 plan,
+                 participant,
+                 credential_options(plan, options)
+               ),
+             {:ok, integrations} <- AgentActivationOptions.mcp_integrations(participant, options),
              {:ok, activation, tool_registry} <-
                SpeechToSpeechActivation.resolve(plan, participant, options),
              {:ok, {^provider_module, runtime_options} = runtime_provider, provider_private} <-
@@ -543,6 +560,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              call_id: plan.call_id,
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
+             guardrails: Keyword.get(guardrail_options, :guardrails),
              tool_registry: tool_registry,
              tool_invocation_options:
                InvocationConfig.for_participant(plan, participant, tool_settings),
@@ -554,6 +572,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              output_speech_to_text_private: output_speech_to_text_private
            }}
         else
+          {:error, %Error{}} = error -> error
           _invalid_runtime -> unsupported_speech_configuration(participant, :speech_to_speech)
         end
 
@@ -761,7 +780,13 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           []
       end
 
-    Enum.reduce_while(selections ++ opening, :ok, fn {selection, kind, path}, :ok ->
+    decisions =
+      case Map.get(plan, :decisions) do
+        nil -> []
+        selection -> [{selection, :decisions, ["defaults", "capabilities", "decisions"]}]
+      end
+
+    Enum.reduce_while(selections ++ opening ++ decisions, :ok, fn {selection, kind, path}, :ok ->
       case valid_planned_selection(selection, kind, path) do
         :ok -> {:cont, :ok}
         error -> {:halt, error}

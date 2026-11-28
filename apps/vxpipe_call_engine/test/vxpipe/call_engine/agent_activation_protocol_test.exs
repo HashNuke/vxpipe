@@ -114,6 +114,55 @@ defmodule Vxpipe.CallEngine.AgentActivationProtocolTest do
     end
   end
 
+  test "a malformed guardrails configuration prevents building the activation" do
+    {:ok, protocol} = Protocol.capture()
+
+    options =
+      Keyword.put(options(protocol, {ModelContextCompactor, %{}}), :context_compaction, false)
+
+    assert {:ok, _children} = RuntimeGraph.children(options)
+    settings = Keyword.put(options, :guardrails, adapter: fn _ -> :unused end)
+    assert {:error, :invalid_configuration} = RuntimeGraph.children(settings)
+  end
+
+  test "an activation with configured checks owns a reachable Guardrails service" do
+    {:ok, protocol} = Protocol.capture()
+    settings = options(protocol, {ModelContextCompactor, %{}})
+
+    {:ok, policy} =
+      Vxpipe.CallEngine.CallSpec.Guardrails.new(
+        %{
+          "before_turn" => [
+            %{"id" => "scope", "question" => "In scope?", "required_answer" => "yes"}
+          ]
+        },
+        []
+      )
+
+    adapter = fn _request -> {:ok, %{scores: %{"scope" => 1}}} end
+
+    activation =
+      start_supervised!(
+        {Vxpipe.CallEngine.AgentActivationSupervisor,
+         Keyword.merge(settings,
+           context_compaction: false,
+           guardrails: [policy: policy, adapter: adapter]
+         )}
+      )
+
+    assert %{guardrails: service} =
+             Vxpipe.CallEngine.AgentActivationSupervisor.children(activation)
+
+    assert :passed =
+             Vxpipe.CallEngine.Guardrails.Participant.check(
+               service,
+               :before_turn,
+               "turn",
+               %{},
+               System.monotonic_time(:millisecond) + 500
+             )
+  end
+
   defp options(protocol, compactor) do
     {:ok, usage} =
       ProviderContext.new(name: "test", integration_id: "test-model", model: "test:scripted")

@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
 
   @roles [
     :coordinator,
+    :guardrails,
     :invocation_registry,
     :invocation_supervisor,
     :remote_mcp_owner,
