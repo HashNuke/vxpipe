@@ -15,8 +15,6 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   alias Vxpipe.CallEngine.Speech.{
     ActivityBoundary,
-    ActivityRuntime,
-    ActivitySupervisor,
     CapabilityTree,
     Channel,
     Descriptor,
@@ -24,13 +22,13 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     LocalTurnEnd,
     Session,
     SessionTree,
-    Silero,
+    Silero.Detector,
     STTProvider,
     STTTurnStart
   }
 
   @maximum_pcm_bytes 96_000
-  @chunk_bytes 32_000
+  @window_bytes 1_024
   @orphan_timeout_ms 60_000
   @endpoint_hangover_ms 300
   @final_wait_ms 1_000
@@ -273,48 +271,43 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   end
 
   def handle_info(
-        {:vxpipe_speech_activity, reference, {:ok, stream, probabilities}},
-        %{inference: reference, detector_ready?: false} = state
+        {:silero_result, ref, {:ok, _, _}},
+        %{inference: ref, detector_ready?: false} = state
       ) do
-    # Model preparation is not admitted caller audio.
-    _ = {stream, probabilities}
-    activate(%{state | inference: nil, detector_ready?: true, stream: Silero.new()})
+    activate(%{state | inference: nil, detector_ready?: true})
   end
 
-  def handle_info(
-        {:vxpipe_speech_activity, reference, {:ok, stream, probabilities}},
-        %{inference: reference} = state
-      ) do
-    InferenceTap.result(state.diagnostic_inference, probabilities)
+  def handle_info({:silero_result, ref, {:ok, p, packed}}, %{inference: ref} = state) do
+    current? = state.inference_epoch == state.recognition_epoch
+    if current?, do: InferenceTap.result(state.diagnostic_inference, [p])
 
-    with {:ok, state} <-
-           probabilities(
-             %{
-               state
-               | inference: nil,
-                 diagnostic_inference: nil,
-                 stream:
-                   if(state.inference_epoch == state.recognition_epoch,
-                     do: stream,
-                     else: state.stream
-                   )
-             },
-             probabilities,
-             state.inference_epoch == state.recognition_epoch
-           ),
+    stream =
+      if current?, do: %{packed: packed, samples: state.stream.samples + 512}, else: state.stream
+
+    state = %{state | stream: stream, inference: nil, diagnostic_inference: nil}
+
+    with {:ok, state} <- probabilities(state, [p], current?),
          {:ok, state} <- advance_detector(state) do
       {:noreply, state}
     else
-      _failure -> fail(state)
+      _ -> fail(state)
     end
   end
 
-  def handle_info(
-        {:vxpipe_speech_activity, reference, _failure},
-        %{inference: reference} = state
-      ) do
-    InferenceTap.failed(state.diagnostic_inference)
-    fail(state)
+  def handle_info({:silero_retired, ref}, %{inference: ref} = state) do
+    case advance_detector(%{state | inference: nil, diagnostic_inference: nil}) do
+      {:ok, next} -> {:noreply, next}
+      _ -> fail(state)
+    end
+  end
+
+  def handle_info({:silero_result, ref, _failure}, %{inference: ref} = state) do
+    if state.detector_ready? and state.inference_epoch != state.recognition_epoch do
+      handle_info({:silero_retired, ref}, state)
+    else
+      InferenceTap.failed(state.diagnostic_inference)
+      fail(state)
+    end
   end
 
   def handle_info({:orphan, token}, %{orphan: {_timer, token}} = state), do: fail(state)
@@ -352,31 +345,25 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   defp prepare_detector(%{detector_ready?: true} = state), do: {:ok, state}
 
   defp prepare_detector(state) do
-    generation = state.allocation.generation
-    runtime = CapabilityTree.address({generation, :stt_activity_runtime})
+    stream = Detector.stream()
 
-    options =
-      Keyword.merge(Keyword.get(state.private, :activity_options, []),
-        name: CapabilityTree.address({generation, :stt_activity}),
-        tasks: CapabilityTree.address({generation, :stt_activity_tasks}),
-        runtime: runtime,
-        max_jobs: 1
-      )
-
-    with {:ok, _tree} <-
-           DynamicSupervisor.start_child(
-             SessionTree.providers(state.allocation),
-             Supervisor.child_spec({ActivitySupervisor, options}, restart: :temporary)
-           ),
-         {:ok, reference} <-
-           ActivityRuntime.submit(Silero.new(), :binary.copy(<<0>>, 1_024), runtime) do
+    with {:ok, detector} <-
+           Detector.prepare(state.allocation, Keyword.get(state.private, :activity_options, [])),
+         {:ok, ref} <-
+           Detector.submit(
+             detector,
+             stream,
+             :binary.copy(<<0>>, @window_bytes),
+             :warmup,
+             state.allocation.deadline
+           ) do
       {:ok,
        %{
          state
-         | runtime: runtime,
-           runtime_monitor: Process.monitor(GenServer.whereis(runtime)),
-           inference: reference,
-           stream: Silero.new(),
+         | runtime: detector,
+           runtime_monitor: Process.monitor(detector.lease.pool),
+           inference: ref,
+           stream: stream,
            boundary: ActivityBoundary.new()
        }}
     end
@@ -502,6 +489,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   # earlier audio cannot start or extend the next turn.
   defp settle_detector(state, emissions) do
     if Enum.any?(emissions, fn {kind, _fields} -> kind == :turn_ended end) do
+      if state.inference, do: Detector.cancel(state.runtime, state.inference)
+
       %{
         state
         | recognition_epoch: state.recognition_epoch + 1,
@@ -514,7 +503,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
             ),
           pending_pcm: "",
           pending_epoch: nil,
-          stream: if(state.runtime, do: Silero.new(), else: nil),
+          stream: if(state.runtime, do: Detector.stream(), else: nil),
           boundary: if(state.runtime, do: ActivityBoundary.new(), else: nil)
       }
     else
@@ -573,19 +562,21 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   defp acoustic_source(state, %{source_epoch: epoch})
        when epoch != state.acoustic_source and not is_nil(state.runtime) do
     send(state.allocation.consumer, {:vxpipe_acoustic_epoch, state.allocation, epoch})
+    if state.inference, do: Detector.cancel(state.runtime, state.inference)
     next = state.recognition_epoch + 1
     if state.orphan, do: Process.cancel_timer(elem(state.orphan, 0))
 
     %{
       state
       | acoustic_source: epoch,
+        odd_pcm: "",
         acoustic_origin_ms: nil,
         recognition_epoch: next,
         orphan: nil,
         diagnostic_tap: InferenceTap.reset(state.diagnostic_tap, next, state.odd_pcm == ""),
         pending_pcm: "",
         pending_epoch: nil,
-        stream: Silero.new(),
+        stream: Detector.stream(),
         boundary: ActivityBoundary.new()
     }
   end
@@ -596,7 +587,10 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   defp acoustic_source(state, _frame), do: state
 
   defp accept_input(state, audio, pcm, timestamp \\ nil, frame \\ nil) do
-    if byte_size(state.pending_pcm) + byte_size(pcm) > @maximum_pcm_bytes do
+    in_flight_bytes = if state.inference, do: @window_bytes, else: 0
+
+    if byte_size(state.pending_pcm) + byte_size(pcm) + byte_size(state.odd_pcm) + in_flight_bytes >
+         @maximum_pcm_bytes do
       {:reply, {:error, :busy}, state}
     else
       result =
@@ -668,16 +662,17 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   defp advance_detector(%{inference: reference} = state) when not is_nil(reference),
     do: {:ok, state}
 
-  defp advance_detector(%{pending_pcm: ""} = state), do: {:ok, state}
+  defp advance_detector(%{pending_pcm: pcm} = state) when byte_size(pcm) < @window_bytes,
+    do: {:ok, state}
 
   defp advance_detector(state) do
-    bytes = min(byte_size(state.pending_pcm), @chunk_bytes)
-    <<chunk::binary-size(bytes), pending::binary>> = state.pending_pcm
+    <<chunk::binary-size(@window_bytes), pending::binary>> = state.pending_pcm
 
     diagnostic_inference =
       InferenceTap.begin(state.diagnostic_tap, state.recognition_epoch, state.stream)
 
-    with {:ok, reference} <- ActivityRuntime.submit(state.stream, chunk, state.runtime),
+    with {:ok, reference} <-
+           Detector.submit(state.runtime, state.stream, chunk, state.recognition_epoch),
          do:
            {:ok,
             %{

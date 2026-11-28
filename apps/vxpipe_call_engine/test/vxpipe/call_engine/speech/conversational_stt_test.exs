@@ -5,6 +5,20 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, ConversationalSTT, Event, Session}
   alias Vxpipe.CallEngine.SpeechOnsetProbe
 
+  test "caller VAD acquires a node pool lease and retains partial PCM locally" do
+    alias Vxpipe.CallEngine.Speech.Silero.Pool
+    session = start_session(true, [])
+    assert_receive {:recognizer, _, _}
+    _ = event(session, :ready)
+    assert :ok = Session.push_audio(session, <<1, 0>>)
+    state = :sys.get_state(Session.provider(session))
+    assert state.runtime.lease.pool == Process.whereis(Pool)
+    assert state.pending_pcm == <<1, 0>>
+    assert state.inference == nil
+    assert state.stream.samples == 0
+    assert :ok = Session.close(session)
+  end
+
   test "default onset ignores native hints until words, using one acknowledged outer allocation" do
     session = start_session(false)
     assert_receive {:recognizer, recognizer, inner}
@@ -68,7 +82,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
     pcm = :binary.copy(<<10, 0>>, 2_048)
     assert :ok = Session.push_audio(session, pcm)
     assert_receive {:recognized_audio, ^pcm}
-    assert_receive {:classified, ^pcm}
+    for <<frame::binary-size(1024) <- pcm>>, do: assert_receive({:classified, ^frame})
     start = event(session, :speech_started)
     native = make_ref()
     assert :ok = emit(recognizer, :speech_started, turn_ref: native)
@@ -155,12 +169,12 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
 
     classify = fn _model, stream, audio ->
       if audio == warmup do
-        {:ok, stream, []}
+        {:ok, stream, [0.0]}
       else
         send(observer, {:classifying, self()})
 
         receive do
-          :continue -> {:ok, stream, [0.9, 0.9, 0.9, 0.9]}
+          :continue -> {:ok, stream, [0.9]}
         end
       end
     end
@@ -183,9 +197,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
              )
 
     _ = event(session, :turn_ended)
-    monitor = Process.monitor(worker)
     send(worker, :continue)
-    assert_receive {:DOWN, ^monitor, :process, ^worker, _}
+    _ = :sys.get_state(worker)
     refute_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}, 200
   end
 
@@ -194,12 +207,12 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
 
     classify = fn _model, stream, audio ->
       if audio == :binary.copy(<<0>>, 1_024) do
-        {:ok, stream, []}
+        {:ok, stream, [0.0]}
       else
         send(observer, {:detector_job, self(), byte_size(audio)})
 
         receive do
-          :continue -> {:ok, stream, [0.9, 0.9, 0.9, 0.9]}
+          :continue -> {:ok, stream, [0.9]}
         end
       end
     end
@@ -208,7 +221,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
     assert_receive {:recognizer, recognizer, _}
     _ = event(session, :ready)
     assert :ok = Session.push_audio(session, :binary.copy(<<1, 0>>, 32_000))
-    assert_receive {:detector_job, old_worker, 32_000}
+    assert_receive {:detector_job, old_worker, 1_024}
 
     assert :ok =
              emit(recognizer, :turn_ended,
@@ -222,8 +235,12 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
     _ = event(session, :turn_ended)
     assert :ok = Session.push_audio(session, :binary.copy(<<2, 0>>, 2_048))
     send(old_worker, :continue)
-    assert_receive {:detector_job, fresh_worker, 4_096}
-    send(fresh_worker, :continue)
+
+    for _ <- 1..4 do
+      assert_receive {:detector_job, fresh_worker, 1_024}
+      send(fresh_worker, :continue)
+    end
+
     _ = event(session, :speech_started)
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}
   end
@@ -270,7 +287,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
 
       classify = fn _model, stream, audio ->
         send(observer, {:detector_pcm, audio})
-        {:ok, stream, []}
+        {:ok, stream, [0.0]}
       end
 
       session =
@@ -311,8 +328,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
 
       assert :ok = Session.push_frame(session, frame)
       assert_receive {:recognized_audio, ^payload}
-      assert_receive {:detector_pcm, normalized}
-      assert normalized == :binary.copy(<<3, 0>>, 320)
+      assert :sys.get_state(Session.provider(session)).pending_pcm == :binary.copy(<<3, 0>>, 320)
+      refute_received {:detector_pcm, _}
       assert :ok = Session.close(session)
     end
   end
@@ -434,6 +451,11 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
          roles \\ [],
          extra_private \\ []
        ) do
+    activity_options =
+      if vad and Keyword.has_key?(activity_options, :load),
+        do: Vxpipe.CallEngine.Speech.SileroPoolFixture.options(__MODULE__, activity_options),
+        else: activity_options
+
     tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
     scope = CapabilityTree.scope(tree)
 

@@ -70,7 +70,7 @@ defmodule Vxpipe.CallEngine.Capability.DiagnosticSourceFenceTest do
 
     classify = fn _model, stream, audio ->
       if audio == :binary.copy(<<0>>, 1_024) do
-        {:ok, stream, []}
+        {:ok, stream, [0.0]}
       else
         send(parent, :classified)
         count = div(byte_size(audio), 1_024)
@@ -99,7 +99,11 @@ defmodule Vxpipe.CallEngine.Capability.DiagnosticSourceFenceTest do
            recognizer: SpeechSessionProbe,
            recognizer_options: [sample_rate: 16_000],
            recognizer_private: [observer: self(), hold_input?: true, input_result: :ok],
-           activity_options: [load: fn -> {:ok, :model} end, classify: classify]
+           activity_options:
+             Vxpipe.CallEngine.Speech.SileroPoolFixture.options(__MODULE__,
+               load: fn -> {:ok, :model} end,
+               classify: classify
+             )
          ],
          initial_policy: initial}
       )

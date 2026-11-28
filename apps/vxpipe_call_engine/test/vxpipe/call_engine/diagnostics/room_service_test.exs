@@ -722,10 +722,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
          recognizer: STTSession,
          recognizer_options: [commit_strategy: :vad],
          recognizer_private: private,
-         activity_options: [
-           load: fn -> {:ok, :fixture_model} end,
-           classify: classifier(parent, :operational)
-         ]
+         activity_options:
+           Vxpipe.CallEngine.Speech.SileroPoolFixture.options(__MODULE__,
+             load: fn -> {:ok, :fixture_model} end,
+             classify: classifier(parent, :operational)
+           )
        ]}
     else
       {{STTSession, [commit_strategy: :vad]}, private}

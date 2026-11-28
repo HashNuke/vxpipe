@@ -19,7 +19,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.InferenceTap do
 
         armed? =
           not in_flight? and clean_input? and
-            match?(%Silero{samples: 0, pending: ""}, stream)
+            (match?(%Silero{samples: 0, pending: ""}, stream) or
+               match?(%{samples: 0, packed: _}, stream))
 
         tap = %__MODULE__{handoff: handoff, armed?: armed?}
         if not armed?, do: notice(tap, epoch, :partial_start)
@@ -43,7 +44,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.InferenceTap do
     end
   end
 
-  def begin(%__MODULE__{armed?: true, handoff: handoff} = tap, epoch, %Silero{} = stream) do
+  def begin(%__MODULE__{armed?: true, handoff: handoff} = tap, epoch, %{samples: _} = stream) do
     if CaptureHandoff.current?(handoff) do
       if tap.source_origin == nil,
         do: {handoff, epoch, stream.samples},

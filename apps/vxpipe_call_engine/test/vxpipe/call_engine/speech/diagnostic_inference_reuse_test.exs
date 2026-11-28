@@ -23,7 +23,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
 
       pcm = :binary.copy(<<8, 0>>, 2_048)
       assert :ok = Session.push_audio(session, pcm)
-      assert_receive {:classified, classifier, 0, ^pcm}
+      classifier = first_window(pcm, 0)
       send(classifier, :finish)
       assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
 
@@ -46,16 +46,16 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     _ = :sys.get_state(Session.provider(session))
     pcm = :binary.copy(<<1, 0>>, 2_048)
     assert :ok = Session.push_audio(session, pcm)
-    assert_receive {:classified, _, 0, ^pcm}
+    assert_windows(pcm, 0)
     started = event(session, :speech_started)
-    assert {:probabilities, 0, 0, [0.9, 0.9, 0.9, 0.9], timestamp} = packet(handoff)
+    assert {:probabilities, 0, 0, [0.9, 0.9, 0.9, 0.9], timestamp} = window_packets(handoff, 4)
     assert is_integer(timestamp)
     refute_received {:classified, _, _, _}
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
 
     :ok = CaptureHandoff.close(handoff)
     assert :ok = Session.push_audio(session, silence())
-    assert_receive {:classified, _, 2_048, _silence}
+    assert_windows(silence(), 2_048)
     native = make_ref()
 
     assert :ok =
@@ -77,11 +77,10 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     _ = :sys.get_state(Session.provider(session))
     pcm = :binary.copy(<<2, 0>>, 2_048)
     assert :ok = Session.push_audio(session, pcm)
-    assert_receive {:classified, worker, 0, ^pcm}
-    monitor = Process.monitor(worker)
+    worker = first_window(pcm, 0)
     :ok = CaptureHandoff.close(handoff)
     send(worker, :finish)
-    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
+    finish_remaining(pcm, 0)
     _ = event(session, :speech_started)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
@@ -90,17 +89,17 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     {session, recognizer} = session(true)
     pcm = :binary.copy(<<3, 0>>, 2_048)
     assert :ok = Session.push_audio(session, pcm)
-    assert_receive {:classified, worker, 0, ^pcm}
+    worker = first_window(pcm, 0)
     handoff = handoff()
     assert :ok = ConversationalSTT.observe(session, handoff)
     _ = :sys.get_state(Session.provider(session))
     assert {:reset, 0, :partial_start, _} = packet(handoff)
     send(worker, :finish)
+    finish_remaining(pcm, 0)
     _ = event(session, :speech_started)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
     assert :ok = Session.push_audio(session, silence())
-    assert_receive {:classified, silence_worker, 2_048, _silence}
-    send(silence_worker, :finish)
+    assert_windows(silence(), 2_048, true)
     _ = :sys.get_state(Session.provider(session))
     # The partially covered epoch still reports nothing until its reset.
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
@@ -116,10 +115,11 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     _ = event(session, :turn_ended)
     assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
     assert :ok = Session.push_audio(session, pcm)
-    assert_receive {:classified, next_worker, 0, ^pcm}
+    next_worker = first_window(pcm, 0)
     send(next_worker, :finish)
+    finish_remaining(pcm, 0)
     _ = event(session, :speech_started)
-    assert {:probabilities, 1, 0, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+    assert {:probabilities, 1, 0, [0.9, 0.9, 0.9, 0.9], _} = window_packets(handoff, 4)
   end
 
   test "an adopted prepared allocation can reuse inference for its current consumer" do
@@ -130,9 +130,9 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     _ = :sys.get_state(Session.provider(session))
     pcm = :binary.copy(<<4, 0>>, 2_048)
     assert :ok = Session.push_audio(session, pcm)
-    assert_receive {:classified, _, 0, ^pcm}
+    assert_windows(pcm, 0)
     _ = event(session, :speech_started)
-    assert {:probabilities, 0, 0, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+    assert {:probabilities, 0, 0, [0.9, 0.9, 0.9, 0.9], _} = window_packets(handoff, 4)
   end
 
   test "a pre-subscription trailing byte makes the diagnostic stream partial" do
@@ -180,12 +180,15 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
       )
 
     assert :ok = Session.push_frame(session, frame)
-    assert_receive {:classified, _, 0, ^pcm}
+    assert_windows(pcm, 0)
     _ = event(session, :speech_started)
-    assert {:mapped_probabilities, 0, 0, 32_000, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+
+    assert {:mapped_probabilities, 0, 0, 32_000, [0.9, 0.9, 0.9, 0.9], _} =
+             window_packets(handoff, 4)
+
     assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048, payload: silence()})
-    assert_receive {:classified, _, 2_048, _silence}
-    assert {:mapped_probabilities, 0, 2_048, 34_048, silent, _} = packet(handoff)
+    assert_windows(silence(), 2_048)
+    assert {:mapped_probabilities, 0, 2_048, 34_048, silent, _} = window_packets(handoff, 16)
     assert silent == List.duplicate(0.0, 16)
 
     assert :ok =
@@ -200,9 +203,12 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert {:operational_epoch_closed, 0, 32_000, 42_240, _} = packet(handoff)
     assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
     assert :ok = Session.push_frame(session, %{frame | timestamp: 42_240})
-    assert_receive {:classified, _, 0, ^pcm}
+    assert_windows(pcm, 0)
     _ = event(session, :speech_started)
-    assert {:mapped_probabilities, 1, 0, 42_240, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+
+    assert {:mapped_probabilities, 1, 0, 42_240, [0.9, 0.9, 0.9, 0.9], _} =
+             window_packets(handoff, 4)
+
     refute_received {:classified, _, _, _}
   end
 
@@ -223,20 +229,20 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
       )
 
     assert :ok = Session.push_frame(session, frame)
-    assert_receive {:classified, _, 0, ^pcm}
+    assert_windows(pcm, 0)
     _ = event(session, :speech_started)
-    assert {:mapped_probabilities, 0, 0, 32_000, _, _} = packet(handoff)
+    assert {:mapped_probabilities, 0, 0, 32_000, _, _} = window_packets(handoff, 4)
     assert :ok = Session.push_frame(session, %{frame | timestamp: 40_000})
-    assert_receive {:classified, _, 2_048, ^pcm}
+    assert_windows(pcm, 2_048)
     assert {:reset, 0, :audio_gap, _} = packet(handoff)
-    assert {:probabilities, 0, 2_048, _, _} = packet(handoff)
+    assert {:probabilities, 0, 2_048, _, _} = window_packets(handoff, 4)
     assert :ok = Session.push_frame(session, %{frame | timestamp: 42_048})
-    assert_receive {:classified, _, 4_096, ^pcm}
-    assert {:probabilities, 0, 4_096, _, _} = packet(handoff)
+    assert_windows(pcm, 4_096)
+    assert {:probabilities, 0, 4_096, _, _} = window_packets(handoff, 4)
     refute_received {:classified, _, _, _}
   end
 
-  test "in-flight evidence keeps its source mapping when provider settlement resets the stream" do
+  test "retired inference cannot publish evidence under the new recognition epoch" do
     {session, recognizer} = session(true)
     handoff = handoff()
     assert :ok = ConversationalSTT.observe(session, handoff)
@@ -253,7 +259,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
       )
 
     assert :ok = Session.push_frame(session, frame)
-    assert_receive {:classified, worker, 0, ^pcm}
+    worker = first_window(pcm, 0)
 
     assert :ok =
              GenServer.call(
@@ -269,11 +275,12 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
     assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048})
     send(worker, :finish)
-    assert {:mapped_probabilities, 0, 0, 32_000, _, _} = packet(handoff)
-    assert_receive {:classified, next, 0, ^pcm}
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:mapped_probabilities, 0, _, _, _, _}, _}
+    next = first_window(pcm, 0)
     send(next, :finish)
+    finish_remaining(pcm, 0)
     _ = event(session, :speech_started)
-    assert {:mapped_probabilities, 1, 0, 34_048, _, _} = packet(handoff)
+    assert {:mapped_probabilities, 1, 0, 34_048, _, _} = window_packets(handoff, 4)
     refute_received {:classified, _, _, _}
   end
 
@@ -320,8 +327,10 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
 
     assert :ok = Session.push_frame(session, frame)
     assert :ok = CaptureHandoff.offer(input, {:audio, frame})
-    assert_receive {:classified, _, 0, ^pcm}
+    assert_windows(pcm, 0)
     _ = event(session, :speech_started)
+
+    for _ <- 1..3, do: assert({:acoustic_progress, 0, 32_000, 32_000} = packet(output))
 
     assert {:acoustic_boundary, 0, :speech_started, 32_000, 0, 1_000_000, _, :partial_start} =
              packet(output)
@@ -330,7 +339,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     CaptureHandoff.close(output)
     send(worker, :check_grant)
     assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048, sequence_number: 2})
-    assert_receive {:classified, _, 2_048, ^pcm}
+    assert_windows(pcm, 2_048)
   end
 
   test "VAD onset links a known native hint before any transcript arrives" do
@@ -370,7 +379,7 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     parent = self()
 
     classify = fn _model, stream, audio ->
-      if audio != :binary.copy(<<0>>, 1_024) do
+      if audio != :binary.copy(<<0>>, 1_024) or stream.samples > 0 do
         send(parent, {:classified, self(), stream.samples, audio})
 
         if hold? in [true, :fail],
@@ -407,7 +416,11 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
                  recognizer: SpeechOnsetProbe,
                  recognizer_options: [sample_rate: 16_000],
                  recognizer_private: [observer: self()],
-                 activity_options: [load: fn -> {:ok, :model} end, classify: classify]
+                 activity_options:
+                   Vxpipe.CallEngine.Speech.SileroPoolFixture.options(__MODULE__,
+                     load: fn -> {:ok, :model} end,
+                     classify: classify
+                   )
                ]
              )
 
@@ -437,6 +450,55 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: ^kind} = event}, 1_000
     assert :ok = Session.ack(session, event)
     event
+  end
+
+  defp first_window(<<frame::binary-size(1024), _::binary>>, offset) do
+    assert_receive {:classified, worker, ^offset, ^frame}
+    worker
+  end
+
+  defp finish_remaining(<<_first::binary-size(1024), rest::binary>>, offset) do
+    assert_windows(rest, offset + 512, true)
+  end
+
+  defp assert_windows(audio, offset, finish? \\ false) do
+    for <<window::binary-size(1024) <- audio>>, reduce: offset do
+      sample ->
+        assert_receive {:classified, worker, ^sample, ^window}
+        if finish?, do: send(worker, :finish)
+        sample + 512
+    end
+  end
+
+  defp window_packets(handoff, count) do
+    first = packet(handoff)
+
+    {tag, epoch, offset, source, p, at} =
+      case first do
+        {:mapped_probabilities, epoch, offset, source, [p], at} ->
+          {:mapped_probabilities, epoch, offset, source, p, at}
+
+        {:probabilities, epoch, offset, [p], at} ->
+          {:probabilities, epoch, offset, nil, p, at}
+      end
+
+    rest =
+      for index <- 1..(count - 1) do
+        expected = offset + 512 * index
+
+        if source do
+          absolute = source + 512 * index
+          assert {^tag, ^epoch, ^expected, ^absolute, [score], _} = packet(handoff)
+          score
+        else
+          assert {^tag, ^epoch, ^expected, [score], _} = packet(handoff)
+          score
+        end
+      end
+
+    if source,
+      do: {tag, epoch, offset, source, [p | rest], at},
+      else: {tag, epoch, offset, [p | rest], at}
   end
 
   defp packet(handoff) do
