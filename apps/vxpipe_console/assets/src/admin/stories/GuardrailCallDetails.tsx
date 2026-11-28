@@ -141,8 +141,9 @@ const failureHistory: HistoryFilters = {
 function Preview({ scenario, theme, initialTab }: {
   scenario: GuardrailScenario; theme: "light" | "dark"; initialTab: "Conversation" | "Metrics";
 }) {
-  const [filters, change] = useState<HistoryFilters>(() =>
-    scenario === "pass" || scenario === "partial-answer" || scenario === "multiple-agents" ? allHistory : failureHistory);
+  const defaults = scenario === "pass" || scenario === "partial-answer" || scenario === "multiple-agents"
+    ? allHistory : failureHistory;
+  const [filters, change] = useState(defaults);
   const page = useMemo(() => storyState(scenario, filters), [scenario, filters]);
   const host = useRef<HTMLDivElement>(null);
   const [targets, setTargets] = useState<Target[]>([]);
@@ -229,7 +230,8 @@ function Preview({ scenario, theme, initialTab }: {
       if (agent) return createPortal(<button type="button" className="guardrail-inspect" aria-controls={detailId}
         aria-label={"Inspect Decisions for " + agents[agent]} aria-expanded={selected === agent}
         onClick={() => setSelected(current => current === agent ? null : agent)}>Inspect checks</button>, element, key);
-      if (key === "filters") return createPortal(<HistoryFilterButton filters={filters} change={change} theme={theme} />, element, key);
+      if (key === "filters") return createPortal(
+        <HistoryFilterButton filters={filters} defaults={defaults} change={change} theme={theme} />, element, key);
       if (key === "empty") return createPortal(<div className="gh-empty">
         <p>No matching history</p><button type="button" className="gh-reset" onClick={() => change(allHistory)}>Show all history</button>
       </div>, element, key);

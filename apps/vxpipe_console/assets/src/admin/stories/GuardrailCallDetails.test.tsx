@@ -194,7 +194,9 @@ test("opening filters focuses Messages and shows only the individual filter cont
   render(<GuardrailCallDetails scenario="blocked-input" theme="light" />);
   const modal = await filters();
   expect(modal.queryByRole("group", {name: "Preset"})).toBeNull();
-  expect(modal.getAllByRole("button")).toEqual([modal.getByRole("button", {name: "Close dialog"})]);
+  expect(modal.getAllByRole("button")).toEqual([
+    modal.getByRole("button", {name: "Close dialog"}), modal.getByRole("button", {name: "Reset to defaults"}),
+  ]);
   expect(modal.getByRole("combobox", {name: "Messages"})).toHaveFocus();
   for (const trigger of modal.getAllByRole("combobox")) {
     fireEvent.keyDown(trigger, {key: "Enter"});
@@ -202,6 +204,24 @@ test("opening filters focuses Messages and shows only the individual filter cont
     expect(firstOption).toHaveAccessibleName("Hide");
     fireEvent.keyDown(firstOption, {key: "Escape"});
   }
+});
+
+test.each(["mixed-proposal", "pass"] as const)("reset restores all five opening values in %s", async scenario => {
+  render(<GuardrailCallDetails scenario={scenario} theme="light" />);
+  const modal = await filters();
+  const reset = modal.getByRole("button", {name: "Reset to defaults"});
+  const values = () => modal.getAllByRole("combobox").map(trigger => trigger.textContent);
+  const defaults = values();
+  expect(reset).toHaveAttribute("aria-disabled", "true");
+  for (const label of ["Messages", "Logs", "Events", "Tools", "Guardrails"]) {
+    await chooseFilter(label, label === "Logs" && scenario === "mixed-proposal" ? "Show" : "Hide");
+  }
+  expect(reset).toHaveAttribute("aria-disabled", "false");
+  fireEvent.click(reset);
+  expect(values()).toEqual(defaults);
+  expect(reset).toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(modal.getByRole("button", {name: "Close dialog"}));
+  expect((await filters()).getAllByRole("combobox").map(trigger => trigger.textContent)).toEqual(defaults);
 });
 
 test("Escape dismisses the Events menu before closing the filter dialog", async () => {

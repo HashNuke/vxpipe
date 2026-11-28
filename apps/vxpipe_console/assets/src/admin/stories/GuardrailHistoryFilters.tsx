@@ -1,7 +1,8 @@
 import { useId, useState, type ReactNode } from "react";
-import { ListFilter, ShieldCheck, Wrench } from "lucide-react";
+import { ListFilter, RotateCcw, ShieldCheck, Wrench } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@vxpipe/react";
 import { Icon } from "../../../../../../packages/react/src/Icon";
+import { Button } from "../Button";
 import { SetupDialog } from "../SetupDialog";
 
 const visibility = ["Hide", "Show"] as const;
@@ -20,13 +21,15 @@ const eventDescriptions: Partial<Record<HistoryFilters["events"], string>> = {
   "Call + technical events": "Also include turn, transcript, delivery, and usage events.",
 };
 
-export function HistoryFilterButton({ filters, change, theme }: {
+export function HistoryFilterButton({ filters, defaults, change, theme }: {
   filters: HistoryFilters;
+  defaults: HistoryFilters;
   change: (value: HistoryFilters) => void;
   theme: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
+  const atDefaults = (Object.keys(options) as (keyof HistoryFilters)[]).every(key => filters[key] === defaults[key]);
 
   function row(key: keyof HistoryFilters, label: string, icon: ReactNode) {
     const labelId = id + key;
@@ -62,6 +65,12 @@ export function HistoryFilterButton({ filters, change, theme }: {
         {row("events", "Events", <Icon name="event" />)}
         {row("tools", "Tools", <Wrench aria-hidden="true" />)}
         {row("guardrails", "Guardrails", <ShieldCheck aria-hidden="true" />)}
+        <footer className="gh-filter-footer">
+          <Button type="button" variant="ghost" className="gh-reset-defaults" aria-disabled={atDefaults}
+            onClick={atDefaults ? undefined : () => change(defaults)}>
+            <RotateCcw aria-hidden="true" size={14} />Reset to defaults
+          </Button>
+        </footer>
       </div>
     </SetupDialog>}
   </>;
