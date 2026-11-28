@@ -326,3 +326,35 @@ Do not weaken deadlines or remove failure assertions to make a load run pass.
 Record commands, outcomes, failures and limitations in labnotes. Milestone checkboxes
 mean their acceptance gates passed; a design review or a Storybook approval does
 not complete implementation.
+
+### Isolated Silero performance
+
+Caller-local VAD and manual Scribe share a supervised worker pool. The pool
+chooses workers from CPU affinity, container CPU bandwidth and online BEAM dirty
+CPU schedulers when it starts. Each caller keeps its own recurrent state. A
+worker can run up to 16 ready windows from separate streams in one inference.
+The startup log and `Vxpipe.CallEngine.Speech.Silero.Pool.status/0` report the
+selected worker count. Model loading starts on demand.
+
+The isolated runner in [scripts/qa/bench/silero.exs](../../../scripts/qa/bench/silero.exs)
+uses the packaged CPU model and starts a fresh set of streams per invocation.
+Run it in a disposable Linux release container with cgroup v2, two CPUs and 2 GiB
+of memory. Mount the script, the short-answer PCM fixture, and a writable output
+directory. For example, with the QA release at `/app`:
+
+```sh
+SILERO_VARIANT=cap16 SILERO_WORKLOAD=sync SILERO_STREAMS=100 \
+SILERO_PCM=/fixtures/short_answer_16k_mono_s16le.pcm \
+SILERO_TRACE=/results/sync-cap16.f32 \
+ERL_FLAGS='+S 2:2 +SDcpu 2:2' \
+/app/bin/vxpipe eval 'Code.require_file("/bench/silero.exs")'
+```
+
+Compare `scalar`, `cap1` and `cap16` in separate fresh VMs with identical
+inputs. The `round` workload synchronizes all streams for 96 rounds. The `sync`
+and `spread` workloads send 30 seconds of 10 ms packets, either together or
+phased over 32 ms. Each result includes latency percentiles, output counts,
+cgroup CPU and memory, backlog, and pool batch sizes. Compare every float32
+trace to the scalar run in stream order with a tolerance of 0.000001, and
+check for identical decisions at both 0.5 and 0.35. The variant switch belongs
+to this benchmark script and has no effect on normal release startup.
