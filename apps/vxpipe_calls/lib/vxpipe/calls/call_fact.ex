@@ -32,6 +32,7 @@ defmodule Vxpipe.Calls.CallFact do
     :usage_observed,
     :decisions_evaluation,
     :decisions_question_result,
+    :decisions_feedback_dispatched,
     :decisions_attempt,
     :outgoing_dial_submitted,
     :outgoing_call_answered,

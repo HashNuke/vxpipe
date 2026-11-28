@@ -212,6 +212,19 @@ defmodule Vxpipe.Persistence.TestDecisionsHistoryFixture do
          Keyword.put(ArchiveProjection.attributes(observation), :source_policy, policy)}
       end)
 
-    [{:decisions_evaluation, evaluation}] ++ questions ++ attempts ++ usage
+    receipt =
+      if report.evaluation_id == "draft" do
+        {:ok, report} = Emission.build_report(report)
+
+        delivery =
+          report |> Emission.feedback_receipt() |> Map.put(:dispatched_at, report.ended_at)
+
+        {:ok, attrs} = Emission.feedback_fact(delivery, policy)
+        [{:decisions_feedback_dispatched, attrs}]
+      else
+        []
+      end
+
+    [{:decisions_evaluation, evaluation}] ++ questions ++ attempts ++ usage ++ receipt
   end
 end

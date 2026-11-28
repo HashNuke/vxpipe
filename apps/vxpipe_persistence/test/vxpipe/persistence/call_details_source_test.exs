@@ -472,6 +472,11 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
 
     assert length(rows["decisions_attempt"]) == 5
 
+    assert [%{"evaluation_id" => "draft", "question_ids" => ids}] =
+             rows["decisions_feedback_dispatched"]
+
+    assert ids == ~w(own_account list_variables other_account harsh_language)
+
     blocked = Enum.filter(rows["decisions_question_result"], &(&1["evaluation_id"] == "draft"))
 
     assert Enum.map(
@@ -494,6 +499,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
              [{"yes", "no"}, {"yes", "no"}, {"no", "yes"}, {"no", "yes"}, {"yes", "yes"}]
 
     assert Enum.all?(blocked, &(&1["threshold_hundredths"] == 70))
+    assert Enum.map(blocked, & &1["feedback_dispatched"]) == [true, true, true, true, false]
 
     {decision_usage, other_usage} =
       Enum.split_with(document["usage"]["observations"], &(&1["capability"] == "decisions"))

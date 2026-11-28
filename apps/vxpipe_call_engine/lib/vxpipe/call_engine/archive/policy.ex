@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.Archive.Policy do
   @decisions_kinds [
     :decisions_evaluation,
     :decisions_question_result,
+    :decisions_feedback_dispatched,
     :decisions_attempt
   ]
 
@@ -60,6 +61,12 @@ defmodule Vxpipe.CallEngine.Archive.Policy do
   # A denied interval strips decisions text and any smuggled transcript text
   # at every depth, in both string and atom key forms.
   @decisions_denied_fields @decisions_text_fields ++ @text_fields
+
+  defp filter_decisions_payload(:decisions_feedback_dispatched, payload) do
+    payload
+    |> Map.take(["evaluation_id", "policy_revision", "policy_digest"])
+    |> Map.put("content_unavailable", %{"reason" => "denied"})
+  end
 
   defp filter_decisions_payload(:decisions_question_result, payload) do
     payload

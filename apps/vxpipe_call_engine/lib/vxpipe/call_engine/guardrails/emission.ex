@@ -13,9 +13,9 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
   the authoritative source; unknown intervals default to safe redaction.
 
   Probabilities, question text, feedback and draft text never enter the usage
-  ledger. Unknown provider tokens stay unknown; only actually submitted
-  attempts produce `requests` usage. `feedback_dispatched` is true only when a
-  semantic block was actually handed to the model repair path, never invented.
+  ledger. Submitted attempts produce `requests` usage. A question result records
+  computed feedback. Call history marks its failed questions as dispatched when
+  the original source interval permits a matching model or native provider receipt.
   """
 
   alias Vxpipe.CallEngine.Id
@@ -117,6 +117,72 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
   end
 
   def build_report(_attrs), do: {:error, :invalid_decisions_report}
+
+  @doc "Private identifiers required to confirm delivery after a semantic block."
+  def feedback_receipt(%{outcome: :blocked} = report) do
+    failed = for %{outcome: :failed, question_id: id} <- report.outcomes, do: id
+
+    report
+    |> Map.take([
+      :tenant_id,
+      :call_id,
+      :room_id,
+      :incarnation_id,
+      :event,
+      :participant_id,
+      :activation_id,
+      :source_participant_id,
+      :source_policy_revision,
+      :policy_revision,
+      :policy_digest,
+      :command_id,
+      :evaluation_id
+    ])
+    |> Map.merge(%{
+      kind: :decisions_feedback_dispatched,
+      question_ids: failed,
+      correlation_id: correlation_id(report),
+      tool_call_id: tool_call_id(report)
+    })
+  end
+
+  @doc false
+  def feedback_fact(
+        %{
+          kind: :decisions_feedback_dispatched,
+          evaluation_id: id,
+          question_ids: ids,
+          policy_revision: revision,
+          policy_digest: digest,
+          dispatched_at: %DateTime{} = at
+        } = receipt,
+        policy
+      ) do
+    payload = %{
+      "evaluation_id" => id,
+      "question_ids" => ids,
+      "policy_revision" => revision,
+      "policy_digest" => digest
+    }
+
+    with :ok <- Vxpipe.CallEngine.Archive.DecisionsFact.validate(receipt.kind, payload) do
+      {:ok,
+       [
+         id: "feedback:" <> id,
+         payload: payload,
+         source_policy: policy,
+         occurred_at: at,
+         participant_id: receipt.participant_id,
+         activation_id: receipt.activation_id,
+         source_participant_id: receipt.source_participant_id,
+         command_id: Map.get(receipt, :command_id),
+         correlation_id: Map.get(receipt, :correlation_id),
+         tool_call_id: Map.get(receipt, :tool_call_id)
+       ]}
+    end
+  end
+
+  def feedback_fact(_, _), do: {:error, :invalid_call_fact}
 
   @doc "Builds evaluation fact attributes for Recorder.internal_fact/3."
   @spec evaluation_fact(map(), map()) :: {:ok, keyword()} | {:error, term()}

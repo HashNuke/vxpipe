@@ -44,6 +44,7 @@ defmodule Vxpipe.Calls.CallHistory do
   @decisions_kinds [
     :decisions_evaluation,
     :decisions_question_result,
+    :decisions_feedback_dispatched,
     :decisions_attempt
   ]
 
@@ -54,10 +55,47 @@ defmodule Vxpipe.Calls.CallHistory do
       timeline: CallTimeline.project(facts, variable_snapshots.snapshots),
       transcript: Enum.filter(facts, &transcript_fact?/1),
       tool_history: Enum.filter(facts, &(&1.kind in @tool_kinds)),
-      decisions: Enum.filter(facts, &(&1.kind in @decisions_kinds)),
+      decisions: decisions(facts),
       variable_snapshots: variable_snapshots,
       archive_status: ArchiveStatus.from_facts(facts)
     }
+  end
+
+  @doc "Projects computed question results and their subsequent private dispatch receipts."
+  @spec decisions([Vxpipe.Calls.CallFact.t()]) :: [Vxpipe.Calls.CallFact.t()]
+  def decisions(facts) do
+    facts = Enum.filter(facts, &(&1.kind in @decisions_kinds))
+
+    delivered =
+      for %{kind: :decisions_feedback_dispatched, payload: %{"question_ids" => ids}} = receipt <-
+            facts,
+          receipt.source_policy["save_transcripts"] == true,
+          id <- ids,
+          into: MapSet.new(),
+          do: feedback_key(receipt, id)
+
+    Enum.map(facts, fn
+      %{
+        kind: :decisions_question_result,
+        payload: %{"outcome" => "failed", "question_id" => id} = payload
+      } = question ->
+        if question.source_policy["save_transcripts"] == true and
+             is_nil(payload["content_unavailable"]) and
+             MapSet.member?(delivered, feedback_key(question, id)) do
+          %{question | payload: Map.put(payload, "feedback_dispatched", true)}
+        else
+          question
+        end
+
+      fact ->
+        fact
+    end)
+  end
+
+  defp feedback_key(fact, id) do
+    {fact.activation_id, fact.participant_id, fact.source_participant_id,
+     fact.payload["policy_revision"], fact.payload["policy_digest"],
+     fact.payload["evaluation_id"], id}
   end
 
   defp transcript_fact?(%{kind: kind, payload: payload, participant_id: id}) do

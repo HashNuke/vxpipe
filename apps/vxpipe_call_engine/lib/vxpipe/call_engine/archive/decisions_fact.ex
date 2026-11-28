@@ -1,7 +1,12 @@
 defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
   @moduledoc "Validates the private, version-pinned Decisions facts stored in call history."
 
-  @kinds [:decisions_evaluation, :decisions_question_result, :decisions_attempt]
+  @kinds [
+    :decisions_evaluation,
+    :decisions_question_result,
+    :decisions_feedback_dispatched,
+    :decisions_attempt
+  ]
   @events ~w(before_turn after_turn before_outgoing_transfer)
   @errors ~w(timeout unavailable unauthorized transport_error rate_limited invalid_result refused oversized retry_exhausted stale cancelled)
   @common ~w(evaluation_id policy_digest policy_revision content_unavailable)
@@ -10,6 +15,7 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
   @attempt_ids ~w(provider model request_id retry_of)
   @question_content ~w(question response feedback)
   @fields %{
+    decisions_feedback_dispatched: @common ++ ~w(question_ids),
     decisions_evaluation:
       @common ++
         @timing ++ @evaluation_ids ++ ~w(event outcome error_code attempt_ids question_ids),
@@ -54,6 +60,17 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
       Enum.all?(@question_content, &(is_nil(p[&1]) or is_binary(p[&1]))) and
       p["feedback_origin"] in [nil, "configured", "authored", "fallback"] and
       p["feedback_dispatched"] in [nil, true, false] and valid_score?(p)
+  end
+
+  defp valid_payload?(:decisions_feedback_dispatched, p) do
+    ids = p["question_ids"]
+
+    nonnegative?(p["policy_revision"]) and
+      if p["content_unavailable"] do
+        is_nil(ids)
+      else
+        id_list?(ids) and length(ids) in 1..32 and Enum.uniq(ids) == ids
+      end
   end
 
   defp valid_payload?(:decisions_attempt, p) do
