@@ -46,6 +46,11 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
   const categoriesList = [...localCategories, ...(tenantKey === null ? [] : categories)];
   const label = category === "search" ? "Search results" : categoriesList.find(item => item.id === category)?.name ?? "MCP integrations";
 
+  const results = data ? [
+    { name: data.status === "unavailable" ? "Available integrations" : label, items: data.items },
+    { name: "Installed integrations", items: data.installedItems },
+  ].filter((group, index) => group.items.length || (index === 0 && !data.installedItems.length)) : [];
+
   useEffect(() => setSearchInput(search), [search]);
   useEffect(() => {
     if (searchInput === search) return;
@@ -113,9 +118,9 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
         {state.status === "invalid-page" && <div className="directory-message" role="alert"><span>This page link is no longer valid for these results.</span><Button onClick={() => selectCursor(null)}>Start from first page</Button></div>}
         {state.status === "missing" && <div className="directory-message" role="alert">This integration category is unavailable. Choose another category.</div>}
         {busy && !data && <p role="status">Loading integrations…</p>}
-        {data && <section className="service-directory-group" aria-label={data.status === "unavailable" ? "Available integrations" : label}>
-          <h2>{data.status === "unavailable" ? "Available integrations" : label}</h2>
-          {data.items.length === 0 ? <div className="service-directory-empty" role="status"><h3>{category === "connected" ? "No connected integrations" : "No matching integrations"}</h3><p>{category === "connected" ? "Browse AI models or Telephony to connect an integration." : "Try a different search or category."}</p></div> : <div className="service-directory-list">{data.items.map(item => {
+        {results.map(group => <section key={group.name} className="service-directory-group" aria-label={group.name}>
+          <h2>{group.name}</h2>
+          {group.items.length === 0 ? <div className="service-directory-empty" role="status"><h3>{category === "connected" ? "No connected integrations" : "No matching integrations"}</h3><p>{category === "connected" ? "Browse AI models or Telephony to connect an integration." : "Try a different search or category."}</p></div> : <div className="service-directory-list">{group.items.map(item => {
             const native = item.provider;
             return <article className="service-directory-row" aria-label={item.name} key={item.id}>
               {native ? <ServiceLogo provider={native} name={item.name} /> : <DirectoryLogo key={item.logoUrl ?? "none"} url={item.logoUrl} />}
@@ -135,8 +140,8 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
               </>}</div>
             </article>;
           })}</div>}
-        </section>}
-        {data?.pagination && <nav className="mt-6 flex items-center justify-between gap-4" aria-label="Directory pages"><span className="text-sm text-[var(--admin-muted)]">{data.pagination.start}–{data.pagination.end} of {data.pagination.total}</span><div className="flex gap-2"><Button disabled={busy || !data.pagination.previous} onClick={() => selectCursor(data.pagination?.previous ?? null)}>Previous</Button><Button disabled={busy || !data.pagination.next} onClick={() => selectCursor(data.pagination?.next ?? null)}>Next</Button></div></nav>}
+        </section>)}
+        {data?.pagination && (data.pagination.total > 0 || !data.installedItems.length) && <nav className="mt-6 flex items-center justify-between gap-4" aria-label="Directory pages"><span className="text-sm text-[var(--admin-muted)]">{data.pagination.start}–{data.pagination.end} of {data.pagination.total}</span><div className="flex gap-2"><Button disabled={busy || !data.pagination.previous} onClick={() => selectCursor(data.pagination?.previous ?? null)}>Previous</Button><Button disabled={busy || !data.pagination.next} onClick={() => selectCursor(data.pagination?.next ?? null)}>Next</Button></div></nav>}
       </div>
     </div>
   </>;

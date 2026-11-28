@@ -52,6 +52,49 @@ defmodule Vxpipe.Console.AdminProviderCatalogEndpointTest do
     refute response.resp_body =~ "api_key"
   end
 
+  test "Decisions discovery reuses authorized connections for TypeSafe, Google and OpenAI" do
+    auth = authenticate()
+    path = "/api/tenants/#{@tenant_key}/providers"
+    tenant = %{key: @tenant_key, name: "Example"}
+
+    for connected? <- [false, true] do
+      bindings =
+        if connected?,
+          do:
+            Enum.map(~w(google jev openai), fn provider ->
+              %{
+                provider: provider,
+                name: provider,
+                credential_id: provider <> "-id",
+                source: :tenant,
+                status: :connected,
+                platform_available: false,
+                saved_fields: ["api_key"],
+                last_validated_at: nil
+              }
+            end),
+          else: []
+
+      configure_repository({:ok, %{tenant: tenant, bindings: bindings}})
+
+      providers =
+        auth
+        |> recycle()
+        |> https_get(path <> "?capability=decisions")
+        |> json_response(200)
+        |> Map.fetch!("providers")
+
+      assert Enum.map(providers, & &1["id"]) == ~w(google jev openai)
+
+      assert Enum.all?(
+               providers,
+               &(&1["credential_available"] == connected? and &1["credential_required"])
+             )
+
+      assert Enum.find(providers, &(&1["id"] == "jev"))["name"] == "TypeSafe"
+    end
+  end
+
   test "catalog errors distinguish invalid capability, unavailable provider and missing tenant" do
     configure_repository({:ok, %{tenant: %{key: @tenant_key, name: "Example"}, bindings: []}})
     path = "/admin/api/tenants/#{@tenant_key}/providers"

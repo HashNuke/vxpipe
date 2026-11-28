@@ -12,6 +12,7 @@ export type ServiceProvider =
   | "morse_code_api"
   | "rime"
   | "google"
+  | "jev"
   | "openai"
   | "vertex_ai"
   | "deepseek"

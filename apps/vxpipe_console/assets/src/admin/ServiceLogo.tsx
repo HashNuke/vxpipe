@@ -11,6 +11,7 @@ import openaiIcon from "./assets/icons/openai.svg";
 import openrouterIcon from "./assets/icons/openrouter.png";
 import rimeIcon from "./assets/icons/rime.png";
 import telnyxIcon from "./assets/icons/telnyx.png";
+import typesafeIcon from "./assets/icons/typesafe.png";
 import twilioIcon from "./assets/icons/twilio.png";
 import vertexAiIcon from "./assets/icons/vertex-ai.png";
 import zenmuxIcon from "./assets/icons/zenmux.svg";
@@ -24,6 +25,7 @@ const serviceFavicons: Record<ServiceProvider, string | null> = {
   elevenlabs: elevenlabsIcon,
   fireworks: fireworksIcon,
   google: googleIcon,
+  jev: typesafeIcon,
   morse_code_api: null,
   openai: openaiIcon,
   openrouter: openrouterIcon,

@@ -6,6 +6,7 @@ import type { CapabilitySelection } from "./types";
 import { CredentialNamesContext } from "./credential-names";
 import { VoiceCatalogContext, type VoiceCatalogClient } from "../voiceCatalog";
 import { CapabilityFields } from "./capability-fields";
+import { modelCatalogFixture } from "../modelCatalogFixtures";
 
 afterEach(cleanup);
 const catalog: ModelCatalog = { text_to_speech: {
@@ -156,4 +157,13 @@ test("replacing a speech model discards legacy hints scoped to its previous mode
   expect(saved()).toEqual(initial);
   await choose("Model", "First");
   expect(saved()).toEqual({ provider: "other", model: "first" });
+});
+
+test("TypeSafe selects the recommended Jev Decisions model with its configured credential", async () => {
+  const onChange = vi.fn();
+  render(<CredentialNamesContext value={{ jev: ["policy-team"] }}>
+    <CapabilityFields kind="decisions" path={["defaults", "capabilities", "decisions"]} catalog={modelCatalogFixture} onChange={onChange} />
+  </CredentialNamesContext>);
+  await choose("Provider", "TypeSafe");
+  expect(onChange).toHaveBeenCalledWith({ provider: "jev", model: "jev-1.14.0", credential_name: "policy-team" });
 });

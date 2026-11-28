@@ -16,7 +16,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.NativeCatalog do
   def capabilities(provider_id) do
     Registry.catalog()
     |> Map.get(provider_id, [])
-    |> Enum.filter(&(&1 in [:stt, :llm, :tts, :sts, :telephony]))
+    |> Enum.filter(&(&1 in [:stt, :llm, :tts, :sts, :decisions, :telephony]))
   end
 
   defp installed?(provider) do

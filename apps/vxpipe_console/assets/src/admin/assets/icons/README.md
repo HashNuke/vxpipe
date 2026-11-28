@@ -22,8 +22,11 @@ This keeps native logos available from nested tenant pages as well as root pages
 | Fireworks AI | [https://fireworks.ai/](https://fireworks.ai/) | [fireworks.svg](fireworks.svg) | [SVG](https://fireworks.ai/icon.svg?26fd47f5c5eddcac) |
 | Telnyx | [https://telnyx.com/](https://telnyx.com/) | [telnyx.png](telnyx.png) | [PNG, 750 × 750](https://telnyx.com/favicon.ico) |
 | Twilio | [https://www.twilio.com/](https://www.twilio.com/) | [twilio.png](twilio.png) | [PNG, 512 × 512 (linked web manifest)](https://www.twilio.com/content/dam/twilio-com/core-assets/social/android-chrome-512x512.png) |
+| TypeSafe | [TypeSafe](https://typesafe.ai/) | [typesafe.png](typesafe.png) | [PNG, 400 × 400, rel=icon](https://framerusercontent.com/images/aNFzSFxM4fjICmnibw7npfZjcQ.png) |
 | OpenAI | [OpenAI](https://openai.com/) | [openai.svg](openai.svg) | [SVG, rel=icon](https://openai.com/favicon.svg) |
 | Vertex AI (legacy inventory) | [Google Cloud Vertex AI](https://cloud.google.com/vertex-ai) | [vertex-ai.png](vertex-ai.png) | [PNG, 192 × 192, apple-touch icon](https://www.gstatic.com/cgc/super_cloud_gradient.png) |
+
+TypeSafe’s landing page also declared a [400 × 400 Apple touch icon](https://framerusercontent.com/images/kcuF2BEp5XaVfkmFB634IPRKQH0.png) on 2026-11-28. The directory publisher ranked the standard favicon first.
 
 The Google asset is specifically AI Studio's 512px favicon, not the general
 Google G mark. Telnyx serves PNG bytes at a `.ico` URL; the local filename uses

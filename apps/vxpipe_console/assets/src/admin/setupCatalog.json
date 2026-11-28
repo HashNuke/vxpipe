@@ -40,15 +40,22 @@
       "id": "google",
       "name": "Google AI Studio",
       "description": "Connect Gemini language, transcription, speech synthesis, and live speech.",
-      "capabilities": ["stt", "llm", "tts", "s2s"],
+      "capabilities": ["stt", "llm", "tts", "s2s", "decisions"],
       "sampleCapabilities": ["stt", "llm", "tts"]
     },
     {
       "id": "openai",
       "name": "OpenAI",
       "description": "Connect GPT language models and live speech with one API key.",
-      "capabilities": ["llm", "s2s"],
+      "capabilities": ["llm", "s2s", "decisions"],
       "sampleCapabilities": ["llm", "s2s"]
+    },
+    {
+      "id": "jev",
+      "name": "TypeSafe",
+      "description": "Check voice agent guardrails with TypeSafe’s Jev decision model.",
+      "capabilities": ["decisions"],
+      "sampleCapabilities": []
     },
     {
       "id": "zenmux",

@@ -42,6 +42,49 @@ test("production integration browsing opens the existing native credential form"
 });
 
 
+test.each([true, false])("saves and reopens a TypeSafe Decisions API key with a published integration row (%s)", async published => {
+  let stored = false;
+  const binding = { provider: "jev", name: "jev", source: "tenant", status: "connected", credential_id: "typesafe-credential",
+    saved_fields: ["api_key"], last_validated_at: null, platform_available: false };
+  const tenant = { key: "demo", name: "Demo" };
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(url);
+    if (init?.method === "POST" && path.endsWith("/credentials")) {
+      stored = true;
+      return Response.json({}, { status: 201 });
+    }
+    if (path.endsWith("/categories")) return Response.json({ categories: [] });
+    if (path.includes("/integrations?")) {
+      const connections = stored ? [{ ...binding, can_edit: true }] : [];
+      const row = { id: published ? "typesafe" : "provider-jev", kind: "provider", name: "TypeSafe", connection: { type: "builtin", provider_id: "jev" },
+        capabilities: ["decisions"], can_connect: !stored, connections };
+      const count = published ? 1 : 0;
+      return Response.json({ tenant, installation_version: "0.1.0", directory_status: "available", connections, local_items: published ? [] : [row],
+        page: { items: published ? [row] : [], pagination: { total_items: count, start_index: count, end_index: count, next_cursor: null, previous_cursor: null } } });
+    }
+    return Response.json({ tenant, bindings: stored ? [binding] : [], model_catalog: modelCatalogFixture,
+      provider_capabilities: { jev: ["credential", "credential_validation", "decisions"] } });
+  });
+  render(<MemoryRouter initialEntries={["/t/demo/services/ai"]}><IntegrationsApp scope={{ kind: "tenant", tenantKey: "demo", tenantName: "Demo" }}
+    csrfToken="csrf" fetchImpl={fetchImpl} onNavigate={vi.fn()} /></MemoryRouter>);
+  const connect = await screen.findByRole("button", { name: "Connect TypeSafe" });
+  expect(screen.getByRole("article", { name: "TypeSafe" })).toHaveTextContent("Decisions");
+  expect(screen.queryByText("No matching integrations")).not.toBeInTheDocument();
+  fireEvent.click(connect);
+  const key = await screen.findByLabelText("API key");
+  expect(key).toHaveAttribute("type", "password");
+  fireEvent.change(key, { target: { value: "synthetic-typesafe-key" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Edit TypeSafe" }));
+  const savedKey = await screen.findByLabelText("API key");
+  expect(savedKey).toHaveValue("");
+  expect(savedKey).toHaveAttribute("placeholder", "••••••••");
+  expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/demo/credentials", expect.objectContaining({
+    method: "POST", headers: expect.objectContaining({ "x-csrf-token": "csrf" }),
+    body: JSON.stringify({ provider: "jev", name: "jev", values: { api_key: "synthetic-typesafe-key" } }),
+  }));
+});
+
 test("removes the exact named native connection from the production inventory", async () => {
   let removed = false;
   const binding = { provider: "google", name: "secondary", source: "platform", status: "connected",

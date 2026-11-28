@@ -1,0 +1,23 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "TypeSafe",
+  "summary": "Check voice agent guardrails with TypeSafe’s Jev decision model.",
+  "website_url": "https://typesafe.ai/",
+  "setup_url": "https://console.typesafe.ai/",
+  "documentation_url": "https://docs.typesafe.ai/introduction/quickstart",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "jev"
+  },
+  "icon_url": "https://framerusercontent.com/images/aNFzSFxM4fjICmnibw7npfZjcQ.png"
+}

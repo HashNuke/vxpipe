@@ -32,7 +32,7 @@ export type SetupProvider = {
   id: SetupProviderId;
   name: string;
   description: string;
-  capabilities: Array<VoiceCapability | "telephony">;
+  capabilities: Array<VoiceCapability | "telephony" | "decisions">;
   defaultModels: Partial<Record<VoiceCapability, string>>;
   recommendedModels: Partial<Record<VoiceCapability, ModelDescriptor>>;
   sampleCapabilities: VoiceCapability[];
@@ -63,7 +63,7 @@ export function installedSetupProviders(
         declared.includes(capability === "s2s" ? "sts" : capability),
     );
     const recommendedModels = Object.fromEntries(
-      capabilities.filter((capability): capability is VoiceCapability => capability !== "telephony")
+      capabilities.filter((capability): capability is VoiceCapability => capability !== "telephony" && capability !== "decisions")
         .flatMap((capability) => {
           const recommended = models[catalogCapability[capability]]?.[provider.id]?.find((model) => model.default);
           return recommended ? [[capability, recommended]] : [];
@@ -98,6 +98,7 @@ export const capabilityLabels = {
   stt: "Speech-to-text",
   llm: "LLM",
   tts: "Text-to-speech",
+  decisions: "Decisions",
   telephony: "Telephony",
   s2s: "Speech-to-speech",
 };

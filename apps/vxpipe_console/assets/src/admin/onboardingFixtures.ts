@@ -19,6 +19,7 @@ const providerDetails: Record<
     services: ["Speech to text", "Text to speech"],
   },
   google: { label: "Google AI Studio", services: ["Language model"] },
+  jev: { label: "TypeSafe", services: ["Decisions"] },
   openai: { label: "OpenAI", services: ["Language model", "Speech to speech"] },
   deepseek: { label: "DeepSeek", services: ["Language model"] },
   openrouter: { label: "OpenRouter", services: ["Language model"] },

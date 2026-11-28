@@ -89,7 +89,9 @@ when to transfer.
 
 ### Participant guardrails
 
-In **Call settings → Models**, select a Decisions provider, model and saved credential. The available providers are OpenAI Decisions, Gemini Decisions and Jev. Open an agent’s **Guardrails** tab to add questions. Each agent has its own lists and shares the call’s Decisions selection. An empty list makes zero provider requests for that event.
+To connect TypeSafe, open **Integrations → AI models → TypeSafe**, enter the API key from the TypeSafe console and choose **Save**. Existing OpenAI and Google AI Studio connections also support Decisions. [TypeSafe console](https://console.typesafe.ai/)
+
+In **Call settings → Models**, choose the Decisions provider and model. The editor uses the configured connection. TypeSafe provides the Jev models and uses the provider ID `jev` in the call spec. Open an agent’s **Guardrails** tab to add questions. Each agent has its own lists and shares the call’s Decisions selection. An empty list makes zero provider requests for that event.
 
 | Event | When the questions run |
 | --- | --- |

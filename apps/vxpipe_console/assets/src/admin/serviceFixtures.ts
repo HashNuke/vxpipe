@@ -232,6 +232,7 @@ function providerLabel(provider: CredentialDraft["provider"]) {
     elevenlabs: "ElevenLabs",
     morse_code_api: "MorseCode API",
     google: "Google AI Studio",
+    jev: "TypeSafe",
     openai: "OpenAI",
     vertex_ai: "Google Vertex AI",
     zenmux: "Zenmux",

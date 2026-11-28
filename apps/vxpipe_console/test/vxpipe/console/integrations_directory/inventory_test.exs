@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.Console.IntegrationsDirectory.Inventory
+  alias Vxpipe.Console.IntegrationsDirectory.{Inventory, Page, Request}
   alias Vxpipe.Console.Test.{FakeUserIdentity, OperatorCredentialRepository}
 
   @tenant "AAAAAAAAAAAAAAAA"
@@ -27,6 +27,90 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
 
     assert [%{"connections" => [%{status: :invalid, can_edit: true}]}] = result.page["items"]
     refute inspect(result) =~ "private-payload"
+  end
+
+  test "TypeSafe lists its installed Decisions capability in the public directory and during outages" do
+    definition =
+      Path.expand("../../../../../../integrations/typesafe.json", __DIR__)
+      |> File.read!()
+      |> JSON.decode!()
+
+    assert %{
+             "name" => "TypeSafe",
+             "kind" => "provider",
+             "connection" => %{"provider_id" => "jev", "type" => "builtin"}
+           } = definition
+
+    row =
+      definition
+      |> Map.take(
+        ~w(name kind connection availability summary website_url documentation_url minimum_vxpipe_version setup_url)
+      )
+      |> Map.merge(%{"id" => "typesafe", "category_ids" => ["ai"], "revision" => 1})
+
+    page =
+      Path.expand(
+        "../../../../../../docs/assets/integrations/integrations-directory.search.example.json",
+        __DIR__
+      )
+      |> File.read!()
+      |> JSON.decode!()
+      |> Map.put("items", [row])
+      |> put_in(["query", "q"], "typesafe")
+      |> put_in(["pagination", "total_items"], 1)
+      |> put_in(["pagination", "end_index"], 1)
+
+    principal = FakeUserIdentity.principal()
+    query = %{"q" => "TypeSafe"}
+    assert {:ok, request} = Request.build(:integrations, query)
+    assert {:ok, ^page} = Page.validate(page, request)
+    public = options(fn _, _ -> {:ok, %{body: page}} end)
+    offline = options(fn _, _ -> {:error, :unavailable} end)
+
+    assert {:ok, %{page: %{"items" => [listed]}}} =
+             Inventory.list(principal, @tenant, query, public)
+
+    assert {:ok, %{fallback_items: [local]}} = Inventory.list(principal, @tenant, query, offline)
+
+    for item <- [listed, local] do
+      assert %{
+               "name" => "TypeSafe",
+               "capabilities" => [:decisions],
+               "can_connect" => true,
+               "connection" => %{"provider_id" => "jev"}
+             } = item
+    end
+  end
+
+  test "the 0.1.0 catalog can offer installed TypeSafe separately from successful public results" do
+    remote = %{"items" => [provider_row()], "pagination" => %{"total_items" => 15}}
+    opts = options(fn _, _ -> {:ok, %{body: remote}} end)
+
+    list = fn params ->
+      assert {:ok, result} = Inventory.list(FakeUserIdentity.principal(), @tenant, params, opts)
+      assert result.page["pagination"] == remote["pagination"]
+      assert [%{"connection" => %{"provider_id" => "google"}}] = result.page["items"]
+      result.local_items
+    end
+
+    for params <- [%{"q" => "Jev"}, %{"q" => "TypeSafe"}, %{"category" => "ai"}] do
+      assert [%{"name" => "TypeSafe", "can_connect" => true}] = list.(params)
+    end
+
+    for params <- [
+          %{"q" => "sheets"},
+          %{"category" => "calendar"},
+          %{"category" => "telephony"},
+          %{"category" => "ai", "cursor" => "next"}
+        ] do
+      assert [] == list.(params)
+    end
+
+    present = put_in(provider_row(), ["connection", "provider_id"], "jev")
+    opts = options(fn _, _ -> {:ok, %{body: %{"items" => [present]}}} end)
+
+    assert {:ok, %{local_items: []}} =
+             Inventory.list(FakeUserIdentity.principal(), @tenant, %{"category" => "ai"}, opts)
   end
 
   test "unknown local status prevents fetching and never becomes an enabled Connect" do
@@ -277,7 +361,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
         end
 
       google = Enum.find(rows, &(&1["connection"]["provider_id"] == "google"))
-      assert Map.fetch!(google, "capabilities") == [:llm, :sts, :stt, :tts]
+      assert Map.fetch!(google, "capabilities") == [:decisions, :llm, :sts, :stt, :tts]
     end
   end
 

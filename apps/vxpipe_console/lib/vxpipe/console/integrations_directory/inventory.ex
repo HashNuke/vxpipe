@@ -94,7 +94,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
            directory_status: :available,
            page: page,
            fallback_items: [],
-           local_items: []
+           local_items: installed_additions(page, params, context)
          })}
 
       {:error, reason} when reason in @outages ->
@@ -117,6 +117,24 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
         error
     end
   end
+
+  # The published 0.1.0 directory manifest predates Jev. Keep installed
+  # additions outside the public directory page and its cursor/total.
+  defp installed_additions(page, params, %{installation_version: "0.1.0"} = context) do
+    eligible? = params["category"] in [nil, "ai"] and not Map.has_key?(params, "cursor")
+    published? = Enum.any?(page["items"], &(get_in(&1, ["connection", "provider_id"]) == "jev"))
+
+    if eligible? and not published? do
+      NativeCatalog.items()
+      |> Enum.filter(&(get_in(&1, ["connection", "provider_id"]) == "jev"))
+      |> filter_fallback(params)
+      |> join(context.connections, context.can_connect_native)
+    else
+      []
+    end
+  end
+
+  defp installed_additions(_page, _params, _context), do: []
 
   defp listing_references(page, params) do
     Map.update!(page, "items", fn items ->

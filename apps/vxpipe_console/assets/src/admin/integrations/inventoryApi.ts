@@ -20,7 +20,7 @@ export type IntegrationPagination = {
 };
 export type IntegrationInventory = {
   tenant: { key: string; name: string } | null; version: string;
-  status: "local" | "available" | "unavailable"; items: IntegrationEntry[];
+  status: "local" | "available" | "unavailable"; items: IntegrationEntry[]; installedItems: IntegrationEntry[];
   mcpConnections: McpConnection[]; connections: IntegrationConnection[]; pagination: IntegrationPagination | null;
 };
 export type IntegrationCategory = { id: string; name: string; count: number };
@@ -60,8 +60,8 @@ function entry(value: unknown, tenantKey: string | null): IntegrationEntry {
     !Array.isArray(value.connections) || typeof value.can_connect !== "boolean" || !object(value.connection)) throw invalid();
   if (value.kind === "provider" && !provider(value.connection.provider_id)) throw invalid();
   const capabilities = value.kind === "provider" ? value.capabilities ?? [] : [];
-  if (!Array.isArray(capabilities) || capabilities.length > 5 ||
-    !capabilities.every(item => ["stt", "llm", "tts", "sts", "telephony"].includes(item))) throw invalid();
+  if (!Array.isArray(capabilities) || capabilities.length > 6 ||
+    !capabilities.every(item => ["stt", "llm", "tts", "sts", "telephony", "decisions"].includes(item))) throw invalid();
   const mcps = value.mcp_connections ?? (value.kind === "provider" ? [] : undefined);
   if (!Array.isArray(mcps)) throw invalid();
   return { id: value.id, name: value.name, mcpConnections: mcps.map(item => parseMcpConnection(item, tenantKey)), kind: value.kind as IntegrationEntry["kind"],
@@ -91,13 +91,17 @@ export function parseInventory(value: unknown, tenantKey: string | null): Integr
   }
   if (!Array.isArray(items) || items.length > 1500) throw invalid();
   const parsed = items.map(item => entry(item, tenantKey));
+  const installed = value.directory_status === "available" ? value.local_items ?? [] : [];
+  if (!Array.isArray(installed) || installed.length > setupProviders.length) throw invalid();
+  const installedItems = installed.map(item => entry(item, tenantKey));
+  if (installedItems.some(item => !item.provider || parsed.some(remote => remote.provider === item.provider))) throw invalid();
   const mcps = value.mcp_connections ?? (parsed.every(item => item.kind === "provider") ? [] : undefined);
   if (!Array.isArray(mcps) || mcps.length > 1500) throw invalid();
   const mcpConnections = mcps.map(item => parseMcpConnection(item, tenantKey));
   if (new Set(mcpConnections.map(item => item.id)).size !== mcpConnections.length) throw invalid();
   if (new Set(parsed.map(item => item.id)).size !== parsed.length) throw invalid();
   return { tenant: tenant as IntegrationInventory["tenant"], version: value.installation_version,
-    status: value.directory_status as IntegrationInventory["status"], items: parsed,
+    status: value.directory_status as IntegrationInventory["status"], items: parsed, installedItems,
     connections: value.connections.map(connection), mcpConnections, pagination };
 }
 

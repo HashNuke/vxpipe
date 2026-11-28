@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
     "elevenlabs" => "ElevenLabs",
     "fireworks" => "Fireworks",
     "google" => "Google",
-    "jev" => "Jev",
+    "jev" => "TypeSafe",
     "morse" => "MorseCode Local",
     "morse_code_api" => "MorseCode API",
     "openai" => "OpenAI",

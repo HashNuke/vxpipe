@@ -30,6 +30,7 @@ const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
   "morse_code_api",
   "deepgram",
   "google",
+  "jev",
   "openai",
   "rime",
   "zenmux",
