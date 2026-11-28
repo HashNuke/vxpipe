@@ -115,6 +115,8 @@ for provider in openai google jev; do
   rg -qxF 'argument=DemoTenant000001' "$scratch/output"
   rg -qxF 'argument=billing-policy' "$scratch/output"
 done
+# Invalid arguments must leave a free reservation available to the next checkout.
+export VXPIPE_LIVETESTS_STATE_DIR="$scratch/unused-state"
 if "$repo_root/bin/livetests" decisions openai > "$scratch/stdout" 2> "$scratch/stderr"; then
   echo 'Decisions must require an explicit tenant and connection' >&2
   exit 1
@@ -126,6 +128,18 @@ if "$repo_root/bin/livetests" run --only live_openai_decisions > "$scratch/stdou
   exit 1
 fi
 rg -q 'decisions openai TENANT CONNECTION' "$scratch/stderr"
+
+for arguments in "invalid DemoTenant000001 policy" "google short policy" "jev DemoTenant000001 ?"; do
+  read -r -a invalid <<< "$arguments"
+  if "$repo_root/bin/livetests" decisions "${invalid[@]}" > "$scratch/stdout" 2> "$scratch/stderr"; then
+    echo 'Invalid Decisions selector unexpectedly succeeded' >&2
+    exit 1
+  fi
+done
+[[ ! -e "$VXPIPE_LIVETESTS_STATE_DIR/owner" ]] || {
+  echo 'Invalid Decisions selections claimed the branch reservation' >&2
+  exit 1
+}
 
 # Subcommand dispatch
 "$repo_root/bin/livetests" help > "$scratch/help"

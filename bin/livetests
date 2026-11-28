@@ -601,6 +601,7 @@ run_tests() {
     esac
     die "use bin/livetests decisions $provider TENANT CONNECTION for hosted Guardrails checks"
   done
+  claim_owner
   load_credentials
   export VXPIPE_LIVETESTS_RUNNER=1
   cd -- "$repo_root"
@@ -645,7 +646,7 @@ command="${1:-}"
 
 # Check ownership before loading credentials or performing any live operation.
 case "$command" in
-  run|decisions|tools:up|tools:down|telephony:provision|telephony:hangup|telnyx:hangup|twilio:hangup)
+  tools:up|tools:down|telephony:provision|telephony:hangup|telnyx:hangup|twilio:hangup)
     claim_owner ;;
 esac
 
@@ -655,6 +656,9 @@ case "$command" in
   decisions)
     [[ $# == 3 ]] || die "usage: bin/livetests decisions PROVIDER TENANT CONNECTION"
     case "$1" in openai|google|jev) ;; *) die "unknown Decisions provider (use openai, google or jev)" ;; esac
+    [[ "$2" =~ ^[a-zA-Z0-9_-]{16}$ ]] || die "TENANT must be a 16-character tenant ID"
+    [[ "$3" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$ ]] || die "CONNECTION must be a saved connection name"
+    claim_owner
     cd -- "$repo_root"
     # Use the same installation configuration as bin/dev and QA.
     if [[ -f .env ]]; then
