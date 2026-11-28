@@ -12,7 +12,8 @@ defmodule Vxpipe.AgentRuntime.Session do
     Request,
     RequestRunner,
     Result,
-    SessionConfiguration
+    SessionConfiguration,
+    ToolRegistry
   }
 
   @derive {Inspect, only: [:status]}
@@ -58,6 +59,22 @@ defmodule Vxpipe.AgentRuntime.Session do
     GenServer.call(server, {:request, :caller, input, correlation}, timeout)
   end
 
+  @doc "Revalidates host permission at session admission for a caller or private reply."
+  @spec request_guarded(
+          server(),
+          :caller | :private,
+          String.t() | Input.t() | {:feedback, String.t(), String.t()},
+          map(),
+          (-> boolean()),
+          timeout()
+        ) :: {:ok, Result.t()} | {:error, atom()}
+  def request_guarded(server, kind, input, correlation, permitted?, timeout)
+      when kind in [:caller, :private] and is_function(permitted?, 0) do
+    GenServer.call(server, {:request_guarded, kind, input, correlation, permitted?}, timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @spec continue(server(), String.t() | Input.t(), map(), timeout()) ::
           {:ok, Result.t()} | {:error, atom()}
   def continue(server, input, correlation, timeout \\ :infinity) do
@@ -69,6 +86,16 @@ defmodule Vxpipe.AgentRuntime.Session do
           {:ok, Result.t()} | {:error, atom()}
   def continue_tool_result(server, input, correlation, timeout) do
     GenServer.call(server, {:request, :tool_result, input, correlation}, timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc "Runs a private tool-free model reply for rejected input without retaining it."
+  @spec request_private(server(), String.t(), map(), timeout()) ::
+          {:ok, Result.t()} | {:error, atom()}
+  def request_private(server, input, correlation, timeout \\ :infinity)
+      when is_binary(input) and is_map(correlation) do
+    GenServer.call(server, {:request_private, input, correlation, nil}, timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -123,6 +150,13 @@ defmodule Vxpipe.AgentRuntime.Session do
   def settle_output(server, correlation, message, timeout \\ 5_000)
       when is_map(correlation) do
     GenServer.call(server, {:settle_output, correlation, message}, timeout)
+  end
+
+  @doc false
+  def recent_dialogue(server) do
+    GenServer.call(server, :recent_dialogue, 500)
+  catch
+    :exit, _ -> {[], true}
   end
 
   @spec status(server()) :: :idle | :busy
@@ -181,6 +215,26 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   @impl true
+  def handle_call({:request_guarded, kind, input, correlation, permitted?}, caller, state) do
+    if permitted?.() do
+      message =
+        case {kind, input} do
+          {:caller, input} ->
+            {:request, :caller, input, correlation}
+
+          {:private, {:feedback, feedback, trigger}} ->
+            {:request_private, feedback, correlation, trigger}
+
+          {:private, feedback} ->
+            {:request_private, feedback, correlation, nil}
+        end
+
+      handle_call(message, caller, state)
+    else
+      {:reply, {:error, :input_revoked}, state}
+    end
+  end
+
   def handle_call(
         {:request, origin, input, correlation},
         caller,
@@ -309,6 +363,138 @@ defmodule Vxpipe.AgentRuntime.Session do
     end
   end
 
+  def handle_call(
+        {:request_private, input, correlation, trigger},
+        caller,
+        %{status: :idle} = state
+      )
+      when is_binary(input) and is_map(correlation) do
+    cond do
+      byte_size(input) > state.configuration.maximum_model_context_bytes ->
+        {:reply, {:error, :oversized}, state}
+
+      host_settled?(state) and map_size(state.outstanding) >= @maximum_outstanding ->
+        {:reply, {:error, :busy}, state}
+
+      host_settled?(state) and map_size(state.outstanding) > 0 ->
+        {:reply, {:error, :busy}, state}
+
+      host_settled?(state) and Map.has_key?(state.outstanding, correlation) ->
+        {:reply, {:error, :busy}, state}
+
+      true ->
+        with {:ok, request} <- Request.new(input, correlation, origin: :engine),
+             {:ok, empty_registry} <- ToolRegistry.new([]),
+             {:ok, state} <- admit_private_input(state, request) do
+          state = %{state | active_base_entries: state.conversation.entries}
+          emit(state.configuration.event_destination, Event.new(:request_started, correlation))
+          session = self()
+          token = make_ref()
+
+          begin_submission = fn ->
+            begin_submission(session, token, state.configuration.commit_timeout_ms)
+          end
+
+          commit = fn conversation ->
+            commit_conversation(
+              session,
+              token,
+              conversation,
+              state.configuration.commit_timeout_ms
+            )
+          end
+
+          emit_text_delta = fn text ->
+            emit_request_event(
+              session,
+              token,
+              :text_delta,
+              %{text: text},
+              state.configuration.event_handoff_timeout_ms
+            )
+          end
+
+          emit_model_usage = fn usage, provider_metadata, outcome ->
+            emit_request_event(
+              session,
+              token,
+              :model_usage,
+              %{usage: usage, provider_metadata: provider_metadata, outcome: outcome},
+              state.configuration.event_handoff_timeout_ms
+            )
+          end
+
+          emit_model_attempt = fn kind ->
+            emit_request_event(
+              session,
+              token,
+              kind,
+              %{},
+              state.configuration.event_handoff_timeout_ms
+            )
+          end
+
+          emit_context_compaction_usage = fn usage, provider_metadata, outcome ->
+            emit_request_event(
+              session,
+              token,
+              :context_compaction_usage,
+              %{usage: usage, provider_metadata: provider_metadata, outcome: outcome},
+              state.configuration.event_handoff_timeout_ms
+            )
+          end
+
+          callbacks = %{
+            begin_submission: begin_submission,
+            commit: commit,
+            emit_context_compaction_usage: emit_context_compaction_usage,
+            emit_model_attempt: emit_model_attempt,
+            emit_model_usage: emit_model_usage,
+            emit_text_delta: emit_text_delta
+          }
+
+          transient = [Message.user(request.input, :engine)]
+
+          runner_options =
+            state.configuration
+            |> SessionConfiguration.runner_options(callbacks)
+            |> Map.put(:retry_tool_result?, false)
+            |> Map.put(:transient_messages, transient)
+            |> Map.put(:admission_trigger, trigger)
+            |> Map.put(:tool_registry, empty_registry)
+
+          task =
+            Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
+              RequestRunner.run(state.conversation, request, runner_options)
+            end)
+
+          request_timer =
+            Process.send_after(
+              self(),
+              {:agent_runtime_request_timeout, token},
+              state.configuration.request_timeout_ms
+            )
+
+          {:noreply,
+           %{
+             state
+             | status: :busy,
+               active_task: task,
+               active_token: token,
+               caller: caller,
+               correlation: correlation,
+               request_timer: request_timer
+           }}
+        else
+          {:error, reason} -> {:reply, {:error, reason}, state}
+        end
+    end
+  end
+
+  def handle_call({:request_private, _input, _correlation, _trigger}, _caller, state) do
+    {:reply, {:error, :busy}, state}
+  end
+
   def handle_call({:request, _origin, _input, _correlation}, _caller, state) do
     {:reply, {:error, :busy}, state}
   end
@@ -429,6 +615,9 @@ defmodule Vxpipe.AgentRuntime.Session do
         end
     end
   end
+
+  def handle_call(:recent_dialogue, _from, state),
+    do: {:reply, Conversation.recent_dialogue(state.conversation, nil), state}
 
   def handle_call(:status, _caller, state), do: {:reply, state.status, state}
 
@@ -618,6 +807,15 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   defp admit_input(state, _request), do: state
+
+  defp admit_private_input(%{configuration: %{history_mode: :host_settled}} = state, request) do
+    case put_outstanding(state, request.correlation, nil) do
+      {:ok, state} -> {:ok, state}
+      {:error, :busy} -> {:error, :busy}
+    end
+  end
+
+  defp admit_private_input(state, _request), do: {:ok, state}
 
   defp clear_request(state) do
     state = cancel_request_timer(state)

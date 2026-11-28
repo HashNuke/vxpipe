@@ -28,7 +28,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
     :context_preparation,
     :commit_timeout_ms,
     :request_timeout_ms,
-    :event_destination
+    :event_destination,
+    :round_admission,
+    :maximum_admission_repairs
   ]
   defstruct @enforce_keys
 
@@ -125,7 +127,11 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          {:ok, request_timeout_ms} <-
            positive(Keyword.get(options, :request_timeout_ms, 30_000)),
          {:ok, event_destination} <-
-           resolve_event_destination(Keyword.get(options, :event_destination)) do
+           resolve_event_destination(Keyword.get(options, :event_destination)),
+         {:ok, round_admission} <-
+           Vxpipe.AgentRuntime.RoundAdmission.validate(Keyword.get(options, :round_admission)),
+         {:ok, maximum_admission_repairs} <-
+           non_negative(Keyword.get(options, :maximum_admission_repairs, 2)) do
       {:ok,
        %__MODULE__{
          instructions: instructions,
@@ -151,7 +157,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          context_preparation: context_preparation,
          commit_timeout_ms: commit_timeout_ms,
          request_timeout_ms: request_timeout_ms,
-         event_destination: event_destination
+         event_destination: event_destination,
+         round_admission: round_admission,
+         maximum_admission_repairs: maximum_admission_repairs
        }}
     else
       _invalid -> {:error, :invalid_configuration}
@@ -200,7 +208,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       emit_context_compaction_usage: emit_context_compaction_usage,
       emit_model_attempt: emit_model_attempt,
       emit_model_usage: emit_model_usage,
-      emit_text_delta: emit_text_delta
+      emit_text_delta: emit_text_delta,
+      round_admission: config.round_admission,
+      maximum_admission_repairs: config.maximum_admission_repairs
     }
   end
 
@@ -229,7 +239,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       :context_compaction,
       :commit_timeout_ms,
       :request_timeout_ms,
-      :event_destination
+      :event_destination,
+      :round_admission,
+      :maximum_admission_repairs
     ])
   end
 
@@ -369,4 +381,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
 
   defp positive(value) when is_integer(value) and value > 0, do: {:ok, value}
   defp positive(_value), do: {:error, :invalid_limit}
+
+  defp non_negative(value) when is_integer(value) and value >= 0, do: {:ok, value}
+  defp non_negative(_value), do: {:error, :invalid_limit}
 end

@@ -15,6 +15,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     PendingContext,
     PendingReplyReplay,
     Request,
+    RoundAdmission,
+    RoundCandidate,
     StreamBudget,
     ToolRegistry
   }
@@ -26,13 +28,20 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
           | {:ok, Dialogue.t(), Conversation.t(), PendingReplyReplay.t()}
           | {:error, atom()}
   def run(%Conversation{} = conversation, %Request{} = request, config) when is_map(config) do
+    transient = transient_messages(config)
+
     staged_messages =
-      if config.history_mode == :host_settled,
-        do: [],
-        else: [Message.user(request.input, request.origin)]
+      cond do
+        transient != [] -> []
+        config.history_mode == :host_settled -> []
+        true -> [Message.user(request.input, request.origin)]
+      end
 
     generate(conversation, staged_messages, [], 1, true, request, config)
   end
+
+  defp transient_messages(%{transient_messages: messages}) when is_list(messages), do: messages
+  defp transient_messages(_config), do: []
 
   defp generate(
          conversation,
@@ -41,13 +50,17 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          round,
          tools_enabled?,
          request,
-         config
+         config,
+         admission_state \\ %{repairs_used: 0, repairs: [], attempt: 1}
        ) do
     with {:ok, pending_invocations} <- pending_context(config, request.correlation),
          {:ok, model_context} <- model_context(config, request.correlation),
          model_request <-
            ModelRequest.new(
-             conversation.messages ++ staged_messages,
+             conversation.messages ++
+               staged_messages ++
+               transient_messages(config) ++
+               admission_state.repairs,
              model_tools(config.tool_registry, tools_enabled?),
              pending_invocations,
              model_context,
@@ -58,22 +71,292 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          {:ok, prepared_conversation, model_request} <-
            prepare_context(conversation, model_request, config),
          :ok <- config.emit_model_attempt.(:model_attempt_started),
-         {:ok, response} <- generate_round(config, model_request, output, round),
-         {:ok, response} <- maybe_correct(response, model_request, round, config) do
-      handle_response(
-        response,
-        prepared_conversation,
-        staged_messages,
-        output,
-        round,
-        request,
-        config
-      )
+         {:ok, response, buffered_deltas} <-
+           admitted_model_response(config, model_request, output, round),
+         {:ok, verdict} <-
+           admit_candidate(config, response, request, admission_state, conversation) do
+      case verdict do
+        {:accept} ->
+          accept_round(
+            config,
+            response,
+            buffered_deltas,
+            prepared_conversation,
+            staged_messages,
+            output,
+            round,
+            request,
+            admission_state
+          )
+
+        {:accept, %{binds: _binds}} ->
+          accept_round(
+            config,
+            response,
+            buffered_deltas,
+            prepared_conversation,
+            staged_messages,
+            output,
+            round,
+            request,
+            admission_state
+          )
+
+        {:repair, %{messages: lines} = repair} ->
+          handle_admission_repair(
+            lines,
+            Map.get(repair, :failures),
+            conversation,
+            staged_messages,
+            output,
+            round,
+            request,
+            config,
+            admission_state
+          )
+
+        {:failure, reason} ->
+          {:error, admission_failure_reason(reason)}
+      end
     else
       {:error, reason} when is_atom(reason) -> {:error, reason}
       _invalid -> {:error, :invalid_provider_response}
     end
   end
+
+  defp admitted_model_response(config, model_request, output, round) do
+    if config_round_admission(config) == nil do
+      case generate_round(config, model_request, output, round) do
+        {:ok, response} ->
+          with {:ok, response} <- maybe_correct(response, model_request, round, config) do
+            {:ok, response, []}
+          end
+
+        {:error, _reason} = error ->
+          error
+      end
+    else
+      Process.put(:vxpipe_admission_deltas, [])
+      buffered = %{config | emit_text_delta: &buffer_admission_delta/1}
+
+      result =
+        with {:ok, response} <- generate_round(buffered, model_request, output, round),
+             {:ok, response} <- maybe_correct(response, model_request, round, buffered) do
+          {:ok, response}
+        end
+
+      deltas = Process.delete(:vxpipe_admission_deltas) || []
+
+      case result do
+        {:ok, response} -> {:ok, response, Enum.reverse(deltas)}
+        {:error, _reason} = error -> error
+      end
+    end
+  end
+
+  defp buffer_admission_delta(text) when is_binary(text) do
+    current = Process.get(:vxpipe_admission_deltas, [])
+    Process.put(:vxpipe_admission_deltas, [text | current])
+    :ok
+  end
+
+  defp accept_round(
+         config,
+         response,
+         buffered_deltas,
+         prepared_conversation,
+         staged_messages,
+         output,
+         round,
+         request,
+         admission_state
+       ) do
+    # A repaired round must come back tool-free; a disobedient provider tool
+    # is rejected without submit/commit/delta effects.
+    if admission_state.repairs_used > 0 and response.tool_calls != [] do
+      {:error, :guardrail_blocked}
+    else
+      with :ok <- flush_admitted_deltas(config, buffered_deltas, response) do
+        handle_response(
+          response,
+          prepared_conversation,
+          staged_messages,
+          output,
+          round,
+          request,
+          config,
+          admission_state
+        )
+      end
+    end
+  end
+
+  defp flush_admitted_deltas(_config, [], _response), do: :ok
+
+  defp flush_admitted_deltas(config, deltas, response) do
+    if deltas_match_response?(deltas, response) do
+      flush_deltas(config, deltas)
+    else
+      # Mismatched streamed deltas are never released; only final admitted
+      # speech goes out, once, when it carries caller-facing text.
+      case admitted_speech(response) do
+        nil -> :ok
+        text -> flush_deltas(config, [text])
+      end
+    end
+  end
+
+  defp deltas_match_response?(deltas, %{text: text}) when is_binary(text) do
+    try do
+      IO.iodata_to_binary(deltas) == text
+    rescue
+      _error -> false
+    end
+  end
+
+  defp deltas_match_response?(_deltas, _response), do: false
+
+  defp admitted_speech(%{text: text}) when is_binary(text) do
+    if String.trim(text) != "", do: text, else: nil
+  end
+
+  defp admitted_speech(_response), do: nil
+
+  defp flush_deltas(_config, []), do: :ok
+
+  defp flush_deltas(config, deltas) do
+    Enum.reduce_while(deltas, :ok, fn text, :ok ->
+      case config.emit_text_delta.(text) do
+        :ok -> {:cont, :ok}
+        _unavailable -> {:halt, {:error, :event_unavailable}}
+      end
+    end)
+  end
+
+  defp config_round_admission(%{round_admission: admission}), do: admission
+  defp config_round_admission(_config), do: nil
+
+  defp admit_candidate(config, response, request, admission_state, conversation) do
+    # Validation before guard checks: malformed or policy-violating shapes
+    # fail closed without spending guardrail I/O.
+    with :ok <- validate_round_shape(config, response),
+         {:ok, candidate} <- build_candidate(config, response, request, admission_state) do
+      context = %{
+        correlation: request.correlation,
+        recent_dialogue:
+          if(config_round_admission(config),
+            do: Conversation.recent_dialogue(conversation, request.correlation),
+            else: {[], false}
+          ),
+        triggering_input:
+          if(request.origin == :caller,
+            do: request.input,
+            else: Map.get(config, :admission_trigger)
+          ),
+        history_mode: config.history_mode,
+        reply_protocol: config.reply_protocol
+      }
+
+      {:ok, RoundAdmission.admit(config_round_admission(config), candidate, context)}
+    else
+      {:failure, _reason} = failure -> {:ok, failure}
+      _invalid -> {:ok, {:failure, :error}}
+    end
+  end
+
+  defp validate_round_shape(config, response) do
+    maximum_calls = Map.get(config, :maximum_tool_calls_per_round, 32)
+
+    cond do
+      not is_list(response.tool_calls) ->
+        {:failure, :error}
+
+      length(response.tool_calls) > maximum_calls ->
+        {:failure, :error}
+
+      not Enum.all?(response.tool_calls, &Vxpipe.AgentRuntime.ToolCall.valid?/1) ->
+        {:failure, :error}
+
+      duplicate_tool_ids?(response.tool_calls) ->
+        {:failure, :error}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp duplicate_tool_ids?(tool_calls) do
+    ids = Enum.map(tool_calls, & &1.id)
+    length(ids) != length(Enum.uniq(ids))
+  end
+
+  defp build_candidate(config, response, request, admission_state) do
+    try do
+      {:ok,
+       RoundCandidate.new(response.text,
+         tool_calls: response.tool_calls,
+         correlation: request.correlation,
+         attempt: admission_state.attempt,
+         maximum_bytes: config.maximum_output_bytes,
+         reply_protocol: config.reply_protocol
+       )}
+    rescue
+      ArgumentError -> {:failure, :error}
+    catch
+      _kind, _reason -> {:failure, :error}
+    end
+  end
+
+  defp handle_admission_repair(
+         lines,
+         failures,
+         conversation,
+         staged_messages,
+         output,
+         round,
+         request,
+         config,
+         admission_state
+       ) do
+    maximum_repairs = Map.get(config, :maximum_admission_repairs, 2)
+
+    if admission_state.repairs_used >= maximum_repairs do
+      {:error, :guardrail_blocked}
+    else
+      repair_text =
+        Vxpipe.AgentRuntime.GuardrailFeedback.encode(
+          failures || [%{event: :after_turn, messages: lines}]
+        )
+
+      if byte_size(repair_text) > config.maximum_model_context_bytes do
+        {:error, :guardrail_error}
+      else
+        repair_message = Message.user(repair_text, :engine)
+
+        generate(
+          conversation,
+          staged_messages,
+          output,
+          round,
+          false,
+          request,
+          config,
+          %{
+            repairs_used: admission_state.repairs_used + 1,
+            repairs: [repair_message],
+            attempt: admission_state.attempt + 1
+          }
+        )
+      end
+    end
+  end
+
+  defp admission_failure_reason(:blocked), do: :guardrail_blocked
+  defp admission_failure_reason(:error), do: :guardrail_error
+  defp admission_failure_reason(:oversized), do: :guardrail_error
+  defp admission_failure_reason(:cancelled), do: :guardrail_cancelled
+  defp admission_failure_reason(:stale), do: :guardrail_cancelled
+  defp admission_failure_reason(_reason), do: :guardrail_error
 
   defp generate_round(%{retry_tool_result?: true} = config, request, output, 1) do
     emitted = :atomics.new(1, signed: false)
@@ -138,7 +421,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          output,
          _round,
          request,
-         config
+         config,
+         _admission_state
        ) do
     with {:ok, complete_output} <- final_output(response.text, output, config) do
       conversation =
@@ -157,7 +441,16 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     end
   end
 
-  defp handle_response(response, conversation, staged_messages, output, round, request, config) do
+  defp handle_response(
+         response,
+         conversation,
+         staged_messages,
+         output,
+         round,
+         request,
+         config,
+         admission_state
+       ) do
     if round >= config.maximum_model_rounds do
       {:error, :model_round_limit}
     else
@@ -179,7 +472,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
               round + 1,
               config.reply_protocol == :mode_message_v1 or mode != :blocking,
               request,
-              config
+              config,
+              %{admission_state | repairs: [], attempt: admission_state.attempt + 1}
             )
         end
       else
@@ -251,10 +545,26 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     end
   end
 
+  # Terminal tools (transfer/hangup, marked via typed host `terminal?` binding)
+  # submit last globally, preserving model order within each partition. Ordinary
+  # submits complete first, so a blocked ordinary submit delays terminal start.
+  # The host `Executor.submit/4` acknowledgement remains the effect-time gate:
+  # a terminal denial there becomes a rejected tool result without terminal
+  # effects, while already-accepted ordinary submissions stand. After ordinary
+  # submits, the host completion barrier (`Executor.await_ordinary_completions/2`,
+  # when exported) waits until ordinary invocation results FINISH before any
+  # terminal start, including unguarded and tool-only batches. If an ordinary
+  # failed (or the wait times out/goes stale), terminal effects are withheld and
+  # each terminal call gets a correlated rejected result for a later distinct
+  # proposal. No synchronous room query runs here after `begin_submission/0`.
   defp submit_resolved_calls(resolved_calls, preflight_rejections, request, config) do
-    {submissions, disposition} =
-      Enum.reduce(resolved_calls, {[], :non_blocking}, fn {call, descriptor},
-                                                          {submissions, disposition} ->
+    {ordinary_calls, terminal_calls} =
+      Enum.split_with(resolved_calls, fn {_call, descriptor} -> not terminal_tool?(descriptor) end)
+
+    {ordinary_submissions, disposition, accepted_ordinary_ids} =
+      Enum.reduce(ordinary_calls, {[], :non_blocking, []}, fn {call, descriptor},
+                                                              {submissions, disposition,
+                                                               accepted_ids} ->
         case Map.get(preflight_rejections, call.id) do
           nil ->
             case Executor.submit(
@@ -266,19 +576,111 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
                  ) do
               {:accepted, mode} ->
                 {[{call, running_result(call)} | submissions],
-                 submission_disposition(disposition, mode)}
+                 submission_disposition(disposition, mode), [call.id | accepted_ids]}
 
               {:error, reason} ->
-                {[{call, rejected_result(reason)} | submissions], disposition}
+                {[{call, rejected_result(reason)} | submissions], disposition, accepted_ids}
             end
 
           reason ->
-            {[{call, rejected_result(reason)} | submissions], disposition}
+            {[{call, rejected_result(reason)} | submissions], disposition, accepted_ids}
         end
       end)
 
-    {:ok, Enum.reverse(submissions), disposition}
+    case terminal_calls do
+      [] ->
+        {:ok, Enum.reverse(ordinary_submissions), disposition}
+
+      _ ->
+        submit_terminal_calls(
+          terminal_calls,
+          ordinary_submissions,
+          disposition,
+          Enum.reverse(accepted_ordinary_ids),
+          preflight_rejections,
+          request,
+          config
+        )
+    end
   end
+
+  defp submit_terminal_calls(
+         terminal_calls,
+         ordinary_submissions,
+         disposition,
+         accepted_ordinary_ids,
+         preflight_rejections,
+         request,
+         config
+       ) do
+    barrier =
+      if length(accepted_ordinary_ids) == length(ordinary_submissions),
+        do: await_ordinary_barrier(config, request, accepted_ordinary_ids),
+        else: {:error, :ordinary_failed}
+
+    case barrier do
+      :ok ->
+        {submissions, disposition} =
+          Enum.reduce(terminal_calls, {ordinary_submissions, disposition}, fn {call, descriptor},
+                                                                              {submissions,
+                                                                               disposition} ->
+            case Map.get(preflight_rejections, call.id) do
+              nil ->
+                submit_one(call, descriptor, request, config, submissions, disposition)
+
+              reason ->
+                {[{call, rejected_result(reason)} | submissions], disposition}
+            end
+          end)
+
+        {:ok, Enum.reverse(submissions), disposition}
+
+      {:error, reason} ->
+        {submissions, _disposition} =
+          Enum.reduce(terminal_calls, {ordinary_submissions, disposition}, fn {call, _descriptor},
+                                                                              {submissions,
+                                                                               disposition} ->
+            case Map.get(preflight_rejections, call.id) do
+              nil ->
+                {[{call, rejected_result(reason)} | submissions], disposition}
+
+              preflight_reason ->
+                {[{call, rejected_result(preflight_reason)} | submissions], disposition}
+            end
+          end)
+
+        {:ok, Enum.reverse(submissions), disposition}
+    end
+  end
+
+  defp await_ordinary_barrier(_config, _request, []), do: :ok
+
+  defp await_ordinary_barrier(config, request, accepted_ordinary_ids) do
+    Executor.await_ordinary_completions(
+      config.executor,
+      request.correlation,
+      accepted_ordinary_ids
+    )
+  end
+
+  defp submit_one(call, descriptor, request, config, submissions, disposition) do
+    case Executor.submit(
+           config.executor,
+           descriptor.binding,
+           call.arguments,
+           request.correlation,
+           call.id
+         ) do
+      {:accepted, mode} ->
+        {[{call, running_result(call)} | submissions], submission_disposition(disposition, mode)}
+
+      {:error, reason} ->
+        {[{call, rejected_result(reason)} | submissions], disposition}
+    end
+  end
+
+  defp terminal_tool?(%{terminal?: true}), do: true
+  defp terminal_tool?(_descriptor), do: false
 
   # Room admission must stay cancellable while caller interruption waits on the session.
   defp preflight_resolved_calls(resolved_calls, request, config) do

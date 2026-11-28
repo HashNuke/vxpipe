@@ -32,6 +32,28 @@ defmodule Vxpipe.AgentRuntime.Conversation do
     rebuild(entries)
   end
 
+  @doc "Returns only committed dialogue for the host to permission-filter for a new candidate."
+  def recent_dialogue(%__MODULE__{} = conversation, excluding) do
+    newest =
+      conversation.entries
+      |> Enum.reverse()
+      |> Stream.reject(&(&1.correlation == excluding and not is_nil(excluding)))
+      |> Stream.flat_map(fn entry ->
+        entry.messages
+        |> Enum.reverse()
+        |> Stream.filter(fn
+          %Message{role: :user, origin: :caller} -> true
+          %Message{role: :assistant, origin: nil, tool_calls: []} -> true
+          _private -> false
+        end)
+        |> Stream.map(&{&1.role, &1.content, entry.correlation})
+      end)
+      |> Enum.take(5)
+
+    compacted? = Enum.any?(conversation.entries, &(&1.source_correlations != []))
+    {newest |> Enum.take(4) |> Enum.reverse(), compacted? or length(newest) > 4}
+  end
+
   @spec append_exchange(t(), [Message.t()], map(), Entry.retention()) :: t()
   def append_exchange(%__MODULE__{} = conversation, messages, correlation, retention)
       when is_list(messages) and is_map(correlation) do

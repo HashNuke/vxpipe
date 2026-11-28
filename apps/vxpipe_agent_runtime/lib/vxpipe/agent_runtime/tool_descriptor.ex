@@ -5,7 +5,7 @@ defmodule Vxpipe.AgentRuntime.ToolDescriptor do
 
   @derive {Inspect, only: [:name, :description, :input_schema]}
   @enforce_keys [:name, :description, :input_schema, :binding, :compiled_schema]
-  defstruct @enforce_keys ++ [invalid_arguments_binding: nil]
+  defstruct @enforce_keys ++ [invalid_arguments_binding: nil, terminal?: false]
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -13,7 +13,8 @@ defmodule Vxpipe.AgentRuntime.ToolDescriptor do
           input_schema: map(),
           binding: term(),
           invalid_arguments_binding: term(),
-          compiled_schema: JSV.Root.t()
+          compiled_schema: JSV.Root.t(),
+          terminal?: boolean()
         }
 
   @name_pattern ~r/^[A-Za-z0-9_-]+$/
@@ -24,16 +25,18 @@ defmodule Vxpipe.AgentRuntime.ToolDescriptor do
   @spec new(keyword()) :: {:ok, t()} | {:error, atom()}
   def new(attributes) when is_list(attributes) do
     with {:ok, attributes} <-
-           Keyword.validate(attributes, [:name, :description, :input_schema, :binding]),
+           Keyword.validate(attributes, [:name, :description, :input_schema, :binding, :terminal?]),
          {:ok, projection, compiled_schema} <- validate_projection(attributes),
-         {:ok, binding} <- validate_binding(Keyword.get(attributes, :binding)) do
+         {:ok, binding} <- validate_binding(Keyword.get(attributes, :binding)),
+         {:ok, terminal?} <- validate_terminal(Keyword.get(attributes, :terminal?, false)) do
       {:ok,
        %__MODULE__{
          name: projection.name,
          description: projection.description,
          input_schema: projection.input_schema,
          binding: binding,
-         compiled_schema: compiled_schema
+         compiled_schema: compiled_schema,
+         terminal?: terminal?
        }}
     else
       {:error, _reason} = error -> error
@@ -91,4 +94,7 @@ defmodule Vxpipe.AgentRuntime.ToolDescriptor do
 
   defp validate_binding(nil), do: {:error, :invalid_binding}
   defp validate_binding(binding), do: {:ok, binding}
+
+  defp validate_terminal(value) when is_boolean(value), do: {:ok, value}
+  defp validate_terminal(_value), do: {:error, :invalid_terminal}
 end
