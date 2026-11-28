@@ -182,6 +182,8 @@ MCP grant:
 | Password reset | `POST /api/users/:id/reset-password`. |
 | Connected external MCP clients | `GET /api/account/connections`, `DELETE /api/account/connections/:id`. |
 
+Call specs using schema `20261128.01` can set `defaults.capabilities.decisions` with `provider`, `model` and `credential_name`. Each `participants.<key>.guardrails` object can contain ordered `before_turn`, `after_turn` and `before_outgoing_transfer` arrays. Omit `id` for a new question. Saving returns the generated IDs in the source. Send the existing ID when updating that question. See [Participant guardrails](call-specs.md#participant-guardrails).
+
 Credential create/test input is `{provider,name?,values}`; replacement is
 `{provider,values}`. Values follow the provider's closed schema, never appear in
 read responses, and are separate from telephony metadata. MCP updates carry the

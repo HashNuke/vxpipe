@@ -13,6 +13,7 @@ defmodule Vxpipe.Calls.CallSpecs do
   alias Vxpipe.Calls.{
     CallPlanCompiler,
     CallSpecCredentials,
+    CallSpecGuardrailIds,
     CallSpecRevision,
     ParticipantRoute,
     PrivateMaterial,
@@ -34,12 +35,25 @@ defmodule Vxpipe.Calls.CallSpecs do
          {:ok, call_spec_repository} <-
            Repositories.fetch(options, :call_spec_repository),
          {:ok, source} <- json_safe(source),
-         {:ok, call_spec_id} <- call_spec_id(call_spec_repository, options) do
+         {:ok, call_spec_id} <- call_spec_id(call_spec_repository, options),
+         {:ok, next} <-
+           Repositories.call(call_spec_repository, :next_revision, [tenant_key, call_spec_id]),
+         {:ok, source, guardrail_known} <-
+           assign_guardrail_ids(
+             call_spec_repository,
+             tenant_key,
+             call_spec_id,
+             next,
+             source,
+             options
+           ) do
       attempt_save(
         call_spec_repository,
         tenant_key,
         call_spec_id,
+        next,
         source,
+        guardrail_known,
         options,
         @maximum_attempts
       )
@@ -127,13 +141,65 @@ defmodule Vxpipe.Calls.CallSpecs do
     end
   end
 
-  defp attempt_save(_repository, _tenant_key, _call_spec_id, _source, _options, 0),
+  defp assign_guardrail_ids(repository, tenant_key, call_spec_id, next, source, options) do
+    if CallSpecGuardrailIds.supported?(source) and
+         CallSpecGuardrailIds.has_guardrail_questions?(source) do
+      id_generator =
+        Keyword.get(options, :guardrail_id_generator, &CallSpecGuardrailIds.default_id/0)
+
+      predecessor = if Keyword.has_key?(options, :call_spec_id), do: next, else: 1
+
+      with {:ok, known} <-
+             fetch_known_guardrail_ids(repository, tenant_key, call_spec_id, predecessor),
+           {:ok, assigned} <- assign_questions(source, known, id_generator) do
+        {:ok, assigned, known}
+      end
+    else
+      {:ok, source, %{}}
+    end
+  end
+
+  defp assign_questions(source, known, generator) when map_size(known) == 0,
+    do: CallSpecGuardrailIds.assign_new(source, generator)
+
+  defp assign_questions(source, known, generator),
+    do: CallSpecGuardrailIds.assign_update(source, known, generator)
+
+  # Recheck caller-owned references against the winner without reallocating new IDs.
+  defp verify_retry_guardrails(repository, tenant_key, call_spec_id, next, source, known) do
+    if CallSpecGuardrailIds.supported?(source) and
+         CallSpecGuardrailIds.has_guardrail_questions?(source) do
+      with {:ok, winning} <- fetch_known_guardrail_ids(repository, tenant_key, call_spec_id, next) do
+        CallSpecGuardrailIds.verify_persisted(source, winning, known)
+      end
+    else
+      :ok
+    end
+  end
+
+  defp fetch_known_guardrail_ids(_repository, _tenant_key, _call_spec_id, 1), do: {:ok, %{}}
+
+  defp fetch_known_guardrail_ids(repository, tenant_key, call_spec_id, next) do
+    with {:ok, stored} <-
+           Repositories.call(repository, :fetch_revision, [tenant_key, call_spec_id, next - 1]) do
+      {:ok, CallSpecGuardrailIds.known_ids(stored.source)}
+    end
+  end
+
+  defp attempt_save(_repository, _tenant_key, _id, _revision, _source, _known, _options, 0),
     do: {:error, :revision_generation_exhausted}
 
-  defp attempt_save(repository, tenant_key, call_spec_id, source, options, attempts_left) do
-    with {:ok, revision_number} <-
-           Repositories.call(repository, :next_revision, [tenant_key, call_spec_id]),
-         {:ok, call_spec} <-
+  defp attempt_save(
+         repository,
+         tenant_key,
+         call_spec_id,
+         revision_number,
+         source,
+         known,
+         options,
+         attempts_left
+       ) do
+    with {:ok, call_spec} <-
            CallSpec.new(source, resource_id: call_spec_id, revision: revision_number),
          :ok <- preserve_direction(repository, tenant_key, call_spec),
          :ok <- CallSpecCredentials.check(call_spec, tenant_key, options),
@@ -173,14 +239,28 @@ defmodule Vxpipe.Calls.CallSpecs do
 
       case result do
         {:error, :revision_conflict} ->
-          attempt_save(
-            repository,
-            tenant_key,
-            call_spec_id,
-            source,
-            options,
-            attempts_left - 1
-          )
+          with {:ok, next} <-
+                 Repositories.call(repository, :next_revision, [tenant_key, call_spec_id]),
+               :ok <-
+                 verify_retry_guardrails(
+                   repository,
+                   tenant_key,
+                   call_spec_id,
+                   next,
+                   source,
+                   known
+                 ) do
+            attempt_save(
+              repository,
+              tenant_key,
+              call_spec_id,
+              next,
+              source,
+              known,
+              options,
+              attempts_left - 1
+            )
+          end
 
         result ->
           result
