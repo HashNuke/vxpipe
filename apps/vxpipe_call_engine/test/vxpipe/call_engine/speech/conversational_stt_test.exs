@@ -101,6 +101,44 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
     assert :ok = Session.close(session)
   end
 
+  test "accepted partial and complete windows reuse the running inference processes" do
+    parent = self()
+
+    classify = fn _, stream, pcm ->
+      if :binary.first(pcm) == 11, do: send(parent, {:classified_window, stream.samples})
+      {:ok, stream, [0.0]}
+    end
+
+    session = start_session(true, load: fn -> {:ok, :model} end, classify: classify)
+    _ = event(session, :ready)
+    provider = Session.provider(session)
+    pool = :sys.get_state(provider).runtime.lease.pool
+    [worker] = Map.keys(:sys.get_state(pool).workers)
+    trace = :trace.session_create(:silero_inference_processes, self(), [])
+
+    try do
+      for name <- [:async, :async_nolink, :start_child] do
+        :trace.function(trace, {Task.Supervisor, name, :_}, true, [])
+      end
+
+      for pid <- [provider, pool, worker], do: :trace.process(trace, pid, true, [:call, :procs])
+      assert :ok = Session.push_audio(session, <<11, 0>>)
+      assert :ok = Session.push_audio(session, :binary.copy(<<11, 0>>, 1023))
+      assert_receive {:classified_window, 0}
+      assert_receive {:classified_window, 512}
+
+      for pid <- [provider, pool, worker] do
+        ref = :trace.delivered(trace, pid)
+        assert_receive {:trace_delivered, ^pid, ^ref}
+      end
+
+      refute_received {:trace, _, :spawn, _, _}
+      refute_received {:trace, _, :call, {Task.Supervisor, _, _}}
+    after
+      :trace.session_destroy(trace)
+    end
+  end
+
   test "default onset ignores native hints until words, using one acknowledged outer allocation" do
     session = start_session(false)
     assert_receive {:recognizer, recognizer, inner}

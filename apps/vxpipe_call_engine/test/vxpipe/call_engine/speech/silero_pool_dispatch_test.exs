@@ -113,10 +113,16 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
   end
 
   test "recovers after a worker exit and fails malformed results once" do
+    id = make_ref()
+    event = [:vxpipe, :silero, :pool, :outcome]
+    :ok = :telemetry.attach(id, event, &__MODULE__.observe/4, self())
+    on_exit(fn -> :telemetry.detach(id) end)
     {_lease, ref} = submit()
     assert_receive {:batch, worker, 1}
     Process.exit(worker, :kill)
     assert_receive {:silero_result, ^ref, {:error, :classification_failed}}
+    assert_receive {:outcome, %{count: 1}, %{outcome: :classification_failed} = metadata}
+    assert map_size(metadata) == 1
     {_lease, next} = submit()
     assert_receive {:batch, replacement, 1}
     refute replacement == worker
@@ -128,6 +134,54 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
     assert_result(live)
     refute_received {:silero_result, ^ref, _}
     refute_received {:silero_result, ^next, _}
+  end
+
+  test "queued expiry releases the row without executing it" do
+    first = submit()
+    assert_receive {:batch, worker, 1}
+    {lease, ref} = submit(100)
+
+    assert_receive {:silero_result, ^ref, {:error, :classification_timeout, :await_settlement}},
+                   1000
+
+    assert_receive {:silero_retired, ^ref}
+    assert %{ready: 0, in_flight: 1} = Pool.status(lease.pool)
+    assert :ok = Pool.close(lease)
+    send(worker, :finish)
+    assert_result(first)
+    refute_received {:batch, ^worker, _}
+  end
+
+  test "status redacts pending audio and native failure telemetry exposes only its fixed reason" do
+    id = make_ref()
+    event = [:vxpipe, :silero, :pool, :outcome]
+    :ok = :telemetry.attach(id, event, &__MODULE__.observe/4, self())
+    on_exit(fn -> :telemetry.detach(id) end)
+    first = submit()
+    assert_receive {:batch, worker, 1}
+    marker = "private-window!!"
+    deadline = System.monotonic_time(:millisecond) + 5000
+    {:ok, lease} = Pool.reserve(marker, deadline, __MODULE__)
+
+    {:ok, ref} =
+      Pool.submit(
+        lease,
+        marker,
+        :model,
+        {:binary.copy(marker, 64), Batch.initial_state()},
+        deadline
+      )
+
+    refute inspect(:sys.get_status(lease.pool), limit: :infinity) =~ marker
+
+    send(worker, :finish)
+    assert_result(first)
+    assert_receive {:batch, ^worker, 1}
+    send(worker, :bad_shape)
+    assert_receive {:silero_result, ^ref, {:error, :classification_failed}}
+    assert_receive {:outcome, %{count: 1}, %{outcome: :classification_failed} = metadata}
+    assert map_size(metadata) == 1
+    refute inspect(:sys.get_status(worker), limit: :infinity) =~ marker
   end
 
   test "an unloaded model cannot claim or dispatch a row" do

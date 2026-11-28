@@ -3,6 +3,36 @@ defmodule Vxpipe.CallEngine.Speech.Silero.ModelCacheTest do
 
   alias Vxpipe.CallEngine.Speech.Silero.{Model, ModelCache}
 
+  test "a cold cache shares one successful load between concurrent callers" do
+    parent = self()
+    model = %Model{resource: :shared, sample_rate: 16_000}
+
+    server =
+      start_supervised!(
+        {ModelCache,
+         name: __MODULE__,
+         load: fn ->
+           send(parent, {:loading, self()})
+           receive do: (:finish -> {:ok, model})
+         end}
+      )
+
+    assert :sys.get_state(server).task == nil
+    refute_received {:loading, _}
+
+    first = Task.async(fn -> ModelCache.fetch(server) end)
+    assert_receive {:loading, loader}
+    # Send the second request from this process so status acknowledges its admission.
+    second =
+      :gen_server.send_request(server, {:fetch, System.monotonic_time(:millisecond) + 5000})
+
+    assert map_size(:sys.get_state(server).waiting) == 2
+    send(loader, :finish)
+    assert {:ok, ^model} = Task.await(first)
+    assert {:reply, {:ok, ^model}} = :gen_server.receive_response(second, 1000)
+    refute_received {:loading, _}
+  end
+
   test "owners leaving a blocked model load release their waiters" do
     parent = self()
 
