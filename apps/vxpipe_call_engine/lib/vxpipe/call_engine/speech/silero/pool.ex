@@ -77,6 +77,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
     {:ok,
      %{
        budget: budget,
+       batch_limit: Keyword.get(opts, :batch_limit, 16) |> min(16) |> max(1),
        workers: %{},
        table: table,
        capacity: capacity,
@@ -165,6 +166,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
   def handle_call({:cancel, lease, ref}, {owner, _}, state) do
     case state.jobs[lease.token] do
       %{ref: ^ref, owner: ^owner, retired: false} ->
+        outcome(:cancelled)
         {:reply, :ok, retire(state, lease.token, false)}
 
       _ ->
@@ -239,6 +241,8 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
   def handle_info({:expired, token, ref}, state) do
     case state.jobs[token] do
       %{ref: ^ref, retired: false} = job ->
+        outcome(:classification_timeout)
+
         send(
           job.owner,
           {:silero_result, ref, {:error, :classification_timeout, :await_settlement}}
@@ -258,7 +262,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
   defp dispatch(%{idle: []} = state), do: state
 
   defp dispatch(state) do
-    {entries, state} = take_ready(state, [], 16)
+    {entries, state} = take_ready(state, [], state.batch_limit)
 
     case entries do
       [] ->
@@ -269,6 +273,17 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
         id = make_ref()
         tokens = Enum.map(entries, &elem(&1, 0))
         rows = Enum.map(entries, fn {_, job} -> job.row end)
+        now = System.monotonic_time()
+
+        queue_duration =
+          Enum.reduce(entries, 0, fn {_, job}, total -> total + now - job.queued_at end)
+
+        :telemetry.execute(
+          [:vxpipe, :silero, :pool, :dispatch],
+          %{rows: length(entries), queue_duration: queue_duration},
+          %{}
+        )
+
         GenServer.cast(worker, {:batch, id, first.model, rows})
 
         jobs =
@@ -294,8 +309,10 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
         state = %{state | ready: queue}
 
         if job.deadline <= System.monotonic_time(:millisecond) do
+          state = drop_job(state, token)
+          outcome(:classification_timeout)
           send(job.owner, {:silero_result, job.ref, {:error, :classification_timeout}})
-          take_ready(drop_job(state, token), acc, remaining)
+          take_ready(state, acc, remaining)
         else
           take_ready(state, [{token, job} | acc], remaining - 1)
         end
@@ -340,6 +357,13 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
                   {:ok, p, packed}
               end
 
+            outcome(
+              case reply do
+                {:ok, _, _} -> :ok
+                {:error, reason} -> reason
+              end
+            )
+
             send(job.owner, {:silero_result, job.ref, reply})
           end
 
@@ -354,12 +378,18 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
     end
   end
 
+  defp outcome(kind) do
+    :telemetry.execute([:vxpipe, :silero, :pool, :outcome], %{count: 1}, %{outcome: kind})
+  end
+
   defp valid_result?({p, packed}),
     do: is_float(p) and p >= 0.0 and p <= 1.0 and is_binary(packed) and byte_size(packed) == 1280
 
   defp valid_result?(_), do: false
 
   defp close_lease(state, lease) do
+    if match?(%{retired: false}, state.jobs[lease.token]), do: outcome(:cancelled)
+
     case state.jobs[lease.token] do
       %{running: true} -> retire(state, lease.token, true)
       nil -> release(state, lease)

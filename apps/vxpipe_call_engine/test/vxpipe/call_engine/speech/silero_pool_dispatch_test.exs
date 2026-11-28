@@ -37,6 +37,25 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
     Enum.each(queued, &assert_result/1)
   end
 
+  test "reports queue and native timing and a fixed per-row outcome" do
+    events = for suffix <- [:dispatch, :batch, :outcome], do: [:vxpipe, :silero, :pool, suffix]
+    id = make_ref()
+    :ok = :telemetry.attach_many(id, events, &__MODULE__.observe/4, self())
+    on_exit(fn -> :telemetry.detach(id) end)
+    first = submit()
+    assert_receive {:batch, worker, 1}
+    send(worker, :finish)
+    assert_result(first)
+    assert_receive {:dispatch, %{rows: 1, queue_duration: elapsed}, %{}}
+    assert elapsed >= 0
+    assert_receive {:batch, %{rows: 1, duration: duration}, %{}}
+    assert duration >= 0
+    assert_receive {:outcome, %{count: 1}, %{outcome: :ok}}
+  end
+
+  def observe(event, measurements, metadata, target),
+    do: send(target, {List.last(event), measurements, metadata})
+
   test "retiring a running allocation retains physical credit until completion" do
     {lease, ref} = submit()
     assert_receive {:batch, worker, 1}
