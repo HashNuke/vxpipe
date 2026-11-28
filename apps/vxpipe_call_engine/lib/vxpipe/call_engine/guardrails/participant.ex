@@ -173,7 +173,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
       true ->
         correlation = pin_source_interval(correlation, event, state)
         entry = evaluation_entry(event, proposal, correlation, questions)
-        entry = Map.put(entry, :checked_text, archived_text(state, entry, evidence["text"]))
+        entry = Map.put(entry, :archive_content, archive_content(state, entry, evidence))
         evaluation_id = entry.evaluation_id
 
         participant_pid = self()
@@ -495,24 +495,43 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
     })
   end
 
-  defp archived_text(
-         %{incarnation_id: incarnation} = state,
-         %{event: event, correlation: link},
-         text
-       )
-       when is_binary(incarnation) and event in [:before_turn, :after_turn] and is_binary(text) and
-              byte_size(text) in 1..8192 do
+  defp archive_content(state, entry, evidence) do
+    if may_archive_content?(state, entry) do
+      text = evidence["text"]
+
+      calls =
+        for %{"id" => id, "name" => name} <- List.wrap(evidence["proposed_calls"]),
+            entry.event in [:after_turn, :before_outgoing_transfer],
+            do: %{"id" => id, "name" => name}
+
+      %{
+        checked_text:
+          if(is_binary(text) and byte_size(text) in 1..8192 and String.valid?(text), do: text),
+        proposed_calls: calls,
+        requested_destination:
+          if(entry.event == :before_outgoing_transfer, do: evidence["destination"])
+      }
+    else
+      %{}
+    end
+  end
+
+  defp may_archive_content?(%{incarnation_id: incarnation} = state, %{
+         event: event,
+         correlation: link
+       })
+       when is_binary(incarnation) do
     source =
-      if event == :after_turn,
-        do: link.source_participant_id || state.participant_id,
-        else: link.source_participant_id
+      if event == :before_turn,
+        do: link.source_participant_id,
+        else: link.source_participant_id || state.participant_id
 
     router = TranscriptRouter.whereis(incarnation)
     interval = Evidence.storage_policy(router, state, source, link.source_policy_revision)
-    if interval["save_transcripts"] == true and String.valid?(text), do: text
+    interval["save_transcripts"] == true
   end
 
-  defp archived_text(_, _, _), do: nil
+  defp may_archive_content?(_state, _entry), do: false
 
   defp emit_report(state, entry, result) do
     finished_at = DateTime.utc_now(:millisecond)
@@ -527,18 +546,20 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
         :selected_model
       ])
 
+    archive_content =
+      if result.outcome != :cancelled and may_archive_content?(state, entry),
+        do: Map.get(entry, :archive_content, %{}),
+        else: %{}
+
     attributes =
       base
       |> Map.merge(identity)
       |> Map.merge(entry.correlation)
       |> Map.merge(result)
+      |> Map.merge(archive_content)
       |> Map.merge(%{
         evaluation_id: entry.evaluation_id,
         event: entry.event,
-        checked_text:
-          if(result.outcome != :cancelled,
-            do: archived_text(state, entry, Map.get(entry, :checked_text))
-          ),
         policy_revision: state.policy_revision || 0,
         questions: entry.questions,
         attempts: Attempts.from_events(entry, state.selected_provider, finished_at),

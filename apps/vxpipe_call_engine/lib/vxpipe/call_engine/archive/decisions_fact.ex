@@ -19,7 +19,8 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
     decisions_evaluation:
       @common ++
         @timing ++
-        @evaluation_ids ++ ~w(event outcome error_code attempt_ids question_ids checked_text),
+        @evaluation_ids ++
+        ~w(event outcome error_code attempt_ids question_ids checked_text proposed_calls requested_destination),
     decisions_question_result:
       @common ++
         @question_content ++
@@ -49,6 +50,7 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
       p["outcome"] in ~w(passed blocked error cancelled skipped_empty not_applicable) and
       nonnegative?(p["policy_revision"]) and p["error_code"] in [nil | @errors] and
       optional_ids?(p, @evaluation_ids) and valid_timing?(p) and valid_checked_text?(p) and
+      valid_proposed_calls?(p) and valid_destination?(p) and
       (p["event"] != "before_outgoing_transfer" or id?(p["transfer_invocation_id"])) and
       id_list?(attempts) and (p["outcome"] not in ["passed", "blocked"] or attempts != []) and
       (is_nil(p["question_ids"]) or id_list?(p["question_ids"]))
@@ -83,11 +85,29 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFact do
   end
 
   defp valid_checked_text?(%{"checked_text" => text} = p) do
-    p["event"] in ["before_turn", "after_turn"] and is_nil(p["content_unavailable"]) and
+    p["event"] in @events and is_nil(p["content_unavailable"]) and
       is_binary(text) and byte_size(text) in 1..8192 and String.valid?(text)
   end
 
   defp valid_checked_text?(_), do: true
+
+  defp valid_destination?(%{"requested_destination" => destination} = p),
+    do:
+      p["event"] == "before_outgoing_transfer" and is_nil(p["content_unavailable"]) and
+        id?(destination)
+
+  defp valid_destination?(_), do: true
+
+  defp valid_proposed_calls?(%{"proposed_calls" => calls} = p) do
+    p["event"] in ["after_turn", "before_outgoing_transfer"] and is_nil(p["content_unavailable"]) and
+      is_list(calls) and
+      Enum.all?(calls, fn
+        %{"id" => id, "name" => name} = tool -> map_size(tool) == 2 and id?(id) and id?(name, 128)
+        _ -> false
+      end)
+  end
+
+  defp valid_proposed_calls?(_), do: true
 
   defp valid_marker?(nil), do: true
 

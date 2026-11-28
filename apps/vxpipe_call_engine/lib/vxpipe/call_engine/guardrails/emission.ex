@@ -75,6 +75,8 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
         evaluation_id: evaluation_id,
         event: event,
         checked_text: Map.get(attrs, :checked_text),
+        proposed_calls: Map.get(attrs, :proposed_calls),
+        requested_destination: Map.get(attrs, :requested_destination),
         outcome: outcome,
         error_code: Map.get(attrs, :error_code),
         participant_id: Map.get(attrs, :participant_id),
@@ -214,6 +216,8 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
         }
         |> maybe_put_transfer(report)
         |> put_checked_text(report, envelope)
+        |> put_proposed_calls(report, envelope)
+        |> put_requested_destination(report, envelope)
 
       {:ok,
        [
@@ -234,11 +238,31 @@ defmodule Vxpipe.CallEngine.Guardrails.Emission do
   defp put_checked_text(payload, %{checked_text: text, event: event}, %{
          source_policy: %{"save_transcripts" => true}
        })
-       when event in [:before_turn, :after_turn] and is_binary(text) and
+       when event in [:before_turn, :after_turn, :before_outgoing_transfer] and is_binary(text) and
               byte_size(text) in 1..8192,
        do: Map.put(payload, "checked_text", text)
 
   defp put_checked_text(payload, _report, _envelope), do: payload
+
+  defp put_proposed_calls(payload, %{proposed_calls: [_ | _] = calls, event: event}, %{
+         source_policy: %{"save_transcripts" => true}
+       })
+       when event in [:after_turn, :before_outgoing_transfer],
+       do: Map.put(payload, "proposed_calls", calls)
+
+  defp put_proposed_calls(payload, _report, _envelope), do: payload
+
+  defp put_requested_destination(
+         payload,
+         %{event: :before_outgoing_transfer, requested_destination: destination},
+         %{
+           source_policy: %{"save_transcripts" => true}
+         }
+       )
+       when is_binary(destination) and byte_size(destination) in 1..256,
+       do: Map.put(payload, "requested_destination", destination)
+
+  defp put_requested_destination(payload, _report, _envelope), do: payload
 
   @doc "Builds one question fact per question in authored order."
   @spec question_facts(map(), map()) :: {:ok, [{atom(), keyword()}]} | {:error, term()}

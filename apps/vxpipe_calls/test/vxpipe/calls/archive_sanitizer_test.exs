@@ -2,6 +2,19 @@ defmodule Vxpipe.Calls.ArchiveSanitizerTest do
   use ExUnit.Case, async: true
   alias Vxpipe.Calls.ArchiveSanitizer
 
+  test "denied and unknown guardrail intervals remove the proposed destination and tool identities" do
+    payload = %{
+      "requested_destination" => "billing",
+      "proposed_calls" => [%{"id" => "tool", "name" => "lookup"}]
+    }
+
+    for policy <- [%{}, %{"save_transcripts" => false}] do
+      filtered = ArchiveSanitizer.filter_payload(payload, :decisions_evaluation, policy)
+      refute Map.has_key?(filtered, "requested_destination")
+      refute Map.has_key?(filtered, "proposed_calls")
+    end
+  end
+
   test "transcript retention applies to nested dialogue, cues, summaries and raw copies" do
     payload = %{
       "content" => %{"message" => "private"},

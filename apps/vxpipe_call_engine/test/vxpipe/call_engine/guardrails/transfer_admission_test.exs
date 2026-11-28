@@ -436,8 +436,8 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmissionTest do
 
     for checked <- [evidence, after_evidence] do
       assert checked["proposed_calls"] == [
-               %{"name" => "lookup_order", "kind" => "ordinary"},
-               %{"name" => "transfer", "kind" => "transfer"}
+               %{"id" => "ordinary-1", "name" => "lookup_order", "kind" => "ordinary"},
+               %{"id" => @transfer_call_id, "name" => "transfer", "kind" => "transfer"}
              ]
 
       refute JSON.encode!(checked) =~ "secret"

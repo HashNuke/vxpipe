@@ -241,6 +241,7 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
           proposed_calls =
             Enum.map(candidate.tool_calls, fn call ->
               %{
+                "id" => call.id,
                 "name" => call.name,
                 "kind" => Atom.to_string(Map.fetch!(host.terminal_kinds, call.name))
               }

@@ -18,6 +18,23 @@ defmodule Vxpipe.CallEngine.Archive.DecisionsFactTest do
     end
   end
 
+  test "only permitted outgoing checks may store proposed tool identities" do
+    tool = %{"id" => "lookup-2", "name" => "lookup"}
+
+    payload =
+      Map.merge(evaluation_payload(), %{"event" => "after_turn", "proposed_calls" => [tool]})
+
+    assert :ok = DecisionsFact.validate(:decisions_evaluation, payload)
+
+    for invalid <- [
+          Map.put(payload, "event", "before_turn"),
+          Map.put(payload, "content_unavailable", %{"reason" => "denied"}),
+          Map.put(payload, "proposed_calls", [Map.put(tool, "arguments", %{"order" => 42})])
+        ] do
+      assert {:error, :invalid_call_fact} = DecisionsFact.validate(:decisions_evaluation, invalid)
+    end
+  end
+
   test "rejects unknown top-level keys at the boundary" do
     assert {:error, :invalid_call_fact} =
              DecisionsFact.validate(

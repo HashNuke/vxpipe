@@ -730,8 +730,12 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
                       }},
                      1000
 
+      assert payload["proposed_calls"] == [%{"id" => "route-2", "name" => "transfer"}]
+      assert payload["checked_text"] == "Next reply."
+
       if event == "before_outgoing_transfer" do
         assert payload["transfer_invocation_id"] == "route-2"
+        assert payload["requested_destination"] == "human-support"
 
         assert_receive {:test_archive_fact,
                         %{
