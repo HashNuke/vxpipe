@@ -233,6 +233,14 @@ defmodule Vxpipe.CallEngine.PlanStartup.GuardrailsTest do
              AgentActivation.new(plan, plan.participants["agent"], options(%{}, nil))
   end
 
+  test "a resolved credential lacking a Decisions API key fails before Guardrails starts" do
+    plan = compile_plan(true)
+    bindings = %{{"tenant", "openai", "policy"} => %{"other" => "unused"}}
+
+    assert {:error, %{details: %{"path" => ["defaults", "capabilities", "decisions"]}}} =
+             AgentActivation.new(plan, plan.participants["agent"], options(bindings, nil))
+  end
+
   test "participants without checks skip credential lookup and Guardrails startup" do
     plan = compile_plan(false)
 

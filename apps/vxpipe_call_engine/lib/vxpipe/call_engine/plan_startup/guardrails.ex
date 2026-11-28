@@ -2,8 +2,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.Guardrails do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallSpec.{CapabilitySelection, Guardrails}
-  alias Vxpipe.CallEngine.{CredentialSource, Error, ProviderCredential}
-  alias Vxpipe.Providers.Registry
+  alias Vxpipe.CallEngine.{Decisions, Error}
+  alias Vxpipe.CallEngine.Guardrails.Evidence
 
   def options(plan, %{guardrails: %Guardrails{} = policy} = participant, options) do
     if Guardrails.empty?(policy) do
@@ -84,10 +84,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.Guardrails do
          runtime,
          options
        ) do
-    with {:ok, adapter} <- Registry.resolve_capability(selection.provider, :decisions),
-         {:ok, %ProviderCredential{auth_kind: "api_key", payload: %{"api_key" => key}}} <-
-           CredentialSource.resolve(tenant_id, selection, options),
-         {:ok, config} <- adapter.new(model: selection.model, api_key: key) do
+    with {:ok, decisions} <- Decisions.bind(tenant_id, selection, options) do
       transport =
         case Keyword.get(runtime, :decisions_http_plug) do
           nil -> []
@@ -102,19 +99,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.Guardrails do
            |> put_on_attempt(request)
 
          with {:ok, input} <-
-                Vxpipe.CallEngine.Guardrails.Evidence.packet(
-                  request.event,
-                  participant_id,
-                  request.evidence
-                ),
+                Evidence.packet(request.event, participant_id, request.evidence),
               {:ok, %{probabilities: scores} = result} <-
-                adapter.evaluate(
-                  config,
-                  input,
-                  request.questions,
-                  evaluate_opts
-                ) do
-           {:ok, Map.merge(result, %{scores: scores, provider: selection.provider})}
+                Decisions.evaluate(decisions, input, request.questions, evaluate_opts) do
+           {:ok, Map.put(result, :scores, scores)}
          end
        end}
     end
