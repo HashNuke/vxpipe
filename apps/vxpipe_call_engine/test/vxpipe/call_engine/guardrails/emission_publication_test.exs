@@ -485,7 +485,7 @@ defmodule Vxpipe.CallEngine.Guardrails.EmissionPublicationTest do
                System.monotonic_time(:millisecond) + 20
              )
 
-    assert_received {:emitted, report}
+    assert_receive {:emitted, report}, 1_000
     assert report.outcome == :cancelled
     assert report.attempts == []
     assert report.usage_observations == []
