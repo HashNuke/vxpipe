@@ -68,7 +68,8 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
              participants
            ),
          {:ok, max_duration_ms} <- DurationLimit.resolve(call_spec.max_duration_ms, options),
-         {:ok, conversation_languages} <- resolve_conversation_languages(call_spec) do
+         {:ok, conversation_languages} <- resolve_conversation_languages(call_spec),
+         {:ok, decisions} <- resolve_decisions(call_spec) do
       plan = %ResolvedCallPlan{
         call_spec_id: call_spec.resource_id,
         call_spec_revision: call_spec.revision,
@@ -89,7 +90,8 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
         transfer_policy: call_spec.transfer_policy,
         call_variables: call_variables,
         tool_visibility: tool_visibility,
-        max_duration_ms: max_duration_ms
+        max_duration_ms: max_duration_ms,
+        decisions: decisions
       }
 
       {:ok, ConversationLanguages.pin(plan, conversation_languages)}
@@ -109,6 +111,20 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
           :error ->
             invalid(["conversation_languages"], "must list distinct supported language tags")
         end
+    end
+  end
+
+  defp resolve_decisions(%CallSpec{default_capabilities: %{decisions: nil}}), do: {:ok, nil}
+
+  defp resolve_decisions(%CallSpec{default_capabilities: %{decisions: selection}}) do
+    path = ["defaults", "capabilities", "decisions"]
+
+    case CapabilitySelection.validate(selection, path) do
+      :ok ->
+        {:ok, selection}
+
+      {:error, _error} ->
+        invalid(path, "must select a supported Decisions provider, model and options")
     end
   end
 
@@ -233,7 +249,8 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
          transfers: participant.transfers,
          transfer_history:
            if(participant.kind == :agent, do: %CallSpec.TransferHistory{mode: :fresh, turns: nil}),
-         variable_permissions: participant.variable_permissions
+         variable_permissions: participant.variable_permissions,
+         guardrails: participant.guardrails
        }}
     end
   end

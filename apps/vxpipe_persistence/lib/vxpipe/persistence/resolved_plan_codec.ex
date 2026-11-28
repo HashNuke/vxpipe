@@ -134,6 +134,7 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
       |> Map.put_new(:direction, :incoming)
       |> Map.put_new(:ring_timeout_ms, nil)
       |> Map.put_new(:agent_protocol, nil)
+      |> Map.put_new(:decisions, nil)
 
   defp normalize_reference_defaults(
          value,
@@ -143,7 +144,17 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
          value |> Map.put_new(:speech_to_speech, nil) |> Map.put_new(:output_speech_to_text, nil)
 
   defp normalize_reference_defaults(value, Vxpipe.CallEngine.CallSpec.Capabilities),
-    do: value |> Map.put_new(:speech_to_speech, nil) |> Map.put_new(:output_speech_to_text, nil)
+    do:
+      value
+      |> Map.put_new(:speech_to_speech, nil)
+      |> Map.put_new(:output_speech_to_text, nil)
+      |> Map.put_new(:decisions, nil)
+
+  defp normalize_reference_defaults(value, Vxpipe.CallEngine.ResolvedCallPlan.Participant),
+    do: Map.put_new(value, :guardrails, %Vxpipe.CallEngine.CallSpec.Guardrails{})
+
+  defp normalize_reference_defaults(value, Vxpipe.CallEngine.CallSpec.Participant),
+    do: Map.put_new(value, :guardrails, %Vxpipe.CallEngine.CallSpec.Guardrails{})
 
   defp normalize_reference_defaults(value, _module), do: value
 

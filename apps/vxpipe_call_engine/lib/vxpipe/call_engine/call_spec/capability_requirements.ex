@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilityRequirements do
   @moduledoc "Effective capability selections and their source paths, including transfer destinations."
 
   alias Vxpipe.CallEngine.{CallSpec, CapabilityCatalog}
-  alias Vxpipe.CallEngine.CallSpec.{Capabilities, OpeningAudio}
+  alias Vxpipe.CallEngine.CallSpec.{Capabilities, Guardrails, OpeningAudio}
 
   def all(%CallSpec{} = call_spec) do
     participants =
@@ -15,7 +15,11 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilityRequirements do
     opening =
       OpeningAudio.voice_requirement(call_spec.opening_audio, call_spec.default_capabilities)
 
-    Enum.reject(participants ++ [opening], fn {selection, _path} -> is_nil(selection) end)
+    decisions = decisions_requirement(call_spec)
+
+    Enum.reject(participants ++ [opening, decisions], fn {selection, _path} ->
+      is_nil(selection)
+    end)
   end
 
   def credentials(%CallSpec{} = call_spec) do
@@ -41,5 +45,13 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilityRequirements do
            ["participants", participant.call_spec_key, "capabilities", Atom.to_string(kind)]}
       end
     end)
+  end
+
+  defp decisions_requirement(%CallSpec{} = call_spec) do
+    selection =
+      if Guardrails.required?(call_spec.participants),
+        do: call_spec.default_capabilities.decisions
+
+    {selection, ["defaults", "capabilities", "decisions"]}
   end
 end

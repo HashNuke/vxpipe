@@ -146,10 +146,22 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudioCompilerTest do
     call_spec_input()
     |> Map.drop([:entry_caller, :entry_receiver])
     |> Map.merge(%{
-      schema_version: "20261125.01",
+      schema_version: CallSpec.schema_version(),
       incoming_call: %{caller: "caller", handled_by: "reception"},
       opening_audio: %{type: "text", text: "Notice"}
     })
+  end
+
+  test "retained 20261125.01 still parses and compiles without guardrails" do
+    input =
+      current_input()
+      |> Map.put(:schema_version, "20261125.01")
+      |> Map.delete(:opening_audio)
+
+    assert {:ok, call_spec} = CallSpec.new(input, resource_id: "support", revision: 7)
+    assert call_spec.schema_version == "20261125.01"
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation(), registries())
+    assert plan.schema_version == "20261125.01"
   end
 
   test "resolves the opening's explicit TTS selection with a human initial receiver" do
@@ -204,7 +216,7 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudioCompilerTest do
   end
 
   test "pins supported text and HTTPS file sources into the resolved plan" do
-    assert CallSpec.schema_version() == "20261125.01"
+    assert CallSpec.schema_version() == "20261128.01"
 
     for {input, expected} <- [
           {%{

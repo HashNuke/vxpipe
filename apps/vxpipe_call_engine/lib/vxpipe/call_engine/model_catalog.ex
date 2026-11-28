@@ -8,7 +8,8 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
     "output_speech_to_text" => :stt,
     "text_to_speech" => :tts,
     "speech_to_speech" => :sts,
-    "model_inference" => :llm
+    "model_inference" => :llm,
+    "decisions" => :decisions
   }
   @names %{
     "cartesia" => "Cartesia",
@@ -17,6 +18,7 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
     "elevenlabs" => "ElevenLabs",
     "fireworks" => "Fireworks",
     "google" => "Google",
+    "jev" => "Jev",
     "morse" => "MorseCode Local",
     "morse_code_api" => "MorseCode API",
     "openai" => "OpenAI",
@@ -58,6 +60,22 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
     end
   end
 
+  def models(provider, "decisions") do
+    with {:ok, adapter} <- Registry.resolve_capability(provider, :decisions) do
+      models =
+        adapter.models()
+        |> Enum.sort()
+        |> Enum.with_index()
+        |> Enum.map(fn {id, index} ->
+          %{id: id, name: decisions_model_name(provider, id), default: index == 0, voices: nil}
+        end)
+
+      {:ok, models}
+    else
+      _invalid -> {:error, :unsupported_provider_capability}
+    end
+  end
+
   def models(provider, capability) do
     with {:ok, kind} <- kind(capability),
          {:ok, adapter} <- Registry.resolve_capability(provider, kind) do
@@ -73,6 +91,11 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
       descriptor -> Map.put(model, :languages, descriptor)
     end
   end
+
+  defp decisions_model_name("openai", "gpt-6-luna"), do: "GPT-6 Luna"
+  defp decisions_model_name("jev", "jev-1.14.0"), do: "Jev 1.14.0"
+  defp decisions_model_name("jev", "jev-latest"), do: "Jev Latest"
+  defp decisions_model_name(_provider, id), do: id
 
   defp kind(capability) do
     case Map.fetch(@capabilities, capability) do

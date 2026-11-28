@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallSpec.ConnectionIntent
+  alias Vxpipe.CallEngine.CallSpec.Guardrails
   alias Vxpipe.CallEngine.CallSpec.TransferHistory
   alias Vxpipe.CallEngine.CallSpec.VariablePermissions
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, MediaPolicy, ToolBinding}
@@ -24,7 +25,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
     :transfer_history,
     :variable_permissions
   ]
-  defstruct @enforce_keys ++ [telephony_service: nil]
+  defstruct @enforce_keys ++ [telephony_service: nil, guardrails: %Guardrails{}]
 
   @type t :: %__MODULE__{
           call_spec_key: String.t(),
@@ -43,6 +44,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
           tools: %{optional(String.t()) => ToolBinding.t()},
           transfers: [String.t()],
           transfer_history: nil | TransferHistory.t(),
-          variable_permissions: VariablePermissions.t()
+          variable_permissions: VariablePermissions.t(),
+          guardrails: Guardrails.t()
         }
 end

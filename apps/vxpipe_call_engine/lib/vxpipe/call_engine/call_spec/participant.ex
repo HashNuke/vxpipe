@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
   alias Vxpipe.CallEngine.CallSpec.{
     Capabilities,
     ConnectionIntent,
+    Guardrails,
     MediaPolicy,
     ToolSelection,
     TransferHistory,
@@ -24,7 +25,8 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
     :tools,
     :transfers,
     :transfer_history,
-    :variable_permissions
+    :variable_permissions,
+    :guardrails
   ]
   @human_fields [
     :type,
@@ -44,7 +46,8 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
     :tools,
     :transfers,
     :transfer_history,
-    :variable_permissions
+    :variable_permissions,
+    :guardrails
   ]
 
   @enforce_keys [
@@ -63,7 +66,7 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
     :transfer_history,
     :variable_permissions
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [guardrails: %Guardrails{}]
 
   @type t :: %__MODULE__{
           call_spec_key: String.t(),
@@ -79,7 +82,8 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
           tools: %{optional(String.t()) => ToolSelection.t()},
           transfers: [String.t()],
           transfer_history: nil | TransferHistory.t(),
-          variable_permissions: VariablePermissions.t()
+          variable_permissions: VariablePermissions.t(),
+          guardrails: Guardrails.t()
         }
 
   def new(call_spec_key, value, options \\ [])
@@ -190,7 +194,8 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
          tools: %{},
          transfers: [],
          transfer_history: nil,
-         variable_permissions: %VariablePermissions{}
+         variable_permissions: %VariablePermissions{},
+         guardrails: %Guardrails{}
        }}
     end
   end
@@ -218,7 +223,8 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
            VariablePermissions.new(
              Map.get(input, :variable_permissions, %{}),
              path ++ ["variable_permissions"]
-           ) do
+           ),
+         {:ok, guardrails} <- guardrails(input, code, message, path, options) do
       {:ok,
        %{
          connection: nil,
@@ -229,8 +235,27 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
          tools: tools,
          transfers: transfers,
          transfer_history: transfer_history,
-         variable_permissions: variable_permissions
+         variable_permissions: variable_permissions,
+         guardrails: guardrails
        }}
+    end
+  end
+
+  defp guardrails(input, code, message, path, options) do
+    cond do
+      Keyword.get(options, :guardrails?, false) ->
+        Guardrails.new(Map.get(input, :guardrails), path ++ ["guardrails"])
+
+      Map.has_key?(input, :guardrails) ->
+        CallSpecValidation.invalid(
+          code,
+          message,
+          path ++ ["guardrails"],
+          "is not supported in this schema version"
+        )
+
+      true ->
+        {:ok, %Guardrails{}}
     end
   end
 

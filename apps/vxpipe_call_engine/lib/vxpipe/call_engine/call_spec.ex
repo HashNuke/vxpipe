@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
     CallVariables,
     Capabilities,
     Direction,
+    Guardrails,
     MediaPolicy,
     OpeningAudio,
     Participant,
@@ -17,9 +18,11 @@ defmodule Vxpipe.CallEngine.CallSpec do
 
   alias Vxpipe.CallEngine.CallSpecValidation
 
-  @schema_version "20261125.01"
+  @schema_version "20261128.01"
   @explicit_entry_versions ["20260915.01", "20261004.01"]
-  @supported_schema_versions @explicit_entry_versions ++ [@schema_version]
+  @retained_schema_versions ["20261125.01"]
+  @supported_schema_versions @explicit_entry_versions ++
+                               @retained_schema_versions ++ [@schema_version]
   @fields [
     :schema_version,
     :name,
@@ -91,6 +94,12 @@ defmodule Vxpipe.CallEngine.CallSpec do
   @spec supported_schema_version?(term()) :: boolean()
   def supported_schema_version?(version), do: version in @supported_schema_versions
 
+  @spec guardrails_supported?(term()) :: boolean()
+  def guardrails_supported?(version), do: version == @schema_version
+
+  @spec decisions_supported?(term()) :: boolean()
+  def decisions_supported?(version), do: version == @schema_version
+
   @spec inherits_entry_settings?(term()) :: boolean()
   def inherits_entry_settings?(version),
     do: version in @supported_schema_versions and version not in @explicit_entry_versions
@@ -112,7 +121,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
          :ok <- validate_schema(schema_input, code, message),
          {:ok, name} <- optional_name(input, code, message),
          {:ok, direction} <- Direction.new(input, schema_input),
-         {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
+         {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message, schema_input),
          {:ok, opening_audio} <-
            OpeningAudio.new(
              Map.get(input, :opening_audio),
@@ -124,9 +133,9 @@ defmodule Vxpipe.CallEngine.CallSpec do
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
            CallSpecValidation.fetch(input, :participants, code, message, []),
-         {:ok, participants} <-
-           participants(participants_input, direction, inherits_entry_settings?(schema_input)),
+         {:ok, participants} <- participants(participants_input, direction, schema_input),
          :ok <- Direction.validate(direction, participants),
+         :ok <- validate_decisions_guardrails(defaults, participants, code, message),
          :ok <- validate_transfers(participants, code, message),
          :ok <- validate_media_policies(media_policy, participants),
          {:ok, transfer_policy} <-
@@ -202,23 +211,29 @@ defmodule Vxpipe.CallEngine.CallSpec do
     )
   end
 
-  defp defaults(value, code, message) do
+  defp defaults(value, code, message, schema_version) do
     with {:ok, input} <-
            CallSpecValidation.normalize_map(value, [:capabilities], code, message, ["defaults"]),
          {:ok, capabilities} <-
-           Capabilities.new(Map.get(input, :capabilities, %{}), ["defaults", "capabilities"]) do
+           Capabilities.new(Map.get(input, :capabilities, %{}), ["defaults", "capabilities"],
+             decisions?: decisions_supported?(schema_version)
+           ) do
       {:ok, capabilities}
     end
   end
 
-  defp participants(value, direction, inherit_entry_settings?)
-       when is_map(value) and map_size(value) > 0 do
+  defp participants(value, direction, schema_version)
+       when is_map(value) and map_size(value) > 0 and is_binary(schema_version) do
+    inherit_entry_settings? = inherits_entry_settings?(schema_version)
+    guardrails? = guardrails_supported?(schema_version)
+
     Enum.reduce_while(value, {:ok, %{}}, fn
       {key, participant_input}, {:ok, participants} when is_binary(key) ->
         case Participant.new(
                key,
                participant_input,
-               Direction.participant_options(direction, key, inherit_entry_settings?)
+               Direction.participant_options(direction, key, inherit_entry_settings?) ++
+                 [guardrails?: guardrails?]
              ) do
           {:ok, participant} -> {:cont, {:ok, Map.put(participants, key, participant)}}
           {:error, _error} = error -> {:halt, error}
@@ -250,6 +265,104 @@ defmodule Vxpipe.CallEngine.CallSpec do
         {:error, _error} = error -> {:halt, error}
       end
     end)
+  end
+
+  defp validate_decisions_guardrails(defaults, participants, code, message) do
+    with :ok <-
+           validate_decisions_presence(
+             defaults,
+             Guardrails.required?(participants),
+             code,
+             message
+           ) do
+      validate_event_modes(defaults, participants, code, message)
+    end
+  end
+
+  defp validate_decisions_presence(_defaults, false, _code, _message), do: :ok
+
+  defp validate_decisions_presence(%{decisions: nil}, true, code, message) do
+    CallSpecValidation.invalid(
+      code,
+      message,
+      ["defaults", "capabilities", "decisions"],
+      "is required when guardrails are enabled"
+    )
+  end
+
+  defp validate_decisions_presence(_defaults, true, _code, _message), do: :ok
+
+  defp validate_event_modes(defaults, participants, code, message) do
+    participants
+    |> Enum.sort_by(fn {call_spec_key, _participant} -> call_spec_key end)
+    |> Enum.reduce_while(:ok, fn {_key, participant}, :ok ->
+      case validate_participant_event_modes(participant, defaults, code, message) do
+        :ok -> {:cont, :ok}
+        {:error, _error} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp validate_participant_event_modes(%{kind: :human}, _defaults, _code, _message), do: :ok
+
+  defp validate_participant_event_modes(participant, defaults, code, message) do
+    guardrails = participant.guardrails
+
+    with :ok <-
+           validate_turn_event(
+             participant,
+             defaults,
+             guardrails.before_turn,
+             "before_turn",
+             code,
+             message
+           ) do
+      validate_turn_event(
+        participant,
+        defaults,
+        guardrails.after_turn,
+        "after_turn",
+        code,
+        message
+      )
+    end
+  end
+
+  defp validate_turn_event(_participant, _defaults, [], _event, _code, _message), do: :ok
+
+  defp validate_turn_event(participant, defaults, _questions, event, code, message) do
+    path = ["participants", participant.call_spec_key, "guardrails", event]
+    effective_sts = effective_capability(participant, defaults, :speech_to_speech)
+    effective_llm = effective_capability(participant, defaults, :model_inference)
+    effective_tts = effective_capability(participant, defaults, :text_to_speech)
+
+    cond do
+      not is_nil(effective_sts) ->
+        CallSpecValidation.invalid(
+          code,
+          message,
+          path,
+          "is not supported for speech-to-speech"
+        )
+
+      is_nil(effective_llm) or is_nil(effective_tts) ->
+        CallSpecValidation.invalid(
+          code,
+          message,
+          path,
+          "requires effective model_inference and text_to_speech"
+        )
+
+      true ->
+        :ok
+    end
+  end
+
+  defp effective_capability(participant, defaults, kind) do
+    case Capabilities.ref(participant.capabilities, kind) do
+      nil -> Capabilities.ref(defaults, kind)
+      selection -> selection
+    end
   end
 
   defp validate_media_policies(media_policy, participants) do

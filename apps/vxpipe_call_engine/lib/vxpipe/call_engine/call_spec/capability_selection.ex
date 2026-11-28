@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
           | :text_to_speech
           | :speech_to_speech
           | :output_speech_to_text
+          | :decisions
 
   @type t :: %__MODULE__{
           kind: kind(),
@@ -31,7 +32,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
   def new(input, kind, path) do
     fields = if kind == :speech_to_text, do: @fields ++ [:vad], else: @fields
 
-    fields = if kind == :model_inference, do: fields, else: [:languages | fields]
+    fields = if kind in [:model_inference, :decisions], do: fields, else: [:languages | fields]
 
     with {:ok, input} <- CallSpecValidation.normalize_map(input, fields, @code, @message, path),
          {:ok, provider} <- required_string(input, :provider, path),
@@ -84,7 +85,8 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
         :model_inference,
         :text_to_speech,
         :speech_to_speech,
-        :output_speech_to_text
+        :output_speech_to_text,
+        :decisions
       ] and
       is_binary(selection.provider) and is_binary(selection.model) and
       String.valid?(selection.model) and byte_size(selection.model) in 1..256 and

@@ -1,4 +1,30 @@
 {
+  "decisions": {
+    "jev": [
+      {
+        "default": true,
+        "id": "jev-1.14.0",
+        "name": "Jev 1.14.0",
+        "voices": null
+      }
+    ],
+    "openai": [
+      {
+        "default": true,
+        "id": "gpt-6-luna",
+        "name": "GPT-6 Luna",
+        "voices": null
+      }
+    ],
+    "google": [
+      {
+        "default": true,
+        "id": "gemini-decision-1",
+        "name": "Gemini Decision 1",
+        "voices": null
+      }
+    ]
+  },
   "model_inference": {
     "deepseek": [
       {

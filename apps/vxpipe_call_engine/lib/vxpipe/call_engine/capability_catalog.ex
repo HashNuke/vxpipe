@@ -43,6 +43,25 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def validate(%CapabilitySelection{kind: :output_speech_to_text} = selection),
     do: validate(%{selection | kind: :speech_to_text})
 
+  def validate(%CapabilitySelection{
+        kind: :decisions,
+        provider: "fixture",
+        model: "fixture",
+        credential_name: nil,
+        options: options,
+        provider_options: specific,
+        languages: [],
+        vad: false
+      })
+      when map_size(options) == 0 and map_size(specific) == 0, do: :ok
+
+  def validate(%CapabilitySelection{kind: :decisions} = selection) do
+    case adapter(selection) do
+      {:ok, _module} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
   def validate(%CapabilitySelection{kind: :model_inference, provider: provider} = selection)
       when provider in ["google", "zenmux", "openai", "deepseek", "openrouter", "fireworks"] do
     case Vxpipe.AgentRuntime.ProviderSelection.translate(
@@ -77,6 +96,24 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :model_inference, provider: provider})
       when provider in ["google", "zenmux", "openai", "deepseek", "openrouter", "fireworks"],
       do: {:ok, Vxpipe.AgentRuntime.Provider.ReqLLM}
+
+  def adapter(
+        %CapabilitySelection{
+          kind: :decisions,
+          languages: [],
+          vad: false,
+          options: options,
+          provider_options: specific
+        } = selection
+      )
+      when map_size(options) == 0 and map_size(specific) == 0 do
+    with {:ok, module} <- Registry.resolve_capability(selection.provider, :decisions),
+         true <- selection.model in module.models() do
+      {:ok, module}
+    else
+      _invalid -> {:error, :unsupported_capability}
+    end
+  end
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "deepgram"}),
     do: Registry.resolve_capability("deepgram", :stt)
