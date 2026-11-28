@@ -73,6 +73,11 @@ export interface ActivityEvent {
 
 export interface ToolCall {
   id: string;
+  /** Provider call reference scoped to this participant, activation and command. */
+  toolCallId?: string;
+  participantId?: string;
+  activationId?: string;
+  commandId?: string;
   /** UTC RFC 3339 instant when this item occurred. */
   occurredAt: string;
   name: string;

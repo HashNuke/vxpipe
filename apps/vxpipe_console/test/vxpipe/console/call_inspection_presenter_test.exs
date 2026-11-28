@@ -290,7 +290,8 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     assert input["value"]["participant_id"] == "caller-runtime"
     assert transcription["value"]["text"] == "Participant transcription final"
 
-    assert tool_call["id"] == "tool-1"
+    assert tool_call["value"]["tool_call_id"] == "tool-1"
+    assert tool_call["id"] == tool_call["value"]["id"]
     assert tool_call["revision"] == 4
     assert tool_call["value"]["status"] == "completed"
     assert tool_call["value"]["request"] == %{}
@@ -451,6 +452,51 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     assert [first, second] = response["metrics"]
     refute first["id"] == second["id"]
     assert Enum.map([first, second], & &1["revision"]) |> Enum.sort() == [0, 9]
+  end
+
+  test "interleaved commands and agent activations reusing one provider call ID keep their own tools" do
+    at = ~U[2026-09-16 09:00:01Z]
+
+    tool = fn kind, sequence, agent, activation, command, payload ->
+      base =
+        fact(kind, sequence, at, tool_call_id: "reused", participant_id: agent, payload: payload)
+
+      %{base | activation_id: activation, command_id: command}
+    end
+
+    start = fn name -> %{"name" => name, "arguments" => %{"account" => name}} end
+    complete = fn name -> %{"name" => name, "result" => name} end
+
+    facts = [
+      tool.(:tool_call_started, 1, "agent", "one", "command-x", start.("first")),
+      tool.(:tool_call_started, 2, "agent", "one", "command-y", start.("second")),
+      tool.(:tool_call_started, 3, "other-agent", "two", "command-x", start.("third")),
+      tool.(:tool_call_completed, 4, "other-agent", "two", "command-x", complete.("third")),
+      tool.(:tool_call_completed, 5, "agent", "one", "command-y", complete.("second")),
+      tool.(:tool_call_completed, 6, "agent", "one", "command-x", complete.("first"))
+    ]
+
+    project = fn rows ->
+      history = CallHistory.new(rows, %VariableSnapshotHistory{snapshots: [], latest: nil})
+      CallInspectionPresenter.present(%{result() | history: history})["timeline"]
+    end
+
+    initial = project.([hd(facts)])
+    tools = Enum.map(project.(facts), & &1["value"])
+    assert length(tools) == 3
+    assert length(Enum.uniq_by(tools, & &1["id"])) == 3
+
+    for t <- tools do
+      assert t["tool_call_id"] == "reused"
+      assert t["response"] == t["request"]["account"]
+      assert t["name"] == t["response"]
+    end
+
+    first = Enum.find(tools, &(&1["name"] == "first"))
+    assert first["id"] == hd(initial)["id"]
+
+    assert Map.take(first, ~w(participant_id activation_id command_id)) ==
+             %{"participant_id" => "agent", "activation_id" => "one", "command_id" => "command-x"}
   end
 
   test "uses source sequence rather than timestamp to reduce a tool-call lifecycle" do

@@ -64,7 +64,9 @@ export function guardrailTimeline(
       for (const tool of check.proposedTools ?? []) proposed.set(tool.id, tool);
     }
     const invocation = transfer?.transferInvocationId;
-    const transferTool = invocation && tools.find(tool => tool.id === invocation);
+    const matchesOwner = (tool: ToolCall) => !!first.activationId && !!first.commandId &&
+      tool.participantId === first.participantId && tool.activationId === first.activationId && tool.commandId === first.commandId;
+    const transferTool = invocation && tools.find(tool => tool.toolCallId === invocation && matchesOwner(tool));
     if (invocation && !transfer.contentUnavailable && !proposed.has(invocation)) {
       proposed.set(invocation, { id: invocation, name: "transfer" });
     }
@@ -82,7 +84,7 @@ export function guardrailTimeline(
       continue;
     }
     if (filters.tools !== "Hide" && !stopped) {
-      const executed = transferTool || tools.find(tool => proposed.has(tool.id));
+      const executed = transferTool || tools.find(tool => tool.toolCallId && proposed.has(tool.toolCallId) && matchesOwner(tool));
       if (executed) {
         attach(toolChecks, executed.id, visible);
         continue;

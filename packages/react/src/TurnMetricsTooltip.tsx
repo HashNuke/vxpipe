@@ -86,9 +86,9 @@ export function TurnMetricsTooltip({
             {groups.map(([label, group]) => (
               <section className="vx-turn-metric-group" key={label}>
                 <h3>{label}</h3>
-                {group.map((metric) => (
-                  <div className="vx-turn-metric-row" key={metric.label}>
-                    <span>{metric.label}</span>
+                {group.map((metric, index) => (
+                  <div className="vx-turn-metric-row" key={JSON.stringify([metric.label, metric.attemptId, metric.source, index])}>
+                    <span>{metric.label}{metric.attemptId && <small> · {metric.attemptId}</small>}</span>
                     <strong>
                       {metric.value === null
                         ? "Unavailable"

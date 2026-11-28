@@ -13,6 +13,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     CallFact,
     CallHistory,
     CallSummary,
+    CallTimeline,
     CallTimelineEntry,
     PreparedCall,
     UsageReport,
@@ -338,7 +339,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     |> Enum.filter(&(&1.kind in @tool_kinds and is_binary(&1.tool_call_id)))
     |> Enum.sort_by(& &1.source_sequence)
     |> Enum.reduce(%{}, fn entry, tools ->
-      Map.update(tools, entry.tool_call_id, new_tool(entry), &update_tool(&1, entry))
+      Map.update(tools, CallTimeline.tool_key(entry), new_tool(entry), &update_tool(&1, entry))
     end)
     |> Map.values()
     |> Enum.map(&tool_entity/1)
@@ -346,7 +347,11 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
 
   defp new_tool(entry) do
     %{
-      id: entry.tool_call_id,
+      id: tool_entity_id(CallTimeline.tool_key(entry)),
+      tool_call_id: entry.tool_call_id,
+      participant_id: entry.participant_id,
+      activation_id: entry.activation_id,
+      command_id: entry.command_id,
       revision: revision(entry),
       source_sequence: entry.source_sequence,
       occurred_at: entry.occurred_at,
@@ -356,6 +361,16 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
       response: tool_response(entry),
       response_status: response_status(entry.payload)
     }
+  end
+
+  defp tool_entity_id({nil, nil, nil, "tool:" <> _ = id}),
+    do: "tool:legacy:" <> Base.url_encode64(id, padding: false)
+
+  defp tool_entity_id({nil, nil, nil, id}), do: id
+
+  defp tool_entity_id(key) do
+    encoded = key |> Tuple.to_list() |> JSON.encode!() |> Base.url_encode64(padding: false)
+    "tool:scoped:" <> encoded
   end
 
   defp update_tool(tool, entry) do
@@ -371,6 +386,10 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   defp tool_entity(tool) do
     value = %{
       "id" => tool.id,
+      "tool_call_id" => tool.tool_call_id,
+      "participant_id" => tool.participant_id,
+      "activation_id" => tool.activation_id,
+      "command_id" => tool.command_id,
       "occurred_at" => instant(tool.occurred_at),
       "name" => tool.name,
       "status" => tool.status

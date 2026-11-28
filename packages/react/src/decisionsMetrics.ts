@@ -1,4 +1,4 @@
-import type { GuardrailEvaluation, Metric } from "@vxpipe/core";
+import type { GuardrailEvaluation, Message, Metric, MetricObservation } from "@vxpipe/core";
 
 export const decisionEvents = {
   before_turn: "Before turn", after_turn: "After turn", before_outgoing_transfer: "Before outgoing transfer",
@@ -26,6 +26,52 @@ export function attemptsFor(check: GuardrailEvaluation) {
 
 function requestIds(check: GuardrailEvaluation) {
   return [...new Set([...(check.attemptIds ?? []), ...check.attempts.map(attempt => attempt.id)])];
+}
+
+function attemptOwner(id: string, participant: string, activation?: string, turn?: string) {
+  return JSON.stringify([id, participant, activation, turn]);
+}
+
+function evaluationTurn(check: GuardrailEvaluation) {
+  if (check.event === "before_turn") return check.sourceTurnId;
+  if (check.event === "after_turn") return check.responseTurnId;
+  return check.responseTurnId ?? check.sourceTurnId;
+}
+
+function metricOwner(metric: Metric) {
+  if (metric.attemptId && metric.scope.kind === "participant-capability" && metric.scope.capability === "Decisions") {
+    return attemptOwner(metric.attemptId, metric.scope.participantId, metric.activationId, metric.turnId);
+  }
+}
+
+/** Attach settled amounts only to dialogue explicitly identified by an authorized evaluation. */
+export function messageDecisionMetrics(messages: Message[], checks: readonly GuardrailEvaluation[], observations: readonly MetricObservation[]) {
+  const byId = new Map(messages.map(message => [message.id, message]));
+  const owners = new Map<string, string | null>();
+  for (const check of checks) {
+    const message = check.messageId && byId.get(check.messageId);
+    const participant = check.event === "before_turn" ? check.sourceParticipantId : check.participantId;
+    const turn = evaluationTurn(check);
+    const id = message && !check.contentUnavailable && check.activationId && turn &&
+      message.participantId === participant && message.turnId === turn ? message.id : null;
+    for (const attempt of requestIds(check)) {
+      const key = attemptOwner(attempt, check.participantId, check.activationId, turn);
+      owners.set(key, owners.has(key) && owners.get(key) !== id ? null : id);
+    }
+  }
+  const linked = new Map<string, Metric[]>();
+  for (const observation of distinct(observations)) {
+    const owner = metricOwner(observation.value);
+    const id = owner && owners.get(owner);
+    if (!id) continue;
+    const amounts = linked.get(id) ?? [];
+    amounts.push(observation.value);
+    linked.set(id, amounts);
+  }
+  return messages.map(message => {
+    const measured = linked.get(message.id);
+    return measured ? {...message, metrics: [...(message.metrics ?? []), ...measured]} : message;
+  });
 }
 
 export function failedQuestions(check: GuardrailEvaluation) {
@@ -85,8 +131,6 @@ export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metr
   const groups = new Map<string, DecisionsGroup>();
   const byAttempt = new Map<string, DecisionsGroup>();
   const linkedAttempts = new Set<string>();
-  const ownership = (id: string, participant: string, activation?: string, turn?: string) =>
-    JSON.stringify([id, participant, activation, turn]);
   for (const check of checks) {
     const provider = check.selectedProvider ?? check.actualProvider;
     const modelName = check.selectedModel ?? check.actualModel;
@@ -95,10 +139,9 @@ export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metr
     const group: DecisionsGroup = groups.get(key) ?? { key, model, participantId: check.participantId, checks: [], metrics: new Map() };
     group.checks.push(check);
     groups.set(key, group);
-    const turn = check.event === "before_turn" ? check.sourceTurnId :
-      check.event === "after_turn" ? check.responseTurnId : check.responseTurnId ?? check.sourceTurnId;
+    const turn = evaluationTurn(check);
     for (const id of requestIds(check)) {
-      byAttempt.set(ownership(id, check.participantId, check.activationId, turn), group);
+      byAttempt.set(attemptOwner(id, check.participantId, check.activationId, turn), group);
       linkedAttempts.add(id);
     }
   }
@@ -106,8 +149,8 @@ export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metr
   const perGroup = new Map<DecisionsGroup, Metric[]>();
   const unlinkedRequests = new Set<string>();
   for (const metric of metrics) {
-    const group = metric.attemptId && metric.scope.kind === "participant-capability" &&
-      byAttempt.get(ownership(metric.attemptId, metric.scope.participantId, metric.activationId, metric.turnId));
+    const owner = metricOwner(metric);
+    const group = owner && byAttempt.get(owner);
     if (!group || metric.scope.kind !== "participant-capability" || metric.scope.capability !== "Decisions" ||
       metric.scope.participantId !== group.participantId) {
       otherMetrics.push(metric);

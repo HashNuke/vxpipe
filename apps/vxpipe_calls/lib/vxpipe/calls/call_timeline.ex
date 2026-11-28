@@ -26,12 +26,16 @@ defmodule Vxpipe.Calls.CallTimeline do
     Enum.sort_by(fact_entries ++ snapshot_entries, &sort_key/1, order(options))
   end
 
+  @doc "Identifies a tool call within its originating participant, activation and command."
+  def tool_key(entry),
+    do: {entry.participant_id, entry.activation_id, entry.command_id, entry.tool_call_id}
+
   defp tool_starts(facts) do
     Map.new(
       Enum.flat_map(facts, fn
         %CallFact{kind: :tool_call_started, tool_call_id: tool_call_id} = fact
         when is_binary(tool_call_id) ->
-          [{tool_call_id, fact}]
+          [{tool_key(fact), fact}]
 
         _fact ->
           []
@@ -44,7 +48,7 @@ defmodule Vxpipe.Calls.CallTimeline do
          tool_starts
        )
        when kind in @tool_terminal_kinds and is_binary(tool_call_id) do
-    case Map.fetch(tool_starts, tool_call_id) do
+    case Map.fetch(tool_starts, tool_key(terminal)) do
       {:ok, started} -> duration_options(started, terminal)
       :error -> []
     end

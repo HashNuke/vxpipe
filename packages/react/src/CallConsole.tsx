@@ -15,6 +15,7 @@ import { ParticipantPicker, Participants } from "./Participants.js";
 import { ParticipantDetails } from "./ParticipantDetails.js";
 import { ConversationHistoryFilters } from "./ConversationHistoryFilters.js";
 import { allHistoryFilters, conversationVisibility, defaultHistoryFilters, type HistoryFilters } from "./historyFilters.js";
+import { messageDecisionMetrics } from "./decisionsMetrics.js";
 import { revealGuardrail } from "./guardrailTimeline.js";
 import { Conversation } from "./Conversation.js";
 import { ConversationFilterControls } from "./ConversationFilterControls.js";
@@ -78,14 +79,16 @@ function consoleSnapshot(
       ? "word"
       : "unavailable";
 
+  const guardrails = details.guardrails?.map(entity => entity.value);
   return {
-    guardrails: details.guardrails?.map(entity => entity.value),
+    guardrails,
     timelineOrder: details.timeline.map((entity) => `${entity.kind}:${entity.value.id}`),
     callId: details.call.id,
     state,
     duration: formatDuration(details.call.durationMs),
     participants: details.participants.map((participant) => participant.value),
-    messages,
+    messages: guardrails?.length && details.metricsAvailability.state === "available"
+      ? messageDecisionMetrics(messages, guardrails, details.metrics) : messages,
     activities,
     toolCalls,
     events,

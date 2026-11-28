@@ -316,6 +316,10 @@ function toolCall(value: unknown, path: string): ToolCall {
   const responseStatus = optionalInteger(item.response_status, `${path}.response_status`);
   return {
     id: string(item.id, `${path}.id`),
+    ...(item.tool_call_id != null && {toolCallId: string(item.tool_call_id, `${path}.tool_call_id`)}),
+    ...(item.participant_id != null && {participantId: string(item.participant_id, `${path}.participant_id`)}),
+    ...(item.activation_id != null && {activationId: string(item.activation_id, `${path}.activation_id`)}),
+    ...(item.command_id != null && {commandId: string(item.command_id, `${path}.command_id`)}),
     occurredAt: instant(item.occurred_at, `${path}.occurred_at`),
     name: string(item.name, `${path}.name`),
     status: member(

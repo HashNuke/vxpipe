@@ -232,6 +232,19 @@ defmodule Vxpipe.Calls.ArchivesTest do
     assert List.last(incomplete.timeline).observed_duration_ms == nil
     assert List.last(incomplete.timeline).duration_basis == nil
     refute inspect(history) =~ "order-7"
+
+    other_command = %{
+      started
+      | id: "later-tool",
+        sequence: 3,
+        command_id: "other-command",
+        occurred_at: ~U[2026-09-09 11:41:03.000000Z]
+    }
+
+    concurrent =
+      Vxpipe.Calls.CallHistory.new([started, other_command, completed], snapshot_history)
+
+    assert Enum.find(concurrent.timeline, &(&1.id == completed.id)).observed_duration_ms == 3_250
   end
 
   test "selects versioned speech using trusted attribution while retaining original tool facts" do

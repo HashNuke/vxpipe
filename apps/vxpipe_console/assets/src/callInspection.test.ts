@@ -187,6 +187,7 @@ test("rejects a malformed response at the Console boundary", () => {
 test("keeps captured null distinct from unavailable collections", () => {
   const response = responseFixture("running");
   const tool = response.timeline[1]!.value as Record<string, unknown>;
+  Object.assign(tool, {tool_call_id:"vendor", participant_id:"agent", activation_id:"a", command_id:"cmd"});
   tool.request = null;
   delete tool.response;
   response.variables = { state: "unavailable", reason: "not-captured" } as never;
@@ -203,6 +204,7 @@ test("keeps captured null distinct from unavailable collections", () => {
     kind: "tool-call",
     value: { request: null },
   });
+  expect(toolCall?.value).toMatchObject({toolCallId:"vendor", participantId:"agent", activationId:"a", commandId:"cmd"});
   expect(toolCall && "response" in toolCall.value).toBe(false);
   expect(snapshot.variables).toEqual({
     state: "unavailable",
