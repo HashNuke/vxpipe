@@ -255,3 +255,17 @@ test("the repair story shows actual delivery separately from the private rejecte
   const rejected = within(screen.getByText("I can look up the other account for you.").closest("article")!);
   expect(rejected.queryByText("Delivery confirmed")).toBeNull();
 });
+
+test("a passing speech check in a jointly withheld proposal stays private after repair", async () => {
+  render(<GuardrailCallDetails scenario="transfer-check-blocked" theme="dark" />);
+  await filters();
+  await chooseFilter("Guardrails", "All");
+  fireEvent.click(screen.getByRole("button", {name: "Close dialog"}));
+  const draft = within(screen.getByText("I can look up the other account for you.").closest("article")!);
+  expect(draft.getByText("Unsent")).toBeVisible();
+  expect(draft.getByText("Speech check passed")).toBeVisible();
+  expect(draft.getByRole("button", {name: "Failed · Is billing the correct destination?"})).toBeVisible();
+  expect(draft.queryByText("Candidate accepted")).toBeNull();
+  const repair = within(screen.getByText("I can help with your own account.").closest("article")!);
+  expect(repair.getByText("Delivery confirmed")).toBeVisible();
+});

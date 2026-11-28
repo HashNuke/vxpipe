@@ -10,6 +10,7 @@ export interface GuardrailRow {
   label: string;
   tools: { id: string; name: string; requestedDestination?: string }[];
   blocked: boolean;
+  candidateWithheld: boolean;
 }
 
 function failed(check: GuardrailEvaluation) {
@@ -100,7 +101,7 @@ export function guardrailTimeline(
       !stopped && text && showText ? "Checked candidate" : "Private activity";
     privateRows.push({
       id, participantId: input ? first.sourceParticipantId ?? first.participantId : first.participantId, occurredAt: after?.occurredAt ?? first.occurredAt,
-      checks: visible, blocked, text: showText ? text : undefined, label,
+      checks: visible, blocked, candidateWithheld: stopped, text: showText ? text : undefined, label,
       tools: showTools ? [...proposed.values()].map(tool =>
         tool.id === invocation && transfer && !transfer.contentUnavailable
           ? {...tool, requestedDestination: transfer.requestedDestination} : tool) : [],

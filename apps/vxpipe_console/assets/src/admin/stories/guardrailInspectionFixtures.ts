@@ -2,7 +2,7 @@ import type { CallDetailsTimelineEntity, GuardrailAttempt, GuardrailEvaluation, 
 import { createCallDetailsStore } from "@vxpipe/core";
 import { callDetailsFixture } from "../callDetailsFixtures";
 
-export const scenarios = ["blocked-input", "mixed-proposal", "before-and-after", "pass", "repair-and-transfer", "transfer-denied", "partial-answer", "restricted-history", "multiple-agents", "missing-usage"] as const;
+export const scenarios = ["blocked-input", "mixed-proposal", "transfer-check-blocked", "before-and-after", "pass", "repair-and-transfer", "transfer-denied", "partial-answer", "restricted-history", "multiple-agents", "missing-usage"] as const;
 export type GuardrailScenario = typeof scenarios[number];
 
 function question(id: string, ordinal: number, text: string, requiredAnswer: "yes" | "no", probabilityYes: number,
@@ -42,7 +42,7 @@ export function inspectionFixture(scenario: GuardrailScenario) {
     timeline.push({id, value, kind: "message", revision: 1});
   }
   if (scenario !== "transfer-denied") message("caller-1", "turn-1", "caller", callerText, 3);
-  if (["before-and-after", "mixed-proposal", "repair-and-transfer", "pass"].includes(scenario)) {
+  if (["before-and-after", "mixed-proposal", "transfer-check-blocked", "repair-and-transfer", "pass"].includes(scenario)) {
     message("reply-1", "turn-1", "assistant", replyText, 7);
   }
 
@@ -85,10 +85,12 @@ export function inspectionFixture(scenario: GuardrailScenario) {
         checkedText: "I can check someone else’s account.", questions: [questions[2]!]});
       check("permitted-reply", repair);
       break;
+    case "transfer-check-blocked":
     case "mixed-proposal":
       check("check-input", input);
-      check("mixed-speech", {...output, outcome: "blocked", candidateAttemptId: "draft", checkedText: draftText,
-        questions: [questions[0]!, passed], proposedTools: [{id: "lookup-other", name: "lookup_account"}, {id: "proposed-transfer", name: "transfer"}]});
+      check("mixed-speech", {...output, outcome: scenario === "mixed-proposal" ? "blocked" : "passed",
+        candidateAttemptId: "draft", checkedText: draftText,
+        questions: scenario === "mixed-proposal" ? [questions[0]!, passed] : [passed], proposedTools: [{id: "lookup-other", name: "lookup_account"}, {id: "proposed-transfer", name: "transfer"}]});
       check("mixed-transfer", {event: "before_outgoing_transfer", outcome: "blocked", responseTurnId: "turn-1", occurredAt: time(5),
         candidateAttemptId: "draft", transferInvocationId: "proposed-transfer", questions: [
           {...destination, outcome: "failed", probabilityYes: .36, inferredAnswer: "no"}]});
@@ -137,7 +139,7 @@ export function inspectionFixture(scenario: GuardrailScenario) {
     participants.push({...assistant, id: "routing", value: {...assistant.value, id: "routing", name: "Routing agent"}});
   }
   const metrics = [...snapshot.metrics];
-  if (["repair-and-transfer", "mixed-proposal", "before-and-after"].includes(scenario)) {
+  if (["repair-and-transfer", "mixed-proposal", "transfer-check-blocked", "before-and-after"].includes(scenario)) {
     metrics.push({id: "llm-rewrite", revision: 1, value: {label: "Rewrites", value: 1, unit: "requests",
       description: "Conversational model repair dispatch", source: "LLM",
       scope: {kind: "participant-capability", capability: "LLM", participantId: "assistant"}}});

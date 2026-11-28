@@ -63,6 +63,25 @@ test("the production Conversation shows one withheld mixed attempt and links eac
   expect(screen.getByText("Released response.")).toBeVisible();
 });
 
+test("a passed speech check stays within the unsent candidate when its transfer check blocks", async () => {
+  inspect([
+    evaluation("speech", {outcome: "passed", commandId: "joint", candidateAttemptId: "first", checkedText: "Let me connect you.",
+      questions: [{id: "q", ordinal: 0, outcome: "passed", question: "Is the speech allowed?", requiredAnswer: "yes", thresholdHundredths: 70}]}),
+    evaluation("handoff", {event: "before_outgoing_transfer", outcome: "blocked", commandId: "joint",
+      candidateAttemptId: "first", transferInvocationId: "proposed-transfer"}),
+  ]);
+  const row = within(screen.getByText("Let me connect you.").closest("article")!);
+  expect(row.getByText("Unsent")).toBeVisible();
+  expect(row.getByText("handoff question?")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", {name: "Filters"}));
+  await select("Guardrails", "All");
+  fireEvent.click(screen.getByRole("button", {name: "Close dialog"}));
+  expect(row.getByRole("button", {name: "Passed · Is the speech allowed?"})).toBeVisible();
+  expect(row.queryByText("Candidate accepted")).toBeNull();
+  expect(row.queryByText("Delivery confirmed")).toBeNull();
+  expect(row.getByText("Unsent")).toBeVisible();
+});
+
 test("a denied evaluation never reuses checked text or a question from another agent or retry", () => {
   inspect([
     evaluation("denied", {participantId: "private-agent", activationId: "other", candidateAttemptId: "turn:1",

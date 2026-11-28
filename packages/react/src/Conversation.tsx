@@ -418,10 +418,10 @@ export function Conversation({
     item.kind === "guardrails" ? item.value.checks : item.kind === "messages" ? projected?.messageChecks.get(item.id) :
       item.kind === "tools" ? projected?.toolChecks.get(item.id) : undefined;
   const showAgent = new Set(snapshot.guardrails?.map(c => c.participantId)).size > 1;
-  function cards(checks: GuardrailEvaluation[] = []) {
+  function cards(checks: GuardrailEvaluation[] = [], candidateWithheld = false) {
     return checks.map(check => {
       const agent = snapshot.participants.find(p => p.id === check.participantId);
-      return <GuardrailQuestionCard key={check.id} check={check} focus={focusEvaluationId === check.id}
+      return <GuardrailQuestionCard key={check.id} check={check} candidateWithheld={candidateWithheld} focus={focusEvaluationId === check.id}
         agent={agent ? participantDisplayName(agent) : check.participantId} showAgent={showAgent} all={historyFilters?.guardrails === "All"} />;
     });
   }
@@ -473,13 +473,13 @@ export function Conversation({
             if (row.text) {
               return <MessageRow key={row.id} message={{id: row.id, participantId: row.participantId, text: row.text,
                 occurredAt: row.occurredAt, state: "final"}} snapshot={snapshot} theme={theme} onSelectParticipant={onSelectParticipant}
-                privateLabel={row.label} blocked={row.blocked}>{tools}{cards(checks)}</MessageRow>;
+                privateLabel={row.label} blocked={row.blocked}>{tools}{cards(checks, row.candidateWithheld)}</MessageRow>;
             }
             const agent = snapshot.participants.find(p => p.id === row.participantId);
             return <section key={row.id} className="vx-guardrail-activity" data-blocked={row.blocked || undefined}>
               <header><strong>{agent ? participantDisplayName(agent) : row.participantId}</strong> · {row.label}
                 <TimelineTimestamp occurredAt={row.occurredAt} theme={theme}/></header>
-              {tools}{cards(checks)}
+              {tools}{cards(checks, row.candidateWithheld)}
             </section>;
           }
           if (item.kind === "messages")

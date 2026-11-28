@@ -13,6 +13,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const BlockedInput: Story = {};
 export const MixedProposal: Story = { args: { scenario: "mixed-proposal" } };
+export const TransferCheckBlocked: Story = { args: { scenario: "transfer-check-blocked" } };
 export const BeforeAndAfter: Story = { args: { scenario: "before-and-after" } };
 export const Passed: Story = { args: { scenario: "pass" } };
 export const RepairAndTransfer: Story = { args: { scenario: "repair-and-transfer" } };

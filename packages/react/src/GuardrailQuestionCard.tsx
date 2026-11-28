@@ -8,13 +8,14 @@ const stages = {
   before_outgoing_transfer: "Before outgoing transfer",
 };
 
-function recordedStatus(check: GuardrailEvaluation) {
+function recordedStatus(check: GuardrailEvaluation, candidateWithheld: boolean) {
   if (check.outcome === "error") return "Check incomplete";
   if (check.outcome === "cancelled") return "Check cancelled";
   if (check.outcome === "pending") return "Check pending";
   if (check.outcome === "skipped_empty") return "No configured questions";
   if (check.outcome === "not_applicable") return "Check not applicable";
   if (check.event === "after_turn" && check.outcome === "passed") {
+    if (candidateWithheld) return "Speech check passed";
     return check.deliveredFactId ? "Delivery confirmed" : "Candidate accepted";
   }
   if (check.event === "before_outgoing_transfer" && check.transferOutcome) {
@@ -58,8 +59,8 @@ function ResultIcon({ q }: {q: GuardrailQuestionResult}) {
   </span>;
 }
 
-export function GuardrailQuestionCard({check, all, agent, showAgent, focus}: {
-  check: GuardrailEvaluation; all: boolean; agent: string; showAgent: boolean; focus: boolean;
+export function GuardrailQuestionCard({check, all, agent, showAgent, focus, candidateWithheld}: {
+  check: GuardrailEvaluation; all: boolean; agent: string; showAgent: boolean; focus: boolean; candidateWithheld: boolean;
 }) {
   const card = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -70,7 +71,7 @@ export function GuardrailQuestionCard({check, all, agent, showAgent, focus}: {
   const questions = permitted
     ? check.questions.filter(q => all || q.outcome === "failed").sort((a, b) => a.ordinal - b.ordinal)
     : [];
-  const status = recordedStatus(check);
+  const status = recordedStatus(check, candidateWithheld);
   const missingQuestions = !permitted || (!check.questions.length &&
     check.outcome !== "skipped_empty" && check.outcome !== "not_applicable");
   if (permitted && !all && check.questions.length && !questions.length && check.outcome === "blocked") return null;
