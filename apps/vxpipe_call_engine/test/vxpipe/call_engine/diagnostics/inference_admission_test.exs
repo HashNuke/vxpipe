@@ -35,6 +35,35 @@ defmodule Vxpipe.CallEngine.Diagnostics.InferenceAdmissionTest do
     %{grant: grant, admission: ActivityRuntime.diagnostic_admission(__MODULE__.Runtime)}
   end
 
+  test "a saturated or revoked diagnostic observer cannot block operational Silero", ctx do
+    alias Silero.{Batch, ModelCache, Pool}
+    assert {:ok, _} = InferenceAdmission.submit(ctx.admission, ctx.grant, Silero.new(), <<1, 0>>)
+    assert_receive {:classify, observer, <<1, 0>>}
+
+    assert {:error, :full} =
+             InferenceAdmission.submit(ctx.admission, ctx.grant, Silero.new(), <<2, 0>>)
+
+    deadline = System.monotonic_time(:millisecond) + 5000
+    assert {:ok, lease} = Pool.reserve(make_ref(), deadline)
+    assert {:ok, model} = ModelCache.fetch()
+
+    state =
+      Enum.reduce([:observing, :revoked], Batch.initial_state(), fn phase, packed ->
+        if phase == :revoked, do: CaptureHandoff.close(ctx.grant)
+
+        assert {:ok, ref} =
+                 Pool.submit(lease, phase, model, {:binary.copy(<<0>>, 1024), packed}, deadline)
+
+        assert_receive {:silero_result, ^ref, {:ok, p, next}}, 1000
+        assert p < 0.35
+        next
+      end)
+
+    assert byte_size(state) == 1280
+    assert :ok = Pool.close(lease)
+    send(observer, :finish)
+  end
+
   test "offers remain bounded while inference runtime is suspended", ctx do
     :sys.suspend(__MODULE__.Runtime)
 

@@ -61,7 +61,21 @@ defmodule Vxpipe.CallEngine.Speech.Silero.BatchTest do
     {:ok, model} = Silero.load()
     row = {:binary.copy(<<0>>, 1024), Batch.initial_state()}
 
-    for rows <- [[], List.duplicate(row, 17), [{<<1>>, elem(row, 1)}], [{elem(row, 0), <<>>}]] do
+    {pcm, packed} = row
+    <<_::32, suffix::binary>> = packed
+    nan_context = <<0x7FC00000::little-32, suffix::binary>>
+    <<prefix::binary-size(1276), _::32>> = packed
+    infinite_hidden = <<prefix::binary, 0x7F800000::little-32>>
+
+    for rows <- [
+          [],
+          [row | :improper],
+          List.duplicate(row, 17),
+          [{<<1>>, packed}],
+          [{pcm, <<>>}],
+          [{pcm, nan_context}],
+          [{pcm, infinite_hidden}]
+        ] do
       assert {:error, :classification_failed} = Batch.run(model, rows)
     end
   end

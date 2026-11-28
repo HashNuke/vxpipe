@@ -143,6 +143,22 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
     refute_received {:batch, ^worker, _}
   end
 
+  test "dispatcher replacement fences old leases and starts fresh workers" do
+    {lease, ref} = submit()
+    assert_receive {:batch, old_worker, 1}
+    monitor = Process.monitor(old_worker)
+    Process.exit(lease.pool, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^old_worker, _}, 6000
+    _ = Supervisor.which_children(__MODULE__.Supervisor)
+    assert {:error, :unknown_lease} = Pool.close(lease)
+    next = submit()
+    assert_receive {:batch, new_worker, 1}
+    refute new_worker == old_worker
+    send(new_worker, :finish)
+    assert_result(next)
+    refute_received {:silero_result, ^ref, _}
+  end
+
   defp submit do
     deadline = System.monotonic_time(:millisecond) + 5000
     {:ok, lease} = Pool.reserve(make_ref(), deadline, __MODULE__)
