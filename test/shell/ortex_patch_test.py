@@ -30,6 +30,20 @@ class OrtexPatchTest(unittest.TestCase):
             result = self.apply()
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_upgrades_current_cpu_patch_to_batch(self):
+        dependency = self.root / 'deps/ortex'
+        patch = self.root / 'patches/ortex/session-threads.patch'
+        subprocess.run(['git', 'apply', str(patch)], cwd=dependency, check=True)
+        self.assertEqual(self.apply().returncode, 0)
+        self.assertTrue((dependency / 'native/ortex/src/silero.rs').is_file())
+        self.assertEqual(self.apply().returncode, 0)
+
+    def test_unexpected_batch_source_is_preserved(self):
+        path = self.root / 'deps/ortex/native/ortex/src/silero.rs'
+        path.write_text('// local file')
+        self.assertNotEqual(self.apply().returncode, 0)
+        self.assertEqual(path.read_text(), '// local file')
+
     def test_unknown_sources_are_preserved(self):
         source = self.root / 'deps/ortex/native/ortex/src/model.rs'
         modified = source.read_bytes() + b'\n// local change\n'

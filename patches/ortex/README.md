@@ -48,3 +48,9 @@ Focused native tests prove Silero calls the CPU entry and avoids the legacy entr
 and compare both entries' output bytes. Installer tests also cover upgrade and
 upgrade-checksum rejection. Scheduling selection does not establish performance
 acceptance; measured paired workloads remain required.
+
+The installer then applies `silero-batch.patch` to the verified CPU patch. Its
+dirty-CPU entry accepts 1–16 PCM windows with per-stream little-endian float
+state and runs the shared CPU session once. The batch manifest pins every
+resulting source, including the added Rust module. The CallEngine batch wrapper
+maps malformed rows and recoverable inference failures to a fixed reason.

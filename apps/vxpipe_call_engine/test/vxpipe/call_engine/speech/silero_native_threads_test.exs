@@ -21,6 +21,24 @@ defmodule Vxpipe.CallEngine.Speech.SileroNativeThreadsTest do
     assert probability < 0.35
   end
 
+  test "sixteen rows cross one native boundary without starting ONNX workers" do
+    alias Silero.Batch
+    {:ok, model} = Silero.load()
+    rows = List.duplicate({:binary.copy(<<0>>, 1024), Batch.initial_state()}, 16)
+    before = MapSet.new(File.ls!("/proc/self/task"))
+    function = {Ortex.Native, :silero_batch, 2}
+    assert :erlang.trace_pattern(function, true, [:call_count]) == 1
+
+    try do
+      assert {:ok, results} = Batch.run(model, rows)
+      assert length(results) == 16
+      assert {:call_count, 1} = :erlang.trace_info(function, :call_count)
+      assert MapSet.subset?(MapSet.new(File.ls!("/proc/self/task")), before)
+    after
+      :erlang.trace_pattern(function, false, [:call_count])
+    end
+  end
+
   test "warm inference uploads at most one changing input tensor per frame" do
     assert {:ok, model} = Silero.load()
     assert {:ok, stream, [_]} = Silero.push(Silero.new(), model, :binary.copy(<<0>>, 1_024))

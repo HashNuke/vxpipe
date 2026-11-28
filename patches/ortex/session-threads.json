@@ -33,5 +33,17 @@
       "native/ortex/src/lib.rs": "2a73303423c2ca97a25e1b6f38e13f39cdcf35c4626e259367f6c008ef4cadc9",
       "native/ortex/src/model.rs": "de49d4a31b1f1e10935780b6978caaada23523345d3a9ae1144adb6971edbf8a"
     }
+  },
+  "batch": {
+    "patch_file": "silero-batch.patch",
+    "patch_sha256": "5b3943cf2f9b37093d67fe12d35b8803f51ca5242e8e5ac7dd15758bc83d424f",
+    "files": {
+      "lib/ortex.ex": "265d2bc309c859efc06f878e898255346134d7b9efddf2d08d39f27e02bb2967",
+      "lib/ortex/model.ex": "565871ae06226a54452454819803ebc94062421a8261658f0a7a769610c3449f",
+      "lib/ortex/native.ex": "4f47ccc2b3024db9da138d85b05331a6f9e89b322870e14b36473558899bc6c6",
+      "native/ortex/src/lib.rs": "8c5b8892e122f13985ec56e54ee6fda2ca2b19632febea0759a9993614a115b3",
+      "native/ortex/src/model.rs": "de49d4a31b1f1e10935780b6978caaada23523345d3a9ae1144adb6971edbf8a",
+      "native/ortex/src/silero.rs": "6a80d9cc0d6d7b504ed14fd0be2378baf0dd085f38b3faac788a37bd7f2b9705"
+    }
   }
 }

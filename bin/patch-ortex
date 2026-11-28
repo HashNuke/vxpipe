@@ -24,19 +24,30 @@ def main():
         upgrade = patch.parent / previous['patch_file']
         if digest(upgrade) != previous['patch_sha256']:
             raise ValueError('Ortex upgrade patch checksum differs from the reviewed manifest')
-    actual = {name: digest(dependency / name) for name in manifest['files']}
-    if all(actual[name] == hashes['patched'] for name, hashes in manifest['files'].items()):
-        print('Ortex session-thread patch verified')
+    batch = manifest['batch']
+    batch_patch = patch.parent / batch['patch_file']
+    if digest(batch_patch) != batch['patch_sha256']:
+        raise ValueError('Ortex batch patch checksum differs from the reviewed manifest')
+    actual = {name: digest(dependency / name) for name in batch['files']
+              if (dependency / name).exists()}
+    if actual == batch['files']:
+        print('Ortex CPU and batch patch verified')
         return
-    if not all(actual[name] == hashes['original'] for name, hashes in manifest['files'].items()):
-        if previous and actual == previous['files']:
-            patch = upgrade
-        else:
-            raise ValueError('Ortex sources differ from reviewed states; preserve changes and review the patch')
-    subprocess.run(['git', 'apply', '--check', str(patch)], cwd=dependency, check=True)
-    subprocess.run(['git', 'apply', str(patch)], cwd=dependency, check=True)
-    if not all(digest(dependency / name) == hashes['patched'] for name, hashes in manifest['files'].items()):
-        raise ValueError('Ortex patch result failed checksum verification')
+    states = [
+        ({name: hashes['original'] for name, hashes in manifest['files'].items()}, [patch, batch_patch]),
+        ({name: hashes['patched'] for name, hashes in manifest['files'].items()}, [batch_patch]),
+        (previous['files'], [upgrade, batch_patch]),
+    ]
+    for known, steps in states:
+        if actual == known:
+            for step in steps:
+                subprocess.run(['git', 'apply', '--check', str(step)], cwd=dependency, check=True)
+                subprocess.run(['git', 'apply', str(step)], cwd=dependency, check=True)
+            break
+    else:
+        raise ValueError('Ortex sources differ from reviewed states; preserve changes and review the patch')
+    if any(digest(dependency / name) != expected for name, expected in batch['files'].items()):
+        raise ValueError('Ortex batch patch result failed checksum verification')
     print('Ortex session-thread patch applied and verified')
 
 

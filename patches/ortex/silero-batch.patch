@@ -1,0 +1,138 @@
+diff --git a/lib/ortex/native.ex b/lib/ortex/native.ex
+index ccaac3b..035a33d 100644
+--- a/lib/ortex/native.ex
++++ b/lib/ortex/native.ex
+@@ -33,6 +33,7 @@ defmodule Ortex.Native do
+ 
+   def run(_model, _inputs), do: :erlang.nif_error(:nif_not_loaded)
+   def run_cpu(_model, _inputs), do: :erlang.nif_error(:nif_not_loaded)
++  def silero_batch(_model, _rows), do: :erlang.nif_error(:nif_not_loaded)
+   def from_binary(_bin, _shape, _type), do: :erlang.nif_error(:nif_not_loaded)
+   def to_binary(_reference, _bits, _limit), do: :erlang.nif_error(:nif_not_loaded)
+   def show_session(_model), do: :erlang.nif_error(:nif_not_loaded)
+diff --git a/native/ortex/src/lib.rs b/native/ortex/src/lib.rs
+index 64847bf..150588f 100644
+--- a/native/ortex/src/lib.rs
++++ b/native/ortex/src/lib.rs
+@@ -6,6 +6,8 @@
+ 
+ mod constants;
+ mod model;
++mod silero;
++use silero::silero_batch;
+ mod tensor;
+ mod utils;
+ 
+@@ -121,6 +123,7 @@ rustler::init!(
+     [
+         run,
+         run_cpu,
++        silero_batch,
+         init,
+         from_binary,
+         to_binary,
+diff --git a/native/ortex/src/silero.rs b/native/ortex/src/silero.rs
+new file mode 100644
+index 0000000..2aa3fb8
+--- /dev/null
++++ b/native/ortex/src/silero.rs
+@@ -0,0 +1,99 @@
++// Fused CPU inference for the pinned Silero graph. State is 64 context samples
++// followed by two layers of 128 recurrent values, all little-endian f32.
++use crate::model::OrtexModel;
++use ndarray::{arr0, Array2, Array3};
++use rustler::{Binary, Env, Error, NifResult, OwnedBinary, ResourceArc, Term};
++use std::convert::TryInto;
++
++const CONTEXT: usize = 64;
++const WINDOW: usize = 512;
++const HIDDEN: usize = 128;
++const STATE_BYTES: usize = (CONTEXT + 2 * HIDDEN) * 4;
++
++fn read_float(bytes: &[u8]) -> NifResult<f32> {
++    let value = f32::from_le_bytes(bytes.try_into().map_err(|_| Error::BadArg)?);
++    if value.is_finite() {
++        Ok(value)
++    } else {
++        Err(Error::BadArg)
++    }
++}
++
++#[rustler::nif(schedule = "DirtyCpu")]
++pub fn silero_batch<'a>(
++    env: Env<'a>,
++    model: ResourceArc<OrtexModel>,
++    rows: Term<'a>,
++) -> NifResult<Vec<(f64, Binary<'a>)>> {
++    let mut items = Vec::with_capacity(16);
++    let mut rest = rows;
++    while !rest.is_empty_list() {
++        let (row, tail) = rest.list_get_cell()?;
++        rest = tail;
++        if items.len() == 16 {
++            return Err(Error::BadArg);
++        }
++        let (pcm, state) = row.decode::<(Binary, Binary)>()?;
++        if pcm.len() != WINDOW * 2 || state.len() != STATE_BYTES {
++            return Err(Error::BadArg);
++        }
++        items.push((pcm, state));
++    }
++    let batch = items.len();
++    if batch == 0 {
++        return Err(Error::BadArg);
++    }
++    let mut x = Array2::zeros((batch, CONTEXT + WINDOW));
++    let mut h = Array3::zeros((2, batch, HIDDEN));
++    for (i, (pcm, state)) in items.iter().enumerate() {
++        for (j, bytes) in state.as_slice().chunks_exact(4).enumerate() {
++            let v = read_float(bytes)?;
++            if j < CONTEXT {
++                x[[i, j]] = v;
++            } else {
++                let k = j - CONTEXT;
++                h[[k / HIDDEN, i, k % HIDDEN]] = v;
++            }
++        }
++        for (j, bytes) in pcm.as_slice().chunks_exact(2).enumerate() {
++            x[[i, CONTEXT + j]] = i16::from_le_bytes([bytes[0], bytes[1]]) as f32 / 32768.0;
++        }
++    }
++    let sample_rate = arr0(16000_i64);
++    let inputs = ort::inputs![x.view(), h.view(), sample_rate.view()].map_err(|_| Error::BadArg)?;
++    let outputs = model.session.run(inputs).map_err(|_| Error::BadArg)?;
++    if outputs.len() != 2 {
++        return Err(Error::BadArg);
++    }
++    let scores = outputs[0]
++        .try_extract_tensor::<f32>()
++        .map_err(|_| Error::BadArg)?;
++    let hidden = outputs[1]
++        .try_extract_tensor::<f32>()
++        .map_err(|_| Error::BadArg)?;
++    if scores.shape() != [batch, 1] || hidden.shape() != [2, batch, HIDDEN] {
++        return Err(Error::BadArg);
++    }
++    let mut results = Vec::with_capacity(batch);
++    for i in 0..batch {
++        let score = scores[[i, 0]];
++        if !(0.0..=1.0).contains(&score) {
++            return Err(Error::BadArg);
++        }
++        let mut state = OwnedBinary::new(STATE_BYTES).ok_or(Error::BadArg)?;
++        for (j, dst) in state.as_mut_slice().chunks_exact_mut(4).enumerate() {
++            let v = if j < CONTEXT {
++                x[[i, WINDOW + j]]
++            } else {
++                let k = j - CONTEXT;
++                hidden[[k / HIDDEN, i, k % HIDDEN]]
++            };
++            if !v.is_finite() {
++                return Err(Error::BadArg);
++            }
++            dst.copy_from_slice(&v.to_le_bytes());
++        }
++        results.push((score as f64, state.release(env)));
++    }
++    Ok(results)
++}

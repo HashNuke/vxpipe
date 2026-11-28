@@ -368,7 +368,7 @@ def provenance():
     paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py', 'scripts/diagnostics/resource_schedule.py', 'scripts/diagnostics/workload_profile.py',
              'scripts/diagnostics/pcm_generator.py', 'scripts/diagnostics/cold_start.py', 'apps/vxpipe_providers/test/fixtures/deepgram/final_word_16k_mono_s16le.pcm', 'scripts/diagnostics/ingress_latency.py', 'scripts/diagnostics/response_latency.py', 'mix.lock',
              'patches/ortex/session-threads.patch', 'patches/ortex/session-threads.json',
-             'patches/ortex/cpu-scheduling-upgrade.patch',
+             'patches/ortex/cpu-scheduling-upgrade.patch', 'patches/ortex/silero-batch.patch',
              'deps/ortex/lib/ortex.ex', 'deps/ortex/lib/ortex/model.ex', 'deps/ortex/lib/ortex/native.ex',
              'deps/ortex/native/ortex/src/model.rs', 'deps/ortex/native/ortex/src/lib.rs',
              'deps/ortex/priv/native/ortex.so',
