@@ -33,14 +33,33 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
 
   def submit(%Lease{owner: owner} = lease, position, model, {pcm, packed} = row, deadline)
       when owner == self() and byte_size(pcm) == 1024 and byte_size(packed) == 1280 do
-    GenServer.call(lease.pool, {:submit, lease, position, model, row, deadline})
+    ref = {lease.pool, lease.generation, position, make_ref()}
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    cond do
+      remaining <= 0 ->
+        {:error, :classification_timeout}
+
+      Lease.submit(lease) ->
+        GenServer.call(lease.pool, {:submit, lease, ref, model, row, deadline}, remaining)
+
+      true ->
+        {:error, :busy}
+    end
+  rescue
+    ArgumentError -> {:error, :unknown_lease}
   catch
+    :exit, {:timeout, _} -> {:error, :classification_timeout}
     :exit, _ -> {:error, :classification_failed}
   end
 
   def submit(_, _, _, _, _), do: {:error, :invalid_row}
 
-  def cancel(%Lease{} = lease, ref), do: GenServer.call(lease.pool, {:cancel, lease, ref})
+  def cancel(%Lease{} = lease, ref) do
+    GenServer.call(lease.pool, {:cancel, lease, ref})
+  catch
+    :exit, _ -> {:error, :unknown_job}
+  end
 
   def close(%Lease{} = lease) do
     GenServer.call(lease.pool, {:close, lease})
@@ -101,14 +120,13 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
     end
   end
 
-  def handle_call({:submit, lease, position, model, row, deadline}, {owner, _}, state) do
+  def handle_call({:submit, lease, ref, model, row, deadline}, {owner, _}, state) do
     token = lease.token
     now = System.monotonic_time(:millisecond)
 
     case state.leases[token] do
       {^lease, _}
       when owner == lease.owner and not is_map_key(state.jobs, token) and deadline > now ->
-        ref = {self(), lease.generation, position, make_ref()}
         timer = Process.send_after(self(), {:expired, token, ref}, deadline - now)
 
         job = %{
@@ -133,6 +151,7 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
         {:reply, {:ok, ref}, dispatch(state)}
 
       {^lease, _} when deadline <= now ->
+        Lease.settle(lease)
         {:reply, {:error, :classification_timeout}, state}
 
       {^lease, _} ->
@@ -301,6 +320,8 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
         |> Enum.reduce(%{state | running: running}, fn {token, value}, acc ->
           job = acc.jobs[token]
 
+          acc = drop_job(acc, token)
+
           unless job.retired do
             reply =
               cond do
@@ -317,8 +338,6 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
 
             send(job.owner, {:silero_result, job.ref, reply})
           end
-
-          acc = drop_job(acc, token)
 
           if job.closing do
             {lease, _} = acc.leases[token]
@@ -357,6 +376,8 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
   end
 
   defp drop_job(state, token) do
+    {lease, _} = Map.fetch!(state.leases, token)
+    Lease.settle(lease)
     {job, jobs} = Map.pop!(state.jobs, token)
     Process.cancel_timer(job.timer)
     %{state | jobs: jobs}

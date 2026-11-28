@@ -34,14 +34,22 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Lease do
     ArgumentError -> {:error, :model_unavailable}
   end
 
-  def adopt(lease) do
-    before = entry(lease, :offered)
-    after_entry = entry(lease, :active)
+  def adopt(lease), do: move(lease, :offered, :active)
+  def submit(lease), do: move(lease, :active, :submitted)
+  def settle(lease), do: move(lease, :submitted, :active)
+
+  defp move(lease, from, to) do
+    before = entry(lease, from)
+    after_entry = entry(lease, to)
     :ets.select_replace(lease.table, [{before, [], [{:const, after_entry}]}]) == 1
   end
 
   def withdraw(lease), do: :ets.delete_object(lease.table, entry(lease, :offered))
-  def release(lease), do: :ets.delete_object(lease.table, entry(lease, :active))
+
+  def release(lease) do
+    :ets.delete_object(lease.table, entry(lease, :active))
+    :ets.delete_object(lease.table, entry(lease, :submitted))
+  end
 
   defp take_slot(_lease, _capacity, 0), do: {:error, :busy}
 

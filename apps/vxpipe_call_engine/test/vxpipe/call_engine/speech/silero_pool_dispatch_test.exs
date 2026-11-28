@@ -52,6 +52,27 @@ defmodule Vxpipe.CallEngine.Speech.Silero.PoolDispatchTest do
     refute_received {:silero_result, ^ref, _}
   end
 
+  test "a stalled dispatcher bounds submission time and admits only one pending row per lease" do
+    {:ok, lease} =
+      Pool.reserve(make_ref(), System.monotonic_time(:millisecond) + 5000, __MODULE__)
+
+    :sys.suspend(lease.pool)
+
+    try do
+      row = {:binary.copy(<<0>>, 1024), Batch.initial_state()}
+
+      assert {:error, :classification_timeout} =
+               Pool.submit(lease, 0, :model, row, System.monotonic_time(:millisecond) + 20)
+
+      assert {:error, :busy} =
+               Pool.submit(lease, 0, :model, row, System.monotonic_time(:millisecond) + 20)
+    after
+      :sys.resume(lease.pool)
+    end
+
+    assert %{ready: 0, in_flight: 0} = Pool.status(__MODULE__)
+  end
+
   defp submit do
     deadline = System.monotonic_time(:millisecond) + 5000
     {:ok, lease} = Pool.reserve(make_ref(), deadline, __MODULE__)
