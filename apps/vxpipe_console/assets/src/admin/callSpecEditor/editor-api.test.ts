@@ -129,3 +129,20 @@ test("viewing a specific revision shows the standard saved revision notice", asy
   const snapshot = await api.read("hello", new AbortController().signal, stored.revision);
   expect(snapshot.document.notice).toBe("Viewing revision 2. This saved revision is read-only.");
 });
+
+test("save returns assigned question IDs from the exact written revision", async () => {
+  const { setGuardrailQuestions } = await import("./guardrails");
+  const q = { question: "In scope?", required_answer: "yes" as const };
+  const draft = setGuardrailQuestions(editorFixture, "intake", "before_turn", [q]);
+  const written = setGuardrailQuestions(draft, "intake", "before_turn", [{ ...q, id: "q_saved" }]);
+  const api = createEditorApi("tenant", "csrf", () => reply({ call_spec: { ...stored, source: written.source } }, 201));
+  const result = await api.execute({ id: 1, action: "save", source: draft.source }, new AbortController().signal);
+  expect(result.savedSource).toEqual(written.source);
+});
+
+test("keeps the committed revision when its returned source lost an unassigned question", async () => {
+  const { setGuardrailQuestions } = await import("./guardrails");
+  const draft = setGuardrailQuestions(editorFixture, "intake", "before_turn", [{ question: "In scope?", required_answer: "yes" }]);
+  const api = createEditorApi("tenant", "csrf", () => reply({ call_spec: stored }, 201));
+  expect(await api.execute({ id: 1, action: "save", source: draft.source }, new AbortController().signal)).toMatchObject({ status: 201, callSpecId: "hello", revision: 2, questionIdsUnavailable: true });
+});

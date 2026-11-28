@@ -1,3 +1,4 @@
+import { applySavedIds, copyEditableSource } from "./saved-question-ids";
 import type { CallSpecPublication } from "../callSpecPublication";
 import { stringifySourceJson } from "./source-json";
 import { applyActionResult, emptyActionFeedback, feedbackAfterEdit, type EditorActionFeedback } from "./action-feedback";
@@ -22,7 +23,7 @@ export type EditorState = EditorSnapshot & {
   pending?: EditorRequest;
   nextRequestId: number;
 };
-export type EditorResult = ActionResult & { callSpecId?: string };
+export type EditorResult = ActionResult & { callSpecId?: string; savedSource?: CallSpecSource; questionIdsUnavailable?: boolean };
 export type EditorEvent =
   | { type: "edit"; document: SourceDocument }
   | { type: "start"; action: "save" | "publish" }
@@ -70,7 +71,7 @@ function startAction(state: EditorState, action: EditorRequest["action"]): Edito
     feedback: applyActionResult(state.feedback, state.document.source, action, { clientIssues: blocking }) };
   return { ...state, nextRequestId: state.nextRequestId + 1,
     pending: { id: state.nextRequestId, action: publishAfterSave ? "save" : action,
-      ...(publishAfterSave ? { publishAfterSave: true } : {}), source: structuredClone(state.document.source),
+      ...(publishAfterSave ? { publishAfterSave: true } : {}), source: copyEditableSource(state.document.source, true),
       callSpecId: state.saved?.callSpecId, revision: state.saved?.revision } };
 }
 
@@ -92,12 +93,21 @@ function completeAction(state: EditorState, id: number, received: EditorResult):
       publishedRevision: received.publication ? received.publication.revision : state.saved?.publishedRevision ?? null,
       ...(received.publication ? { publication: received.publication } : {}),
     };
+    if (received.questionIdsUnavailable) {
+      return { ...next, saved, savedSource: request.source, feedback: { ...feedback, authoringDisabled: true,
+        toast: { tone: "error", persistent: true, action: "reload",
+          message: "Draft saved. Reload to get the assigned guardrail question IDs before saving or publishing again." } } };
+    }
     // Publish the clicked snapshot, even if the user has edited again while saving.
-    return { ...next, savedSource: request.source, saved,
+    const savedSource = received.savedSource ? applySavedIds(request.source, received.savedSource, request.source) : request.source;
+    const document = received.savedSource
+      ? { ...state.document, source: applySavedIds(request.source, savedSource, state.document.source) }
+      : state.document;
+    return { ...next, document, savedSource, saved,
       ...(request.publishAfterSave ? {
         nextRequestId: state.nextRequestId + 1,
         feedback: { ...feedback, toast: null },
-        pending: { id: state.nextRequestId, action: "publish" as const, source: request.source,
+        pending: { id: state.nextRequestId, action: "publish" as const, source: savedSource,
           callSpecId: saved.callSpecId, revision: saved.revision },
       } : {}) };
   }

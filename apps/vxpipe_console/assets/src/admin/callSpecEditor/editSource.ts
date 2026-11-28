@@ -1,3 +1,4 @@
+import { copyEditableSource } from "./saved-question-ids";
 import type { CallSpecSource, SourceDocument } from "./types";
 
 export const guardrailsSchemaVersion = "20261128.01";
@@ -7,7 +8,7 @@ export function editSource(document: SourceDocument, change: (source: CallSpecSo
   if (document.readOnly || !editableSchemaVersions.includes(document.source.schema_version)) {
     throw new Error("This historical call spec is read-only.");
   }
-  const source = structuredClone(document.source);
+  const source = copyEditableSource(document.source);
   change(source);
   return { ...document, source };
 }

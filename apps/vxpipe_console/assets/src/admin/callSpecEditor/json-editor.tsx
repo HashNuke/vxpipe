@@ -1,12 +1,13 @@
-import { useId, useState } from "react";
+import { useContext, useId, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
-import type { JsonDraft } from "./json-drafts";
+import { JsonDraftContext, type JsonDraft } from "./json-drafts";
 
 export function JsonEditor({ label, value, draft, onDraftChange, onApply, readOnly = false }: {
   label: string; value: string; draft?: JsonDraft; onDraftChange: (draft: JsonDraft | undefined) => void;
   onApply: (text: string) => void; readOnly?: boolean;
 }) {
+  const assigningQuestionIds = useContext(JsonDraftContext)?.assigningQuestionIds;
   const [error, setError] = useState("");
   const errorId = useId();
   const stale = draft && draft.base !== value;
@@ -18,12 +19,12 @@ export function JsonEditor({ label, value, draft, onDraftChange, onApply, readOn
       onChange={(event) => { setError(""); const text = event.target.value; onDraftChange(text === value ? undefined : { text, base: draft?.base ?? value }); }} />
     {message && <p role="alert" id={errorId} className="max-h-36 shrink-0 overflow-auto whitespace-pre-wrap break-words text-sm text-destructive">{message}</p>}
     {!readOnly && <div className="flex shrink-0 flex-wrap items-center gap-2">
-      <Button size="sm" disabled={!draft || !!stale} onClick={() => {
+      <Button size="sm" disabled={!draft || !!stale || assigningQuestionIds} onClick={() => {
         try { onApply(draft!.text); onDraftChange(undefined); setError(""); }
         catch (error) { setError(error instanceof Error ? error.message : "Couldn't apply JSON. Your edits are still here."); }
       }}>Apply JSON</Button>
       <Button variant="outline" size="sm" disabled={!draft} onClick={() => { onDraftChange(undefined); setError(""); }}>Discard JSON changes</Button>
-      <p className="w-full text-xs text-muted-foreground">Apply to update the draft, then save the call spec.</p>
+      <p className="w-full text-xs text-muted-foreground">{assigningQuestionIds ? "Saving new guardrail questions…" : "Apply to update the draft, then save the call spec."}</p>
     </div>}
   </div>;
 }

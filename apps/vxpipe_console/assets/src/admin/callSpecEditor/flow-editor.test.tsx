@@ -419,3 +419,23 @@ test("editing, saving, publishing and reopening an ordered conversation language
   openModels();
   expect(screen.getAllByRole("button", {name: /^Remove (British English|Mexican Spanish|Canadian French)/}).map(button => button.parentElement?.textContent?.[0])).toEqual(["1", "2", "3"]);
 });
+
+test("participant JSON can be drafted while a first guardrail save assigns row identities", async () => {
+  const { setGuardrailQuestions } = await import("./guardrails");
+  const { setCapability } = await import("./edits");
+  const props = properties();
+  const selected = setCapability(props.snapshot.document, null, "decisions", { provider: "openai", model: "gpt-6-luna" });
+  const question = { question: "In scope?", required_answer: "yes" as const };
+  const document = setGuardrailQuestions(selected, "intake", "before_turn", [question]);
+  let finish!: (result: EditorResult) => void;
+  props.execute.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  render(<CallSpecEditor {...props} snapshot={{ document }} />);
+  saveDraft();
+  click("Select intake"); click("Participant JSON");
+  fill("Participant JSON", JSON.stringify({ ...document.source.participants.intake, description: "My pending edit" }));
+  expect(screen.getByRole("button", { name: "Apply JSON" })).toBeDisabled();
+  const saved = setGuardrailQuestions(document, "intake", "before_turn", [{ ...question, id: "q_saved" }]);
+  await act(async () => finish({ status: 201, revision: 1, callSpecId: "new", savedSource: saved.source }));
+  expect((screen.getByRole("textbox", { name: "Participant JSON" }) as HTMLTextAreaElement).value).toContain("My pending edit");
+  expect(screen.getByRole("button", { name: "Apply JSON" })).toBeDisabled();
+});

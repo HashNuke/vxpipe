@@ -17,6 +17,7 @@ import { IssuesDrawer } from "./issues-drawer";
 import { LeaveEditorDialog } from "./leave-editor-dialog";
 import { addParticipant, setTransfer } from "./participants";
 import { SourceView } from "./source-view";
+import { hasUnsavedQuestions } from "./saved-question-ids";
 import { JsonDraftContext, type JsonDrafts } from "./json-drafts";
 import type { SourceDocument, SourceIssue } from "./types";
 import { useEditor, type ExecuteEditorRequest } from "./use-editor";
@@ -136,7 +137,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
   const inspector = <CredentialNamesContext value={lookups.credentialNames}><Inspector key={inspectorRequest} document={document} onChange={editor.edit} catalog={catalog} lookups={lookups} issues={issues} focusRequest={focusRequest}
     selectedNodeId={selectedNodeId} tab={tab} onTabChange={(tab) => { setTab(tab); setFocusRequest(undefined); }}
     onRenamed={selectNode} onRemoved={() => selectNode(null)} /></CredentialNamesContext>;
-  return <JsonDraftContext value={{ drafts: jsonDrafts, setDrafts: setJsonDrafts }}><ActionFailureContext value={reportFailure}>
+  return <JsonDraftContext value={{ drafts: jsonDrafts, setDrafts: setJsonDrafts, assigningQuestionIds: state.pending?.action === "save" && hasUnsavedQuestions(state.pending.source) }}><ActionFailureContext value={reportFailure}>
     <FlowEditorLayout noticeAction={noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
       onSelectEdge={selectEdge} onAddNode={add}
       onConnect={(from, to) => { change((document) => setTransfer(document, from, to, true), "Couldn't connect these participants. Choose an agent and a transfer destination."); }}

@@ -1,3 +1,4 @@
+import { hasUnsavedQuestions, savedIdsMatch } from "./saved-question-ids";
 import { parseCallSpecPublication } from "../callSpecPublication";
 import { parseSourceJson, stringifySourceJson } from "./source-json";
 import { catalogCapabilities, parseModelCatalog, type ModelCatalog } from "../modelCatalog";
@@ -53,7 +54,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
       headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrf },
       body: stringifySourceJson(request.action === "publish" ? {} : { source: request.source }) });
     // A gateway may return an HTML login/error page. Preserve the HTTP outcome.
-    const body: unknown = await response.json().catch(() => undefined);
+    const body: unknown = await response.text().then(parseSourceJson).catch(() => undefined);
     if (!response.ok) {
       const value = record(body) ? body.error : undefined;
       const error: AuthoringError | undefined = record(value) && typeof value.code === "string" ? {
@@ -70,7 +71,20 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
       ? saved.validation_warnings.filter((warning: unknown) =>
           record(warning) && typeof warning.code === "string")
       : undefined;
-    return { status: response.status, callSpecId: saved.call_spec_id, revision: saved.revision, ...(publication ? { publication } : {}), ...(validationWarnings ? { validationWarnings } : {}) };
+    let savedSource;
+    let questionIdsUnavailable = false;
+    if (request.action === "save" && hasUnsavedQuestions(request.source)) {
+      try {
+        const source = record(saved.source) ? parseSource(stringifySourceJson(saved.source)!).source
+          : (await read(saved.call_spec_id, signal, saved.revision)).document.source;
+        if (savedIdsMatch(request.source, source)) savedSource = source;
+        else questionIdsUnavailable = true;
+      } catch {
+        // The write committed even if its revision cannot be read back.
+        questionIdsUnavailable = true;
+      }
+    }
+    return { status: response.status, callSpecId: saved.call_spec_id, revision: saved.revision, ...(savedSource ? { savedSource } : {}), ...(questionIdsUnavailable ? { questionIdsUnavailable } : {}), ...(publication ? { publication } : {}), ...(validationWarnings ? { validationWarnings } : {}) };
   };
   async function catalog(signal: AbortSignal): Promise<ModelCatalog> {
     const entries = await Promise.all(catalogCapabilities.map(async (capability) => {

@@ -110,3 +110,35 @@ test("authoritative publication metadata survives repeated saves and a no-op pub
   expect(state.feedback.toast?.message).toBe("Version 1 published");
   expect(isDirty(state)).toBe(true);
 });
+
+test("a save applies backend question IDs to the submitted snapshot and to reordered live edits", async () => {
+  const { setGuardrailQuestions } = await import("./guardrails");
+  const { setCapability } = await import("./edits");
+  const { renameParticipant } = await import("./participants");
+  let draft = setCapability(document, null, "decisions", { provider: "openai", model: "gpt-6-luna" });
+  const first = { question: "In scope?", required_answer: "yes" as const };
+  const second = { ...first };
+  draft = setGuardrailQuestions(draft, "intake", "before_turn", [first, second]);
+  const pending = editorReducer(createEditorState({ document: draft }), { type: "start", action: "save" });
+  const agent = pending.document.source.participants.intake!;
+  if (agent.type !== "agent") throw Error("Expected an agent");
+  const [a, b] = agent.guardrails!.before_turn!;
+  const reordered = setGuardrailQuestions(pending.document, "intake", "before_turn", [b!, a!, { ...first }]);
+  const edited = editorReducer(pending, { type: "edit", document: renameParticipant(reordered, "intake", "front") });
+  const reply = setGuardrailQuestions(draft, "intake", "before_turn", [{ ...first, id: "q_first" }, { ...second, id: "q_second" }]);
+  const completed = editorReducer(edited, { type: "complete", id: 1, result: { status: 201, revision: 1, callSpecId: "test", savedSource: reply.source } });
+  const live = completed.document.source.participants.front!;
+  if (live.type !== "agent") throw Error("Expected renamed agent");
+  expect(live.guardrails?.before_turn?.map(q => q.id)).toEqual(["q_second", "q_first", undefined]);
+  expect(completed.savedSource).toEqual(reply.source);
+  expect(isDirty(completed)).toBe(true);
+});
+
+test("a committed new draft with unavailable IDs can be reloaded without repeating the create or publish", () => {
+  const pending = editorReducer(createEditorState({ document }), { type: "start", action: "publish" });
+  const completed = editorReducer(pending, { type: "complete", id: 1, result: { status: 201, revision: 1, callSpecId: "created", questionIdsUnavailable: true } });
+  expect(completed.saved).toMatchObject({ callSpecId: "created", revision: 1 });
+  expect(completed.pending).toBeUndefined();
+  expect(completed.feedback.toast).toMatchObject({ action: "reload" });
+  expect(editorReducer(completed, { type: "start", action: "save" }).pending).toBeUndefined();
+});

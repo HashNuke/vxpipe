@@ -1,3 +1,4 @@
+import { keepSubmittedRow } from "./saved-question-ids";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Info, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -129,7 +130,7 @@ export function QuestionSection({ title, timing, unavailable, questions, disable
       save={(question) => {
         onChange(editing.index === null
           ? [...questions, question]
-          : questions.map((entry, index) => index === editing.index ? question : entry));
+          : questions.map((entry, index) => index === editing.index ? keepSubmittedRow(entry, question) : entry));
         setEditing(null);
       }} />}
   </section>;
