@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { createCallDetailsStore, type CallDetailsSnapshot, type GuardrailEvaluation } from "@vxpipe/core";
+import { groupDecisions } from "../src/decisionsMetrics.js";
 import { CallConsole } from "../src/index.js";
 import { createFixtureController } from "../stories/fixtureClient.js";
 
@@ -188,4 +189,14 @@ test("the message tooltip shows only this check's measured attempts on the ownin
   expect(tooltip).toHaveTextContent("13");
   expect(tooltip).not.toHaveTextContent(/99|98|97/);
   expect(reply.getByRole("button",{name:/Metrics unavailable/})).toBeDisabled();
+});
+
+test("an unassigned transfer's amounts require its exact invocation", () => {
+  const native = evaluation("native", {event:"before_outgoing_transfer", sourceTurnId:undefined, responseTurnId:undefined,
+    transferInvocationId:"handoff-A", attemptIds:["submitted"]});
+  const base = {label:"Requests", unit:"requests", value:1, source:"Provider", description:"Requests",
+    attemptId:"submitted", activationId:"activation", scope:{kind:"participant-capability" as const, capability:"Decisions", participantId:"assistant"}};
+  const matched = {...base, toolCallId:"handoff-A"};
+  const other = {...base, toolCallId:"handoff-B"};
+  expect(groupDecisions([native],[matched,other,base]).otherMetrics).toEqual([other,base]);
 });

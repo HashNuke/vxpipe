@@ -389,7 +389,7 @@ function guardrailFixture() {
 
 test("parses private guardrail records independently of usage availability", () => {
   const response = responseFixture("running");
-  Object.assign(response.metrics[0]!.value, {activation_id: "activation-1", attempt_id: "attempt-1", turn_id: "turn-1"});
+  Object.assign(response.metrics[0]!.value, {activation_id: "activation-1", attempt_id: "attempt-1", turn_id: "turn-1", tool_call_id:"handoff"});
   const snapshot = parseCallInspectionResponse({...response, guardrails: [guardrailFixture()],
     metrics_availability: {state: "unavailable", reason: "not-loaded"}});
   expect(snapshot.guardrails).toMatchObject([{id:"gate-1", revision:7, value:{
@@ -399,7 +399,7 @@ test("parses private guardrail records independently of usage availability", () 
     attempts:[{id:"attempt-1",durationMs:32,inputTokens:0,costs:[{currency:"USD",amount:"0.000000000000100009"}]}],
   }}]);
   expect(snapshot.guardrails?.[0]?.value.attempts[0]?.totalTokens).toBeUndefined();
-  expect(snapshot.metrics[0]?.value).toMatchObject({activationId:"activation-1",attemptId:"attempt-1",turnId:"turn-1"});
+  expect(snapshot.metrics[0]?.value).toMatchObject({activationId:"activation-1",attemptId:"attempt-1",turnId:"turn-1",toolCallId:"handoff"});
 });
 
 test("guardrail parsing respects withheld evidence and rejects malformed available records", () => {

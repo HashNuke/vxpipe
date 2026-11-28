@@ -1,4 +1,4 @@
-import type { GuardrailEvaluation, Message, Metric, MetricObservation } from "@vxpipe/core";
+import type { GuardrailAttempt, GuardrailEvaluation, Message, Metric, MetricObservation } from "@vxpipe/core";
 
 export const decisionEvents = {
   before_turn: "Before turn", after_turn: "After turn", before_outgoing_transfer: "Before outgoing transfer",
@@ -28,8 +28,8 @@ function requestIds(check: GuardrailEvaluation) {
   return [...new Set([...(check.attemptIds ?? []), ...check.attempts.map(attempt => attempt.id)])];
 }
 
-function attemptOwner(id: string, participant: string, activation?: string, turn?: string) {
-  return JSON.stringify([id, participant, activation, turn]);
+function attemptOwner(id: string, participant: string, activation?: string, turn?: string, invocation?: string) {
+  return JSON.stringify([id, participant, activation, turn, invocation]);
 }
 
 function evaluationTurn(check: GuardrailEvaluation) {
@@ -38,9 +38,14 @@ function evaluationTurn(check: GuardrailEvaluation) {
   return check.responseTurnId ?? check.sourceTurnId;
 }
 
+function evaluationAttemptOwner(check: GuardrailEvaluation, id: string) {
+  const invocation = check.event === "before_outgoing_transfer" ? check.transferInvocationId : undefined;
+  return attemptOwner(id, check.participantId, check.activationId, evaluationTurn(check), invocation);
+}
+
 function metricOwner(metric: Metric) {
   if (metric.attemptId && metric.scope.kind === "participant-capability" && metric.scope.capability === "Decisions") {
-    return attemptOwner(metric.attemptId, metric.scope.participantId, metric.activationId, metric.turnId);
+    return attemptOwner(metric.attemptId, metric.scope.participantId, metric.activationId, metric.turnId, metric.toolCallId);
   }
 }
 
@@ -55,7 +60,7 @@ export function messageDecisionMetrics(messages: Message[], checks: readonly Gua
     const id = message && !check.contentUnavailable && check.activationId && turn &&
       message.participantId === participant && message.turnId === turn ? message.id : null;
     for (const attempt of requestIds(check)) {
-      const key = attemptOwner(attempt, check.participantId, check.activationId, turn);
+      const key = evaluationAttemptOwner(check, attempt);
       owners.set(key, owners.has(key) && owners.get(key) !== id ? null : id);
     }
   }
@@ -82,9 +87,20 @@ export function failedQuestions(check: GuardrailEvaluation) {
   return questions.filter(q => q.outcome === "failed").length;
 }
 
+function physicalAttempts(checks: readonly GuardrailEvaluation[]) {
+  const physical = new Map<string, GuardrailAttempt | undefined>();
+  for (const check of checks) {
+    for (const id of check.attemptIds ?? []) {
+      const key = evaluationAttemptOwner(check, id);
+      if (!physical.has(key)) physical.set(key, undefined);
+    }
+    for (const attempt of check.attempts) physical.set(evaluationAttemptOwner(check, attempt.id), attempt);
+  }
+  return physical;
+}
+
 export function decisionTotals(checks: readonly GuardrailEvaluation[]) {
-  const attempts = distinct(checks.flatMap(check => check.attempts));
-  const ids = new Set(checks.flatMap(requestIds));
+  const attempts = [...physicalAttempts(checks).values()];
   const failed = checks.map(failedQuestions);
   return {
     evaluations: checks.length,
@@ -92,8 +108,8 @@ export function decisionTotals(checks: readonly GuardrailEvaluation[]) {
     errors: checks.filter(check => check.outcome === "error").length,
     cancelled: checks.filter(check => check.outcome === "cancelled").length,
     failed: failed.every(count => count !== undefined) ? failed.reduce((sum, count) => sum + count, 0) : undefined,
-    requests: ids.size,
-    retries: ids.size === attempts.length ? attempts.filter(a => a.retryOf || a.ordinal > 0).length : undefined,
+    requests: attempts.length,
+    retries: attempts.every(a => a !== undefined) ? attempts.filter(a => a.retryOf || a.ordinal > 0).length : undefined,
   };
 }
 
@@ -105,12 +121,16 @@ function groupMetrics(group: DecisionsGroup, additional: Metric[]) {
 
   summary("Evaluations", evaluations, "checks", "Distinct guardrail evaluations for this participant and model.");
   summary("API requests", requests, "requests", "Distinct submitted Decisions API attempts, including retries.");
-  const attempts = distinct(group.checks.flatMap(check => check.attempts));
+  const attempts = physicalAttempts(group.checks);
   for (const [key, label] of [["inputTokens", "Input tokens"], ["outputTokens", "Output tokens"], ["totalTokens", "Total tokens"]] as const) {
-    const reported = new Map(attempts.flatMap(attempt => attempt[key] === undefined ? [] : [[attempt.id, attempt[key]] as const]));
+    const reported = new Map<string, number>();
+    for (const [owner, attempt] of attempts) {
+      if (attempt?.[key] !== undefined) reported.set(owner, attempt[key]);
+    }
     for (const metric of additional) {
-      if (metric.label === label && metric.attemptId && metric.value !== null && !attempts.some(a => a.id === metric.attemptId)) {
-        reported.set(metric.attemptId, metric.value);
+      const owner = metricOwner(metric);
+      if (metric.label === label && owner && metric.value !== null && !attempts.get(owner)) {
+        reported.set(owner, metric.value);
       }
     }
     const amounts = [...reported.values()];
@@ -130,7 +150,6 @@ export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metr
   const checks = distinct(evaluations).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
   const groups = new Map<string, DecisionsGroup>();
   const byAttempt = new Map<string, DecisionsGroup>();
-  const linkedAttempts = new Set<string>();
   for (const check of checks) {
     const provider = check.selectedProvider ?? check.actualProvider;
     const modelName = check.selectedModel ?? check.actualModel;
@@ -139,10 +158,8 @@ export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metr
     const group: DecisionsGroup = groups.get(key) ?? { key, model, participantId: check.participantId, checks: [], metrics: new Map() };
     group.checks.push(check);
     groups.set(key, group);
-    const turn = evaluationTurn(check);
     for (const id of requestIds(check)) {
-      byAttempt.set(attemptOwner(id, check.participantId, check.activationId, turn), group);
-      linkedAttempts.add(id);
+      byAttempt.set(evaluationAttemptOwner(check, id), group);
     }
   }
   const otherMetrics: Metric[] = [];
@@ -154,9 +171,9 @@ export function groupDecisions(evaluations: readonly GuardrailEvaluation[], metr
     if (!group || metric.scope.kind !== "participant-capability" || metric.scope.capability !== "Decisions" ||
       metric.scope.participantId !== group.participantId) {
       otherMetrics.push(metric);
-      if (metric.attemptId && !linkedAttempts.has(metric.attemptId) && "capability" in metric.scope &&
+      if (metric.attemptId && (!owner || !byAttempt.has(owner)) && "capability" in metric.scope &&
         metric.scope.capability === "Decisions" && metric.label === "Requests" && metric.value === 1) {
-        unlinkedRequests.add(metric.attemptId);
+        unlinkedRequests.add(owner ?? JSON.stringify([metric.scope, metric.attemptId, metric.activationId, metric.turnId, metric.toolCallId]));
       }
       continue;
     }

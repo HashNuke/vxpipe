@@ -88,6 +88,7 @@ export interface ToolCall {
 }
 
 export interface Metric {
+  toolCallId?: string;
   activationId?: string;
   attemptId?: string;
   turnId?: string;

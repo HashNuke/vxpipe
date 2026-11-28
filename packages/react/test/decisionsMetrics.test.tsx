@@ -134,3 +134,41 @@ test("a restricted passing input belongs to its source turn and preserves the co
   const turns = [...document.querySelectorAll(".vx-decisions-owner")];
   expect(turns.map(item => item.getAttribute("aria-label"))).toEqual(["Turn input-turn", "Turn reply-turn"]);
 });
+
+test("counts requests, retries and token amounts once per physical owner across reused IDs", () => {
+  const first = evaluation("first", { activationId: "old", responseTurnId: "one",
+    attempts: [attempt("request", { totalTokens: 3, costs: [{ currency: "USD", amount: "0.0003" }] })] });
+  const second = evaluation("second", { activationId: "new", responseTurnId: "two",
+    attempts: [attempt("request", { totalTokens: 5, costs: [{ currency: "USD", amount: "0.0005" }] }),
+      attempt("retry", { ordinal: 1, retryOf: "request", totalTokens: 1 })] });
+  const unattached = { activationId: "third", attemptId: "request", turnId: "three", label: "Requests",
+    value: 1, unit: "requests", source: "fixture", description: "Requests",
+    scope: { kind: "participant-capability", participantId: "assistant", capability: "Decisions" } as const };
+  render(<Metrics theme="dark" snapshot={{ ...snapshot, guardrails: [first, second], metrics: [unattached] }} />);
+  const panel = screen.getByRole("region", {name: "Decisions detail"});
+  expect(within(panel).getByText("4 API requests")).toBeVisible();
+  expect(within(panel).getByText("Retry count unavailable")).toBeVisible();
+  const model = screen.getByRole("rowheader", {name: "Decisions, Assistant, fixture · policy-a"}).closest("tr")!;
+  expect(within(model).getByRole("button", {name: /^API requests .*: 3 reqs/})).toBeVisible();
+  expect(within(model).getByRole("button", {name: /^Total tokens .*: 9 tokens/})).toBeVisible();
+  fireEvent.click(within(model).getByRole("button", {name: /Inspect checks/}));
+  for (const [turn, amount] of [["one", "0.0003"], ["two", "0.0005"]]) {
+    const own = within(panel).getByRole("region", {name:"Turn " + turn});
+    fireEvent.click(own.querySelector("summary")!);
+    expect(within(own).getByText("Cost USD " + amount)).toBeVisible();
+  }
+});
+
+test("keeps unassigned native transfers distinct when a provider reuses its physical ID", () => {
+  const transfer = (id: string, tokens: number) => evaluation(id, {
+    event: "before_outgoing_transfer", activationId: "native", sourceTurnId: undefined, responseTurnId: undefined,
+    transferInvocationId: id, attempts: [attempt("shared", { totalTokens: tokens })],
+  });
+  render(<Metrics theme="dark" snapshot={{ ...snapshot, metrics: [], guardrails: [transfer("billing", 2), transfer("sales", 6)] }} />);
+  expect(screen.getByText("2 API requests")).toBeVisible();
+  const row = screen.getByRole("rowheader", { name: "Decisions, Assistant, fixture · policy-a" }).closest("tr")!;
+  expect(within(row).getByRole("button", { name: /^Total tokens .*: 8 tokens/ })).toBeVisible();
+  fireEvent.click(within(row).getByRole("button", { name: /Inspect checks/ }));
+  expect(screen.getByRole("region", { name: "Transfer billing" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Transfer sales" })).toBeVisible();
+});

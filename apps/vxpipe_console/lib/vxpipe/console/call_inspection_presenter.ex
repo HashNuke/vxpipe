@@ -514,6 +514,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   defp metric_links(%EffectiveAmount{capability: :decisions} = amount),
     do: %{
       "attempt_id" => amount.attempt_id,
+      "tool_call_id" => amount.attribution.tool_call_id,
       "turn_id" => amount.attribution.turn_id,
       "activation_id" => amount.attribution.activation_id
     }

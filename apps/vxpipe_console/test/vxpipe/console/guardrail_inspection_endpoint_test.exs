@@ -148,6 +148,8 @@ defmodule Vxpipe.Console.GuardrailInspectionEndpointTest do
     decisions = Enum.filter(metrics, &(&1["scope"]["capability"] == "Decisions"))
     requests = Enum.filter(decisions, &(&1["unit"] == "requests"))
     assert Enum.sort(Enum.map(requests, & &1["attempt_id"])) == ~w(a1 a2 a3 a4 a5)
+    assert Enum.find(requests, &(&1["attempt_id"] == "a5"))["tool_call_id"] == "handoff"
+    refute Enum.find(requests, &(&1["attempt_id"] == "a2"))["tool_call_id"]
     assert Enum.find(requests, &(&1["attempt_id"] == "a2"))["turn_id"] == "output-turn"
 
     assert [%{"value" => 1, "unit" => "rewrites", "scope" => %{"capability" => "LLM"}}] =
