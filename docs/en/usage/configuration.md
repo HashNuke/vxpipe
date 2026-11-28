@@ -40,6 +40,12 @@ live in [`config/config.exs`](../../../config/config.exs).
 | `AWS_ENDPOINT_URL_S3` | S3-specific endpoint URL. Takes precedence over `AWS_ENDPOINT_URL`; an empty value falls back to the global endpoint. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Optional object-storage credentials. Otherwise ExAws uses its credential chain. Session token is needed only for temporary credentials. |
 
+Each participant activation limits concurrent Guardrails requests using the agent runtime's
+`maximum_pending_requests` setting (default `4`, minimum `2` for Guardrails). This allows
+speech and transfer checks to run together. A cancelled request that already reached the
+provider still occupies a slot until its worker finishes. When all slots are occupied,
+a new check fails before sending a provider request.
+
 For Cloudflare R2, set `AWS_ENDPOINT_URL_S3` to
 `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, `AWS_REGION` to `auto`, and
 `STORAGE_BUCKET` to the bucket name. Use the bucket's R2 S3 access key and secret.

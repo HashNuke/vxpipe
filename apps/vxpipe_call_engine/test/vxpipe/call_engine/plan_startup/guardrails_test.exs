@@ -30,6 +30,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.GuardrailsTest do
     assert {:ok, activation_options} =
              AgentActivation.new(plan, participant, options(bindings, plug))
 
+    assert activation_options[:guardrails][:maximum_pending_requests] == 3
     activation = start_supervised!({AgentActivationSupervisor, activation_options})
     assert %{guardrails: service} = AgentActivationSupervisor.children(activation)
 
@@ -257,6 +258,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.GuardrailsTest do
 
     assert {:ok, startup} = PlanStartup.new(plan, native_options(bindings, plug))
     assert %{guardrails: guardrail_settings} = runtime = startup.speech_to_speech
+    assert guardrail_settings[:maximum_pending_requests] == 3
     assert startup.agent_activation == nil
     incarnation = "sts-guardrail-#{System.unique_integer([:positive])}"
     start_supervised!({RoomCapabilitySupervisor, incarnation_id: incarnation})
@@ -322,6 +324,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.GuardrailsTest do
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.merge(
         fixture: {TestAgentRuntimeModelProvider, [owner: self()]},
+        maximum_pending_requests: 3,
         decisions_http_plug: plug
       )
 

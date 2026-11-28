@@ -35,7 +35,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.Guardrails do
                room_id: plan.room_id,
                incarnation_id: Keyword.get(options, :incarnation_id),
                enforce_input_route?: is_binary(Keyword.get(options, :incarnation_id))
-             ] ++ emission_options(plan)
+             ] ++ Keyword.take(runtime, [:maximum_pending_requests]) ++ emission_options(plan)
          ]}
       else
         {:error, :oversized} ->

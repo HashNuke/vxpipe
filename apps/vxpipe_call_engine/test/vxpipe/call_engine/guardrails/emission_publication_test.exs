@@ -573,6 +573,97 @@ defmodule Vxpipe.CallEngine.Guardrails.EmissionPublicationTest do
     refute_received {:terminal, _}
   end
 
+  test "saturated cancelled transports retain their corrections and bound new submissions" do
+    parent = self()
+    rule = fn id -> %{"id" => id, "question" => "Safe?", "required_answer" => "yes"} end
+
+    {:ok, policy} =
+      Guardrails.new(
+        %{"after_turn" => [rule.("safe")], "before_outgoing_transfer" => [rule.("route")]},
+        []
+      )
+
+    adapter = fn request ->
+      :ok =
+        request.on_attempt.(%{
+          phase: :started,
+          ordinal: 1,
+          started_at_ms: System.monotonic_time(:millisecond)
+        })
+
+      send(parent, {:transport_submitted, self(), request.event})
+
+      receive do
+        :finish ->
+          request.on_attempt.(finished_event(%{usage: %{output_tokens: 3}}))
+          {:ok, %{scores: Map.new(request.questions, &{&1.id, 0.99})}}
+      end
+    end
+
+    participant =
+      start_participant(policy, adapter, &send(parent, {:report, &1}),
+        maximum_pending_requests: 1,
+        on_late_usage: &send(parent, {:correction, &1})
+      )
+
+    check = fn event, proposal ->
+      Task.async(fn ->
+        Participant.check(
+          participant,
+          event,
+          proposal,
+          %{},
+          System.monotonic_time(:millisecond) + 1_000
+        )
+      end)
+    end
+
+    drains =
+      for i <- 1..2 do
+        caller = check.(:after_turn, "proposal-#{i}")
+        assert_receive {:transport_submitted, worker, :after_turn}
+        Task.shutdown(caller, :brutal_kill)
+        assert_receive {:report, %{outcome: :cancelled, attempts: [attempt]}}
+        {worker, attempt.attempt_id}
+      end
+
+    assert {:error, :busy} =
+             Participant.check(
+               participant,
+               :after_turn,
+               "overflow",
+               %{},
+               System.monotonic_time(:millisecond) + 50
+             )
+
+    refute_received {:transport_submitted, _, _}
+
+    assert_receive {:report,
+                    %{
+                      outcome: :error,
+                      error_code: :unavailable,
+                      attempts: [],
+                      usage_observations: []
+                    }}
+
+    :erlang.trace(participant, true, [:receive])
+
+    for {worker, id} <- drains do
+      send(worker, :finish)
+      assert_receive {:correction, [%{attempt_id: ^id, measurement: %{quantity: 3}}]}
+      assert_receive {:trace, ^participant, :receive, {:DOWN, _, :process, ^worker, _}}
+    end
+
+    after_turn = check.(:after_turn, "joint")
+    assert_receive {:transport_submitted, speech, :after_turn}
+    transfer = check.(:before_outgoing_transfer, "joint")
+    assert_receive {:transport_submitted, route, :before_outgoing_transfer}
+    send(speech, :finish)
+    send(route, :finish)
+    assert :passed = Task.await(after_turn)
+    assert :passed = Task.await(transfer)
+  end
+
   test "retiring admission cancels its live caller and accepts a scoped metering correction", %{
     policy: policy
   } do

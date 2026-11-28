@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
   use GenServer
 
   alias Vxpipe.CallEngine.CallSpec.Guardrails
-  alias Vxpipe.CallEngine.Guardrails.{Emission, Evidence}
+  alias Vxpipe.CallEngine.Guardrails.{Attempts, Emission, Evidence}
   alias Vxpipe.CallEngine.TranscriptRouter
   alias Vxpipe.CallEngine.TranscriptRouter.Projection
 
@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
     :adapter,
     :supervisor,
     :timeout_ms,
+    :maximum_transports,
     :participant_id,
     :activation_id,
     :policy_revision,
@@ -75,6 +76,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
        policy: Keyword.fetch!(options, :policy),
        admission_owner: owner,
        admission_monitor: if(owner, do: Process.monitor(owner)),
+       maximum_transports: maximum_transports(Keyword.get(options, :maximum_pending_requests)),
        adapter: Keyword.fetch!(options, :adapter),
        supervisor: Keyword.fetch!(options, :request_supervisor),
        timeout_ms:
@@ -153,6 +155,17 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
         )
 
         {:reply, {:error, :timeout}, state}
+
+      map_size(state.pending) + map_size(state.late_reports) >= state.maximum_transports ->
+        entry = evaluation_entry(event, proposal, correlation, questions)
+
+        emit_report(state, entry, %{
+          outcome: :error,
+          error_code: :unavailable,
+          outcomes: unavailable_outcomes(questions)
+        })
+
+        {:reply, {:error, :busy}, state}
 
       busy?(state.pending, event, proposal) ->
         {:reply, {:error, :busy}, state}
@@ -334,6 +347,10 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
   defp questions(policy, :after_turn), do: policy.after_turn
   defp questions(policy, :before_outgoing_transfer), do: policy.before_outgoing_transfer
 
+  # After-turn and transfer may share two simultaneous transports for one proposal.
+  defp maximum_transports(limit) when is_integer(limit) and limit > 2, do: limit
+  defp maximum_transports(_), do: 2
+
   defp busy?(pending, event, proposal) do
     Enum.any?(pending, fn {_ref, entry} ->
       entry.proposal != proposal or entry.event == event or :before_turn in [entry.event, event]
@@ -447,17 +464,17 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
     if late? do
       emit_cancelled_from_entry(state, entry, :timeout)
     else
-      last_attempt = Enum.find(entry.attempt_events, &finished_attempt_event?/1) || %{}
+      last_attempt = Enum.find(entry.attempt_events, &(&1.phase == :finished)) || %{}
       evaluation = evaluation_evidence(outcome, entry.questions, last_attempt, evaluation)
 
       emit_report(state, entry, %{
         outcome: outcome,
         error_code: error,
-        outcomes: normalize_outcomes(entry.questions, evaluation.outcomes),
+        outcomes: Enum.map(evaluation.outcomes, &archived_outcome/1),
         feedback: if(outcome == :blocked, do: Guardrails.feedback(evaluation), else: []),
-        actual_provider: actual_provider(result),
-        actual_model: actual_model(result) || event_model(last_attempt),
-        actual_request_id: actual_request_id(result) || event_request_id(last_attempt)
+        actual_provider: result[:provider],
+        actual_model: result[:model] || last_attempt[:model],
+        actual_request_id: result[:request_id] || last_attempt[:request_id]
       })
     end
   end
@@ -524,7 +541,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
           ),
         policy_revision: state.policy_revision || 0,
         questions: entry.questions,
-        attempts: actual_attempts(state, entry, entry.started_wall, finished_at),
+        attempts: Attempts.from_events(entry, state.selected_provider, finished_at),
         started_at: entry.started_wall,
         ended_at: finished_at,
         duration_ms: max(now() - entry.started_mono, 0)
@@ -533,13 +550,13 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
     {:ok, report} = Emission.build_report(attributes)
     {:ok, observations} = Emission.usage_observations(report, identity)
     report = %{report | usage_observations: observations}
-    dispatch(state, report)
+    dispatch(state.on_emit, report)
     report
   end
 
-  defp dispatch(%{on_emit: nil}, _report), do: :ok
+  defp dispatch(nil, _report), do: :ok
 
-  defp dispatch(%{on_emit: emit}, report) when is_function(emit, 1) do
+  defp dispatch(emit, report) when is_function(emit, 1) do
     try do
       emit.(report)
     rescue
@@ -621,13 +638,13 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
            ) do
       completed = %{
         attempt
-        | model: event_model(event),
-          request_id: event_request_id(event),
-          outcome: event_outcome(event)
+        | model: event[:model],
+          request_id: event[:request_id],
+          outcome: event.outcome
       }
 
       observations = Emission.late_observations(drain.context, completed, usage)
-      if observations != [], do: dispatch_late_usage(state, observations)
+      if observations != [], do: dispatch(state.on_late_usage, observations)
       remaining = List.delete(drain.attempts, attempt)
       %{state | late_reports: Map.put(state.late_reports, ref, %{drain | attempts: remaining})}
     else
@@ -649,166 +666,11 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
     end
   end
 
-  defp dispatch_late_usage(%{on_late_usage: nil}, _observations), do: :ok
-
-  defp dispatch_late_usage(%{on_late_usage: emit}, observations)
-       when is_function(emit, 1) do
-    try do
-      emit.(observations)
-    rescue
-      _ -> :ok
-    catch
-      _, _ -> :ok
-    end
-
-    :ok
+  defp archived_outcome(%{question: question} = outcome) do
+    outcome |> Map.delete(:question) |> Map.put(:question_id, question.id)
   end
 
-  # --- actual physical attempts only ---
-
-  defp actual_attempts(state, entry, started_wall, ended_wall) do
-    entry.attempt_events
-    |> Enum.uniq_by(&attempt_ordinal/1)
-    |> Enum.sort_by(&attempt_ordinal/1)
-    |> Enum.map(fn event ->
-      ordinal = attempt_ordinal(event) - 1
-      attempt_id = Map.fetch!(entry.attempt_ids, ordinal + 1)
-      incomplete? = event.phase == :started
-
-      %{
-        attempt_id: attempt_id,
-        ordinal: ordinal,
-        provider: selected_or_event_provider(state, event),
-        model: event_model(event),
-        request_id: event_request_id(event),
-        outcome: if(incomplete?, do: :cancelled, else: event_outcome(event)),
-        error_code: event_error_code(event),
-        started_at: attempt_time(entry, event[:started_at_ms], started_wall),
-        ended_at: attempt_time(entry, event[:ended_at_ms], ended_wall),
-        duration_ms:
-          Map.get(event, :duration_ms, max(now() - Map.get(event, :started_at_ms, now()), 0)),
-        retry_of: nil,
-        usage: event_usage(event)
-      }
-    end)
-    |> link_retries()
-  end
-
-  defp finished_attempt_event?(%{phase: :finished}), do: true
-  defp finished_attempt_event?(%{"phase" => "finished"}), do: true
-  # Legacy test shape with explicit attempt_id counts as actual.
-  defp finished_attempt_event?(%{attempt_id: id}) when is_binary(id), do: true
-  defp finished_attempt_event?(_), do: false
-
-  defp attempt_ordinal(%{ordinal: ordinal}) when is_integer(ordinal), do: ordinal
-  defp attempt_ordinal(%{"ordinal" => ordinal}) when is_integer(ordinal), do: ordinal
-  defp attempt_ordinal(_), do: 0
-
-  defp selected_or_event_provider(state, event) do
-    case Map.get(event, :provider) || Map.get(event, "provider") do
-      provider when is_binary(provider) -> provider
-      _ -> state.selected_provider
-    end
-  end
-
-  defp event_model(%{model: model}) when is_binary(model), do: model
-  defp event_model(%{"model" => model}) when is_binary(model), do: model
-  defp event_model(_), do: nil
-
-  defp event_request_id(%{request_id: id}) when is_binary(id), do: id
-  defp event_request_id(%{"request_id" => id}) when is_binary(id), do: id
-  defp event_request_id(_), do: nil
-
-  defp event_outcome(%{outcome: outcome}) when outcome in [:succeeded, :failed, :cancelled],
-    do: outcome
-
-  defp event_outcome(%{"outcome" => outcome})
-       when outcome in ["succeeded", "failed", "cancelled"] do
-    String.to_existing_atom(outcome)
-  end
-
-  defp event_outcome(_), do: :succeeded
-
-  defp event_error_code(%{error_code: code}) when is_atom(code), do: code
-  defp event_error_code(_), do: nil
-
-  defp attempt_time(entry, milliseconds, _fallback) when is_integer(milliseconds) do
-    DateTime.add(entry.started_wall, milliseconds - entry.started_mono, :millisecond)
-  end
-
-  defp attempt_time(_entry, _milliseconds, fallback), do: fallback
-
-  defp event_usage(%{usage: usage}) when is_map(usage), do: usage
-  defp event_usage(_), do: :unknown
-
-  defp link_retries([]), do: []
-
-  defp link_retries([first | rest]) do
-    {linked, _} =
-      Enum.map_reduce([first | rest], nil, fn attempt, previous_id ->
-        attempt =
-          if previous_id == nil do
-            %{attempt | retry_of: nil}
-          else
-            %{attempt | retry_of: attempt.retry_of || previous_id}
-          end
-
-        {attempt, attempt.attempt_id}
-      end)
-
-    linked
-  end
-
-  defp actual_provider(%{provider: provider}) when is_binary(provider), do: provider
-  defp actual_provider(_), do: nil
-
-  defp actual_model(%{model: model}) when is_binary(model), do: model
-  defp actual_model(_), do: nil
-
-  defp actual_request_id(%{request_id: id}) when is_binary(id), do: id
-  defp actual_request_id(_), do: nil
-
-  defp normalize_outcomes(questions, outcomes) when is_list(outcomes) do
-    by_id =
-      Map.new(outcomes, fn outcome ->
-        id =
-          Map.get(outcome, :question_id) ||
-            (is_map(Map.get(outcome, :question)) && Map.get(outcome.question, :id))
-
-        {id, outcome}
-      end)
-
-    Enum.map(questions, fn question ->
-      case Map.fetch(by_id, question.id) do
-        {:ok, detail} ->
-          outcome = Map.get(detail, :outcome)
-
-          if outcome in [:passed, :failed, :unavailable] do
-            %{
-              question_id: question.id,
-              probability_yes: Map.get(detail, :probability_yes),
-              inferred_answer: Map.get(detail, :inferred_answer),
-              outcome: outcome
-            }
-          else
-            %{
-              question_id: question.id,
-              probability_yes: nil,
-              inferred_answer: nil,
-              outcome: :unavailable
-            }
-          end
-
-        _ ->
-          %{
-            question_id: question.id,
-            probability_yes: nil,
-            inferred_answer: nil,
-            outcome: :unavailable
-          }
-      end
-    end)
-  end
+  defp archived_outcome(%{question_id: _} = unavailable), do: unavailable
 
   defp extract_correlation(evidence, event, proposal) when is_map(evidence) do
     nested =
@@ -825,7 +687,7 @@ defmodule Vxpipe.CallEngine.Guardrails.Participant do
     source_participant_id = get.(:source_participant_id)
     source_turn_id = get.(:source_turn_id)
     response_turn_id = get.(:response_turn_id)
-    transfer_invocation_id = get.(:transfer_invocation_id)
+    transfer_invocation_id = get.(:transfer_invocation_id) || get.(:invocation_id)
     command_id = get.(:command_id)
     candidate_attempt_id = get.(:candidate_attempt_id) || get.(:attempt_id)
 
