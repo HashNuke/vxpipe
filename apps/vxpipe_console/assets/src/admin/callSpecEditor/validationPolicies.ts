@@ -4,12 +4,22 @@ import { Fields, record, type ObjectValue } from "./validationFields";
 export function validatePolicies(fields: Fields, source: ObjectValue, participants: ObjectValue): void {
   if (source.defaults !== undefined) {
     const defaults = fields.object(source.defaults, ["defaults"], ["capabilities"]);
-    if (defaults.capabilities !== undefined) capabilities(fields, defaults.capabilities, ["defaults", "capabilities"]);
+    if (defaults.capabilities !== undefined) {
+      capabilities(fields, defaults.capabilities, ["defaults", "capabilities"]);
+      if (source.schema_version !== "20261128.01" && record(defaults.capabilities) && Object.hasOwn(defaults.capabilities, "decisions")) {
+        fields.issue(["defaults", "capabilities", "decisions"], "is not supported in this schema version");
+      }
+    }
   }
   if (source.media_policy !== undefined) media(fields, source.media_policy, ["media_policy"], participants);
   for (const [key, value] of Object.entries(participants)) {
     if (!record(value)) continue;
-    if (value.capabilities !== undefined) capabilities(fields, value.capabilities, ["participants", key, "capabilities"]);
+    if (value.capabilities !== undefined) {
+      capabilities(fields, value.capabilities, ["participants", key, "capabilities"]);
+      if (record(value.capabilities) && Object.hasOwn(value.capabilities, "decisions")) {
+        fields.issue(["participants", key, "capabilities", "decisions"], "Change the Decisions model in Call settings → Models.");
+      }
+    }
     if (value.while_present !== undefined) media(fields, value.while_present, ["participants", key, "while_present"], participants);
   }
   if (source.wait_sounds !== undefined && source.wait_sounds !== null) {
@@ -18,6 +28,7 @@ export function validatePolicies(fields: Fields, source: ObjectValue, participan
   }
   opening(fields, source);
   visibility(fields, source, participants);
+  guardrailDecisions(fields, source, participants);
 }
 
 function capabilities(fields: Fields, value: unknown, path: string[]): void {
@@ -89,7 +100,7 @@ function opening(fields: Fields, source: ObjectValue): void {
   if (item.type === "text") {
     if (Object.hasOwn(item, "url")) fields.issue([...path, "url"], "is not supported for this opening audio type");
     fields.text(item.text, [...path, "text"], 4096);
-    if (source.schema_version === "20261125.01") {
+    if (source.schema_version === "20261128.01" || source.schema_version === "20261125.01") {
       if (Object.hasOwn(item, "text_to_speech")) fields.issue([...path, "text_to_speech"], "set the opening voice in Call settings → Models");
       const defaults = record(source.defaults) && record(source.defaults.capabilities) ? source.defaults.capabilities : {};
       if (defaults.speech_to_speech || !defaults.text_to_speech) fields.issues.push({
@@ -99,6 +110,23 @@ function opening(fields: Fields, source: ObjectValue): void {
   } else if (item.type === "file_url") {
     for (const name of ["text", "text_to_speech"]) if (Object.hasOwn(item, name)) fields.issue([...path, name], "is not supported for this opening audio type");
     audioUrl(fields, item.url, [...path, "url"], true);
+  }
+}
+
+function guardrailDecisions(fields: Fields, source: ObjectValue, participants: ObjectValue): void {
+  let configured = false;
+  for (const value of Object.values(participants)) {
+    if (!record(value) || value.type !== "agent" || !record(value.guardrails)) continue;
+    for (const event of ["before_turn", "after_turn", "before_outgoing_transfer"]) {
+      const questions = (value.guardrails as ObjectValue)[event];
+      if (Array.isArray(questions) && questions.length > 0) configured = true;
+    }
+  }
+  if (!configured) return;
+  const defaults = record(source.defaults) ? source.defaults : {};
+  const capabilities = record(defaults.capabilities) ? defaults.capabilities as ObjectValue : {};
+  if (!record(capabilities.decisions)) {
+    fields.issue(["defaults", "capabilities", "decisions"], "Select a Decisions model for these guardrail checks.");
   }
 }
 

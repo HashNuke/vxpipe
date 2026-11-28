@@ -1,5 +1,4 @@
-import { Fragment, useContext, useState } from "react";
-import { GuardrailInspectorContext } from "./guardrail-inspector-context";
+import { Fragment, useState } from "react";
 import { Badge } from "../components/ui/badge";
 import type { ToolSelection } from "./types";
 import { setTransfer } from "./participants";
@@ -11,6 +10,7 @@ import { useIssueRequest } from "./issue-context";
 import { IssueAnchor } from "./issue-anchor";
 import { AddToolsModal } from "./add-tools-modal";
 import { EditToolModal } from "./edit-tool-modal";
+import { TransferToolEditor } from "./transfer-tool-editor";
 import { agent, setTools } from "./edits";
 import type { InspectorProps, ToolCatalog } from "./inspectorTypes";
 
@@ -18,11 +18,10 @@ export function AgentToolsPanel({ participantKey, integrations, catalog, ...prop
   const [editing, setEditing] = useState<{ name?: string } | null>(null);
   const request = useIssueRequest();
   const [dismissedRequest, setDismissedRequest] = useState<number>();
-  const prototype = useContext(GuardrailInspectorContext);
   const participant = agent(props.document.source, participantKey);
   const configured = participant.tools ?? {};
   const destinations = participant.transfers ?? [];
-  const hasTransfer = !!prototype && destinations.length > 0;
+  const hasTransfer = destinations.length > 0;
   const tools: Record<string, ToolSelection> = hasTransfer ? { ...configured, transfer: { type: "platform", tool: "transfer" } } : configured;
   function remove(name: string) {
     if (hasTransfer && name === "transfer") {
@@ -46,6 +45,6 @@ export function AgentToolsPanel({ participantKey, integrations, catalog, ...prop
         <ItemActions><Button variant="ghost" size="icon-sm" aria-label={`Edit ${name}`} disabled={props.document.readOnly} onClick={() => setEditing({ name })}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={props.document.readOnly} onClick={() => remove(name)}><Trash2 className="h-4 w-4" /></Button></ItemActions>
       </Item></IssueAnchor>
     </Fragment>)}{!Object.keys(tools).length && <Item size="sm"><ItemContent><ItemDescription>No tools enabled for this agent.</ItemDescription></ItemContent></Item>}</ItemGroup>
-    {selected && (prototype && selected.name === "transfer" ? prototype.transferEditor({ ...props, participantKey, onClose: close }) : selected.name !== undefined ? <EditToolModal key={`${selected.name}:${request?.id ?? "manual"}`} {...props} participantKey={participantKey} name={selected.name} onClose={close} /> : <AddToolsModal {...props} participantKey={participantKey} integrations={integrations} catalog={catalog} onSelectTransfer={prototype ? () => setEditing({ name: "transfer" }) : undefined} onClose={close} />)}
+    {selected && (selected.name === "transfer" ? <TransferToolEditor {...props} participantKey={participantKey} onClose={close} /> : selected.name !== undefined ? <EditToolModal key={`${selected.name}:${request?.id ?? "manual"}`} {...props} participantKey={participantKey} name={selected.name} onClose={close} /> : <AddToolsModal {...props} participantKey={participantKey} integrations={integrations} catalog={catalog} onClose={close} />)}
   </div></TooltipProvider>;
 }

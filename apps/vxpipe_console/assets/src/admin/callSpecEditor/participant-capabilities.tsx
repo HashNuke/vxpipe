@@ -3,7 +3,7 @@ import { CapabilityFields } from "./capability-fields";
 import { participant, setCapability } from "./edits";
 import type { InspectorProps } from "./inspectorTypes";
 
-const labels: Record<CatalogCapability, string> = { speech_to_text: "Speech to text", output_speech_to_text: "Output speech to text", text_to_speech: "Text to speech", speech_to_speech: "Speech to speech", model_inference: "Language model" };
+const labels: Record<CatalogCapability, string> = { speech_to_text: "Speech to text", output_speech_to_text: "Output speech to text", text_to_speech: "Text to speech", speech_to_speech: "Speech to speech", model_inference: "Language model", decisions: "Decisions" };
 export function ParticipantCapabilities({ document, onChange, issues, participantKey, catalog, kinds = ["speech_to_text"], required = false }: InspectorProps & { participantKey: string; catalog: ModelCatalog; kinds?: CatalogCapability[]; required?: boolean }) {
   const target = participant(document.source, participantKey);
   return <div className="space-y-6">{kinds.map((kind) => {

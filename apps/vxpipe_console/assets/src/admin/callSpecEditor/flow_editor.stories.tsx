@@ -21,9 +21,9 @@ import "../admin.css";
 
 import { setAgentModelMode } from "./agent-models";
 
-type Props = { transferExample?: boolean; guardrailMode?: "llm" | "speech_to_speech"; conversationLanguages?: string[]; theme: "dark" | "light"; scenario: EditorScenario; outcome?: EditorResult; pageStatus?: "loading" | "spec-error" | "catalog-error" };
+type Props = { transferExample?: boolean; guardrailsExample?: boolean; guardrailMode?: "llm" | "speech_to_speech"; conversationLanguages?: string[]; theme: "dark" | "light"; scenario: EditorScenario; outcome?: EditorResult; pageStatus?: "loading" | "spec-error" | "catalog-error" };
 // Adapted from Callpipe's flow_editor.stories: whole-page fixtures and real UI actions.
-function FlowEditorStory({ theme, scenario, outcome, pageStatus, conversationLanguages, transferExample, guardrailMode = "llm" }: Props) {
+function FlowEditorStory({ theme, scenario, outcome, pageStatus, conversationLanguages, transferExample, guardrailsExample, guardrailMode = "llm" }: Props) {
   const [destination, setDestination] = useState<string>();
   const [created, setCreated] = useState<SourceDocument>();
   const [retried, setRetried] = useState(false);
@@ -35,6 +35,25 @@ function FlowEditorStory({ theme, scenario, outcome, pageStatus, conversationLan
     participants.scheduling = { type: "agent", prompt: "Help the caller arrange a follow-up appointment. Confirm their preferred date and time, then repeat the booking details." };
     participants.billing = { type: "agent", prompt: "Help the caller with billing questions. Ask which appointment they are calling about before discussing their account." };
     if (participants.intake?.type === "agent") participants.intake.transfers = ["specialist", "scheduling"];
+  }
+  if (guardrailsExample) {
+    const source = snapshot.document.source;
+    source.schema_version = "20261128.01";
+    source.defaults ??= {};
+    source.defaults.capabilities ??= {};
+    source.defaults.capabilities.model_inference ??= { provider: "google", model: "gemini-2.5-flash" };
+    source.defaults.capabilities.text_to_speech ??= { provider: "deepgram", model: "flux", options: { voice: "hannah" } };
+    source.defaults.capabilities.decisions ??= { provider: "openai", model: "gpt-6-luna" };
+    const intake = source.participants.intake;
+    if (intake?.type === "agent") intake.guardrails = {
+      before_turn: [{ question: "Is the caller asking about their own account?", required_answer: "yes" }],
+      after_turn: [{ question: "Does this response disclose another patient’s details?", required_answer: "no", probability_threshold: 0.75, response: "I can only discuss your own account." }],
+      before_outgoing_transfer: [{ question: "Is the requested destination unrelated to the caller’s issue?", required_answer: "no", response: "Ask which department the caller needs." }],
+    };
+    const scheduling = source.participants.scheduling;
+    if (scheduling?.type === "agent") scheduling.guardrails = {
+      before_outgoing_transfer: [{ question: "Is the appointment reference missing?", required_answer: "yes" }],
+    };
   }
   if (conversationLanguages) snapshot.document.source.conversation_languages = conversationLanguages;
   return <StoryNavigationContext value={storyNavigation(`/t/${demoTenant.key}/editor`, setDestination, demoTenant)}><EditorTheme theme={theme}>{destination ? <main className="grid min-h-dvh place-content-center gap-4 bg-background p-6">

@@ -8,7 +8,7 @@ import type { OpeningAudio } from "./types";
 export function OpeningAudioFields({ document, onChange, issues, onOpenModels }: InspectorProps & { onOpenModels: () => void }) {
   const { source, readOnly } = document;
   const audio = source.opening_audio;
-  const current = source.schema_version === "20261125.01";
+  const current = source.schema_version === "20261128.01" || source.schema_version === "20261125.01";
   const defaults = source.defaults?.capabilities;
   const speechToSpeech = Boolean(defaults?.speech_to_speech);
   const spokenAvailable = !speechToSpeech && Boolean(defaults?.text_to_speech);

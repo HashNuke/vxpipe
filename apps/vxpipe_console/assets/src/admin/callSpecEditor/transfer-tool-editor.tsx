@@ -9,7 +9,7 @@ import { agent } from "./edits";
 import { isTransferDestination, setTransfer } from "./participants";
 import type { InspectorProps } from "./inspectorTypes";
 
-export function TransferToolStoryEditor({ document, onChange, participantKey, onClose }: InspectorProps & {
+export function TransferToolEditor({ document, onChange, participantKey, onClose }: InspectorProps & {
   participantKey: string; onClose: () => void;
 }) {
   const saved = agent(document.source, participantKey).transfers ?? [];

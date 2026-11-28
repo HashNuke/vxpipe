@@ -11,7 +11,7 @@ const rootFields = ["conversation_languages", "schema_version", "name", "incomin
 export function validateSource(value: unknown): SourceIssue[] {
   const fields = new Fields();
   const source = fields.object(value, [], rootFields);
-  fields.enumeration(source.schema_version, ["schema_version"], ["20261125.01", "20261004.01", "20260915.01"]);
+  fields.enumeration(source.schema_version, ["schema_version"], ["20261128.01", "20261125.01", "20261004.01", "20260915.01"]);
   const languages = source.conversation_languages;
   if (languages !== undefined && (!Array.isArray(languages) || languages.some(code => !conversationLanguageCodes.includes(code)) || new Set(languages).size !== languages.length)) {
     fields.issue(["conversation_languages"], "must list distinct supported language tags");
@@ -73,7 +73,7 @@ function direction(fields: Fields, source: ObjectValue, participants: ObjectValu
   if (entry === handler) fields.issue(handlerPath, "must differ from the caller or callee");
   const caller = typeof entry === "string" && Object.hasOwn(participants, entry) ? participants[entry] : undefined;
   const receiver = typeof handler === "string" && Object.hasOwn(participants, handler) ? participants[handler] : undefined;
-  if (source.schema_version === "20261125.01" && typeof entry === "string" && record(caller)) {
+  if ((source.schema_version === "20261128.01" || source.schema_version === "20261125.01") && typeof entry === "string" && record(caller)) {
     for (const field of ["capabilities", "while_present"]) if (Object.hasOwn(caller, field)) fields.issue(["participants", entry, field], "Entry uses the call defaults");
   }
   if (record(caller) && caller.type !== "human") fields.issue(entryPath, "must reference a human participant");

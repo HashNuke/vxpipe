@@ -48,6 +48,15 @@ export type HumanParticipant = ParticipantBase & {
   connection: Connection;
   transfer_notice?: string | null;
 };
+export type GuardrailQuestion = {
+  id?: string;
+  question: string;
+  required_answer: "yes" | "no";
+  probability_threshold?: number;
+  response?: string;
+};
+export type GuardrailEvent = "before_turn" | "after_turn" | "before_outgoing_transfer";
+export type Guardrails = Partial<Record<GuardrailEvent, GuardrailQuestion[]>>;
 export type AgentParticipant = ParticipantBase & {
   type: "agent";
   prompt: string;
@@ -56,6 +65,7 @@ export type AgentParticipant = ParticipantBase & {
   transfers?: string[];
   transfer_history?: TransferHistory | null;
   variable_permissions?: Record<string, VariablePermission>;
+  guardrails?: Guardrails;
 };
 export type Participant = HumanParticipant | AgentParticipant;
 export type VariableType = "array" | "boolean" | "integer" | "null" | "number" | "object" | "string";
@@ -87,7 +97,7 @@ export type Visibility = "hidden" | "metadata" | "full";
 // Optional fields stay omitted until explicitly edited. Parsing never inserts defaults.
 export type CallSpecSource = {
   conversation_languages?: string[];
-  schema_version: "20261125.01" | "20261004.01" | "20260915.01";
+  schema_version: "20261128.01" | "20261125.01" | "20261004.01" | "20260915.01";
   name?: string | null;
   incoming_call?: { caller: string; handled_by: string };
   outgoing_call?: { callee: string; handled_by: string; ring_timeout_ms?: number };

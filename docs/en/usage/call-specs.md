@@ -39,7 +39,7 @@ revision and keeps your unsaved edits in the editor. Errors point to the relevan
 participant or setting.
 
 The editor's ellipsis menu opens the JSON source. Current new source uses
-`schema_version: "20261125.01"`. Use the
+`schema_version: "20261128.01"`. Use the
 [development example](../../../examples/call-specs/development.json) as a complete
 text-call starting point; supply the selected provider credential before saving.
 
@@ -86,6 +86,37 @@ The initial incoming agent defaults to waiting for input. The initial outgoing
 agent defaults to a generated greeting. Explicit first-message modes can override
 that behavior. Prompts should refer to destination participant keys when describing
 when to transfer.
+
+### Participant guardrails
+
+In **Call settings → Models**, select a Decisions provider, model and saved credential. The available providers are OpenAI Decisions, Gemini Decisions and Jev. Open an agent’s **Guardrails** tab to add questions. Each agent has its own lists and shares the call’s Decisions selection. An empty list makes zero provider requests for that event.
+
+| Event | When the questions run |
+| --- | --- |
+| Before turn | When an LLM + TTS agent receives final speech or typed input. |
+| After turn | Before the agent releases a reply that contains speech, including speech proposed alongside tools. A tool-only reply skips this event. |
+| Before outgoing transfer | When the sending agent requests a transfer to an allowed destination. This also applies to native speech agents. Configure allowed destinations on the agent’s transfer tool. |
+
+For each question choose **Required answer**, set **Probability threshold** and optionally write a **Response**. The score always measures the probability of Yes. With the default threshold of 0.70, required **Yes** passes at 0.70 or above. Required **No** passes below 0.70. For example, “Is the caller requesting someone else’s account details?” with required No will block at exactly 0.70.
+
+The call-spec JSON stores each question inside the participant. A new question can be written as follows.
+
+```json
+{
+  "guardrails": {
+    "before_turn": [
+      {
+        "question": "Is the caller requesting someone else's account details?",
+        "required_answer": "no",
+        "probability_threshold": 0.70,
+        "response": "Ask the caller about their own account."
+      }
+    ]
+  }
+}
+```
+
+The backend assigns each new question an `id` when saving the call spec. Keep the returned ID when editing or reordering an existing question. The API accepts numeric thresholds from 0 through 1 in increments of 0.01. An omitted threshold defaults to 0.70.
 
 ### Conversation languages
 

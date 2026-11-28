@@ -1,7 +1,7 @@
 import { Fields, record, type ObjectValue } from "./validationFields";
 
 const common = ["type", "description", "capabilities", "while_present"];
-const agentFields = ["prompt", "first_message", "tools", "transfers", "transfer_history", "variable_permissions"];
+const agentFields = ["prompt", "first_message", "tools", "transfers", "transfer_history", "variable_permissions", "guardrails"];
 const humanFields = ["connection", "transfer_notice"];
 const reservedTools = ["transfer", "read_variables", "update_variables", "update_variable"];
 
@@ -26,6 +26,7 @@ export function validateParticipant(fields: Fields, source: ObjectValue, key: st
     tools(fields, item, path);
     transfers(fields, item, key, path, participants);
     history(fields, item, path);
+    guardrails(fields, source, item, path);
   }
 }
 
@@ -80,6 +81,59 @@ function history(fields: Fields, item: ObjectValue, path: string[]): void {
   fields.enumeration(history.mode, [...location, "mode"], ["fresh", "all_spoken", "last_n_spoken", "selected"]);
   if (history.mode === "last_n_spoken") fields.integer(history.turns, [...location, "turns"], 1, Number.MAX_SAFE_INTEGER);
   else if (Object.hasOwn(history, "turns")) fields.issue([...location, "turns"], "is only supported for last_n_spoken mode");
+}
+
+function guardrails(fields: Fields, source: ObjectValue, item: ObjectValue, path: string[]): void {
+  if (item.guardrails === undefined) return;
+  const location = [...path, "guardrails"];
+  if (source.schema_version !== "20261128.01") {
+    fields.issue(location, "is not supported in this schema version");
+    return;
+  }
+  const value = fields.object(item.guardrails, location, ["before_turn", "after_turn", "before_outgoing_transfer"]);
+  const seen = new Set<string>();
+  for (const event of ["before_turn", "after_turn", "before_outgoing_transfer"] as const) {
+    if (value[event] === undefined) continue;
+    const eventPath = [...location, event];
+    if (!Array.isArray(value[event])) { fields.issue(eventPath, "must be a list of questions"); continue; }
+    const questions = value[event] as unknown[];
+    if (questions.length > 32) fields.issue(eventPath, "must contain at most 32 questions");
+    let bytes = 0;
+    questions.forEach((entry, index) => {
+      const questionPath = [...eventPath, String(index)];
+      const question = fields.object(entry, questionPath, ["id", "question", "required_answer", "probability_threshold", "response"]);
+      if (question.id !== undefined && (typeof question.id !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(question.id))) {
+        fields.issue([...questionPath, "id"], "must match [a-z][a-z0-9_]{0,63}");
+      } else if (typeof question.id === "string") {
+        if (seen.has(question.id)) fields.issue([...questionPath, "id"], "must be unique within the participant");
+        seen.add(question.id);
+      }
+      if (typeof question.question !== "string" || !question.question.trim() || new TextEncoder().encode(question.question).length > 1024) {
+        fields.issue([...questionPath, "question"], "must be a non-empty string of at most 1024 bytes");
+      } else {
+        bytes += new TextEncoder().encode(question.question).length;
+      }
+      if (question.required_answer !== "yes" && question.required_answer !== "no") {
+        fields.issue([...questionPath, "required_answer"], question.required_answer === undefined ? "is required" : "must be a supported value");
+      }
+      if (question.probability_threshold !== undefined) {
+        const threshold = question.probability_threshold;
+        const valid = typeof threshold === "number" && Number.isFinite(threshold) && threshold >= 0 && threshold <= 1 &&
+          /^(0(\.\d{1,2})?|1(\.0{1,2})?)$/.test(String(threshold));
+        if (!valid) fields.issue([...questionPath, "probability_threshold"], "must be between 0.00 and 1.00 in hundredth increments");
+      }
+      if (question.response !== undefined && (typeof question.response !== "string" || new TextEncoder().encode(question.response).length > 1024)) {
+        fields.issue([...questionPath, "response"], "must be a string of at most 1024 bytes");
+      }
+    });
+    if (bytes > 16384) fields.issue(eventPath, "must contain at most 16384 bytes of question text");
+    if ((event === "before_turn" || event === "after_turn") && questions.length > 0) {
+      const capabilities = record(item.capabilities) ? item.capabilities : {};
+      const defaults = record(source.defaults) && record(source.defaults.capabilities) ? source.defaults.capabilities : {};
+      const speechToSpeech = (capabilities as ObjectValue).speech_to_speech ?? (defaults as ObjectValue).speech_to_speech;
+      if (speechToSpeech) fields.issue(eventPath, "is not supported for speech-to-speech agents");
+    }
+  }
 }
 
 function connection(fields: Fields, source: ObjectValue, key: string, value: unknown, path: string[]): void {

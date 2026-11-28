@@ -34,7 +34,7 @@ test("agent prompt and first-message controls preserve source on load and remove
   render(<Harness initial={initial} />);
   expect(saved()).toEqual(initial.source);
   expect(screen.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
-  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Prompt", "Models", "Variables", "Transfers", "Tools", "Media"]);
+  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Prompt", "Models", "Variables", "Transfers", "Tools", "Media", "Guardrails"]);
   expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Wait for input");
   fireEvent.keyDown(screen.getByRole("combobox", { name: "First message" }), { key: "ArrowDown" });
   expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Wait for input", "Generated", "Fixed text"]);

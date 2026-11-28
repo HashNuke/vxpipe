@@ -1,6 +1,6 @@
 export const catalogCapabilities = [
   "speech_to_text", "output_speech_to_text", "text_to_speech",
-  "speech_to_speech", "model_inference",
+  "speech_to_speech", "model_inference", "decisions",
 ] as const;
 export type CatalogCapability = (typeof catalogCapabilities)[number];
 export type ModelVoice = { id: string; name: string; default: boolean };

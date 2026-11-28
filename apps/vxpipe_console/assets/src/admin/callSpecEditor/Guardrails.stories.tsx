@@ -1,13 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import editorStory from "./flow_editor.stories";
-import { GuardrailStoryPanels } from "./guardrail-story-panels";
 
 const meta = {
   title: "Vxpipe/Console/Call spec editor/Page/Guardrails",
   component: editorStory.component,
-  decorators: [Story => <GuardrailStoryPanels><Story /></GuardrailStoryPanels>],
-  args: { theme: "dark", scenario: "default", transferExample: true },
+  args: { theme: "dark", scenario: "default", transferExample: true, guardrailsExample: true },
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof editorStory.component>;
 export default meta;
@@ -34,6 +32,7 @@ export const EveryTurn: Story = { play: async ({ canvasElement }) => {
   await userEvent.click(before.getByRole("button", { name: "Add question" }));
   const dialog = within(await page.findByRole("dialog", { name: "Add question" }));
   await userEvent.type(dialog.getByRole("textbox", { name: "Question" }), "Is the caller asking for another patient’s appointment details?");
+  await userEvent.click(dialog.getByRole("radio", { name: "Yes" }));
   await userEvent.click(dialog.getByRole("button", { name: "Save question" }));
   await expect(before.getByRole("button", { name: /^Edit question/ })).toBeVisible();
   for (const name of ["Before turn", "After turn", "Before outgoing transfer"]) {
@@ -65,11 +64,18 @@ export const SpeechToSpeech: Story = { args: { guardrailMode: "speech_to_speech"
   await expect(within(page.getByRole("region", { name: "Before outgoing transfer" })).getByRole("button", { name: "Add question" })).toBeEnabled();
 } };
 
+export const MissingCapability: Story = { args: { guardrailsExample: false, transferExample: false }, play: async ({ canvasElement }) => {
+  const page = within(canvasElement.ownerDocument.body);
+  await userEvent.click(await page.findByText("intake", { exact: true, selector: "[data-flow-node-title-row] div" }));
+  await userEvent.click(await page.findByRole("tab", { name: "Guardrails" }));
+  await expect(within(page.getByRole("region", { name: "Before turn" })).queryByRole("button", { name: "Add question" })).toBeNull();
+} };
+
 export const CallDecisions: Story = { play: async ({ canvasElement }) => {
   const page = within(canvasElement.ownerDocument.body);
   await userEvent.click(await page.findByRole("button", { name: "Call settings" }));
   await userEvent.click(await page.findByRole("tab", { name: "Models" }));
-  const decisions = await page.findByRole("combobox", { name: "Decisions" });
+  const decisions = within(page.getByRole("region", { name: "Decisions" })).getByRole("combobox", { name: "Provider" });
   await expect(decisions).toBeEnabled();
   decisions.scrollIntoView({ block: "center" });
 } };
@@ -92,7 +98,9 @@ export const EditQuestion: Story = { play: async ({ canvasElement }) => {
   await userEvent.click(before.getByRole("button", { name: /^Edit question/ }));
   const dialog = within(await page.findByRole("dialog", { name: "Edit question" }));
   await expect(dialog.getByRole("textbox", { name: "Question" })).toBeVisible();
-  await expect(dialog.getByLabelText("Confidence threshold")).toHaveAttribute("placeholder", "0.70");
+  await expect(dialog.getByRole("radiogroup", { name: "Required answer" })).toBeVisible();
+  await expect(dialog.getByLabelText("Probability threshold")).toHaveAttribute("placeholder", "0.70");
+  await expect(dialog.getByRole("textbox", { name: /Response/ })).toBeVisible();
 } };
 
 export const SchedulingTransfer: Story = { play: async ({ canvasElement }) => {

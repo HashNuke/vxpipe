@@ -36,7 +36,7 @@ export function newCallSpec(catalog: ModelCatalog, choice: NewCallDirection): So
   return {
     readOnly: false,
     source: {
-      schema_version: "20261125.01",
+      schema_version: "20261128.01",
       ...(choice.direction === "outgoing" ? { outgoing_call: { callee: entry, handled_by: "assistant" } } : { incoming_call: { caller: entry, handled_by: "assistant" } }),
       defaults: { capabilities: { model_inference: recommendedSelection(catalog, "model_inference", provider) } },
       participants: {

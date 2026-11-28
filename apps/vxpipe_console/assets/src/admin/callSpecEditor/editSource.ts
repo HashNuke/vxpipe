@@ -1,7 +1,9 @@
 import type { CallSpecSource, SourceDocument } from "./types";
 
+export const editableSchemaVersions = ["20261128.01", "20261125.01"];
+
 export function editSource(document: SourceDocument, change: (source: CallSpecSource) => void): SourceDocument {
-  if (document.readOnly || document.source.schema_version !== "20261125.01") {
+  if (document.readOnly || !editableSchemaVersions.includes(document.source.schema_version)) {
     throw new Error("This historical call spec is read-only.");
   }
   const source = structuredClone(document.source);

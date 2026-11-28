@@ -1,5 +1,4 @@
-import { GuardrailInspectorContext } from "./guardrail-inspector-context";
-import { useContext, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Background, Controls, ReactFlow, type XYPosition } from "@xyflow/react";
 import { FitCanvasOnResize } from "./fit-canvas-on-resize";
 import { FlowNode } from "./flow-node";
@@ -18,8 +17,7 @@ export type FlowCanvasProps = {
 
 export function FlowCanvas({ document, selectedNodeId, issues, onConnect, onSelectNode, onSelectEdge }: FlowCanvasProps) {
   const [positions, setPositions] = useState<Record<string, { position?: XYPosition; measured?: { width: number; height: number } }>>({});
-  const countTransferTool = !!useContext(GuardrailInspectorContext);
-  const graph = useMemo(() => canvasGraph(document, selectedNodeId, issues, countTransferTool), [document, selectedNodeId, issues, countTransferTool]);
+  const graph = useMemo(() => canvasGraph(document, selectedNodeId, issues, true), [document, selectedNodeId, issues]);
   const nodes = useMemo(() => graph.nodes.map((node) => ({ ...node, ...positions[node.id] })), [graph, positions]);
   return (
     <div data-flow-editor-canvas className="absolute inset-y-0 left-0 right-0 lg:right-[34rem]">

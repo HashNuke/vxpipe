@@ -21,11 +21,13 @@ export type ActionFeedback = {
 const capabilityNames: Record<string, string> = {
   speech_to_text: "Speech to text", output_speech_to_text: "Output speech to text",
   text_to_speech: "Text to speech", speech_to_speech: "Speech to speech", model_inference: "Model inference",
+  decisions: "Decisions",
 };
 const participantFields: Record<string, [string, string]> = {
   type: ["prompt", "Participant type"], prompt: ["prompt", "Prompt"],
   first_message: ["prompt", "First message"], connection: ["connection", "Connection"],
   transfer_notice: ["connection", "Private briefing"], capabilities: ["voice", "Models"],
+  guardrails: ["guardrails", "Guardrails"],
   transfers: ["transfers", "Transfer destinations"], transfer_history: ["transfers", "Transfer history"],
   variable_permissions: ["variables", "Section permissions"], tools: ["tools", "Tools"], while_present: ["presence", "Media"],
 };

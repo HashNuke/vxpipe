@@ -22,7 +22,7 @@ type Props = {
   inherited?: CapabilitySelection;
 };
 
-const providerNames: Record<string, string> = { ...Object.fromEntries(setupProviders.map(({ id, name }) => [id, name])), morse: "MorseCode Local" };
+const providerNames: Record<string, string> = { ...Object.fromEntries(setupProviders.map(({ id, name }) => [id, name])), morse: "MorseCode Local", jev: "Jev" };
 
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
 export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Not configured", defaultDisabled = false, inherited }: Props) {

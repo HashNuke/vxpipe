@@ -1,11 +1,11 @@
-import { editSource } from "./editSource";
+import { editSource, editableSchemaVersions } from "./editSource";
 import { parseSourceJson } from "./source-json";
 import { parseSource } from "./source";
 import type { Participant, SourceDocument } from "./types";
 import { validateSource } from "./validation";
 
 export function applyJson(document: SourceDocument, text: string, participantKey?: string): SourceDocument {
-  if (document.readOnly || document.source.schema_version !== "20261125.01") throw new Error("This call spec is read-only.");
+  if (document.readOnly || !editableSchemaVersions.includes(document.source.schema_version)) throw new Error("This call spec is read-only.");
   let value: unknown;
   try { value = parseSourceJson(text); }
   catch { throw new Error("Enter valid JSON before applying changes."); }
