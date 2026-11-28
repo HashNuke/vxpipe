@@ -7,6 +7,17 @@ nonempty_env = fn name ->
   end
 end
 
+guardrail_timeout = fn name, default ->
+  case Integer.parse(nonempty_env.(name) || Integer.to_string(default)) do
+    {ms, ""} when ms in 1..4_294_967_295 -> ms
+    _ -> raise "invalid #{name}: expected a positive millisecond timer value"
+  end
+end
+
+config :vxpipe_call_engine, :guardrail_deadlines,
+  evaluation_ms: guardrail_timeout.("VXPIPE_GUARDRAIL_EVALUATION_TIMEOUT_MS", 2_000),
+  response_ms: guardrail_timeout.("VXPIPE_GUARDRAIL_RESPONSE_TIMEOUT_MS", 30_000)
+
 oauth_access_token_ttl_seconds =
   case Integer.parse(nonempty_env.("VXPIPE_MCP_ACCESS_TOKEN_TTL_SECONDS") || "3600") do
     {seconds, ""} when seconds in 1..86_400 ->

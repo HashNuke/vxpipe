@@ -49,7 +49,7 @@ defmodule Vxpipe.Providers.DecisionsTransport do
              ordinal: ordinal,
              started_at_ms: started
            }) do
-      timeout = max(1, min(@default_timeout_ms, transport.deadline - started))
+      timeout = max(1, transport.deadline - now())
 
       request_options =
         transport.request_options ++

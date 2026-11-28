@@ -32,6 +32,8 @@ live in [`config/config.exs`](../../../config/config.exs).
 | `TELEPHONY_HOST` | Optional explicit HTTPS callback/media origin, including a mount prefix when needed. Overrides the Installation URL for telephony. |
 | `VXPIPE_MCP_RESOURCE_URL` | Optional explicit resource audience for inbound platform MCP; defaults to the public origin plus `/mcp`. |
 | `VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN` | Optional HTTPS origin for the public integration directory. Normally use the bundled default. |
+| `VXPIPE_GUARDRAIL_EVALUATION_TIMEOUT_MS` | Maximum time for one Guardrails evaluation, including its HTTP retry. Defaults to `2000` milliseconds. |
+| `VXPIPE_GUARDRAIL_RESPONSE_TIMEOUT_MS` | Maximum elapsed time for a guarded response, starting when the agent begins handling it. Generation, checks and rewrites share this budget. Defaults to `30000` milliseconds. An earlier command or model timeout applies first. |
 | `STORAGE_BUCKET` | Optional shared S3 bucket for recordings and call-detail publications. Requires persistence. |
 | `AWS_REGION` | Object-storage region; defaults to `us-east-1`. Use `auto` for Cloudflare R2. |
 | `AWS_ENDPOINT_URL` | Optional S3-compatible endpoint URL, including `http://` or `https://`. Omit for AWS S3. |

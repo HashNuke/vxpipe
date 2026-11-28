@@ -30,6 +30,24 @@ defmodule Vxpipe.Providers.DecisionsTransportTest do
     end
   end
 
+  test "an explicit provider deadline controls connect and receive timeouts above two seconds" do
+    http = fn _url, options ->
+      send(self(), {:timeouts, options[:receive_timeout], options[:connect_options][:timeout]})
+      {:error, :no_response}
+    end
+
+    {:ok, config} = OpenAI.Decisions.new(api_key: "synthetic-key", model: "gpt-6-luna")
+
+    assert {:error, :transport_error} =
+             OpenAI.Decisions.evaluate(config, "Synthetic.", @questions,
+               http_fun: http,
+               deadline_ms: System.monotonic_time(:millisecond) + 5_000
+             )
+
+    assert_received {:timeouts, receive_ms, connect_ms}
+    assert connect_ms == receive_ms and receive_ms in 2_001..5_000
+  end
+
   test "a long Retry-After ends the batch while preserving the failed request identity" do
     Req.Test.stub(__MODULE__, fn conn ->
       conn
