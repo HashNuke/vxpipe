@@ -1,20 +1,16 @@
 defmodule Vxpipe.Providers.OpenAI.Decisions do
   @moduledoc false
 
-  alias Vxpipe.Providers.DecisionsTransport
+  alias Vxpipe.Providers.{DecisionsRequest, DecisionsTransport}
 
   @endpoint "https://api.openai.com/v1/decisions"
   @models ["gpt-6-luna"]
-  @max_evidence_bytes 49_152
-  @max_questions 32
-  @max_question_bytes 1_024
-  @id_pattern ~r/\A[a-z][a-z0-9_]{0,63}\z/
 
   @enforce_keys [:api_key, :model]
   @derive {Inspect, only: [:model]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys
 
-  @type t :: %__MODULE__{api_key: binary(), model: binary(), endpoint: binary()}
+  @type t :: %__MODULE__{api_key: binary(), model: binary()}
 
   @spec models() :: [String.t()]
   def models, do: @models
@@ -24,15 +20,13 @@ defmodule Vxpipe.Providers.OpenAI.Decisions do
 
   @spec new(keyword()) :: {:ok, t()} | {:error, :invalid_configuration}
   def new(options) when is_list(options) do
-    with {:ok, validated} <- Keyword.validate(options, [:api_key, :model, :endpoint]),
+    with {:ok, validated} <- Keyword.validate(options, [:api_key, :model]),
          api_key when is_binary(api_key) <- Keyword.get(validated, :api_key),
          true <- byte_size(api_key) in 1..8_192,
          true <- Regex.match?(~r/\A[\x21-\x7E]+\z/, api_key),
          model when is_binary(model) <- Keyword.get(validated, :model),
-         true <- model in @models,
-         endpoint <- Keyword.get(validated, :endpoint, @endpoint),
-         true <- is_binary(endpoint) and String.starts_with?(endpoint, "https://") do
-      {:ok, %__MODULE__{api_key: api_key, model: model, endpoint: endpoint}}
+         true <- model in @models do
+      {:ok, %__MODULE__{api_key: api_key, model: model}}
     else
       _invalid -> {:error, :invalid_configuration}
     end
@@ -40,25 +34,22 @@ defmodule Vxpipe.Providers.OpenAI.Decisions do
 
   def new(_options), do: {:error, :invalid_configuration}
 
-  @spec request_body(t(), binary(), [map()]) ::
+  @spec request_body(t(), binary() | map(), [map()]) ::
           {:ok, map()} | {:error, :invalid_request | :oversized}
-  def request_body(%__MODULE__{} = config, evidence, questions)
-      when is_binary(evidence) and is_list(questions) do
-    with :ok <- validate_evidence(evidence),
-         {:ok, encoded_questions} <- encode_questions(questions) do
-      body = %{model: config.model, input: evidence, questions: encoded_questions}
+  def request_body(%__MODULE__{} = config, evidence, questions) do
+    DecisionsRequest.build(evidence, questions, :text, fn input, pairs ->
+      questions =
+        Enum.map(pairs, fn {name, instructions} ->
+          %{name: name, type: "predicate", instructions: instructions}
+        end)
 
-      if byte_size(JSON.encode!(body)) <= @max_evidence_bytes do
-        {:ok, body}
-      else
-        {:error, :oversized}
-      end
-    end
+      %{model: config.model, input: input, questions: questions}
+    end)
   end
 
   def request_body(_config, _evidence, _questions), do: {:error, :invalid_request}
 
-  @spec evaluate(t(), binary(), [map()], keyword()) ::
+  @spec evaluate(t(), binary() | map(), [map()], keyword()) ::
           {:ok,
            %{
              model: binary() | nil,
@@ -70,15 +61,16 @@ defmodule Vxpipe.Providers.OpenAI.Decisions do
            }}
           | {:error, atom()}
   def evaluate(%__MODULE__{} = config, evidence, questions, opts \\ []) when is_list(opts) do
-    with {:ok, body} <- request_body(config, evidence, questions),
-         {:ok, ids} <- question_ids(questions) do
+    with {:ok, body} <- request_body(config, evidence, questions) do
+      ids = Enum.map(body.questions, & &1.name)
+
       headers = [
         {"authorization", "Bearer " <> config.api_key},
         {"content-type", "application/json"},
         {"accept", "application/json"}
       ]
 
-      DecisionsTransport.post(config.endpoint, headers, body, opts, %{
+      DecisionsTransport.post(@endpoint, headers, body, opts, %{
         retryable_statuses: [429, 503],
         parse: &parse_transport(&1, ids)
       })
@@ -253,74 +245,5 @@ defmodule Vxpipe.Providers.OpenAI.Decisions do
       output_tokens: "output_tokens",
       total_tokens: "total_tokens"
     )
-  end
-
-  defp validate_evidence(evidence) when is_binary(evidence) do
-    cond do
-      not String.valid?(evidence) -> {:error, :invalid_request}
-      byte_size(evidence) < 1 -> {:error, :invalid_request}
-      byte_size(evidence) > @max_evidence_bytes -> {:error, :oversized}
-      true -> :ok
-    end
-  end
-
-  defp validate_evidence(_evidence), do: {:error, :invalid_request}
-
-  defp encode_questions(questions)
-       when length(questions) < 1 or length(questions) > @max_questions do
-    {:error, :oversized}
-  end
-
-  defp encode_questions(questions) do
-    Enum.reduce_while(questions, {:ok, []}, fn
-      %{id: id, question: text}, {:ok, acc} when is_binary(id) and is_binary(text) ->
-        with true <- Regex.match?(@id_pattern, id),
-             true <- String.valid?(text),
-             size <- byte_size(text),
-             true <- size >= 1 and size <= @max_question_bytes do
-          {:cont, {:ok, [%{name: id, type: "predicate", instructions: text} | acc]}}
-        else
-          _invalid -> {:halt, {:error, :invalid_request}}
-        end
-
-      %{"id" => id, "question" => text}, {:ok, acc} ->
-        if is_binary(id) and is_binary(text) and Regex.match?(@id_pattern, id) and
-             String.valid?(text) and byte_size(text) in 1..@max_question_bytes do
-          {:cont, {:ok, [%{name: id, type: "predicate", instructions: text} | acc]}}
-        else
-          {:halt, {:error, :invalid_request}}
-        end
-
-      _other, _acc ->
-        {:halt, {:error, :invalid_request}}
-    end)
-    |> case do
-      {:ok, reversed} ->
-        names = Enum.map(reversed, & &1.name)
-
-        if length(Enum.uniq(names)) == length(names) do
-          {:ok, Enum.reverse(reversed)}
-        else
-          {:error, :invalid_request}
-        end
-
-      {:error, _reason} = error ->
-        error
-    end
-  end
-
-  defp question_ids(questions) do
-    ids =
-      Enum.map(questions, fn
-        %{id: id} when is_binary(id) -> id
-        %{"id" => id} when is_binary(id) -> id
-        _other -> :invalid
-      end)
-
-    if Enum.any?(ids, &(&1 == :invalid)) or length(Enum.uniq(ids)) != length(ids) do
-      {:error, :invalid_request}
-    else
-      {:ok, ids}
-    end
   end
 end

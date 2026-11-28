@@ -1,14 +1,10 @@
 defmodule Vxpipe.Providers.Google.Decisions do
   @moduledoc false
 
-  alias Vxpipe.Providers.DecisionsTransport
+  alias Vxpipe.Providers.{DecisionsRequest, DecisionsTransport}
 
   @models ["gemini-decision-1"]
   @endpoint "https://generativelanguage.googleapis.com/v1beta/decisions"
-  @max_evidence_bytes 49_152
-  @max_questions 32
-  @max_question_bytes 1_024
-  @id_pattern ~r/\A[a-z][a-z0-9_]{0,63}\z/
 
   @enforce_keys [:api_key, :model]
   @derive {Inspect, only: [:model]}
@@ -41,25 +37,20 @@ defmodule Vxpipe.Providers.Google.Decisions do
   @spec resource_model(t()) :: String.t()
   def resource_model(%__MODULE__{model: model}), do: "models/" <> model
 
-  @spec request_body(t(), binary(), [map()]) ::
+  @spec request_body(t(), binary() | map(), [map()]) ::
           {:ok, map()} | {:error, :invalid_request | :oversized}
-  def request_body(%__MODULE__{} = config, evidence, questions)
-      when is_binary(evidence) and is_list(questions) do
-    with :ok <- validate_evidence(evidence),
-         {:ok, encoded} <- encode_questions(questions) do
-      body = %{"model" => resource_model(config), "input" => evidence, "questions" => encoded}
+  def request_body(%__MODULE__{} = config, evidence, questions) do
+    DecisionsRequest.build(evidence, questions, :text, fn input, pairs ->
+      questions =
+        Map.new(pairs, fn {id, text} -> {id, %{"type" => "noul", "instructions" => text}} end)
 
-      if byte_size(JSON.encode!(body)) <= @max_evidence_bytes do
-        {:ok, body}
-      else
-        {:error, :oversized}
-      end
-    end
+      %{"model" => resource_model(config), "input" => input, "questions" => questions}
+    end)
   end
 
   def request_body(_config, _evidence, _questions), do: {:error, :invalid_request}
 
-  @spec evaluate(t(), binary(), [map()], keyword()) ::
+  @spec evaluate(t(), binary() | map(), [map()], keyword()) ::
           {:ok,
            %{
              model: binary() | nil,
@@ -71,8 +62,9 @@ defmodule Vxpipe.Providers.Google.Decisions do
            }}
           | {:error, atom()}
   def evaluate(%__MODULE__{} = config, evidence, questions, opts \\ []) when is_list(opts) do
-    with {:ok, body} <- request_body(config, evidence, questions),
-         {:ok, ids} <- question_ids(questions) do
+    with {:ok, body} <- request_body(config, evidence, questions) do
+      ids = Map.keys(body["questions"])
+
       headers = [
         {"x-goog-api-key", config.api_key},
         {"content-type", "application/json"},
@@ -213,63 +205,5 @@ defmodule Vxpipe.Providers.Google.Decisions do
       output_tokens: "total_output_tokens",
       total_tokens: "total_tokens"
     )
-  end
-
-  defp validate_evidence(evidence) when is_binary(evidence) do
-    cond do
-      not String.valid?(evidence) -> {:error, :invalid_request}
-      byte_size(evidence) < 1 -> {:error, :invalid_request}
-      byte_size(evidence) > @max_evidence_bytes -> {:error, :oversized}
-      true -> :ok
-    end
-  end
-
-  defp validate_evidence(_evidence), do: {:error, :invalid_request}
-
-  defp encode_questions(questions)
-       when length(questions) < 1 or length(questions) > @max_questions do
-    {:error, :oversized}
-  end
-
-  defp encode_questions(questions) do
-    Enum.reduce_while(questions, {:ok, %{}}, fn
-      %{id: id, question: text}, {:ok, acc} when is_binary(id) and is_binary(text) ->
-        with true <- Regex.match?(@id_pattern, id),
-             true <- String.valid?(text),
-             size <- byte_size(text),
-             true <- size >= 1 and size <= @max_question_bytes,
-             false <- Map.has_key?(acc, id) do
-          {:cont, {:ok, Map.put(acc, id, %{type: "noul", instructions: text})}}
-        else
-          _invalid -> {:halt, {:error, :invalid_request}}
-        end
-
-      %{"id" => id, "question" => text}, {:ok, acc} ->
-        if is_binary(id) and is_binary(text) and Regex.match?(@id_pattern, id) and
-             String.valid?(text) and byte_size(text) in 1..@max_question_bytes and
-             not Map.has_key?(acc, id) do
-          {:cont, {:ok, Map.put(acc, id, %{type: "noul", instructions: text})}}
-        else
-          {:halt, {:error, :invalid_request}}
-        end
-
-      _other, _acc ->
-        {:halt, {:error, :invalid_request}}
-    end)
-  end
-
-  defp question_ids(questions) do
-    ids =
-      Enum.map(questions, fn
-        %{id: id} when is_binary(id) -> id
-        %{"id" => id} when is_binary(id) -> id
-        _other -> :invalid
-      end)
-
-    if Enum.any?(ids, &(&1 == :invalid)) or length(Enum.uniq(ids)) != length(ids) do
-      {:error, :invalid_request}
-    else
-      {:ok, ids}
-    end
   end
 end
