@@ -892,6 +892,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert_receive {:test_archive_fact,
                     %{
                       kind: :participant_transfer_failed,
+                      command_id: ^command_id,
                       tool_call_id: ^invocation,
                       payload: %{"cause" => "transfer_guardrail_blocked"} = denial
                     }},
@@ -925,9 +926,14 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert_receive {:gate, next_http, ^agent, ""}, 2_000
 
     assert_receive {:vxpipe_event,
-                    %CallEngine.Event.ToolCallStarted{tool_call_id: next_invocation}},
+                    %CallEngine.Event.ToolCallStarted{
+                      command_id: next_command_id,
+                      tool_call_id: next_invocation
+                    }},
                    2_000
 
+    assert is_binary(next_command_id)
+    refute next_command_id == command_id
     refute next_invocation == invocation
     refute_received {:test_archive_fact, %{kind: :participant_transfer_started}}
     send(next_http, {:score, 0.99})
@@ -935,6 +941,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert_receive {:test_archive_fact,
                     %{
                       kind: :participant_transfer_completed,
+                      command_id: ^next_command_id,
                       tool_call_id: ^next_invocation,
                       payload: %{"destination_call_spec_key" => "billing"}
                     }},
@@ -1225,13 +1232,19 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert_audio_withheld(voice)
 
     send(after_turn, {:score, 0.99})
+    command_id = command.id
 
     assert_receive {:test_archive_fact,
                     %{
                       kind: :decisions_evaluation,
+                      participant_id: agent,
+                      activation_id: activation,
+                      command_id: ^command_id,
                       payload: %{
                         "event" => "after_turn",
-                        "outcome" => "passed"
+                        "outcome" => "passed",
+                        "candidate_attempt_id" => candidate,
+                        "checked_text" => "A withheld preamble. Please wait."
                       }
                     }},
                    2_000
@@ -1241,7 +1254,6 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     if outcome in [:ordinary_failure, :caller_interrupt] do
       send(transfer_gate, {:score, 0.99})
       assert_receive {:test_blocking_tool_started, ordinary}, 2_000
-      command_id = command.id
       key = {command_id, "proposed-transfer"}
 
       assert {:ok, _} =
@@ -1290,6 +1302,39 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
       refute_received {:test_archive_fact, %{kind: :participant_transfer_started}}
     else
       finish_mixed_audio(outcome, transfer_gate, voice)
+
+      case outcome do
+        :mixed_approved ->
+          assert_receive {:test_archive_fact,
+                          %{
+                            kind: :participant_transfer_completed,
+                            participant_id: ^agent,
+                            activation_id: ^activation,
+                            command_id: ^command_id,
+                            tool_call_id: "proposed-transfer"
+                          }},
+                         2_000
+
+        :approved_repair ->
+          assert_receive {:test_archive_fact,
+                          %{
+                            kind: :decisions_evaluation,
+                            participant_id: ^agent,
+                            activation_id: ^activation,
+                            command_id: ^command_id,
+                            tool_call_id: "proposed-transfer",
+                            payload: %{
+                              "event" => "before_outgoing_transfer",
+                              "outcome" => "blocked",
+                              "candidate_attempt_id" => ^candidate,
+                              "checked_text" => "A withheld preamble. Please wait."
+                            }
+                          }},
+                         2_000
+
+        _ ->
+          :ok
+      end
     end
   end
 
