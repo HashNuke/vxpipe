@@ -387,7 +387,7 @@ function guardrailFixture() {
 
 test("parses private guardrail records independently of usage availability", () => {
   const response = responseFixture("running");
-  Object.assign(response.metrics[0]!.value, {attempt_id: "attempt-1", turn_id: "turn-1"});
+  Object.assign(response.metrics[0]!.value, {activation_id: "activation-1", attempt_id: "attempt-1", turn_id: "turn-1"});
   const snapshot = parseCallInspectionResponse({...response, guardrails: [guardrailFixture()],
     metrics_availability: {state: "unavailable", reason: "not-loaded"}});
   expect(snapshot.guardrails).toMatchObject([{id:"gate-1", revision:7, value:{
@@ -397,7 +397,7 @@ test("parses private guardrail records independently of usage availability", () 
     attempts:[{id:"attempt-1",durationMs:32,inputTokens:0,costs:[{currency:"USD",amount:"0.000000000000100009"}]}],
   }}]);
   expect(snapshot.guardrails?.[0]?.value.attempts[0]?.totalTokens).toBeUndefined();
-  expect(snapshot.metrics[0]?.value).toMatchObject({attemptId:"attempt-1",turnId:"turn-1"});
+  expect(snapshot.metrics[0]?.value).toMatchObject({activationId:"activation-1",attemptId:"attempt-1",turnId:"turn-1"});
 });
 
 test("guardrail parsing respects withheld evidence and rejects malformed available records", () => {
@@ -409,6 +409,8 @@ test("guardrail parsing respects withheld evidence and rejects malformed availab
   expect(restricted).toMatchObject({contentUnavailable:"denied", questions:[]});
   expect(restricted?.checkedText).toBeUndefined();
   expect(restricted?.proposedTools).toBeUndefined();
+  expect(parse({event:"before_outgoing_transfer", requested_destination:"billing"})?.requestedDestination).toBe("billing");
+  expect(parse({content_unavailable:"unknown", requested_destination:"billing"})?.requestedDestination).toBeUndefined();
   expect(parse({actual_model:null})?.actualModel).toBeUndefined();
   expect(() => parse({questions:[{...gate.value.questions[0],probability_yes:2}]})).toThrow(CallInspectionResponseError);
   expect(() => parse({id:"another-evaluation"})).toThrow(CallInspectionResponseError);

@@ -113,6 +113,7 @@ export function guardrailEntity(input: unknown, path: string): RevisionedEntity<
       .map((q, i) => questionResult(q, `${valuePath}.questions[${i}]`)),
     ...(!contentUnavailable && {
       checkedText: optional("checked_text", string),
+      requestedDestination: optional("requested_destination", string),
       proposedTools: optional("proposed_tools", proposedTools),
       questionIds: optional("question_ids", strings),
     }),

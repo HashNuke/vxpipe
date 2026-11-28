@@ -29,6 +29,7 @@ export interface GuardrailEvaluation {
   errorCode?: string;
   contentUnavailable?: "denied" | "unknown";
   checkedText?: string;
+  requestedDestination?: string;
   proposedTools?: readonly { id: string; name: string }[];
   questionIds?: readonly string[];
   attemptIds?: readonly string[];

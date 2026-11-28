@@ -77,5 +77,5 @@ export function CallInspectionApp({
     );
   }
 
-  return <CallConsole controller={loadState.controller} theme="dark" maxHeight="calc(100dvh - 32px)" />;
+  return <CallConsole inspectConversation controller={loadState.controller} theme="dark" maxHeight="calc(100dvh - 32px)" />;
 }

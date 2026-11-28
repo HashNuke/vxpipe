@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CallConsole } from "@vxpipe/react";
+import { CallConsole, type HistoryFilters } from "@vxpipe/react";
 import { AlertTriangle } from "lucide-react";
 
 import { AdminShell } from "./AdminShell";
@@ -16,11 +16,13 @@ export function CallDetailsPage({
   contextHref = (path) => path,
   renderNavigationHeader,
   initialTab = "chat",
+  initialHistoryFilters,
 }: {
   state: CallDetailsPageState;
   theme?: "dark" | "light";
   contextHref?: (path: string) => string;
   renderNavigationHeader?: (state: CallDetailsPageState) => ReactNode;
+  initialHistoryFilters?: Partial<HistoryFilters>;
   initialTab?: "chat" | "variables" | "metrics" | "participants";
 }) {
   const callSpecLabel = state.callSpec
@@ -79,6 +81,8 @@ export function CallDetailsPage({
           <h1 className="sr-only">Call details</h1>
           <CallConsole
             controller={state.controller}
+            inspectConversation
+            initialHistoryFilters={initialHistoryFilters}
             initialTab={initialTab}
             header={header}
             headerContext={callContext}

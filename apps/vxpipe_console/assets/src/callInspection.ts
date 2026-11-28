@@ -341,6 +341,7 @@ function metricObservation(value: unknown, path: string): MetricObservation {
 function metric(value: unknown, path: string): Metric {
   const item = object(value, path);
   return {
+    ...(item.activation_id != null && { activationId: string(item.activation_id, `${path}.activation_id`) }),
     ...(item.attempt_id != null && { attemptId: string(item.attempt_id, `${path}.attempt_id`) }),
     ...(item.turn_id != null && { turnId: string(item.turn_id, `${path}.turn_id`) }),
     label: string(item.label, `${path}.label`),

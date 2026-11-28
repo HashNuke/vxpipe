@@ -97,6 +97,7 @@ test("uses the existing header labels as return links without adding workspace t
     expect.objectContaining({
       controller,
       headerContext: expect.anything(),
+      inspectConversation: true,
       theme: "light",
       header: expect.anything(),
       layout: "fill",
