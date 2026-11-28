@@ -23,8 +23,11 @@ function summarize(checks: GuardrailCheck[]) {
   };
 }
 
-function CheckDetail({ check, model }: { check: GuardrailCheck; model: string }) {
+function CheckDetail({ check, model, inMetrics, showInChat }: {
+  check: GuardrailCheck; model: string; inMetrics: boolean; showInChat: (id: string) => void;
+}) {
   const { evidence } = check;
+  const replacementId = evidence?.replacementEvaluationId;
   const { failed } = summarize([check]);
   return <details className="guardrail-check" data-status={check.status} id={"evaluation-" + check.id}>
     <summary>{agents[check.agent]} · <strong>{check.event}</strong> · {check.status}
@@ -33,6 +36,9 @@ function CheckDetail({ check, model }: { check: GuardrailCheck; model: string })
     <div className="guardrail-evidence">
       <p>Selected model · {model}</p>
       <p>{check.transfer ? "Transfer to " + check.transfer.destination + " · " + check.transfer.id : "Turn " + check.turn?.split("-")[1]}</p>
+      {inMetrics && <button type="button" className="guardrail-inspect" onClick={() => showInChat(check.id)}>
+        {check.turn ? "Show evaluation in conversation" : "Show evaluation in private activity"}
+      </button>}
       {evidence === null ? <p>Question details unavailable under the call’s history permissions.</p> : <>
         <ol>{evidence.questions.map(q => <li key={q.id}>
           <strong>{q.question}</strong>
@@ -44,8 +50,11 @@ function CheckDetail({ check, model }: { check: GuardrailCheck; model: string })
           </div>}
         </li>)}</ol>
         {evidence.rejectedDraft && <p>Withheld draft · {evidence.rejectedDraft}</p>}
+        {evidence.acceptedCandidate && <p>Accepted candidate · {evidence.acceptedCandidate}</p>}
         {evidence.dispatch && <p>{evidence.dispatch}</p>}
         {evidence.delivery && <p>{evidence.delivery}</p>}
+        {replacementId && <button type="button" className="guardrail-inspect"
+          onClick={() => showInChat(replacementId)}>Inspect accepted replacement</button>}
       </>}
       <h3>API attempts</h3>
       {check.attempts.map((attempt, index) => <p key={index}>
@@ -120,6 +129,7 @@ export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversati
   const [selected, setSelected] = useState<Agent | null>(null);
   const detailId = useId();
   const detailPanel = useRef<HTMLElement>(null);
+  const [chatTarget, setChatTarget] = useState<string | null>(null);
   useLayoutEffect(() => { setSelected(null); }, [page]);
   useLayoutEffect(() => { if (selected) detailPanel.current?.focus(); }, [selected]);
 
@@ -153,8 +163,25 @@ export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversati
     return () => observer.disconnect();
   }, [page]);
 
-  const checkDetails = (checks: GuardrailCheck[]) => checks.map(check =>
-    <CheckDetail key={check.id} check={check} model={page.model} />);
+  useLayoutEffect(() => {
+    if (!chatTarget) return;
+    const target = host.current?.querySelector<HTMLDetailsElement>(".vx-transcript #evaluation-" + chatTarget);
+    if (target) {
+      target.open = true;
+      target.querySelector("summary")?.focus();
+      target.scrollIntoView?.({ block: "start" });
+      setChatTarget(null);
+    }
+  }, [chatTarget, targets]);
+
+  function showInChat(id: string) {
+    const tabs = host.current?.querySelectorAll<HTMLButtonElement>('nav[aria-label="Call views"] button');
+    Array.from(tabs ?? []).find(tab => tab.textContent === "Conversation")?.click();
+    setChatTarget(id);
+  }
+
+  const checkDetails = (checks: GuardrailCheck[], inMetrics = false) => checks.map(check =>
+    <CheckDetail key={check.id} check={check} model={page.model} inMetrics={inMetrics} showInChat={showInChat} />);
   return <div ref={host} className="guardrail-inspection">
     <CallDetailsPage state={page.state} theme={theme} initialTab={initialTab === "Metrics" ? "metrics" : "chat"}
       renderNavigationHeader={state => <StoryCallBreadcrumbs state={state} theme={theme} />} />
@@ -163,7 +190,7 @@ export function GuardrailCallDetails({ scenario, theme, initialTab = "Conversati
         <h2>Decisions</h2><Totals checks={page.checks} />
         <div id={detailId}>{selected && <section tabIndex={-1} ref={detailPanel} aria-label={agents[selected] + " Decisions"}>
           <h3>{agents[selected]} · {page.model}</h3>
-          {checkDetails(page.checks.filter(check => check.agent === selected))}
+          {checkDetails(page.checks.filter(check => check.agent === selected), true)}
         </section>}</div>
       </section>, element, key);
       const agent = page.owners.find(owner => owner === key);

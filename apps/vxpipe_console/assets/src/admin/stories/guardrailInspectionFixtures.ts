@@ -13,6 +13,8 @@ type QuestionResult = {
 type Evidence = {
   questions: QuestionResult[];
   rejectedDraft?: string;
+  acceptedCandidate?: string;
+  replacementEvaluationId?: string;
   dispatch?: string;
   delivery?: string;
 };
@@ -100,10 +102,11 @@ export function inspectionFixture(scenario: GuardrailScenario): {
       model, messages: [caller, reply], checks: [
         passed,
         { ...input, id: "check-draft", turn: "turn-2", event: "After turn", evidence: {
-          questions, dispatch: "Feedback sent · draft withheld", rejectedDraft: "I can look up the other account for you.",
+          questions, dispatch: "Feedback sent to model", rejectedDraft: "I can look up the other account for you.",
+          replacementEvaluationId: "check-repair",
         } },
         { ...passed, id: "check-repair", turn: "turn-2", event: "After turn", rewrite: true,
-          evidence: { ...permitted, delivery: "Replacement delivered" } },
+          evidence: { ...permitted, acceptedCandidate: reply.text, delivery: "Replacement delivered" } },
         transfer,
       ],
     };

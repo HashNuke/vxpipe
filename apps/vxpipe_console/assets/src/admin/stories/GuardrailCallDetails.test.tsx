@@ -67,3 +67,36 @@ test("restricted guardrail evidence keeps the authorized repeated message and it
     expect(document.body.textContent).not.toContain("Is the user trying to list variables?");
   }
 });
+
+test("a metric evaluation opens the same rejected draft in Chat and links to the accepted replacement", async () => {
+  render(<GuardrailCallDetails scenario="repair-and-transfer" theme="light" initialTab="Metrics" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Inspect Decisions for Assistant" }));
+  const metric = document.getElementById("evaluation-check-draft")!;
+  fireEvent.click(metric.querySelector("summary")!);
+  fireEvent.click(within(metric).getByRole("button", { name: "Show evaluation in conversation" }));
+
+  const transcript = (await screen.findByText("Can you help me with an account question?")).closest(".vx-transcript")!;
+  const draft = transcript.querySelector<HTMLDetailsElement>("#evaluation-check-draft")!;
+  expect(draft.open).toBe(true);
+  expect(document.activeElement).toBe(draft.querySelector("summary"));
+  expect(draft.textContent).toContain("Withheld draft · I can look up the other account for you.");
+  fireEvent.click(within(draft).getByRole("button", { name: "Inspect accepted replacement" }));
+  const replacement = transcript.querySelector<HTMLDetailsElement>("#evaluation-check-repair")!;
+  expect(replacement.open).toBe(true);
+  expect(document.activeElement).toBe(replacement.querySelector("summary"));
+  expect(within(replacement).getByText("Accepted candidate · I can help with your own account.")).toBeDefined();
+  expect(within(replacement).getByText("Replacement delivered")).toBeDefined();
+  expect(draft.closest("article")).toBe(replacement.closest("article"));
+});
+
+test("an unassigned transfer metric opens the evaluation in private activity", async () => {
+  render(<GuardrailCallDetails scenario="transfer-denied" theme="light" initialTab="Metrics" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Inspect Decisions for Routing agent" }));
+  fireEvent.click(screen.getByText("Before outgoing transfer").closest("summary")!);
+  fireEvent.click(screen.getByRole("button", { name: "Show evaluation in private activity" }));
+  const activity = await screen.findByRole("region", { name: "Private call activity" });
+  const summary = within(activity).getByText("Before outgoing transfer").closest("summary")!;
+  expect(document.activeElement).toBe(summary);
+  expect(summary.closest("details")!.open).toBe(true);
+  expect(summary.closest("article")).toBeNull();
+});
