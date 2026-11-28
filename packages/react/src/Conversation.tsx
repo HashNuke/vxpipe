@@ -1,7 +1,8 @@
 import { isTechnicalEvent } from "./conversationFilters.js";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type {
   ActivityEvent,
+  GuardrailEvaluation,
   Message,
   ProtocolEvent,
   ToolCall,
@@ -21,6 +22,9 @@ import {
   TimelineTimestamp,
 } from "./TimelineTimestamp.js";
 import { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
+import { guardrailTimeline, type GuardrailRow } from "./guardrailTimeline.js";
+import type { HistoryFilters } from "./historyFilters.js";
+import { GuardrailQuestionCard } from "./GuardrailQuestionCard.js";
 import { participantDisplayName } from "./participantDisplayName.js";
 
 function MessageText({
@@ -49,12 +53,18 @@ function MessageText({
 
 function MessageRow({
   focus = false,
+  children,
+  privateLabel,
+  blocked = false,
   message,
   snapshot,
   theme,
   onSelectParticipant,
 }: {
   focus?: boolean;
+  children?: ReactNode;
+  privateLabel?: string;
+  blocked?: boolean;
   message: Message;
   snapshot: ConsoleSnapshot;
   theme: "light" | "dark";
@@ -72,7 +82,7 @@ function MessageRow({
     ? () => onSelectParticipant?.(person.id)
     : undefined;
   return (
-    <article ref={article} tabIndex={-1} className={`vx-message vx-message-${person?.role ?? "unknown"}`}>
+    <article ref={article} data-blocked={blocked || undefined} tabIndex={-1} className={`vx-message vx-message-${person?.role ?? "unknown"}`}>
       {person && onSelectParticipant ? (
         <button
           aria-label={`Open ${displayName} participant`}
@@ -111,7 +121,7 @@ function MessageRow({
               <i />
             </span>
           )}
-          {snapshot.metricsEnabled &&
+          {!privateLabel && snapshot.metricsEnabled &&
             (message.metrics && message.metrics.length > 0 ? (
               <TurnMetricsTooltip
                 metrics={message.metrics}
@@ -134,6 +144,8 @@ function MessageRow({
         <p>
           <MessageText message={message} alignment={snapshot.alignment} />
         </p>
+        {privateLabel && <small>{privateLabel}</small>}
+        {children}
         {message.state === "interrupted" && (
           <small>Interrupted · some text may not have been spoken</small>
         )}
@@ -161,15 +173,19 @@ function ActivityRow({
 function ToolRow({
   tool,
   theme,
+  children,
+  allowDetails = true,
 }: {
   tool: ToolCall;
+  children?: ReactNode;
+  allowDetails?: boolean;
   theme: "light" | "dark";
 }) {
   const [expanded, setExpanded] = useState(false);
   const requestAvailable = tool.request !== undefined;
   const responseAvailable =
     tool.response !== undefined || tool.responseStatus !== undefined;
-  const hasDetails = requestAvailable || responseAvailable;
+  const hasDetails = allowDetails && (requestAvailable || responseAvailable);
   const [detail, setDetail] = useState<"request" | "response">(
     requestAvailable ? "request" : "response",
   );
@@ -282,6 +298,7 @@ function ToolRow({
           </section>
         </div>
       )}
+      {children}
     </div>
   );
 }
@@ -312,11 +329,14 @@ type TimelineItem =
   | { kind: "messages"; id: string; occurredAt: string; value: Message }
   | { kind: "events"; id: string; occurredAt: string; value: ActivityEvent }
   | { kind: "tools"; id: string; occurredAt: string; value: ToolCall }
+  | { kind: "guardrails"; id: string; occurredAt: string; value: GuardrailRow }
   | { kind: "logs"; id: string; occurredAt: string; value: ProtocolEvent };
 
 function timeline(
   snapshot: ConsoleSnapshot,
   filters: ConversationFilters,
+  privateRows: GuardrailRow[],
+  withheldTools: Set<string>,
 ): TimelineItem[] {
   const items: TimelineItem[] = [];
   if (filters.messages)
@@ -343,7 +363,7 @@ function timeline(
     );
   if (filters.tools)
     items.push(
-      ...snapshot.toolCalls.map((value) => ({
+      ...snapshot.toolCalls.filter(tool => !withheldTools.has(tool.id)).map((value) => ({
         kind: "tools" as const,
         id: value.id,
         occurredAt: value.occurredAt,
@@ -362,8 +382,9 @@ function timeline(
           value,
         })),
     );
+  for (const row of privateRows) items.push({kind: "guardrails", id: row.id, occurredAt: row.occurredAt, value: row});
   const order = new Map(snapshot.timelineOrder?.map((key, index) => [key, index]));
-  const entityKinds = { messages: "message", events: "activity", tools: "tool-call", logs: "protocol-event" };
+  const entityKinds = {guardrails: "guardrail", messages: "message", events: "activity", tools: "tool-call", logs: "protocol-event" };
   const position = (item: TimelineItem) => order.get(`${entityKinds[item.kind]}:${item.id}`) ?? 0;
   return items.sort(
     (left, right) =>
@@ -374,21 +395,41 @@ function timeline(
 
 export function Conversation({
   focusMessageId,
+  focusEvaluationId,
+  historyFilters,
+  showAllHistory,
   filters,
   snapshot,
   theme = "dark",
   onSelectParticipant,
 }: {
   focusMessageId?: string;
+  focusEvaluationId?: string;
+  historyFilters?: HistoryFilters;
+  showAllHistory?: () => void;
   filters: ConversationFilters;
   snapshot: ConsoleSnapshot;
   theme?: "light" | "dark";
   onSelectParticipant?: (participantId: string) => void;
 }) {
-  const items = timeline(snapshot, filters);
+  const projected = historyFilters && guardrailTimeline(snapshot.guardrails ?? [], snapshot.messages, snapshot.toolCalls, historyFilters);
+  const items = timeline(snapshot, filters, projected?.privateRows ?? [], projected?.withheldTools ?? new Set());
+  const checksOn = (item: TimelineItem) =>
+    item.kind === "guardrails" ? item.value.checks : item.kind === "messages" ? projected?.messageChecks.get(item.id) :
+      item.kind === "tools" ? projected?.toolChecks.get(item.id) : undefined;
+  const showAgent = new Set(snapshot.guardrails?.map(c => c.participantId)).size > 1;
+  function cards(checks: GuardrailEvaluation[] = []) {
+    return checks.map(check => {
+      const agent = snapshot.participants.find(p => p.id === check.participantId);
+      return <GuardrailQuestionCard key={check.id} check={check} focus={focusEvaluationId === check.id}
+        agent={agent ? participantDisplayName(agent) : check.participantId} showAgent={showAgent} all={historyFilters?.guardrails === "All"} />;
+    });
+  }
+
   // A live viewer follows new items until they explicitly browse an older page.
   const [requestedPage, setPage] = useState<number | null>(() => {
-    const target = items.findIndex(item => item.kind === "messages" && item.id === focusMessageId);
+    const target = items.findIndex(item => (item.kind === "messages" && item.id === focusMessageId) ||
+      (focusEvaluationId !== undefined && checksOn(item)?.some(c => c.id === focusEvaluationId)));
     return target >= 0 ? Math.floor(target / 100) : snapshot.state === "connected" ? null : 0;
   });
   const [hasConnected, setHasConnected] = useState(snapshot.state === "connected");
@@ -414,13 +455,33 @@ export function Conversation({
         {items.length === 0 && (
           <div className="vx-empty">
             <h2>
-              {snapshot.state === "connected"
+              {historyFilters ? "No matching history" : snapshot.state === "connected"
                 ? "No conversation items"
                 : "No call active"}
             </h2>
+            {showAllHistory && <button type="button" onClick={showAllHistory}>Show all history</button>}
           </div>
         )}
         {visibleItems.map((item) => {
+          const checks = checksOn(item) ?? [];
+          if (item.kind === "guardrails") {
+            const row = item.value;
+            const tools = row.tools.map(tool => <div key={tool.id} className="vx-guardrail-tool">
+              <Wrench aria-hidden="true" size={14} /> <strong>{tool.requestedDestination ? "Transfer to " + tool.requestedDestination : tool.name}</strong>
+              {row.blocked && <> · Not run</>}
+            </div>);
+            if (row.text) {
+              return <MessageRow key={row.id} message={{id: row.id, participantId: row.participantId, text: row.text,
+                occurredAt: row.occurredAt, state: "final"}} snapshot={snapshot} theme={theme} onSelectParticipant={onSelectParticipant}
+                privateLabel={row.label} blocked={row.blocked}>{tools}{cards(checks)}</MessageRow>;
+            }
+            const agent = snapshot.participants.find(p => p.id === row.participantId);
+            return <section key={row.id} className="vx-guardrail-activity" data-blocked={row.blocked || undefined}>
+              <header><strong>{agent ? participantDisplayName(agent) : row.participantId}</strong> · {row.label}
+                <TimelineTimestamp occurredAt={row.occurredAt} theme={theme}/></header>
+              {tools}{cards(checks)}
+            </section>;
+          }
           if (item.kind === "messages")
             return (
               <MessageRow
@@ -430,7 +491,8 @@ export function Conversation({
                 snapshot={snapshot}
                 theme={theme}
                 onSelectParticipant={onSelectParticipant}
-              />
+                blocked={checks.some(c => c.outcome === "blocked")}
+              >{cards(checks)}</MessageRow>
             );
           if (item.kind === "events")
             return (
@@ -442,7 +504,7 @@ export function Conversation({
             );
           if (item.kind === "tools")
             return (
-              <ToolRow key={`tool-${item.id}`} tool={item.value} theme={theme} />
+              <ToolRow key={`tool-${item.id}`} tool={item.value} theme={theme} allowDetails={!historyFilters || historyFilters.tools === "With details"}>{cards(checks)}</ToolRow>
             );
           return (
             <LogRow key={`log-${item.id}`} event={item.value} theme={theme} />

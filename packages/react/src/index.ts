@@ -1,5 +1,6 @@
 export { CallConsole } from "./CallConsole.js";
 export type { CallConsoleProps } from "./CallConsole.js";
+export type { HistoryFilters } from "./historyFilters.js";
 export { Conversation } from "./Conversation.js";
 export { Composer } from "./Composer.js";
 export { DeviceControls } from "./DeviceControls.js";

@@ -45,9 +45,10 @@ export const SelectContent = forwardRef<
   ElementRef<typeof SelectPrimitive.Content>,
   ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & {
     theme?: "light" | "dark";
+    portalContainer?: HTMLElement | null;
   }
->(({ className = "", children, theme = "dark", ...props }, ref) => (
-  <SelectPrimitive.Portal>
+>(({ className = "", children, theme = "dark", portalContainer, ...props }, ref) => (
+  <SelectPrimitive.Portal container={portalContainer}>
     <SelectPrimitive.Content
       ref={ref}
       className={`vx-select-content ${className}`.trim()}

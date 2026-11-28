@@ -13,6 +13,9 @@ import type {
 import { PhoneCall, PhoneOff } from "lucide-react";
 import { ParticipantPicker, Participants } from "./Participants.js";
 import { ParticipantDetails } from "./ParticipantDetails.js";
+import { ConversationHistoryFilters } from "./ConversationHistoryFilters.js";
+import { allHistoryFilters, conversationVisibility, defaultHistoryFilters, type HistoryFilters } from "./historyFilters.js";
+import { revealGuardrail } from "./guardrailTimeline.js";
 import { Conversation } from "./Conversation.js";
 import { ConversationFilterControls } from "./ConversationFilterControls.js";
 import {
@@ -76,6 +79,7 @@ function consoleSnapshot(
       : "unavailable";
 
   return {
+    guardrails: details.guardrails?.map(entity => entity.value),
     timelineOrder: details.timeline.map((entity) => `${entity.kind}:${entity.value.id}`),
     callId: details.call.id,
     state,
@@ -114,6 +118,8 @@ export interface CallConsoleProps {
   headerVisibility?: "always" | "desktop";
   headerContext?: ReactNode;
   initialTab?: Tab;
+  inspectConversation?: boolean;
+  initialHistoryFilters?: Partial<HistoryFilters>;
   layout?: "contained" | "fill";
   theme?: "light" | "dark";
   maxHeight?: CSSProperties["maxHeight"];
@@ -125,6 +131,8 @@ export function CallConsole({
   headerVisibility = "always",
   headerContext,
   initialTab = "chat",
+  inspectConversation = false,
+  initialHistoryFilters,
   layout = "contained",
   theme = "dark",
   maxHeight,
@@ -141,6 +149,10 @@ export function CallConsole({
     live?.getSnapshot ?? getDetachedSession,
   );
   const snapshot = consoleSnapshot(details, local, live !== undefined);
+  const inspection = inspectConversation || details.guardrails !== undefined;
+  const historyDefaults = {...defaultHistoryFilters, ...initialHistoryFilters};
+  const [historyFilters, setHistoryFilters] = useState(historyDefaults);
+  const [evaluationTarget, setEvaluationTarget] = useState<{callId: string; id: string} | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [transcriptTarget, setTranscriptTarget] = useState<{ callId: string | null; messageId: string } | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(
@@ -183,6 +195,8 @@ export function CallConsole({
           );
           setTab("chat");
           setConversationFilters({ ...defaultConversationFilters });
+          setHistoryFilters(historyDefaults);
+          setEvaluationTarget(null);
           setSelectedParticipantId(defaultParticipantId(nextSnapshot));
           setRunRevision((revision) => revision + 1);
         }
@@ -293,7 +307,7 @@ export function CallConsole({
                   className={tab === item ? "vx-tab-active" : ""}
                   aria-current={tab === item ? "page" : undefined}
                   key={item}
-                  onClick={() => { setTranscriptTarget(null); setTab(item); }}
+                  onClick={() => { setTranscriptTarget(null); setEvaluationTarget(null); setTab(item); }}
                   ref={item === "participants" ? participantsTabRef : undefined}
                 >
                   {item === "chat"
@@ -302,7 +316,7 @@ export function CallConsole({
                 </button>
               ))}
             </div>
-            {tab === "chat" ? (
+            {tab === "chat" && inspection ? <ConversationHistoryFilters filters={historyFilters} defaults={historyDefaults} change={setHistoryFilters} theme={theme} /> : tab === "chat" ? (
               <ConversationFilterControls
                 filters={conversationFilters}
                 onReset={() =>
@@ -316,7 +330,10 @@ export function CallConsole({
           {tab === "chat" && (
             <Conversation
               focusMessageId={transcriptTarget?.callId === snapshot.callId ? transcriptTarget?.messageId : undefined}
-              filters={conversationFilters}
+              focusEvaluationId={evaluationTarget?.callId === snapshot.callId ? evaluationTarget.id : undefined}
+              filters={inspection ? conversationVisibility(historyFilters) : conversationFilters}
+              historyFilters={inspection ? historyFilters : undefined}
+              showAllHistory={inspection ? () => setHistoryFilters(allHistoryFilters) : undefined}
               snapshot={snapshot}
               theme={theme}
               onSelectParticipant={selectParticipant}
@@ -324,10 +341,19 @@ export function CallConsole({
           )}
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
           {tab === "metrics" && <div className="vx-call-metrics" key={snapshot.callId}>
-            <Metrics snapshot={snapshot} theme={theme} latency={controller.latency && {
+            <Metrics snapshot={snapshot} theme={theme} onShowGuardrail={id => {
+              const check = snapshot.guardrails?.find(value => value.id === id);
+              if (!check) return;
+              setHistoryFilters(current => revealGuardrail(current, check));
+              setEvaluationTarget({callId: snapshot.callId, id});
+              setTranscriptTarget(null);
+              setTab("chat");
+            }} latency={controller.latency && {
               loader: controller.latency,
               live: details.call.state === "running" || details.call.state === "admitting",
               onTranscript: messageId => {
+                setEvaluationTarget(null);
+                setHistoryFilters(current => ({...current, messages: "Show"}));
                 setTranscriptTarget({ callId: snapshot.callId, messageId });
                 setConversationFilters(current => ({ ...current, messages: true }));
                 setTab("chat");
