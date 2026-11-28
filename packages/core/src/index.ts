@@ -49,3 +49,5 @@ export type {
   LatencyMetric, LatencyLandmark, LatencyProfile, LatencyCoverage, LatencyRun,
   LatencyAcousticSegment, LatencyAcousticSegments, LatencyBargeInEntry, LatencyBargeIn, LatencyTurn, LatencySummary, LatencyReport, LatencyTurnPage, LatencyLoader,
 } from "./callLatency.js";
+
+export type { GuardrailEvaluation, GuardrailQuestionResult, GuardrailAttempt } from "./guardrails.js";

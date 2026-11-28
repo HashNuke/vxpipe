@@ -5,7 +5,6 @@ import type {
   CallDetailsSnapshot,
   CallDetailsTimelineEntity,
   CallLifecycleState,
-  JsonValue,
   Metric,
   MetricObservation,
   MetricScope,
@@ -16,17 +15,14 @@ import type {
   VariableSnapshot,
 } from "@vxpipe/core";
 
-type ObjectValue = Record<string, unknown>;
+import { guardrailEntity } from "./callInspectionGuardrails";
+import {
+  CallInspectionResponseError, json,
+  object, array, string, nullableString, optionalString, instant, nullableInstant, revision,
+  nullableNumber, nullableNonnegativeNumber, optionalInteger, literal, member, optionalJson, invalid,
+} from "./callInspectionFields";
 
-export class CallInspectionResponseError extends Error {
-  readonly status: number | null;
-
-  constructor(message: string, status: number | null = null) {
-    super(message);
-    this.name = "CallInspectionResponseError";
-    this.status = status;
-  }
-}
+export { CallInspectionResponseError } from "./callInspectionFields";
 
 export function createCallInspectionLoader(tenantKey: string, callId: string) {
   return {
@@ -87,6 +83,9 @@ export function parseCallInspectionResponse(value: unknown): CallDetailsSnapshot
       "variables",
       variableSnapshot,
     ),
+    ...(root.guardrails !== undefined && {
+      guardrails: array(root.guardrails, "guardrails").map((entry, index) => guardrailEntity(entry, `guardrails[${index}]`)),
+    }),
     metrics: array(root.metrics, "metrics").map((entry, index) =>
       metricObservation(entry, `metrics[${index}]`),
     ),
@@ -342,6 +341,8 @@ function metricObservation(value: unknown, path: string): MetricObservation {
 function metric(value: unknown, path: string): Metric {
   const item = object(value, path);
   return {
+    ...(item.attempt_id != null && { attemptId: string(item.attempt_id, `${path}.attempt_id`) }),
+    ...(item.turn_id != null && { turnId: string(item.turn_id, `${path}.turn_id`) }),
     label: string(item.label, `${path}.label`),
     value: nullableNumber(item.value, `${path}.value`),
     unit: string(item.unit, `${path}.unit`),
@@ -437,101 +438,4 @@ function unavailableReason(value: unknown, path: string) {
     ["not-loaded", "not-captured", "not-authorized", "unsupported", "known-gap"] as const,
     path,
   );
-}
-
-function object(value: unknown, path: string): ObjectValue {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) invalid(path);
-  return value as ObjectValue;
-}
-
-function array(value: unknown, path: string): unknown[] {
-  if (!Array.isArray(value)) invalid(path);
-  return value;
-}
-
-function string(value: unknown, path: string): string {
-  if (typeof value !== "string") invalid(path);
-  return value;
-}
-
-function nullableString(value: unknown, path: string): string | null {
-  return value === null ? null : string(value, path);
-}
-
-function optionalString(value: unknown, path: string): string | undefined {
-  return value === undefined ? undefined : string(value, path);
-}
-
-function instant(value: unknown, path: string): string {
-  const result = string(value, path);
-  if (!Number.isFinite(Date.parse(result))) invalid(path);
-  return result;
-}
-
-function nullableInstant(value: unknown, path: string): string | null {
-  return value === null ? null : instant(value, path);
-}
-
-function revision(value: unknown, path: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) invalid(path);
-  return value as number;
-}
-
-function nullableNumber(value: unknown, path: string): number | null {
-  if (value === null) return null;
-  if (typeof value !== "number" || !Number.isFinite(value)) invalid(path);
-  return value;
-}
-
-function nullableNonnegativeNumber(value: unknown, path: string): number | null {
-  const result = nullableNumber(value, path);
-  if (result !== null && result < 0) invalid(path);
-  return result;
-}
-
-function optionalInteger(value: unknown, path: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (!Number.isInteger(value)) invalid(path);
-  return value as number;
-}
-
-function literal(value: unknown, expected: unknown, path: string): void {
-  if (value !== expected) invalid(path);
-}
-
-function member<const T extends readonly string[]>(
-  value: unknown,
-  values: T,
-  path: string,
-): T[number] {
-  if (typeof value !== "string" || !values.includes(value)) invalid(path);
-  return value as T[number];
-}
-
-function optionalJson(value: unknown, path: string): JsonValue | undefined {
-  return value === undefined ? undefined : json(value, path);
-}
-
-function json(value: unknown, path: string): JsonValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    (typeof value === "number" && Number.isFinite(value))
-  ) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry, index) => json(entry, `${path}[${index}]`));
-  }
-  if (typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, json(entry, `${path}.${key}`)]),
-    );
-  }
-  return invalid(path);
-}
-
-function invalid(path: string): never {
-  throw new CallInspectionResponseError(`Invalid call inspection field: ${path}.`);
 }

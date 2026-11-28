@@ -369,3 +369,48 @@ test("rejects an invalid call recording", () => {
   Object.assign(response.call, { recording: "archived" });
   expect(() => parseCallInspectionResponse(response)).toThrow("call.recording");
 });
+
+function guardrailFixture() {
+  return {
+    id: "gate-1", revision: 7, value: {
+      id: "gate-1", participant_id: "assistant-1", occurred_at: "2026-09-16T09:00:06Z",
+      event: "after_turn", outcome: "blocked", selected_model: "test-model",
+      source_turn_id: "turn-1", candidate_attempt_id: "draft-1", checked_text: "Unsent proposal",
+      proposed_tools: [{id: "tool-1", name: "lookup_account"}],
+      questions: [{id: "q1", ordinal: 0, question: "Is this their account?", required_answer: "yes",
+        threshold_hundredths: 70, outcome: "failed", probability_yes: 0.6999, feedback_origin: "fallback"}],
+      attempts: [{id: "attempt-1", ordinal: 0, outcome: "succeeded", duration_ms: 32, input_tokens: 0,
+        costs: [{currency: "USD", amount: "0.000000000000100009"}]}],
+    },
+  };
+}
+
+test("parses private guardrail records independently of usage availability", () => {
+  const response = responseFixture("running");
+  Object.assign(response.metrics[0]!.value, {attempt_id: "attempt-1", turn_id: "turn-1"});
+  const snapshot = parseCallInspectionResponse({...response, guardrails: [guardrailFixture()],
+    metrics_availability: {state: "unavailable", reason: "not-loaded"}});
+  expect(snapshot.guardrails).toMatchObject([{id:"gate-1", revision:7, value:{
+    sourceTurnId:"turn-1", candidateAttemptId:"draft-1", checkedText:"Unsent proposal",
+    proposedTools:[{id:"tool-1",name:"lookup_account"}],
+    questions:[{id:"q1",requiredAnswer:"yes",probabilityYes:0.6999,thresholdHundredths:70}],
+    attempts:[{id:"attempt-1",durationMs:32,inputTokens:0,costs:[{currency:"USD",amount:"0.000000000000100009"}]}],
+  }}]);
+  expect(snapshot.guardrails?.[0]?.value.attempts[0]?.totalTokens).toBeUndefined();
+  expect(snapshot.metrics[0]?.value).toMatchObject({attemptId:"attempt-1",turnId:"turn-1"});
+});
+
+test("guardrail parsing respects withheld evidence and rejects malformed available records", () => {
+  const response = responseFixture("ended");
+  const gate = guardrailFixture();
+  const parse = (fields: object) => parseCallInspectionResponse({...response,
+    guardrails:[{...gate, value:{...gate.value,...fields}}]}).guardrails?.[0]?.value;
+  const restricted = parse({content_unavailable:"denied"});
+  expect(restricted).toMatchObject({contentUnavailable:"denied", questions:[]});
+  expect(restricted?.checkedText).toBeUndefined();
+  expect(restricted?.proposedTools).toBeUndefined();
+  expect(parse({actual_model:null})?.actualModel).toBeUndefined();
+  expect(() => parse({questions:[{...gate.value.questions[0],probability_yes:2}]})).toThrow(CallInspectionResponseError);
+  expect(() => parse({id:"another-evaluation"})).toThrow(CallInspectionResponseError);
+  expect(parseCallInspectionResponse(response).guardrails ?? []).toEqual([]);
+});

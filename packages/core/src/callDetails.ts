@@ -1,3 +1,4 @@
+import type { GuardrailEvaluation } from "./guardrails.js";
 import type {
   ActivityEvent,
   Message,
@@ -97,6 +98,7 @@ export interface CallDetailsSnapshot {
   participants: readonly RevisionedEntity<Participant>[];
   timeline: readonly CallDetailsTimelineEntity[];
   variables: Available<VariableSnapshot>;
+  guardrails?: readonly RevisionedEntity<GuardrailEvaluation>[];
   metrics: readonly MetricObservation[];
   metricsAvailability: Availability;
   completeness: CallDetailsCompleteness;
@@ -192,6 +194,7 @@ function copySnapshot(snapshot: CallDetailsSnapshot): CallDetailsSnapshot {
     incarnation: snapshot.incarnation ? { ...snapshot.incarnation } : null,
     participants: [...snapshot.participants],
     timeline: [...snapshot.timeline].sort(compareTimeline),
+    ...(snapshot.guardrails && { guardrails: [...snapshot.guardrails] }),
     metrics: [...snapshot.metrics],
     metricsAvailability: { ...snapshot.metricsAvailability },
     completeness: { ...snapshot.completeness },
