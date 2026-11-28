@@ -290,7 +290,7 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
     release_pending_context("admit_exhaust", [])
     assert_receive {:model_provider_process, provider2, second_request}, 1_000
 
-    assert_receive {:feedback_dispatched, 1}
+    refute_received {:feedback_dispatched, 1}
 
     # Repair context is present on the retry but never committed as history.
     assert Enum.any?(second_request.messages, fn message ->
@@ -299,6 +299,7 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionTest do
 
     {:ok, draft2} = ModelResponse.new(text: "draft two")
     send(provider2, {:test_model_response, {:ok, draft2}})
+    assert_receive {:feedback_dispatched, 1}
 
     assert {:ok, %Result{status: :failed, reason: :guardrail_blocked}} =
              Task.await(task, 2_000)

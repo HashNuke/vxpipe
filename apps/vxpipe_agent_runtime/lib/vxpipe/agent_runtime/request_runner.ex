@@ -37,6 +37,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
         true -> [Message.user(request.input, request.origin)]
       end
 
+    config = Map.update(config, :on_feedback_dispatch, nil, &once/1)
     generate(conversation, staged_messages, [], 1, true, request, config)
   end
 
@@ -338,7 +339,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
           round,
           false,
           request,
-          Map.put(config, :on_feedback_dispatch, Map.get(repair, :on_dispatch)),
+          Map.put(config, :on_feedback_dispatch, once(Map.get(repair, :on_dispatch))),
           %{
             repairs_used: admission_state.repairs_used + 1,
             repairs: [repair_message],
@@ -359,9 +360,12 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp generate_round(%{retry_tool_result?: true} = config, request, output, 1) do
     emitted = :atomics.new(1, signed: false)
 
+    buffered? = not is_nil(config_round_admission(config))
+
     observe = fn text ->
-      :atomics.put(emitted, 1, 1)
-      config.emit_text_delta.(text)
+      result = config.emit_text_delta.(text)
+      if result == :ok and not buffered?, do: :atomics.put(emitted, 1, 1)
+      result
     end
 
     result = generate_observed_response(%{config | emit_text_delta: observe}, request, output)
@@ -373,6 +377,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
         with :ok <- config.emit_model_attempt.(:model_attempt_failed),
              :ok <- Process.sleep(@tool_result_retry_delay_ms),
              :ok <- config.emit_model_attempt.(:model_attempt_started) do
+          if buffered?, do: Process.put(:vxpipe_admission_deltas, [])
           generate_observed_response(config, request, output)
         end
 
@@ -836,9 +841,11 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp generate_observed_response(config, model_request, output) do
     case generate_response(config, model_request, output) do
       {:ok, %ModelResponse{} = response} ->
+        confirm_feedback_dispatch(config)
         with :ok <- emit_model_usage(response, config, :succeeded), do: {:ok, response}
 
       {:error, reason, %ModelResponse{} = response} ->
+        confirm_feedback_dispatch(config)
         with :ok <- emit_model_usage(response, config, :failed), do: {:error, reason}
 
       {:error, _reason} = error ->
@@ -850,9 +857,16 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     if streaming_provider?(config) do
       stream_response(config, model_request, output)
     else
-      confirm_feedback_dispatch(config)
       config.model_provider.generate(config.model, model_request)
     end
+  end
+
+  # A streamed event, a final response and a retry can all acknowledge the same private input.
+  defp once(nil), do: nil
+
+  defp once(callback) when is_function(callback, 0) do
+    confirmed = :atomics.new(1, signed: false)
+    fn -> if :atomics.compare_exchange(confirmed, 1, 0, 1) == :ok, do: callback.() end
   end
 
   defp confirm_feedback_dispatch(%{on_feedback_dispatch: callback}) when is_function(callback, 0),
@@ -876,10 +890,12 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
         stream_emitter(config)
       )
 
-    confirm_feedback_dispatch(config)
+    emit = fn delta ->
+      if is_binary(delta) and delta != "", do: confirm_feedback_dispatch(config)
+      StreamBudget.emit(budget, delta)
+    end
 
-    response =
-      config.model_provider.stream(config.model, model_request, &StreamBudget.emit(budget, &1))
+    response = config.model_provider.stream(config.model, model_request, emit)
 
     case {StreamBudget.outcome(budget), response} do
       {:ok, response} ->

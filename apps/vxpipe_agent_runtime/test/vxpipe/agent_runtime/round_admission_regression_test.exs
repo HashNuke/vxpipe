@@ -49,6 +49,128 @@ defmodule Vxpipe.AgentRuntime.RoundAdmissionRegressionTest do
     refute_received {:model_provider_process, _, _}
   end
 
+  for provider <- [
+        Vxpipe.AgentRuntime.TestModelProvider,
+        Vxpipe.AgentRuntime.TestStreamingModelProvider
+      ] do
+    @provider provider
+    test "an immediate failure from #{inspect(provider)} does not confirm private feedback" do
+      session = start_session([], model_provider: @provider)
+      task = private_request(session, "undispatched")
+
+      message =
+        if @provider == Vxpipe.AgentRuntime.TestModelProvider,
+          do: :model_provider_process,
+          else: :model_stream_process
+
+      assert_receive {^message, worker, %{tools: []}}
+      refute_received :dispatch_confirmed
+
+      kind =
+        if @provider == Vxpipe.AgentRuntime.TestModelProvider,
+          do: :test_model_response,
+          else: :test_stream_response
+
+      send(worker, {kind, {:error, :transport_error}})
+      assert {:ok, %Result{status: :failed}} = Task.await(task)
+      refute_received :dispatch_confirmed
+    end
+  end
+
+  test "a provider exception before producing evidence cannot confirm feedback" do
+    # The fixture's synchronous provider fetches its configured reply and raises if absent.
+    session = start_session([], model: %{mode: :reply, test_owner: self()})
+    task = private_request(session, "provider-raises")
+    assert_receive {:model_provider_process, _, _}
+    assert {:ok, %Result{status: :failed, reason: :provider_unavailable}} = Task.await(task)
+    refute_received :dispatch_confirmed
+  end
+
+  test "a streaming provider returning a valid response without deltas confirms feedback once" do
+    session = start_session([], model_provider: Vxpipe.AgentRuntime.TestStreamingModelProvider)
+    task = private_request(session, "final-receipt")
+    assert_receive {:model_stream_process, worker, request}
+    assert List.last(request.messages).content == "private guardrail feedback"
+    refute_received :dispatch_confirmed
+    send(worker, {:test_stream_response, ModelResponse.new(text: "Hello")})
+    assert {:ok, %Result{status: :completed}} = Task.await(task)
+    assert_receive :dispatch_confirmed
+    refute_received :dispatch_confirmed
+  end
+
+  test "the first provider stream event confirms feedback once while proposed speech stays private" do
+    session =
+      start_session([],
+        model_provider: Vxpipe.AgentRuntime.TestStreamingModelProvider,
+        round_admission: {__MODULE__.ControllableAdmission, %{owner: self()}}
+      )
+
+    task = private_request(session, "stream-receipt")
+    assert_receive {:model_stream_process, worker, request}
+    assert List.last(request.messages).content == "private guardrail feedback"
+    refute_received :dispatch_confirmed
+    send(worker, {:test_stream_delta, "d"})
+    assert_receive :dispatch_confirmed
+    send(worker, {:test_stream_delta, "raft"})
+    send(worker, {:test_stream_response, ModelResponse.new(text: "draft")})
+    assert_receive {:round_admission_requested, _, _, admission}
+    refute_received {:agent_runtime_event, %{kind: :text_delta}}
+    send(admission, {:admission_verdict, {:failure, :blocked}})
+    assert {:ok, %Result{status: :failed}} = Task.await(task)
+    refute_received :dispatch_confirmed
+    refute_received {:agent_runtime_event, %{kind: :text_delta}}
+  end
+
+  test "tool continuation retries after withheld partial output and releases only the second stream" do
+    session =
+      start_session([],
+        model_provider: Vxpipe.AgentRuntime.TestStreamingModelProvider,
+        round_admission: {__MODULE__.ControllableAdmission, %{owner: self()}}
+      )
+
+    task =
+      Task.async(fn ->
+        Session.continue_tool_result(session, "result", %{request_id: "guarded-retry"}, 2_000)
+      end)
+
+    release_pending_context("guarded-retry", [])
+    assert_receive {:model_stream_process, first, _}
+    send(first, {:test_stream_delta, "withheld failed attempt"})
+    send(first, {:test_stream_response, {:error, :transport_error}})
+    assert_receive {:model_stream_process, retry, _}, 1_000
+    send(retry, {:test_stream_delta, "safe "})
+    send(retry, {:test_stream_delta, "replacement"})
+    send(retry, {:test_stream_response, ModelResponse.new(text: "safe replacement")})
+    assert_receive {:round_admission_requested, _, _, admission}
+    refute_received {:agent_runtime_event, %{kind: :text_delta}}
+    send(admission, {:admission_verdict, {:accept}})
+    assert {:ok, %Result{status: :completed, output: "safe replacement"}} = Task.await(task)
+    assert_receive {:agent_runtime_event, %{kind: :text_delta, data: %{text: "safe "}}}
+    assert_receive {:agent_runtime_event, %{kind: :text_delta, data: %{text: "replacement"}}}
+    refute_received {:agent_runtime_event, %{kind: :text_delta}}
+    refute_received {:tool_submitted, _, _, _, _, _}
+  end
+
+  defp private_request(session, id) do
+    owner = self()
+
+    task =
+      Task.async(fn ->
+        Session.request_guarded(
+          session,
+          :private,
+          {:feedback, "private guardrail feedback", "private blocked caller",
+           fn -> send(owner, :dispatch_confirmed) end},
+          %{request_id: id},
+          fn -> true end,
+          2_000
+        )
+      end)
+
+    release_pending_context(id, [])
+    task
+  end
+
   test "repair carries the exact private JSON envelope, never flat text" do
     session =
       start_session(
