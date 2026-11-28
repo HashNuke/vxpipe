@@ -20,6 +20,15 @@ defmodule Vxpipe.AgentRuntime.ToolRegistryTest do
     assert {:error, :unknown_tool} = ToolRegistry.resolve(registry, "other", %{})
   end
 
+  test "guarded admission rejects a bad schema even when ordinary submission has a rejection handler" do
+    tool = %{descriptor("lookup_order", :run) | invalid_arguments_binding: :reject}
+    {:ok, registry} = ToolRegistry.new([tool])
+    assert {:ok, %{binding: :reject}} = ToolRegistry.resolve(registry, "lookup_order", %{})
+
+    assert {:error, :invalid_arguments} =
+             ToolRegistry.resolve(registry, "lookup_order", %{}, :admission)
+  end
+
   test "rejects duplicate local names" do
     assert {:error, :duplicate_tool} =
              ToolRegistry.new([

@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmissionTest do
 
   defp context do
     %{
+      tool_registry: Vxpipe.CallEngine.TestGuardrailToolRegistry.new(),
       correlation: %{request_id: "req-1", correlation_id: "turn-1"},
       history_mode: :generated,
       reply_protocol: :legacy

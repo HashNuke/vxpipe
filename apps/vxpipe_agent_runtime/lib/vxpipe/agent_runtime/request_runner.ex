@@ -247,6 +247,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          {:ok, candidate} <- build_candidate(config, response, request, admission_state) do
       context = %{
         correlation: request.correlation,
+        tool_registry: config.tool_registry,
         recent_dialogue:
           if(config_round_admission(config),
             do: Conversation.recent_dialogue(conversation, request.correlation),

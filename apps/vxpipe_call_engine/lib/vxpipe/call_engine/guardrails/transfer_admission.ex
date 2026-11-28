@@ -20,7 +20,9 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
   # Stale verdicts (elapsed response deadline, cancelled/stale checker
   # results) fence to failures and never release effects.
 
-  alias Vxpipe.AgentRuntime.{RoundCandidate, ToolCall}
+  alias Vxpipe.AgentRuntime.{RoundCandidate, ToolCall, ToolRegistry}
+  alias Vxpipe.CallEngine.Tool.InvocationBinding
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request, as: TransferRequest
   alias Vxpipe.CallEngine.Guardrails.{CheckClient, Deadline, Evidence}
 
   @stable_event_order [:after_turn, :before_outgoing_transfer]
@@ -234,7 +236,8 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
 
       true ->
         with :ok <- response_admitted?(host),
-             :ok <- candidate_evidence_budget(candidate) do
+             :ok <- candidate_evidence_budget(candidate),
+             true <- valid_tool_arguments?(candidate.tool_calls, context) do
           proposed_calls =
             Enum.map(candidate.tool_calls, fn call ->
               %{
@@ -293,6 +296,25 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
         end
     end
   end
+
+  defp valid_tool_arguments?([], _context), do: true
+
+  defp valid_tool_arguments?(calls, %{tool_registry: %ToolRegistry{} = registry}) do
+    Enum.all?(calls, fn call ->
+      case ToolRegistry.resolve(registry, call.name, call.arguments, :admission) do
+        {:ok, %{binding: %InvocationBinding{handler: {:participant_transfer, binding}}}} ->
+          match?({:ok, _, _, _}, TransferRequest.resolve_arguments(binding, call.arguments))
+
+        {:ok, _ordinary} ->
+          true
+
+        {:error, _} ->
+          false
+      end
+    end)
+  end
+
+  defp valid_tool_arguments?(_calls, _context), do: false
 
   defp issue_check(host, guardrails, event, proposal, evidence, deadline_ms, call) do
     check = check_fun(host)

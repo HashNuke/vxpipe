@@ -21,7 +21,12 @@ defmodule Vxpipe.AgentRuntime.RoundAdmission do
           | {:accept, %{binds: [bind()]}}
           | {:repair, repair()}
           | {:failure, failure()}
-  @type context :: %{correlation: map(), history_mode: atom(), reply_protocol: atom()}
+  @type context :: %{
+          correlation: map(),
+          tool_registry: Vxpipe.AgentRuntime.ToolRegistry.t(),
+          history_mode: atom(),
+          reply_protocol: atom()
+        }
 
   @callback admit(RoundCandidate.t(), context(), term()) :: verdict()
 

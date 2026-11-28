@@ -39,22 +39,28 @@ defmodule Vxpipe.AgentRuntime.ToolRegistry do
 
   @spec resolve(t(), String.t(), map()) ::
           {:ok, ToolDescriptor.t()} | {:error, :invalid_arguments | :unknown_tool}
-  def resolve(%__MODULE__{} = registry, name, arguments)
-      when is_binary(name) and is_map(arguments) do
+  def resolve(%__MODULE__{} = registry, name, arguments),
+    do: resolve(registry, name, arguments, :submission)
+
+  @spec resolve(t(), String.t(), map(), :submission | :admission) ::
+          {:ok, ToolDescriptor.t()} | {:error, :invalid_arguments | :unknown_tool}
+  def resolve(%__MODULE__{} = registry, name, arguments, stage)
+      when is_binary(name) and is_map(arguments) and stage in [:submission, :admission] do
     case Map.fetch(registry.by_name, name) do
-      {:ok, descriptor} -> validate_call(descriptor, arguments)
+      {:ok, descriptor} -> validate_call(descriptor, arguments, stage)
       :error -> {:error, :unknown_tool}
     end
   end
 
-  def resolve(%__MODULE__{}, _name, _arguments), do: {:error, :invalid_arguments}
+  def resolve(%__MODULE__{}, _name, _arguments, _stage), do: {:error, :invalid_arguments}
 
-  defp validate_call(descriptor, arguments) do
+  defp validate_call(descriptor, arguments, stage) do
     case JSV.validate(arguments, descriptor.compiled_schema, cast: false) do
       {:ok, _validated} ->
         {:ok, descriptor}
 
-      {:error, _} when not is_nil(descriptor.invalid_arguments_binding) ->
+      {:error, _}
+      when stage == :submission and not is_nil(descriptor.invalid_arguments_binding) ->
         {:ok, %{descriptor | binding: descriptor.invalid_arguments_binding}}
 
       {:error, _} ->

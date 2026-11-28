@@ -48,12 +48,9 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
 
   @spec new(Binding.t(), map(), Context.t()) :: {:ok, t()} | {:error, :rejected}
   def new(%Binding{} = binding, arguments, %Context{} = context) when is_map(arguments) do
-    with {:ok, announcement, arguments} <- Vxpipe.CallEngine.Tool.Announcement.extract(arguments),
-         {:ok, destination} <- destination(arguments),
+    with {:ok, target, reason, announcement} <- resolve_arguments(binding, arguments),
          true <- context.agent_participant_id == binding.source_participant_id,
          tool_call_id when is_binary(tool_call_id) <- context.tool_call_id,
-         {:ok, target} <- Map.fetch(binding.targets, destination),
-         {:ok, reason} <- reason(arguments, target),
          source_capability when is_pid(source_capability) <-
            source_capability(context, binding) do
       {:ok,
@@ -82,6 +79,19 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
   end
 
   def new(%Binding{}, _arguments, %Context{}), do: {:error, :rejected}
+
+  @spec resolve_arguments(Binding.t(), map()) ::
+          {:ok, Binding.target(), String.t() | nil, String.t() | nil} | {:error, :rejected}
+  def resolve_arguments(%Binding{} = binding, arguments) when is_map(arguments) do
+    with {:ok, announcement, rest} <- Vxpipe.CallEngine.Tool.Announcement.extract(arguments),
+         {:ok, destination} <- destination(rest),
+         {:ok, target} <- Map.fetch(binding.targets, destination),
+         {:ok, reason} <- reason(rest, target) do
+      {:ok, target, reason, announcement}
+    else
+      _invalid -> {:error, :rejected}
+    end
+  end
 
   defp source_capability(%Context{source_capability: capability}, _binding)
        when is_pid(capability),

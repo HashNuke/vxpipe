@@ -93,7 +93,12 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
             |> put_in([:participants, "agent", :guardrails, :before_outgoing_transfer], [
               %{rule | id: "route"}
             ])
-            |> put_in([:participants, "agent", :transfers], ["billing"])
+            |> put_in([:participants, "agent", :transfers], ["billing", "human-support"])
+            |> put_in([:participants, "human-support"], %{
+              type: "human",
+              description: "Support",
+              connection: %{service: "web", mode: "receive", admission: "transfer"}
+            })
             |> put_in([:participants, "billing"], %{
               agent
               | description: "Billing",
@@ -106,6 +111,10 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
               provider: "deepgram",
               model: "flux-haley-en",
               options: %{encoding: "linear16", sample_rate: 48_000}
+            })
+            |> put_in([:participants, "agent", :tools, "submitted_host_tool"], %{
+              type: "host",
+              tool: "submitted_host_tool"
             })
             |> put_in([:participants, "agent", :tools, "wait_for_test"], %{
               type: "host",
@@ -178,7 +187,12 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
       )
 
     host_tools =
-      if variant == :mixed_audio, do: %{"wait_for_test" => CallEngine.TestBlockingTool}, else: %{}
+      if variant == :mixed_audio,
+        do: %{
+          "wait_for_test" => CallEngine.TestBlockingTool,
+          "submitted_host_tool" => CallEngine.TestSubmittedHostTool
+        },
+        else: %{}
 
     {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: host_tools})
     plan
@@ -646,7 +660,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
       Vxpipe.AgentRuntime.ToolCall.new(
         id: "route-2",
         name: "transfer",
-        arguments: %{"destination" => "billing", "reason" => "Billing question"}
+        arguments: %{"destination" => "human-support", "reason" => "Billing question"}
       )
 
     {:ok, response} =
@@ -675,7 +689,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert current == %{
              "text" => "Next reply.",
              "reason" => "Billing question",
-             "destination" => "billing",
+             "destination" => "human-support",
              "proposed_calls" => [%{"name" => "transfer", "kind" => "transfer"}]
            }
 
@@ -1076,8 +1090,31 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     command
   end
 
-  @tag :physical_guarded_round
-  test "a model round with two guarded transfers fails as invalid_response before any sibling starts" do
+  for {scenario, args} <- [
+        duplicate_transfers: [
+          {"transfer", %{"destination" => "human-support", "reason" => "First reason"}},
+          {"transfer", %{"destination" => "human-support", "reason" => "Second reason"}}
+        ],
+        unknown_target: [{"transfer", %{"destination" => "restrictor"}}],
+        missing_human_reason: [{"transfer", %{"destination" => "human-support"}}],
+        blank_human_reason: [{"transfer", %{"destination" => "human-support", "reason" => "  "}}],
+        unexpected_agent_reason: [
+          {"transfer", %{"destination" => "billing", "reason" => "For a human"}}
+        ],
+        malformed_ordinary: [
+          {"submitted_host_tool", %{"value" => 42}},
+          {"transfer", %{"destination" => "billing"}}
+        ]
+      ] do
+    @invalid_args args
+    @tag :guarded_invalid_batch
+    @tag :physical_guarded_round
+    test "a guarded mixed round fails as invalid_response before any sibling starts for #{scenario}" do
+      assert_invalid_batch(@invalid_args)
+    end
+  end
+
+  defp assert_invalid_batch(arguments) do
     :ok = CallEngine.TestVoiceToolRoom.configure()
     Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
     on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
@@ -1088,7 +1125,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     {:ok, command} =
       SendText.new(
         identity ++
-          [correlation_id: "duplicate-transfer", content: "Connect me.", audio_response: true]
+          [correlation_id: "invalid-mixed", content: "Connect me.", audio_response: true]
       )
 
     assert :ok = CallEngine.TestTransferConnection.send_text(command)
@@ -1096,23 +1133,18 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     alias Vxpipe.AgentRuntime.ToolCall
     {:ok, ordinary} = ToolCall.new(id: "ordinary", name: "wait_for_test", arguments: %{})
 
-    transfers =
-      for {id, reason} <- [{"first", "First reason"}, {"second", "Different reason"}] do
-        {:ok, call} =
-          ToolCall.new(
-            id: id,
-            name: "transfer",
-            arguments: %{"destination" => "billing", "reason" => reason}
-          )
-
-        call
+    calls =
+      for {name, args} <- arguments, reduce: [ordinary] do
+        acc ->
+          {:ok, proposed} = ToolCall.new(id: "action-#{length(acc)}", name: name, arguments: args)
+          acc ++ [proposed]
       end
 
-    send_audio_candidate(model, "One moment.", [ordinary | transfers])
+    send_audio_candidate(model, "One moment.", calls)
 
     assert_receive {:vxpipe_event,
                     %CallEngine.Event.AgentTurnFailed{
-                      correlation_id: "duplicate-transfer",
+                      correlation_id: "invalid-mixed",
                       reason: :invalid_response
                     }},
                    2_000
