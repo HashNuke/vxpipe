@@ -20,7 +20,7 @@ export type IntegrationPagination = {
 };
 export type IntegrationInventory = {
   tenant: { key: string; name: string } | null; version: string;
-  status: "local" | "available" | "unavailable"; items: IntegrationEntry[]; installedItems: IntegrationEntry[];
+  status: "local" | "available" | "unavailable"; items: IntegrationEntry[];
   mcpConnections: McpConnection[]; connections: IntegrationConnection[]; pagination: IntegrationPagination | null;
 };
 export type IntegrationCategory = { id: string; name: string; count: number };
@@ -95,13 +95,23 @@ export function parseInventory(value: unknown, tenantKey: string | null): Integr
   if (!Array.isArray(installed) || installed.length > setupProviders.length) throw invalid();
   const installedItems = installed.map(item => entry(item, tenantKey));
   if (installedItems.some(item => !item.provider || parsed.some(remote => remote.provider === item.provider))) throw invalid();
+  if (pagination) {
+    const extra = value.local_item_count ?? installedItems.length;
+    if (!integer(extra) || extra < installedItems.length || extra > setupProviders.length) throw invalid();
+    pagination = { ...pagination,
+      start: pagination.previous ? pagination.start + extra : (pagination.total + extra > 0 ? 1 : 0),
+      end: pagination.end + extra,
+      total: pagination.total + extra,
+    };
+  }
   const mcps = value.mcp_connections ?? (parsed.every(item => item.kind === "provider") ? [] : undefined);
   if (!Array.isArray(mcps) || mcps.length > 1500) throw invalid();
   const mcpConnections = mcps.map(item => parseMcpConnection(item, tenantKey));
   if (new Set(mcpConnections.map(item => item.id)).size !== mcpConnections.length) throw invalid();
-  if (new Set(parsed.map(item => item.id)).size !== parsed.length) throw invalid();
+  const visible = [...parsed, ...installedItems];
+  if (new Set(visible.map(item => item.id)).size !== visible.length) throw invalid();
   return { tenant: tenant as IntegrationInventory["tenant"], version: value.installation_version,
-    status: value.directory_status as IntegrationInventory["status"], items: parsed, installedItems,
+    status: value.directory_status as IntegrationInventory["status"], items: visible,
     connections: value.connections.map(connection), mcpConnections, pagination };
 }
 

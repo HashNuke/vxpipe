@@ -230,8 +230,9 @@ rows or infer totals from its visible length.
 Unknown installation versions, invalid envelopes or unavailable service trigger
 the installed native-provider fallback. On 0.1.0 the immutable publisher release
 manifest predates the Jev adapter. For a matching search or the AI category, Console
-shows TypeSafe under **Installed integrations** on the first page if the public
-page omits it. Public results retain their original totals and cursors.
+includes TypeSafe in the same AI models or search results list on the first page.
+Displayed totals include the installed provider. The public page and its cursors
+retain the directory’s original values.
 Expired cursors restart paging; missing categories are distinct from outages.
 Directory metadata cannot add an executable provider, platform MCP inheritance
 or authorization method unsupported by the installed client.

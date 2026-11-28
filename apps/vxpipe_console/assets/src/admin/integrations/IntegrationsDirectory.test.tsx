@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IntegrationsDirectory } from "./IntegrationsDirectory";
@@ -11,6 +11,24 @@ const page = { ...local, directory_status: "available", local_items: [], page: {
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 describe("production integrations directory", () => {
+  it.each([
+    ["/platform/services/ai", "AI models"],
+    ["/platform/services/search?q=model", "Search results"],
+  ])("shows TypeSafe alongside the other providers on %s", async (path, sectionName) => {
+    const typeSafe = { ...row, id: "provider-jev", name: "TypeSafe", connection: { provider_id: "jev" }, capabilities: ["decisions"] };
+    const zenmux = { ...row, id: "zenmux", name: "Zenmux", connection: { provider_id: "zenmux" } };
+    const inventory = { ...page, local_items: [typeSafe], page: { items: [row, zenmux],
+      pagination: { total_items: 2, start_index: 1, end_index: 2, next_cursor: null, previous_cursor: null } } };
+    render(<MemoryRouter initialEntries={[path]}><IntegrationsDirectory tenantKey={null} fetchImpl={async () => response(inventory)} onManage={vi.fn()} /></MemoryRouter>);
+
+    const section = within(await screen.findByRole("region", { name: sectionName }));
+    expect(section.getByRole("article", { name: "Google AI Studio" })).toBeVisible();
+    expect(section.getByRole("article", { name: "TypeSafe" })).toHaveTextContent("Decisions");
+    expect(screen.getAllByRole("article", { name: "TypeSafe" })).toHaveLength(1);
+    expect(section.getAllByRole("article").map(item => item.getAttribute("aria-label"))).toEqual(["Google AI Studio", "TypeSafe", "Zenmux"]);
+    expect(screen.getByText("1–3 of 3")).toBeVisible();
+  });
+
   it("replaces failed directory logos with a neutral icon and retries a new logo URL", async () => {
     let logo = "https://logos.example.test/missing.png";
     const fetcher = vi.fn(async (url: RequestInfo | URL) => response(String(url).endsWith("/categories") ? { categories: [] } : {

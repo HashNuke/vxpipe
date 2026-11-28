@@ -25,6 +25,16 @@ describe("integration inventory boundary", () => {
     expect(new URLSearchParams(query).get("cursor")).toBe("opaque+/=");
     expect(integrationQuery("connected", "", null)).toBe("category=connected");
   });
+  it("counts first-page provider additions on subsequent cursor pages", () => {
+    const value = { ...inventoryFixture, directory_status: "available", local_items: [], local_item_count: 1,
+      page: { items: inventoryFixture.local_items, pagination: {
+        start_index: 4, end_index: 4, total_items: 4, previous_cursor: "preceding", next_cursor: null,
+      } } };
+    const parsed = parseInventory(value, "tenant-a");
+    expect(parsed.items.map(item => item.name)).toEqual(["Google AI Studio"]);
+    expect(parsed.pagination).toEqual({ start: 5, end: 5, total: 5, previous: "preceding", next: null });
+  });
+
   it("keeps remote pagination separate from outage fallback", () => {
     const value = { ...inventoryFixture, directory_status: "unavailable", fallback_items: inventoryFixture.local_items, local_items: [] };
     expect(parseInventory(value, "tenant-a").pagination).toBeNull();

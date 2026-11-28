@@ -82,7 +82,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
     end
   end
 
-  test "the 0.1.0 catalog can offer installed TypeSafe separately from successful public results" do
+  test "the 0.1.0 catalog can supplement matching public results with TypeSafe" do
     remote = %{"items" => [provider_row()], "pagination" => %{"total_items" => 15}}
     opts = options(fn _, _ -> {:ok, %{body: remote}} end)
 
@@ -100,10 +100,29 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
     for params <- [
           %{"q" => "sheets"},
           %{"category" => "calendar"},
-          %{"category" => "telephony"},
-          %{"category" => "ai", "cursor" => "next"}
+          %{"category" => "telephony"}
         ] do
       assert [] == list.(params)
+    end
+
+    for {previous, start_index} <- [{nil, 1}, {"older", 10}] do
+      page =
+        put_in(remote, ["pagination"], %{
+          "previous_cursor" => previous,
+          "start_index" => start_index
+        })
+
+      opts = options(fn _, _ -> {:ok, %{body: page}} end)
+
+      assert {:ok, %{local_item_count: 1, local_items: rows}} =
+               Inventory.list(
+                 FakeUserIdentity.principal(),
+                 @tenant,
+                 %{"category" => "ai", "cursor" => "opaque"},
+                 opts
+               )
+
+      assert Enum.map(rows, & &1["name"]) == if(is_nil(previous), do: ["TypeSafe"], else: [])
     end
 
     present = put_in(provider_row(), ["connection", "provider_id"], "jev")

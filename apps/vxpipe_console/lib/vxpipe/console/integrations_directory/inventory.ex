@@ -89,12 +89,16 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
             )
           )
 
+        additions = installed_additions(page, params, context)
+        first_page? = is_nil(get_in(page, ["pagination", "previous_cursor"]))
+
         {:ok,
          Map.merge(context, %{
            directory_status: :available,
            page: page,
            fallback_items: [],
-           local_items: installed_additions(page, params, context)
+           local_items: if(first_page?, do: additions, else: []),
+           local_item_count: length(additions)
          })}
 
       {:error, reason} when reason in @outages ->
@@ -119,9 +123,9 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
   end
 
   # The published 0.1.0 directory manifest predates Jev. Keep installed
-  # additions outside the public directory page and its cursor/total.
+  # additions outside the public page so its cursors still describe the upstream data.
   defp installed_additions(page, params, %{installation_version: "0.1.0"} = context) do
-    eligible? = params["category"] in [nil, "ai"] and not Map.has_key?(params, "cursor")
+    eligible? = params["category"] in [nil, "ai"]
     published? = Enum.any?(page["items"], &(get_in(&1, ["connection", "provider_id"]) == "jev"))
 
     if eligible? and not published? do

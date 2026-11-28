@@ -8,15 +8,15 @@ test("AI category page links survive browser history and remounts", () => {
   render(<McpServicesStory scenario="directory-paginated" />);
   fireEvent.change(screen.getByLabelText("Category"), { target: { value: "ai" } });
   fireEvent.click(screen.getByRole("button", { name: "Next page" }));
-  expect(screen.getByText("4–6 of 11")).toBeVisible();
+  expect(screen.getByText("4–6 of 12")).toBeVisible();
   const secondPage = window.location.hash;
   fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
   window.history.replaceState({}, "", secondPage);
   fireEvent.popState(window);
-  expect(screen.getByText("4–6 of 11")).toBeVisible();
+  expect(screen.getByText("4–6 of 12")).toBeVisible();
   cleanup();
   render(<McpServicesStory scenario="directory-paginated" />);
-  expect(screen.getByText("4–6 of 11")).toBeVisible();
+  expect(screen.getByText("4–6 of 12")).toBeVisible();
   expect(window.location.hash).toBe(secondPage);
 });
 
