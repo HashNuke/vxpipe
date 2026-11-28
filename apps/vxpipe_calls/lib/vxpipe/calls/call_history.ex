@@ -92,11 +92,18 @@ defmodule Vxpipe.Calls.CallHistory do
     end)
   end
 
-  defp feedback_key(fact, id) do
-    {fact.activation_id, fact.participant_id, fact.source_participant_id,
-     fact.payload["policy_revision"], fact.payload["policy_digest"],
-     fact.payload["evaluation_id"], id}
+  @doc false
+  def decisions_fact?(kind), do: kind in @decisions_kinds
+
+  @doc "Scopes related private facts to the evaluation's original call, agent, command and source-policy interval."
+  def decision_key(fact) do
+    {fact.tenant_key, fact.call_id, fact.room_id, fact.incarnation_id, fact.participant_id,
+     fact.activation_id, fact.source_participant_id, fact.command_id,
+     fact.payload["evaluation_id"], fact.payload["policy_revision"],
+     fact.payload["policy_digest"], fact.source_policy["media_policy_revision"]}
   end
+
+  defp feedback_key(fact, id), do: {decision_key(fact), id}
 
   defp transcript_fact?(%{kind: kind, payload: payload, participant_id: id}) do
     MessagePayload.project(kind, payload, id) != nil

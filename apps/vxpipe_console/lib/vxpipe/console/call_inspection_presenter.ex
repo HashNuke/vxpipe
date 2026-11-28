@@ -19,7 +19,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     VariableSnapshot
   }
 
-  alias Vxpipe.Console.CallInspectionResult
+  alias Vxpipe.Console.{CallInspectionGuardrails, CallInspectionResult}
 
   @tool_kinds [
     :tool_call_started,
@@ -32,7 +32,8 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   @spec present(CallInspectionResult.t()) :: map()
   def present(%CallInspectionResult{} = result) do
     participants = participants(result.prepared_call, result.history)
-    {metrics, metrics_availability} = metrics(result.usage, result.history)
+    sequences = usage_observation_sequences(result.history)
+    {metrics, metrics_availability} = metrics(result.usage, sequences)
 
     %{
       "schema_version" => 1,
@@ -41,7 +42,8 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
       "participants" => participants,
       "timeline" => timeline(result.history, participants),
       "variables" => variables(result.history),
-      "metrics" => metrics,
+      "guardrails" => CallInspectionGuardrails.entities(result.history, result.usage, sequences),
+      "metrics" => metrics ++ rewrite_metrics(result.history),
       "metrics_availability" => metrics_availability,
       "completeness" => completeness(result.history.archive_status)
     }
@@ -264,7 +266,10 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
 
     ordinary =
       history.timeline
-      |> Enum.reject(&(&1.kind in @tool_kinds or &1.kind == :variable_snapshot))
+      |> Enum.reject(
+        &(&1.kind in @tool_kinds or &1.kind == :variable_snapshot or
+            CallHistory.decisions_fact?(&1.kind))
+      )
       |> Enum.map(&timeline_entity(&1, participant_names))
 
     (ordinary ++ tool_entities(history.timeline))
@@ -458,9 +463,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
 
   defp variables(%CallHistory{}), do: unavailable("not-captured")
 
-  defp metrics({:available, %UsageReport{amounts: amounts}}, history) do
-    observation_sequences = usage_observation_sequences(history)
-
+  defp metrics({:available, %UsageReport{amounts: amounts}}, observation_sequences) do
     metrics =
       amounts
       |> Enum.filter(&(&1.unit in @scalar_units and is_integer(&1.quantity)))
@@ -476,15 +479,51 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     %{
       "id" => metric_id(amount),
       "revision" => metric_revision(amount, observation_sequences),
-      "value" => %{
-        "label" => humanize(amount.component),
-        "value" => amount.quantity,
-        "unit" => unit(amount.unit),
-        "source" => "#{amount.provider.name} · #{humanize(amount.provenance)}",
-        "description" => humanize(amount.component),
-        "scope" => metric_scope(amount)
-      }
+      "value" =>
+        %{
+          "label" => humanize(amount.component),
+          "value" => amount.quantity,
+          "unit" => unit(amount.unit),
+          "source" => "#{amount.provider.name} · #{humanize(amount.provenance)}",
+          "description" => humanize(amount.component),
+          "scope" => metric_scope(amount)
+        }
+        |> Map.merge(metric_links(amount))
     }
+  end
+
+  defp metric_links(%EffectiveAmount{capability: :decisions} = amount),
+    do: %{
+      "attempt_id" => amount.attempt_id,
+      "turn_id" => amount.attribution.turn_id,
+      "activation_id" => amount.attribution.activation_id
+    }
+
+  defp metric_links(_), do: %{}
+
+  defp rewrite_metrics(history) do
+    history
+    |> CallInspectionGuardrails.rewrite_receipts()
+    |> Enum.group_by(&elem(&1, 0))
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.map(fn {participant, receipts} ->
+      %{
+        "id" => "guardrail-rewrites:" <> participant,
+        "revision" => receipts |> Enum.map(&elem(&1, 2)) |> Enum.max(),
+        "value" => %{
+          "label" => "Rewrites",
+          "unit" => "rewrites",
+          "value" => receipts |> Enum.uniq_by(&elem(&1, 1)) |> length(),
+          "scope" => %{
+            "kind" => "participant-capability",
+            "capability" => "LLM",
+            "participant_id" => participant
+          },
+          "source" => "Guardrail feedback dispatch",
+          "description" => "Rejected generated candidates dispatched for a model rewrite."
+        }
+      }
+    end)
   end
 
   defp metric_id(%EffectiveAmount{} = amount) do
@@ -528,6 +567,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     %{"kind" => "room-capability", "capability" => capability_name(amount.capability)}
   end
 
+  defp capability_name(:decisions), do: "Decisions"
   defp capability_name(:model_inference), do: "LLM"
   defp capability_name(:speech_to_text), do: "STT"
   defp capability_name(:text_to_speech), do: "TTS"
