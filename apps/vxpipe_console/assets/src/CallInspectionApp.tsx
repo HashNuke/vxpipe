@@ -7,7 +7,7 @@ import {
   type CallDetailsController,
   type CallDetailsLoader,
 } from "@vxpipe/core";
-import { CallConsole } from "@vxpipe/react";
+import { InspectionConsole } from "./InspectionConsole";
 
 import { createCallInspectionLoader } from "./callInspection";
 
@@ -77,5 +77,5 @@ export function CallInspectionApp({
     );
   }
 
-  return <CallConsole inspectConversation controller={loadState.controller} theme="dark" maxHeight="calc(100dvh - 32px)" />;
+  return <InspectionConsole controller={loadState.controller} theme="dark" maxHeight="calc(100dvh - 32px)" />;
 }

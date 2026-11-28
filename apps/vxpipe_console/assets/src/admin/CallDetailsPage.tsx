@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { CallConsole, type HistoryFilters } from "@vxpipe/react";
+import type { HistoryFilters } from "@vxpipe/react";
 import { AlertTriangle } from "lucide-react";
 
+import { InspectionConsole } from "../InspectionConsole";
 import { AdminShell } from "./AdminShell";
 import { CallDetailsConsoleHeader } from "./CallDetailsConsoleHeader";
 import { CallIdentity } from "./CallIdentity";
@@ -79,9 +80,8 @@ export function CallDetailsPage({
       <AdminShell showHeader={false} theme={theme}>
         <main className="h-dvh w-full overflow-hidden">
           <h1 className="sr-only">Call details</h1>
-          <CallConsole
+          <InspectionConsole
             controller={state.controller}
-            inspectConversation
             initialHistoryFilters={initialHistoryFilters}
             initialTab={initialTab}
             header={header}

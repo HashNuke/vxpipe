@@ -2148,7 +2148,7 @@ async function requestCallDetails(
 ) {
   const response = await fetchImpl(
     `/api/tenants/${encodeURIComponent(selected.tenantKey)}/calls/${encodeURIComponent(selected.callId)}`,
-    { headers: { accept: "application/json" }, signal },
+    { headers: { accept: "application/json" }, signal, cache: "no-store" },
   );
 
   if (response.status === 401) {

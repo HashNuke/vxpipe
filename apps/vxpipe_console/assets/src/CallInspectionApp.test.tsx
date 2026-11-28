@@ -129,3 +129,35 @@ test("remote inspection provides diagnostics lazily and independently from its h
     expect(loader.refresh).toHaveBeenCalledTimes(1);
   } finally { vi.unstubAllGlobals(); }
 });
+
+test("revalidates inspection on reconnect and hides a previously readable call after a rejection", async () => {
+  const loader = {refresh: vi.fn()
+    .mockResolvedValueOnce(snapshot("running"))
+    .mockRejectedValueOnce(new Error("access expired"))
+    .mockResolvedValueOnce(snapshot("ended"))};
+  const {unmount} = render(<CallInspectionApp tenantKey="tenant-1" callId="call-1" loader={loader} />);
+  expect(await screen.findByText("In progress")).toBeVisible();
+  fireEvent(window, new Event("online"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Call inspection is unavailable");
+  expect(screen.queryByText("Loaded from call history")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", {name:"Retry"}));
+  expect(await screen.findByText("Call ended")).toBeVisible();
+  unmount();
+  fireEvent(window, new Event("online"));
+  expect(loader.refresh).toHaveBeenCalledTimes(3);
+});
+
+test("refreshes a visible running call and stops polling once the stored call ends", async () => {
+  vi.useFakeTimers({shouldAdvanceTime: true});
+  try {
+    const loader = { refresh: vi.fn().mockResolvedValueOnce(snapshot("running")).mockResolvedValue(snapshot("ended")) };
+    render(<CallInspectionApp tenantKey="tenant-1" callId="call-1" loader={loader} />);
+    expect(await screen.findByText("In progress")).toBeVisible();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(loader.refresh).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(loader.refresh).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
