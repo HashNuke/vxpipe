@@ -5,6 +5,60 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTTTest do
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, ConversationalSTT, Event, Session}
   alias Vxpipe.CallEngine.SpeechOnsetProbe
 
+  test "a logical timeout for a retired source waits for native settlement" do
+    parent = self()
+
+    classifier = fn _, stream, pcm ->
+      if pcm == :binary.copy(<<0>>, 1024) do
+        {:ok, stream, [0.0]}
+      else
+        send(parent, {:running, self()})
+
+        receive do
+          :finish -> {:ok, stream, [0.9]}
+        end
+      end
+    end
+
+    session = start_session(true, load: fn -> {:ok, :fixture} end, classify: classifier)
+    assert_receive {:recognizer, _, _}
+    _ = event(session, :ready)
+    pcm = :binary.copy(<<1, 0>>, 512)
+    assert :ok = Session.push_audio(session, pcm)
+    assert_receive {:running, worker}
+    provider = Session.provider(session)
+    state = :sys.get_state(provider)
+    lease = state.runtime.lease
+
+    frame =
+      struct(Vxpipe.CallEngine.Media.AudioFrame,
+        codec: :linear16,
+        channels: 1,
+        sample_rate: 16_000,
+        payload: pcm,
+        timestamp: 2048,
+        source_epoch: make_ref()
+      )
+
+    :sys.suspend(provider)
+
+    request =
+      try do
+        req = :gen_server.send_request(provider, {:frame, frame})
+        send(lease.pool, {:expired, lease.token, state.inference})
+        _ = :sys.get_state(lease.pool)
+        req
+      after
+        :sys.resume(provider)
+      end
+
+    assert {:reply, :ok} = :gen_server.receive_response(request, 1000)
+    assert %{pending_pcm: ^pcm} = :sys.get_state(provider)
+    send(worker, :finish)
+    assert_receive {:running, ^worker}
+    send(worker, :finish)
+  end
+
   test "caller VAD acquires a node pool lease and retains partial PCM locally" do
     alias Vxpipe.CallEngine.Speech.Silero.Pool
     session = start_session(true, [])

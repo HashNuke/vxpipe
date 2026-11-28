@@ -34,10 +34,11 @@ defmodule Vxpipe.CallEngine.Speech.Silero.ModelCache do
 
       true ->
         task = state.task || Task.async(fn -> load(state.loader) end)
+        monitor = :erlang.monitor(:process, elem(from, 0), [{:tag, {:waiter_down, from}}])
         timer = Process.send_after(self(), {:expire, from}, remaining)
 
         {:noreply,
-         %{state | task: task, waiting: Map.put(state.waiting, from, {deadline, timer})}}
+         %{state | task: task, waiting: Map.put(state.waiting, from, {deadline, timer, monitor})}}
     end
   end
 
@@ -55,7 +56,8 @@ defmodule Vxpipe.CallEngine.Speech.Silero.ModelCache do
     Process.demonitor(ref, [:flush])
     now = System.monotonic_time(:millisecond)
 
-    for {from, {deadline, timer}} <- state.waiting do
+    for {from, {deadline, timer, monitor}} <- state.waiting do
+      Process.demonitor(monitor, [:flush])
       Process.cancel_timer(timer)
       GenServer.reply(from, if(now < deadline, do: result, else: {:error, :model_unavailable}))
     end
@@ -70,8 +72,26 @@ defmodule Vxpipe.CallEngine.Speech.Silero.ModelCache do
   end
 
   def handle_info({:expire, from}, state) do
-    if Map.has_key?(state.waiting, from), do: GenServer.reply(from, {:error, :model_unavailable})
-    {:noreply, %{state | waiting: Map.delete(state.waiting, from)}}
+    case Map.pop(state.waiting, from) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {{_, _, monitor}, waiting} ->
+        Process.demonitor(monitor, [:flush])
+        GenServer.reply(from, {:error, :model_unavailable})
+        {:noreply, %{state | waiting: waiting}}
+    end
+  end
+
+  def handle_info({{:waiter_down, from}, monitor, :process, _, _}, state) do
+    case Map.pop(state.waiting, from) do
+      {{_, timer, ^monitor}, waiting} ->
+        Process.cancel_timer(timer)
+        {:noreply, %{state | waiting: waiting}}
+
+      _ ->
+        {:noreply, state}
+    end
   end
 
   @impl true

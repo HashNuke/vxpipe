@@ -239,7 +239,11 @@ defmodule Vxpipe.CallEngine.Speech.Silero.Pool do
   def handle_info({:expired, token, ref}, state) do
     case state.jobs[token] do
       %{ref: ^ref, retired: false} = job ->
-        send(job.owner, {:silero_result, ref, {:error, :classification_timeout}})
+        send(
+          job.owner,
+          {:silero_result, ref, {:error, :classification_timeout, :await_settlement}}
+        )
+
         {:noreply, retire(state, token, false)}
 
       _ ->

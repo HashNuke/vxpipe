@@ -301,6 +301,14 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     end
   end
 
+  def handle_info(
+        {:silero_result, ref, {:error, :classification_timeout, :await_settlement}},
+        %{inference: ref, detector_ready?: true} = state
+      )
+      when state.inference_epoch != state.recognition_epoch do
+    {:noreply, state}
+  end
+
   def handle_info({:silero_result, ref, _failure}, %{inference: ref} = state) do
     if state.detector_ready? and state.inference_epoch != state.recognition_epoch do
       handle_info({:silero_retired, ref}, state)
@@ -573,7 +581,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
         acoustic_origin_ms: nil,
         recognition_epoch: next,
         orphan: nil,
-        diagnostic_tap: InferenceTap.reset(state.diagnostic_tap, next, state.odd_pcm == ""),
+        diagnostic_tap: InferenceTap.reset(state.diagnostic_tap, next, true),
         pending_pcm: "",
         pending_epoch: nil,
         stream: Detector.stream(),

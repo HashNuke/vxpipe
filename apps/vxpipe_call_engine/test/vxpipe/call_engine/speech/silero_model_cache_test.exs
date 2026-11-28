@@ -3,6 +3,31 @@ defmodule Vxpipe.CallEngine.Speech.Silero.ModelCacheTest do
 
   alias Vxpipe.CallEngine.Speech.Silero.{Model, ModelCache}
 
+  test "owners leaving a blocked model load release their waiters" do
+    parent = self()
+
+    server =
+      start_supervised!(
+        {ModelCache,
+         name: __MODULE__,
+         load: fn ->
+           send(parent, {:loading, self()})
+
+           receive do
+             :finish -> {:error, :model_unavailable}
+           end
+         end}
+      )
+
+    owner = spawn(fn -> ModelCache.fetch(server, 15_000) end)
+    assert_receive {:loading, loader}
+    ref = Process.monitor(owner)
+    Process.exit(owner, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^owner, :killed}
+    assert map_size(:sys.get_state(server).waiting) == 0
+    send(loader, :finish)
+  end
+
   test "expired waiters cannot retry an unsuccessful load" do
     parent = self()
 

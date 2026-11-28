@@ -143,6 +143,28 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert {:reset, 0, :partial_start, _} = packet(handoff)
   end
 
+  test "a replacement source starts clean after the old source left an odd byte" do
+    {session, _} = session(false)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    assert :ok = Session.push_audio(session, <<7>>)
+    pcm = :binary.copy(<<5, 0>>, 512)
+
+    frame =
+      struct(Vxpipe.CallEngine.Media.AudioFrame,
+        codec: :linear16,
+        channels: 1,
+        sample_rate: 16_000,
+        payload: pcm,
+        timestamp: 2048,
+        source_epoch: make_ref()
+      )
+
+    assert :ok = Session.push_frame(session, frame)
+    assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
+    assert {:mapped_probabilities, 1, 0, 2048, [0.9], _} = packet(handoff)
+  end
+
   test "operational reset retaining an odd byte does not claim a clean diagnostic epoch" do
     {session, recognizer} = session(false)
     handoff = handoff()
