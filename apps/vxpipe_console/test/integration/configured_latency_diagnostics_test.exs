@@ -82,16 +82,36 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             activity_options:
               cond do
                 actual? ->
-                  [
-                    load: actual_loader(parent, :operational),
-                    classify: actual_classifier(parent, :operational)
-                  ]
+                  CallEngine.Speech.SileroPoolFixture.native_options(
+                    __MODULE__,
+                    actual_loader(parent, :operational),
+                    fn model, rows ->
+                      result = Silero.Batch.run(model, rows)
+                      now = System.monotonic_time(:microsecond)
+
+                      case result do
+                        {:ok, _} ->
+                          for {pcm, _state} <- rows,
+                              do:
+                                send(
+                                  parent,
+                                  {:actual_inference, :operational, 1, :crypto.hash(:sha256, pcm),
+                                   now}
+                                )
+
+                        _ ->
+                          send(parent, {:actual_inference_failed, :operational})
+                      end
+
+                      result
+                    end
+                  )
 
                 matrix? ->
-                  [
+                  CallEngine.Speech.SileroPoolFixture.options(__MODULE__,
                     load: fn -> {:ok, :matrix_model} end,
                     classify: matrix_classifier(parent, :operational)
-                  ]
+                  )
 
                 true ->
                   []
@@ -1546,7 +1566,11 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           )
 
           assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
-          if c.vad, do: assert_receive({:matrix_inference, :operational, _, ^pcm}, 2_000)
+          if c.vad do
+            for <<window::binary-size(1024) <- pcm>> do
+              assert_receive {:matrix_inference, :operational, _, ^window}, 2_000
+            end
+          end
 
           case held do
             {worker, handoff, _} ->

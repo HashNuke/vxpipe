@@ -7,12 +7,7 @@ defmodule Vxpipe.CallEngine.Speech.SileroPoolFixture do
   # Each test module gets its own real dispatcher. Only the model loader and
   # native inference call are replaced. Packed state carries a test sample index.
   def options(scope, opts) do
-    pool = Module.concat(scope, SileroPool)
-
-    unless Process.whereis(pool) do
-      start_supervised!({Pool, name: pool, budget: %{workers: 1}}, id: pool)
-      start_supervised!({Worker, {pool, &classify_rows/2}}, id: {pool, Worker})
-    end
+    pool = start_pool(scope, &classify_rows/2)
 
     cache =
       start_supervised!(
@@ -27,6 +22,23 @@ defmodule Vxpipe.CallEngine.Speech.SileroPoolFixture do
       )
 
     Keyword.merge(opts, pool: pool, model_cache: cache)
+  end
+
+  def native_options(scope, loader, run) do
+    pool = start_pool(scope, run)
+    cache = start_supervised!({ModelCache, name: nil, load: loader}, id: make_ref())
+    [pool: pool, model_cache: cache]
+  end
+
+  defp start_pool(scope, run) do
+    pool = Module.concat(scope, SileroPool)
+
+    unless Process.whereis(pool) do
+      start_supervised!({Pool, name: pool, budget: %{workers: 1}}, id: pool)
+      start_supervised!({Worker, {pool, run}}, id: {pool, Worker})
+    end
+
+    pool
   end
 
   defp classify_rows(%Model{resource: {model, classify}}, rows) do
