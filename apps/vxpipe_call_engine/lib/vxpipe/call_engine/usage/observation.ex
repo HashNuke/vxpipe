@@ -10,7 +10,8 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
     :speech_to_speech,
     :output_speech_to_text,
     :tool,
-    :telephony
+    :telephony,
+    :decisions
   ]
   @outcomes [:in_progress, :succeeded, :failed, :cancelled, :unknown]
 
@@ -36,6 +37,7 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
           | :output_speech_to_text
           | :tool
           | :telephony
+          | :decisions
 
   @type outcome :: :in_progress | :succeeded | :failed | :cancelled | :unknown
 

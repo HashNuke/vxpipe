@@ -18,7 +18,8 @@ defmodule Vxpipe.Persistence.Schema.UsageAmount do
         :speech_to_speech,
         :output_speech_to_text,
         :tool,
-        :telephony
+        :telephony,
+        :decisions
       ]
     )
 

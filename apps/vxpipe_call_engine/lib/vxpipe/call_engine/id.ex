@@ -6,6 +6,8 @@ defmodule Vxpipe.CallEngine.Id do
     agent_request: "areq",
     call: "call",
     command: "cmd",
+    decisions_attempt: "datt",
+    decisions_evaluation: "deval",
     event: "evt",
     model_attempt: "matt",
     participant: "part",
@@ -25,6 +27,8 @@ defmodule Vxpipe.CallEngine.Id do
           | :agent_request
           | :call
           | :command
+          | :decisions_attempt
+          | :decisions_evaluation
           | :event
           | :model_attempt
           | :participant

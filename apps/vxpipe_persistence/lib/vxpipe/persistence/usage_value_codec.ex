@@ -162,6 +162,7 @@ defmodule Vxpipe.Persistence.UsageValueCodec do
 
   def capability(value) when value in ["tool", :tool], do: {:ok, :tool}
   def capability(value) when value in ["telephony", :telephony], do: {:ok, :telephony}
+  def capability(value) when value in ["decisions", :decisions], do: {:ok, :decisions}
   def capability(_capability), do: {:error, :invalid_capability}
 
   @spec outcome(String.t() | atom()) ::
