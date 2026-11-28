@@ -196,6 +196,12 @@ test("opening filters focuses Messages and shows only the individual filter cont
   expect(modal.queryByRole("group", {name: "Preset"})).toBeNull();
   expect(modal.getAllByRole("button")).toEqual([modal.getByRole("button", {name: "Close dialog"})]);
   expect(modal.getByRole("combobox", {name: "Messages"})).toHaveFocus();
+  for (const trigger of modal.getAllByRole("combobox")) {
+    fireEvent.keyDown(trigger, {key: "Enter"});
+    const [firstOption] = await screen.findAllByRole("option");
+    expect(firstOption).toHaveAccessibleName("Hide");
+    fireEvent.keyDown(firstOption, {key: "Escape"});
+  }
 });
 
 test("Escape dismisses the Events menu before closing the filter dialog", async () => {

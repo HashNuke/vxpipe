@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Icon } from "../../../../../../packages/react/src/Icon";
 import { SetupDialog } from "../SetupDialog";
 
-const visibility = ["Show", "Hide"] as const;
+const visibility = ["Hide", "Show"] as const;
 const options = {
   messages: visibility,
   logs: visibility,
