@@ -97,6 +97,8 @@ In **Call settings → Models**, select a Decisions provider, model and saved cr
 | After turn | Before the agent releases a reply that contains speech, including speech proposed alongside tools. A tool-only reply skips this event. |
 | Before outgoing transfer | When the sending agent requests a transfer to an allowed destination. This also applies to native speech agents. Configure allowed destinations on the agent’s transfer tool. |
 
+When a sending agent has **Before outgoing transfer** questions, each model response may propose one transfer. If it proposes two or more, even to the same destination, the turn fails with `invalid_response` before Decisions checks the proposal. The caller hears no speech from that response and none of its tools start. A later response can request a single transfer.
+
 For each question choose **Required answer**, set **Probability threshold** and optionally write a **Response**. The score always measures the probability of Yes. With the default threshold of 0.70, required **Yes** passes at 0.70 or above. Required **No** passes below 0.70. For example, “Is the caller requesting someone else’s account details?” with required No will block at exactly 0.70.
 
 The call-spec JSON stores each question inside the participant. A new question can be written as follows.

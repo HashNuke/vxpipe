@@ -54,6 +54,40 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmissionTest do
     ]
   end
 
+  test "guarded duplicate transfers reject the round before checking either event" do
+    parent = self()
+
+    check = fn _, event, _, _, _ ->
+      send(parent, {:checked, event})
+      :passed
+    end
+
+    for destination <- ["billing", "support"] do
+      duplicate =
+        tool_call("second-transfer", "transfer", %{
+          "destination" => destination,
+          "reason" => "Unreviewed reason"
+        })
+
+      candidate = candidate(calls() ++ [duplicate])
+
+      assert {:failure, :error} =
+               TransferAdmission.joint_admit(candidate, context(), host(%{check: check}))
+
+      refute_received {:checked, _}
+
+      assert {:accept, %{binds: []}} =
+               TransferAdmission.joint_admit(
+                 candidate,
+                 context(),
+                 host(%{check: check, transfer_questions: []})
+               )
+
+      assert_received {:checked, :after_turn}
+      refute_received {:checked, :before_outgoing_transfer}
+    end
+  end
+
   test "joint accept shares one stable proposal and binds the transfer call id" do
     parent = self()
 

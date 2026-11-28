@@ -180,12 +180,8 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
     with :ok <- validate_questions(after_questions),
          :ok <- validate_questions(transfer_questions),
          :ok <- validate_kinds(candidate, kinds) do
-      checks =
-        []
-        |> maybe_after_turn(candidate, after_questions, proposal)
-        |> maybe_transfer(candidate, transfer_questions, kinds, proposal)
-
-      {:ok, checks}
+      checks = maybe_after_turn([], candidate, after_questions, proposal)
+      plan_transfer(checks, candidate, transfer_questions, kinds, proposal)
     end
   end
 
@@ -214,19 +210,14 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
 
   defp maybe_after_turn(checks, _candidate, _questions, _proposal), do: checks
 
-  defp maybe_transfer(checks, %RoundCandidate{} = candidate, questions, kinds, proposal) do
-    if questions == [] do
-      checks
-    else
-      case first_transfer_call(candidate, kinds) do
-        nil -> checks
-        %ToolCall{} = call -> [{:before_outgoing_transfer, proposal, call} | checks]
-      end
-    end
-  end
+  defp plan_transfer(checks, _candidate, [], _kinds, _proposal), do: {:ok, checks}
 
-  defp first_transfer_call(%RoundCandidate{tool_calls: calls}, kinds) do
-    Enum.find(calls, fn %ToolCall{name: name} -> Map.get(kinds, name) == :transfer end)
+  defp plan_transfer(checks, %RoundCandidate{tool_calls: calls}, _questions, kinds, proposal) do
+    case Enum.filter(calls, &(Map.fetch!(kinds, &1.name) == :transfer)) do
+      [] -> {:ok, checks}
+      [call] -> {:ok, [{:before_outgoing_transfer, proposal, call} | checks]}
+      _multiple -> {:failure, :error}
+    end
   end
 
   # --- running checks against the participant service ---
@@ -268,7 +259,15 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
               {:after_turn, check_proposal} ->
                 evidence = Map.put(current, "event", "after_turn")
 
-                issue_check(host, guardrails, :after_turn, check_proposal, evidence, deadline_ms)
+                issue_check(
+                  host,
+                  guardrails,
+                  :after_turn,
+                  check_proposal,
+                  evidence,
+                  deadline_ms,
+                  nil
+                )
 
               {:before_outgoing_transfer, check_proposal, %ToolCall{} = call} ->
                 evidence =
@@ -285,7 +284,8 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
                   :before_outgoing_transfer,
                   check_proposal,
                   evidence,
-                  deadline_ms
+                  deadline_ms,
+                  call
                 )
             end)
 
@@ -294,11 +294,11 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
     end
   end
 
-  defp issue_check(host, guardrails, event, proposal, evidence, deadline_ms) do
+  defp issue_check(host, guardrails, event, proposal, evidence, deadline_ms, call) do
     check = check_fun(host)
 
     Task.async(fn ->
-      {event, proposal, run_check(check, guardrails, event, proposal, evidence, deadline_ms)}
+      {event, call, run_check(check, guardrails, event, proposal, evidence, deadline_ms)}
     end)
   end
 
@@ -406,40 +406,21 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
   end
 
   defp accept_binds(results, candidate, host) do
-    transfer_passed? =
-      Enum.any?(results, fn {event, _proposal, outcome} ->
-        event == :before_outgoing_transfer and outcome == :passed
-      end)
-
-    if transfer_passed? do
-      kinds = host[:terminal_kinds] || %{}
-
-      first = first_transfer_call(candidate, kinds)
-      destination = if first, do: transfer_destination(first), else: nil
-      digest = policy_digest(host[:transfer_questions] || [])
-
-      candidate.tool_calls
-      |> Enum.filter(fn %ToolCall{name: name} = call ->
-        Map.get(kinds, name) == :transfer and transfer_destination(call) == destination
-      end)
-      |> Enum.map(fn %ToolCall{id: call_id} ->
-        %{
-          invocation_id: call_id,
-          command_id: Map.get(candidate.correlation, :command_id),
-          expires_at_ms: host[:response_deadline_ms],
-          verdict: :passed,
-          source_activation_id: host[:activation_id],
-          source_participant_id: host[:agent_participant_id],
-          destination_call_spec_key: destination,
-          policy_digest: digest,
-          policy_revision: host[:policy_revision],
-          incarnation_id: host[:incarnation_id],
-          checked_at_ms: System.monotonic_time(:millisecond),
-          source: :bound
-        }
-      end)
-    else
-      []
+    for {:before_outgoing_transfer, %ToolCall{} = call, :passed} <- results do
+      %{
+        invocation_id: call.id,
+        command_id: Map.get(candidate.correlation, :command_id),
+        expires_at_ms: host[:response_deadline_ms],
+        verdict: :passed,
+        source_activation_id: host[:activation_id],
+        source_participant_id: host[:agent_participant_id],
+        destination_call_spec_key: transfer_destination(call),
+        policy_digest: policy_digest(host[:transfer_questions]),
+        policy_revision: host[:policy_revision],
+        incarnation_id: host[:incarnation_id],
+        checked_at_ms: System.monotonic_time(:millisecond),
+        source: :bound
+      }
     end
   end
 
