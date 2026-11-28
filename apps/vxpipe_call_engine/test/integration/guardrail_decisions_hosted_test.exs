@@ -168,8 +168,9 @@ defmodule Vxpipe.CallEngine.Integration.GuardrailDecisionsHostedTest do
         System.monotonic_time(:millisecond) - candidate_started
       )
 
-    assert_receive {:test_audio_output_finish, ^sink, "candidate"}, @wait
     assert :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
+    # The local Morse fixture paces the full utterance against a real clock.
+    assert_receive {:test_audio_output_finish, ^sink, "candidate"}, 15_000
     assert :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "candidate"}}, @wait
 

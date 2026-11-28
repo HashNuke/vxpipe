@@ -878,7 +878,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
               do: %{},
               else: nil
             ),
-          transfer_timeout_ms: 2_000,
+          transfer_timeout_ms: if(outcome == :deadline, do: 2_000, else: 10_000),
           support_stt:
             outcome in [
               :readiness_loss,
