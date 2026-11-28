@@ -851,7 +851,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     plan = guarded_plan(true, :native_transfer)
 
     {room, _identity} =
-      start_guarded_call(plan, controlled_decisions(self()),
+      start_guarded_call(plan, controlled_decisions(self(), "native-inspection"),
         speech_to_speech: [providers: %{Vxpipe.Providers.MorseCode.STSSession => [enabled: true]}],
         input_track: %{track_id: "microphone", codec: :linear16, sample_rate: 16_000, channels: 1}
       )
@@ -861,7 +861,15 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     1 = :erlang.trace(capability, true, [:receive])
     assert :ok = SpeechToSpeech.push_text(capability, ~s(TOOL transfer {"destination":"billing"}))
     assert_receive {:gate, http, ^agent, ""}, 2000
-    assert_receive {:vxpipe_event, %CallEngine.Event.ToolCallStarted{name: "transfer"}}, 1000
+
+    assert_receive {:vxpipe_event,
+                    %CallEngine.Event.ToolCallStarted{name: "transfer", command_id: command_id}},
+                   1000
+
+    assert is_binary(command_id)
+    assert_receive {:scoped_wire, "native-inspection", _, packet}
+    refute Map.has_key?(packet["current"], "correlation")
+    refute Map.has_key?(packet["current"], "command_id")
     refute_received {:test_archive_fact, %{kind: :decisions_feedback_dispatched}}
     send(http, {:score, 0.1})
 
@@ -895,6 +903,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert_receive {:test_archive_fact,
                     %{
                       kind: :decisions_evaluation,
+                      command_id: ^command_id,
                       tool_call_id: ^invocation,
                       payload: %{"evaluation_id" => evaluation}
                     }},
@@ -903,6 +912,7 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
     assert_receive {:test_archive_fact,
                     %{
                       kind: :decisions_feedback_dispatched,
+                      command_id: ^command_id,
                       tool_call_id: ^invocation,
                       payload: %{"evaluation_id" => ^evaluation, "question_ids" => ["scope"]}
                     }},

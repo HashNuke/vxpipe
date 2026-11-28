@@ -170,6 +170,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
       policy_digest: binding.guardrails_policy_digest,
       activation_id: binding.source_activation_id,
       invocation_id: request.tool_call_id,
+      command_id: request.command_id,
       incarnation_id: request.incarnation_id,
       destination: request.destination_call_spec_key,
       reason: request.reason,

@@ -502,6 +502,7 @@ defmodule Vxpipe.CallEngine.Guardrails.TransferAdmission do
   defp transfer_evidence(%{} = attrs) do
     %{
       "event" => "before_outgoing_transfer",
+      "correlation" => %{"command_id" => attrs[:command_id]},
       "destination" => attrs[:destination],
       "reason" => attrs[:reason],
       "text" => attrs[:text] || ""
