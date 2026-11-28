@@ -109,7 +109,8 @@ defmodule Vxpipe.CallEngine.Guardrails.RoomDecisionsIntegrationTest do
             })
             |> put_in([:participants, "agent", :tools, "wait_for_test"], %{
               type: "host",
-              tool: "wait_for_test"
+              tool: "wait_for_test",
+              conversation_mode: "non_blocking"
             })
           else
             source
